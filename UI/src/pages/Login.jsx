@@ -105,6 +105,15 @@ const Login = () => {
 
         <div className="mt-6 pt-6 border-t border-gray-200 text-center">
           <p className="text-sm text-gray-600 mb-2">
+            Are you a Student?{' '}
+            <span
+              onClick={() => navigate('/student-portal')}
+              className="text-blue-600 hover:text-blue-800 font-semibold cursor-pointer transition-all hover:underline"
+            >
+              Access Student Portal
+            </span>
+          </p>
+          <p className="text-sm text-gray-600 mb-2">
             Are you an Examiner?{' '}
             <span
               onClick={() => navigate('/register')}

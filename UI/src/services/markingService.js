@@ -116,6 +116,32 @@ const markingService = {
       throw error.message || error;
     }
   },
+
+  // Save draft marks to Redis
+  saveDraftMarks: async (scriptId, examinerId, draftData) => {
+    try {
+      const response = await apiCall(`/marking/${scriptId}/draft`, {
+        method: 'POST',
+        body: JSON.stringify({
+          examinerId,
+          draftData
+        }),
+      });
+      return response;
+    } catch (error) {
+      throw error.message || error;
+    }
+  },
+
+  // Get draft marks from Redis
+  getDraftMarks: async (scriptId, examinerId) => {
+    try {
+      const response = await apiCall(`/marking/${scriptId}/draft/${examinerId}`);
+      return response;
+    } catch (error) {
+      throw error.message || error;
+    }
+  },
 };
 
 export default markingService;

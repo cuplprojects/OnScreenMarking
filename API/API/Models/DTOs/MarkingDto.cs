@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace API.Models.DTOs
 {
     public class MarkingDto
@@ -21,6 +23,12 @@ namespace API.Models.DTOs
         public decimal TotalMarks { get; set; }
         public string Remarks { get; set; }
         public string? EvaluatedPdfUrl { get; set; }
+    }
+
+    public class DraftMarksRequest
+    {
+        public int ExaminerId { get; set; }
+        public JsonElement DraftData { get; set; }
     }
 
     public class QuestionMarkDto

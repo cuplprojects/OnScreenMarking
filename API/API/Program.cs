@@ -26,6 +26,13 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     )
 );
 
+// Add Redis Cache
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = builder.Configuration.GetConnectionString("RedisConnection");
+    options.InstanceName = "OSM_";
+});
+
 // Add Email Service
 builder.Services.AddScoped<IEmailService, EmailService>();
 

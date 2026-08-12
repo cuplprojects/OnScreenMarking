@@ -57,6 +57,7 @@ namespace API.Controllers
                         CleanPdfUrl = s.CleanPdfUrl,
                         Status = s.Status,
                         IsReEvaluationRequested = s.IsReEvaluationRequested,
+                        RollNumber = s.RollNumber,
                         TotalMarks = s.TotalMarks,
                         Percentage = s.Percentage,
                         Remarks = s.Remarks,
@@ -104,6 +105,7 @@ namespace API.Controllers
                     CleanPdfUrl = script.CleanPdfUrl,
                     Status = script.Status,
                     IsReEvaluationRequested = script.IsReEvaluationRequested,
+                    RollNumber = script.RollNumber,
                     TotalMarks = script.TotalMarks,
                     Percentage = script.Percentage,
                     Remarks = script.Remarks,
@@ -162,6 +164,7 @@ namespace API.Controllers
                 {
                     PaperId = scriptDto.PaperId,
                     CleanPdfUrl = scriptDto.CleanPdfUrl,
+                    RollNumber = scriptDto.RollNumber,
                     Status = "pending",
                 };
 
@@ -276,6 +279,7 @@ namespace API.Controllers
                         CleanPdfUrl = s.CleanPdfUrl,
                         Status = s.Status,
                         IsReEvaluationRequested = s.IsReEvaluationRequested,
+                        RollNumber = s.RollNumber,
                         TotalMarks = s.TotalMarks,
                         Percentage = s.Percentage,
                         Remarks = s.Remarks,
@@ -316,6 +320,7 @@ namespace API.Controllers
                     InBuiltBarCode = s.InBuiltBarcode,
                     Status = s.Status,
                     IsReEvaluationRequested = s.IsReEvaluationRequested,
+                    RollNumber = s.RollNumber,
                     TotalMarks = s.TotalMarks,
                     Percentage = s.Percentage,
                     Remarks = s.Remarks,

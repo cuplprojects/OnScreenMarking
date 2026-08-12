@@ -64,6 +64,7 @@ function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/accept-invitation" element={<AcceptInvitation />} />
+      <Route path="/student-portal" element={<StudentPortal />} />
 
       {/* Main App Layout */}
       <Route element={<ProtectedRoute />}>

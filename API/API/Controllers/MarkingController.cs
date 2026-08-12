@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using API.Data;
 using API.Models;
 using API.Models.DTOs;
+using Microsoft.Extensions.Caching.Distributed;
+using System.Text.Json;
 
 namespace API.Controllers
 {
@@ -13,10 +15,12 @@ namespace API.Controllers
     public class MarkingController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IDistributedCache _cache;
 
-        public MarkingController(ApplicationDbContext context)
+        public MarkingController(ApplicationDbContext context, IDistributedCache cache)
         {
             _context = context;
+            _cache = cache;
         }
 
         [HttpPost]
@@ -181,6 +185,51 @@ namespace API.Controllers
             }
         }
 
+        [HttpPost("{scriptId}/draft")]
+        [Authorize(Roles = "examiner")]
+        public async Task<IActionResult> SaveDraftMarks(int scriptId, [FromBody] DraftMarksRequest request)
+        {
+            try
+            {
+                var cacheKey = $"draft_marks_{scriptId}_{request.ExaminerId}";
+                var serializedData = JsonSerializer.Serialize(request.DraftData);
+                
+                var options = new DistributedCacheEntryOptions()
+                    .SetAbsoluteExpiration(TimeSpan.FromDays(7));
+                
+                await _cache.SetStringAsync(cacheKey, serializedData, options);
+                
+                return Ok(new { success = true, message = "Draft saved successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpGet("{scriptId}/draft/{examinerId}")]
+        [Authorize(Roles = "examiner")]
+        public async Task<IActionResult> GetDraftMarks(int scriptId, int examinerId)
+        {
+            try
+            {
+                var cacheKey = $"draft_marks_{scriptId}_{examinerId}";
+                var draftDataStr = await _cache.GetStringAsync(cacheKey);
+                
+                if (string.IsNullOrEmpty(draftDataStr))
+                {
+                    return Ok(new { success = true, draftData = (object)null });
+                }
+                
+                var draftData = JsonSerializer.Deserialize<JsonElement>(draftDataStr);
+                return Ok(new { success = true, draftData });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpPut("{id}/submit")]
         [Authorize(Roles = "examiner")]
         public async Task<IActionResult> SubmitMarking(int id)
@@ -214,6 +263,10 @@ namespace API.Controllers
                 }
 
                 await _context.SaveChangesAsync();
+
+                // Clear the draft from Redis
+                var cacheKey = $"draft_marks_{script.Id}_{marking.ExaminerId}";
+                await _cache.RemoveAsync(cacheKey);
 
                 return Ok(new { success = true, message = "Marking submitted successfully" });
             }

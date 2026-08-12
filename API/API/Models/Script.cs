@@ -17,6 +17,7 @@ namespace API.Models
         public string CleanPdfUrl { get; set; }
         public string Status { get; set; } = "pending"; // pending, in_progress, completed
         public bool? IsReEvaluationRequested { get; set; }
+        public string? RollNumber { get; set; }
         public decimal? TotalMarks { get; set; } = 0;
         public decimal? Percentage { get; set; } = 0;
         public string? Remarks { get; set; }

@@ -470,18 +470,45 @@ const ExaminerMarking = () => {
 
   const loadExistingQuestionMarks = async (mId, defaultMarks) => {
     try {
-      const savedMarks = await markingService.getQuestionMarks(mId);
-      if (savedMarks && savedMarks.length > 0) {
+      let marksToLoad = null;
+      
+      // 1. Try to fetch draft marks from Redis
+      try {
+        const draftRes = await markingService.getDraftMarks(scriptId, examinerId);
+        if (draftRes && draftRes.draftData) {
+          marksToLoad = draftRes.draftData;
+        }
+      } catch (e) {
+        console.warn("Failed to load draft marks from Redis:", e);
+      }
+
+      // 2. If no draft, fetch saved marks from DB
+      if (!marksToLoad) {
+        const savedMarks = await markingService.getQuestionMarks(mId);
+        if (savedMarks && savedMarks.length > 0) {
+          // Convert array format to object format for state
+          marksToLoad = { ...defaultMarks };
+          savedMarks.forEach(sm => {
+            if (marksToLoad[sm.questionId]) {
+              marksToLoad[sm.questionId] = {
+                ...marksToLoad[sm.questionId],
+                marksAwarded: sm.marksAwarded,
+                isSkipped: sm.isSkipped,
+                remarks: sm.remarks || "",
+                isAttempted: sm.isAttempted
+              };
+            }
+          });
+        }
+      }
+
+      // 3. Apply the loaded marks
+      if (marksToLoad) {
+        // Ensure default structure is maintained in case draft is partial
         const updated = { ...defaultMarks };
-        savedMarks.forEach(sm => {
-          if (updated[sm.questionId]) {
-            updated[sm.questionId] = {
-              ...updated[sm.questionId],
-              marksAwarded: sm.marksAwarded,
-              isSkipped: sm.isSkipped,
-              remarks: sm.remarks || "",
-              isAttempted: sm.isAttempted
-            };
+        Object.keys(marksToLoad).forEach(qId => {
+          if (updated[qId]) {
+             updated[qId] = { ...updated[qId], ...marksToLoad[qId] };
           }
         });
         setQuestionMarks(updated);
@@ -864,6 +891,21 @@ const ExaminerMarking = () => {
     setSaveStatus({ type, msg });
     setTimeout(() => setSaveStatus(null), 3500);
   };
+
+  // Auto-save draft marks
+  useEffect(() => {
+    if (!loading && !submitted && Object.keys(questionMarks).length > 0) {
+      const timer = setTimeout(async () => {
+        try {
+          await markingService.saveDraftMarks(scriptId, examinerId, questionMarks);
+        } catch (err) {
+          console.warn("Failed to auto-save draft marks:", err);
+        }
+      }, 1500); // 1.5 second debounce
+
+      return () => clearTimeout(timer);
+    }
+  }, [questionMarks, loading, submitted, scriptId, examinerId]);
 
   const handleSaveMarks = async () => {
     if (!markingId) {
