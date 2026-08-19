@@ -24,7 +24,10 @@ namespace API.Controllers
             [FromQuery] int? universityId = null,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 10,
-            [FromQuery] string search = "")
+            [FromQuery] string search = "",
+            [FromQuery] string? sortField = null,
+            [FromQuery] string? sortOrder = null,
+            [FromQuery] bool? isActive = null)
         {
             try
             {
@@ -35,30 +38,58 @@ namespace API.Controllers
                     query = query.Where(d => d.UniversityId == universityId.Value);
                 }
 
+                if (isActive.HasValue)
+                {
+                    query = query.Where(d => d.IsActive == isActive.Value);
+                }
+
                 if (!string.IsNullOrWhiteSpace(search))
                 {
-                    query = query.Where(d => d.Name.Contains(search));
+                    var s = search.ToLower();
+                    query = query.Where(d => d.Name.ToLower().Contains(s));
                 }
 
                 var totalCount = await query.CountAsync();
 
-                query = query.Where(d => d.IsActive)
-                    .Include(d => d.Courses)
-                    .Include(d => d.DepartmentSubjects)
-                        .ThenInclude(ds => ds.Subject)
-                    .OrderBy(d => d.Name);
+                // Sorting
+                if (!string.IsNullOrEmpty(sortField))
+                {
+                    bool isDesc = sortOrder?.ToLower() == "desc";
+                    
+                    if (sortField.Equals("name", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(d => d.Name) : query.OrderBy(d => d.Name);
+                    else if (sortField.Equals("isActive", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(d => d.IsActive) : query.OrderBy(d => d.IsActive);
+                    else
+                        query = query.OrderBy(d => d.Name);
+                }
+                else
+                {
+                    query = query.OrderBy(d => d.Name);
+                }
 
-                List<Department> departments;
+                var projection = query.Select(d => new
+                {
+                    departmentId = d.DepartmentId,
+                    name = d.Name,
+                    isActive = d.IsActive,
+                    universityId = d.UniversityId,
+                    createdAt = d.CreatedAt,
+                    updatedAt = d.UpdatedAt,
+                    courses = d.Courses.Select(c => new { id = c.Id, name = c.Name }).ToList()
+                });
+
+                object departments;
                 if (pageSize > 0)
                 {
-                    departments = await query
+                    departments = await projection
                         .Skip((page - 1) * pageSize)
                         .Take(pageSize)
                         .ToListAsync();
                 }
                 else
                 {
-                    departments = await query.ToListAsync();
+                    departments = await projection.ToListAsync();
                 }
 
                 var totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 1;

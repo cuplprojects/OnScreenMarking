@@ -1,8 +1,26 @@
 import apiCall from './api';
 
 const userService = {
-  getAllUsers: async (universityId) => {
-    const url = `/users${universityId ? `?universityId=${universityId}` : ''}`;
+  getAllUsers: async (universityId, params = {}) => {
+    let url = `/users`;
+    const queryParams = [];
+    if (universityId) queryParams.push(`universityId=${universityId}`);
+    
+    // Append standard table parameters
+    if (params.page) queryParams.push(`page=${params.page}`);
+    if (params.pageSize) queryParams.push(`pageSize=${params.pageSize}`);
+    if (params.search) queryParams.push(`search=${encodeURIComponent(params.search)}`);
+    if (params.sortField) queryParams.push(`sortField=${params.sortField}`);
+    if (params.sortOrder) queryParams.push(`sortOrder=${params.sortOrder}`);
+    
+    // Append filters
+    if (params.activeTab) queryParams.push(`activeTab=${params.activeTab}`);
+    if (params.isActive !== undefined && params.isActive !== "") queryParams.push(`isActive=${params.isActive}`);
+    if (params.userType) queryParams.push(`userType=${params.userType}`);
+
+    if (queryParams.length > 0) {
+      url += '?' + queryParams.join('&');
+    }
     return apiCall(url);
   },
 

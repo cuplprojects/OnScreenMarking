@@ -249,7 +249,15 @@ namespace API.Controllers
         }
 
         [HttpGet("examiner/{examinerId}")]
-        public async Task<ActionResult<IEnumerable<ScriptDto>>> GetExaminerScripts(int examinerId)
+        public async Task<ActionResult<object>> GetExaminerScripts(
+            int examinerId,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string search = "",
+            [FromQuery] string? sortField = null,
+            [FromQuery] string? sortOrder = null,
+            [FromQuery] string? statusFilter = null,
+            [FromQuery] int? subjectFilter = null)
         {
             try
             {
@@ -259,13 +267,67 @@ namespace API.Controllers
 
                 var scriptIds = allocations.Select(a => a.ScriptId).ToList();
 
-                 var scripts = await _context.Scripts
+                var query = _context.Scripts
                     .Where(s => scriptIds.Contains(s.Id))
                     .Include(s => s.Paper)
                         .ThenInclude(p => p.SubjectPapers)
                             .ThenInclude(sp => sp.Subject)
-                    .OrderByDescending(s => s.CreatedAt)
-                    .ToListAsync();
+                    .AsQueryable();
+
+                if (!string.IsNullOrEmpty(statusFilter) && statusFilter != "all")
+                {
+                    query = query.Where(s => s.Status == statusFilter);
+                }
+
+                if (subjectFilter.HasValue)
+                {
+                    query = query.Where(s => s.Paper != null && s.Paper.SubjectPapers.Any(sp => sp.SubjectId == subjectFilter.Value));
+                }
+
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    var s = search.ToLower();
+                    query = query.Where(sc => 
+                        (sc.RollNumber != null && sc.RollNumber.ToLower().Contains(s)) ||
+                        (sc.GeneratedBarcode != null && sc.GeneratedBarcode.ToLower().Contains(s))
+                    );
+                }
+
+                var totalCount = await query.CountAsync();
+
+                // Sorting
+                if (!string.IsNullOrEmpty(sortField))
+                {
+                    bool isDesc = sortOrder?.ToLower() == "desc";
+                    
+                    if (sortField.Equals("rollNumber", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(s => s.RollNumber) : query.OrderBy(s => s.RollNumber);
+                    else if (sortField.Equals("status", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(s => s.Status) : query.OrderBy(s => s.Status);
+                    else if (sortField.Equals("submittedAt", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(s => s.SubmittedAt ?? s.CreatedAt) : query.OrderBy(s => s.SubmittedAt ?? s.CreatedAt);
+                    else if (sortField.Equals("totalMarks", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(s => s.TotalMarks) : query.OrderBy(s => s.TotalMarks);
+                    else
+                        query = query.OrderByDescending(s => s.CreatedAt);
+                }
+                else
+                {
+                    query = query.OrderByDescending(s => s.CreatedAt);
+                }
+
+                List<Script> scripts;
+                if (pageSize > 0)
+                {
+                    scripts = await query
+                        .Skip((page - 1) * pageSize)
+                        .Take(pageSize)
+                        .ToListAsync();
+                }
+                else
+                {
+                    scripts = await query.ToListAsync();
+                }
 
                 var scriptDtos = scripts.Select(s => {
                     var alloc = allocations.FirstOrDefault(a => a.ScriptId == s.Id);
@@ -292,7 +354,16 @@ namespace API.Controllers
                     };
                 }).ToList();
 
-                return Ok(scriptDtos);
+                var totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 1;
+
+                return Ok(new
+                {
+                    items = scriptDtos,
+                    totalCount = totalCount,
+                    page = page,
+                    pageSize = pageSize,
+                    totalPages = totalPages
+                });
             }
             catch (Exception ex)
             {

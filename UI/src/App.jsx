@@ -11,6 +11,7 @@ import { BreadcrumbProvider } from './context/BreadcrumbContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 import Layout from './components/Layout';
+import ConfigLayout from './components/ConfigLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import MessageContainer from './components/MessageContainer';
 
@@ -111,46 +112,55 @@ function AppRoutes() {
             path="/admin/colleges" 
             element={userType === 'admin' ? <CollegeManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
-          <Route 
-            path="/admin/masters" 
-            element={userType === 'admin' ? <DepartmentManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-          />
-          <Route 
-            path="/masters" 
-            element={userType === 'coordinator' ? <DepartmentManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-          />
-          <Route 
-            path="/admin/courses" 
-            element={userType === 'admin' ? <CourseManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-          />
-          <Route 
-            path="/courses" 
-            element={userType === 'coordinator' ? <CourseManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-          />
-          <Route 
-            path="/admin/subjects" 
-            element={userType === 'admin' ? <SubjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-          />
-          <Route 
-            path="/subjects" 
-            element={userType === 'coordinator' ? <SubjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-          />
-          <Route 
-            path="/admin/sessions" 
-            element={userType === 'admin' ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-          />
-          <Route 
-            path="/admin/projects" 
-            element={userType === 'admin' ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-          />
-          <Route 
-            path="/sessions" 
-            element={userType === 'coordinator' ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-          />
-          <Route 
-            path="/projects" 
-            element={userType === 'coordinator' ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-          />
+
+          {/* Config Layout Wrapper */}
+          <Route element={<ConfigLayout />}>
+            <Route 
+              path="/admin/masters" 
+              element={userType === 'admin' ? <DepartmentManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+            <Route 
+              path="/masters" 
+              element={userType === 'coordinator' ? <DepartmentManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+            <Route 
+              path="/admin/courses" 
+              element={userType === 'admin' ? <CourseManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+            <Route 
+              path="/courses" 
+              element={userType === 'coordinator' ? <CourseManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+            <Route 
+              path="/admin/subjects" 
+              element={userType === 'admin' ? <SubjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+            <Route 
+              path="/subjects" 
+              element={userType === 'coordinator' ? <SubjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+            <Route 
+              path="/admin/sessions" 
+              element={userType === 'admin' ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+            <Route 
+              path="/admin/projects" 
+              element={userType === 'admin' ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+            <Route 
+              path="/sessions" 
+              element={userType === 'coordinator' ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+            <Route 
+              path="/projects" 
+              element={userType === 'coordinator' ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+            <Route 
+              path="/admin/users" 
+              element={userType === 'admin' ? <UsersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+          </Route>
+
           <Route 
             path="/admin/papers" 
             element={userType === 'admin' ? <PapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 

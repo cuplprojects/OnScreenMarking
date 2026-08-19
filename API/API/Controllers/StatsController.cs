@@ -35,7 +35,7 @@ namespace API.Controllers
                     var userIdClaim = User.FindFirst("id")?.Value;
                     if (int.TryParse(userIdClaim, out int userId))
                     {
-                        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+                        var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
                         if (user != null && user.UniversityId != null)
                         {
                             targetUniversityId = user.UniversityId.Value;
@@ -70,6 +70,7 @@ namespace API.Controllers
                     .CountAsync(p => p.Project.UniversityId == targetUniversityId && !p.Sections.Any());
 
                 var projectsStats = await _context.Projects
+                    .AsNoTracking()
                     .Where(p => p.UniversityId == targetUniversityId)
                     .Select(p => new
                     {

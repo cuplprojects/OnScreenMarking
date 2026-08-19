@@ -25,9 +25,16 @@ namespace API.Controllers
             try
             {
                 var sessions = await _context.Sessions
+                    .AsNoTracking()
                     .Where(s => s.IsActive)
-                    .Include(s => s.Projects)
                     .OrderByDescending(s => s.SessionId)
+                    .Select(s => new
+                    {
+                        sessionId = s.SessionId,
+                        sessionName = s.SessionName,
+                        isActive = s.IsActive,
+                        createdAt = s.CreatedAt
+                    })
                     .ToListAsync();
 
                 return Ok(sessions);

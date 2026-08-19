@@ -6,7 +6,6 @@ import departmentService from '../services/departmentService';
 import subjectService from '../services/subjectService';
 import { useTable } from '../services/tableService';
 import TablePagination from '../components/TablePagination';
-import UniversityConfigHeader from '../components/UniversityConfigHeader';
 import AddCourseModal from '../components/AddCourseModal';
 import AddSubjectModal from '../components/AddSubjectModal';
 import { 
@@ -18,7 +17,10 @@ import {
   Trash2, 
   Plus, 
   BookOpen, 
-  Search
+  Search,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import message from '../services/messageService';
 
@@ -86,6 +88,25 @@ export default function CourseManagement() {
     }
   }, [error, setError]);
 
+  const handleSort = (field) => {
+    if (filters.sortField === field) {
+      if (filters.sortOrder === 'asc') {
+        setFilter('sortOrder', 'desc');
+      } else if (filters.sortOrder === 'desc') {
+        setFilter('sortField', '');
+        setFilter('sortOrder', '');
+      }
+    } else {
+      setFilter('sortField', field);
+      setFilter('sortOrder', 'asc');
+    }
+  };
+
+  const getSortIcon = (field) => {
+    if (filters.sortField !== field) return <ArrowUpDown size={12} className="text-slate-300" />;
+    return filters.sortOrder === 'asc' ? <ArrowUp size={12} className="text-indigo-500" /> : <ArrowDown size={12} className="text-indigo-500" />;
+  };
+
   // Load static departments and subjects for selects with pageSize: 0 (return all)
   useEffect(() => {
     if (activeUniversityId) {
@@ -150,23 +171,16 @@ export default function CourseManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 p-4 md:p-6 w-full max-w-none">
+    <div className="min-h-screen bg-transparent w-full max-w-none">
       <div className="w-full space-y-3">
-        {/* University Header Navigation */}
-        <UniversityConfigHeader />
 
         {/* Unified Dashboard Header & Filters Panel */}
         <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <div className="flex items-center gap-1 text-indigo-600 font-extrabold text-[10px] uppercase tracking-widest leading-none mb-1">
-                <Layers size={11} />
-                <span>Academic Programs</span>
-              </div>
               <h1 className="text-xl font-black text-slate-900 tracking-tight leading-none flex items-center gap-1.5">
                 <span>Courses Management</span>
               </h1>
-              <p className="text-slate-500 text-[10px] mt-0.5">Configure degrees, branches, and map subjects to academic courses</p>
             </div>
             <button
               onClick={handleOpenAddModal}
@@ -291,11 +305,32 @@ export default function CourseManagement() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-450 uppercase tracking-widest select-none">
-                    <th className="px-6 py-4">Course Info</th>
+                    <th 
+                      className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors group"
+                      onClick={() => handleSort('name')}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        Course Info {getSortIcon('name')}
+                      </div>
+                    </th>
                     <th className="px-6 py-4">Department</th>
-                    <th className="px-6 py-4">Level</th>
+                    <th 
+                      className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors group"
+                      onClick={() => handleSort('type')}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        Level {getSortIcon('type')}
+                      </div>
+                    </th>
                     <th className="px-6 py-4">Subjects Mapping</th>
-                    <th className="px-6 py-4 text-center">Status</th>
+                    <th 
+                      className="px-6 py-4 text-center cursor-pointer hover:bg-slate-100 transition-colors group"
+                      onClick={() => handleSort('status')}
+                    >
+                      <div className="flex items-center justify-center gap-1.5">
+                        Status {getSortIcon('status')}
+                      </div>
+                    </th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -309,7 +344,6 @@ export default function CourseManagement() {
                           </div>
                           <div>
                             <span className="font-extrabold text-slate-900 tracking-tight block">{course.name}</span>
-                            <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">ID: CRS-{course.id}</span>
                           </div>
                         </div>
                       </td>
@@ -332,9 +366,9 @@ export default function CourseManagement() {
                       <td className="px-6 py-5 max-w-xs">
                         {course.courseSubjects && course.courseSubjects.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
-                            {course.courseSubjects.map((cs) => (
+                            {course.courseSubjects.map((cs, index) => (
                               <span 
-                                key={cs.id}
+                                key={index}
                                 className="px-2 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-md font-bold text-[9px] uppercase tracking-wider"
                               >
                                 {cs.subject?.subCode || cs.subject?.subName}

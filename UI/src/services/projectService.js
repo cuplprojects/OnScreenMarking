@@ -2,9 +2,18 @@ import apiCall from './api';
 
 const projectService = {
   // Get all projects
-  getAllProjects: async (universityId) => {
-    const url = `/project${universityId ? `?universityId=${universityId}` : ''}`;
-    return apiCall(url);
+  getAllProjects: async (universityId, params = {}) => {
+    const query = new URLSearchParams();
+    if (universityId) query.append('universityId', universityId);
+    if (params.page) query.append('page', params.page);
+    if (params.pageSize !== undefined) query.append('pageSize', params.pageSize);
+    if (params.search) query.append('search', params.search);
+    if (params.sortField) query.append('sortField', params.sortField);
+    if (params.sortOrder) query.append('sortOrder', params.sortOrder);
+    if (params.isActive !== undefined && params.isActive !== '') query.append('isActive', params.isActive);
+    
+    const queryString = query.toString();
+    return apiCall(`/project${queryString ? `?${queryString}` : ''}`);
   },
 
   getProjects: async (universityId) => {
@@ -40,9 +49,19 @@ const projectService = {
   },
 
   // Get projects by session
-  getProjectsBySession: async (sessionId, universityId) => {
-    const url = `/project?sessionId=${sessionId}${universityId ? `&universityId=${universityId}` : ''}`;
-    return apiCall(url);
+  getProjectsBySession: async (sessionId, universityId, params = {}) => {
+    const query = new URLSearchParams();
+    if (sessionId) query.append('sessionId', sessionId);
+    if (universityId) query.append('universityId', universityId);
+    if (params.page) query.append('page', params.page);
+    if (params.pageSize !== undefined) query.append('pageSize', params.pageSize);
+    if (params.search) query.append('search', params.search);
+    if (params.sortField) query.append('sortField', params.sortField);
+    if (params.sortOrder) query.append('sortOrder', params.sortOrder);
+    if (params.isActive !== undefined && params.isActive !== '') query.append('isActive', params.isActive);
+    
+    const queryString = query.toString();
+    return apiCall(`/project${queryString ? `?${queryString}` : ''}`);
   }
 };
 

@@ -144,6 +144,7 @@ namespace API.Controllers
                     return Unauthorized(new { success = false, message = "Invalid user" });
 
                 var user = await _context.Users
+                    .AsNoTracking()
                     .Include(u => u.University)
                     .FirstOrDefaultAsync(u => u.Id == userId);
 
@@ -151,6 +152,7 @@ namespace API.Controllers
                     return NotFound(new { success = false, message = "User not associated with a university" });
 
                 var university = await _context.Universities
+                    .AsNoTracking()
                     .Include(u => u.Departments)
                     .Include(u => u.Projects)
                     .FirstOrDefaultAsync(u => u.UniversityId == user.UniversityId);

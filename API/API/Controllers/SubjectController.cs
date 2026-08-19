@@ -24,20 +24,19 @@ namespace API.Controllers
             [FromQuery] int? departmentId = null,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 10,
-            [FromQuery] string search = "")
+            [FromQuery] string search = "",
+            [FromQuery] string? sortField = null,
+            [FromQuery] string? sortOrder = null,
+            [FromQuery] bool? isActive = null)
         {
             try
             {
-                var query = _context.Subjects
-                    .Where(s => s.Status)
-                    .Include(s => s.DepartmentSubjects)
-                        .ThenInclude(ds => ds.Department)
-                    .Include(s => s.CourseSubjects)
-                        .ThenInclude(cs => cs.Course)
-                    .Include(s => s.SubjectPapers)
-                        .ThenInclude(sp => sp.Paper)
-                    .Include(s => s.ExaminerExpertises)
-                    .AsQueryable();
+                var query = _context.Subjects.AsQueryable();
+
+                if (isActive.HasValue)
+                {
+                    query = query.Where(s => s.Status == isActive.Value);
+                }
 
                 if (departmentId.HasValue)
                 {
@@ -48,24 +47,58 @@ namespace API.Controllers
 
                 if (!string.IsNullOrWhiteSpace(search))
                 {
-                    query = query.Where(s => s.SubName.Contains(search) || s.SubCode.Contains(search));
+                    var s = search.ToLower();
+                    query = query.Where(sub => sub.SubName.ToLower().Contains(s) || sub.SubCode.ToLower().Contains(s));
                 }
 
                 var totalCount = await query.CountAsync();
 
-                query = query.OrderBy(s => s.SubName);
+                // Sorting
+                if (!string.IsNullOrEmpty(sortField))
+                {
+                    bool isDesc = sortOrder?.ToLower() == "desc";
+                    
+                    if (sortField.Equals("subName", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(s => s.SubName) : query.OrderBy(s => s.SubName);
+                    else if (sortField.Equals("subCode", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(s => s.SubCode) : query.OrderBy(s => s.SubCode);
+                    else if (sortField.Equals("status", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(s => s.Status) : query.OrderBy(s => s.Status);
+                    else
+                        query = query.OrderBy(s => s.SubName);
+                }
+                else
+                {
+                    query = query.OrderBy(s => s.SubName);
+                }
 
-                List<Subject> subjects;
+                var projection = query.Select(s => new
+                {
+                    subjectId = s.SubjectId,
+                    subName = s.SubName,
+                    subCode = s.SubCode,
+                    status = s.Status,
+                    departmentSubjects = s.DepartmentSubjects.Select(ds => new
+                    {
+                        department = ds.Department != null ? new { name = ds.Department.Name } : null
+                    }).ToList(),
+                    courseSubjects = s.CourseSubjects.Select(cs => new
+                    {
+                        course = cs.Course != null ? new { name = cs.Course.Name } : null
+                    }).ToList()
+                });
+
+                object subjects;
                 if (pageSize > 0)
                 {
-                    subjects = await query
+                    subjects = await projection
                         .Skip((page - 1) * pageSize)
                         .Take(pageSize)
                         .ToListAsync();
                 }
                 else
                 {
-                    subjects = await query.ToListAsync();
+                    subjects = await projection.ToListAsync();
                 }
 
                 var totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 1;
@@ -122,12 +155,22 @@ namespace API.Controllers
                         s.Status &&
                         s.DepartmentSubjects.Any(ds =>
                             departmentIds.Contains(ds.DepartmentId)))
-                    .Include(s => s.DepartmentSubjects)
-                        .ThenInclude(ds => ds.Department)
-                    .Include(s => s.SubjectPapers)
-                        .ThenInclude(sp => sp.Paper)
-                    .Include(s => s.ExaminerExpertises)
-                    .OrderBy(s => s.SubName)
+                    .Select(s => new
+                    {
+                        subjectId = s.SubjectId,
+                        subName = s.SubName,
+                        subCode = s.SubCode,
+                        status = s.Status,
+                        departmentSubjects = s.DepartmentSubjects.Select(ds => new
+                        {
+                            department = ds.Department != null ? new { name = ds.Department.Name } : null
+                        }).ToList(),
+                        courseSubjects = s.CourseSubjects.Select(cs => new
+                        {
+                            course = cs.Course != null ? new { name = cs.Course.Name } : null
+                        }).ToList()
+                    })
+                    .OrderBy(s => s.subName)
                     .ToListAsync();
 
                 return Ok(subjects);
@@ -147,7 +190,10 @@ namespace API.Controllers
             [FromQuery] int universityId,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 10,
-            [FromQuery] string search = "")
+            [FromQuery] string search = "",
+            [FromQuery] string? sortField = null,
+            [FromQuery] string? sortOrder = null,
+            [FromQuery] bool? isActive = null)
         {
             try
             {
@@ -169,37 +215,69 @@ namespace API.Controllers
                 // Get subjects mapped to those departments
                 var query = _context.Subjects
                     .Where(s =>
-                        s.Status &&
                         s.DepartmentSubjects.Any(ds =>
                             departmentIds.Contains(ds.DepartmentId)))
-                    .Include(s => s.DepartmentSubjects)
-                        .ThenInclude(ds => ds.Department)
-                    .Include(s => s.CourseSubjects)
-                        .ThenInclude(cs => cs.Course)
-                    .Include(s => s.SubjectPapers)
-                        .ThenInclude(sp => sp.Paper)
                     .AsQueryable();
+
+                if (isActive.HasValue)
+                {
+                    query = query.Where(s => s.Status == isActive.Value);
+                }
 
                 if (!string.IsNullOrWhiteSpace(search))
                 {
-                    query = query.Where(s => s.SubName.Contains(search) || s.SubCode.Contains(search));
+                    var s = search.ToLower();
+                    query = query.Where(sub => sub.SubName.ToLower().Contains(s) || sub.SubCode.ToLower().Contains(s));
                 }
 
                 var totalCount = await query.CountAsync();
 
-                query = query.OrderBy(s => s.SubName);
+                // Sorting
+                if (!string.IsNullOrEmpty(sortField))
+                {
+                    bool isDesc = sortOrder?.ToLower() == "desc";
+                    
+                    if (sortField.Equals("subName", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(s => s.SubName) : query.OrderBy(s => s.SubName);
+                    else if (sortField.Equals("subCode", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(s => s.SubCode) : query.OrderBy(s => s.SubCode);
+                    else if (sortField.Equals("status", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(s => s.Status) : query.OrderBy(s => s.Status);
+                    else
+                        query = query.OrderBy(s => s.SubName);
+                }
+                else
+                {
+                    query = query.OrderBy(s => s.SubName);
+                }
 
-                List<Subject> subjects;
+                var projection = query.Select(s => new
+                {
+                    subjectId = s.SubjectId,
+                    subName = s.SubName,
+                    subCode = s.SubCode,
+                    status = s.Status,
+                    departmentSubjects = s.DepartmentSubjects.Select(ds => new
+                    {
+                        department = ds.Department != null ? new { name = ds.Department.Name } : null
+                    }).ToList(),
+                    courseSubjects = s.CourseSubjects.Select(cs => new
+                    {
+                        course = cs.Course != null ? new { name = cs.Course.Name } : null
+                    }).ToList()
+                });
+
+                object subjects;
                 if (pageSize > 0)
                 {
-                    subjects = await query
+                    subjects = await projection
                         .Skip((page - 1) * pageSize)
                         .Take(pageSize)
                         .ToListAsync();
                 }
                 else
                 {
-                    subjects = await query.ToListAsync();
+                    subjects = await projection.ToListAsync();
                 }
 
                 var totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 1;

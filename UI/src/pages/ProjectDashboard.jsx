@@ -5,16 +5,11 @@ import {
   Layers, 
   FileText, 
   Users, 
-  TrendingUp, 
   CheckCircle, 
   Clock, 
   AlertCircle,
-  FileSpreadsheet,
-  Award,
   BookOpen,
-  Calendar,
   Zap,
-  ArrowUpRight,
   Search
 } from 'lucide-react';
 import { useTable } from '../services/tableService';
@@ -263,9 +258,6 @@ export default function ProjectDashboard() {
               <div className="flex items-center gap-2">
                 <span className="bg-indigo-50 text-indigo-700 border border-indigo-100 text-[8px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider">
                   Evaluation Control Panel
-                </span>
-                <span className="bg-slate-100 text-slate-600 text-[8px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider">
-                  ID: PRJ-{project?.projectId}
                 </span>
               </div>
               <h1 className="text-lg font-black text-slate-900 mt-1 leading-tight">{project?.projectName}</h1>

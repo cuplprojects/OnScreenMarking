@@ -79,11 +79,11 @@ export default function PapersManagement() {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const projs = await projectService.getProjects(activeUniversityId);
-      setProjects(projs || []);
+      const projs = await projectService.getAllProjects(activeUniversityId, { pageSize: 0 });
+      setProjects(projs?.items || projs || []);
 
       if (activeUniversityId) {
-        const subs = await subjectService.getSubjectByUniversity(activeUniversityId);
+        const subs = await subjectService.getSubjectByUniversity(activeUniversityId, { pageSize: 0 });
         const subjectsArray = Array.isArray(subs) ? subs : (subs?.items || []);
         const mappedSubs = subjectsArray.map(s => ({ ...s, subjectName: s.subName || s.subjectName || '' }));
         setSubjects(mappedSubs);
@@ -121,7 +121,8 @@ export default function PapersManagement() {
         data = await paperService.getAllPapers(activeUniversityId);
       }
 
-      const mappedData = (data || []).map(paper => ({
+      const papersArray = data?.items || data || [];
+      const mappedData = papersArray.map(paper => ({
         ...paper,
         subjectPapers: paper.subjectPapers?.map(sp => ({
           ...sp,
@@ -358,7 +359,6 @@ export default function PapersManagement() {
                   <FileText className="text-blue-600" />
                   Papers Management
                 </h1>
-                <p className="text-sm text-gray-500">Configure and allocate examiners to exam papers</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -761,7 +761,6 @@ export default function PapersManagement() {
                           />
                           <div>
                             <p className="text-sm font-bold text-gray-800">{examiner.name}</p>
-                            <p className="text-[10px] text-gray-500">ID: {examiner.id}</p>
                           </div>
                         </div>
                         <button 

@@ -81,120 +81,91 @@ const Home = () => {
     const sortFieldVal = params.sortField || '';
     const sortOrderVal = params.sortOrder || '';
 
-    const allScripts = await apiCall(`/scripts/examiner/${user.id}`);
+    // Fetch paginated data for the table
+    const queryParams = new URLSearchParams();
+    queryParams.append('page', pageVal);
+    queryParams.append('pageSize', pageSizeVal);
+    if (searchVal) queryParams.append('search', searchVal);
+    if (sortFieldVal) queryParams.append('sortField', sortFieldVal);
+    if (sortOrderVal) queryParams.append('sortOrder', sortOrderVal);
+    if (statusFilterVal && statusFilterVal !== 'all') queryParams.append('statusFilter', statusFilterVal);
+    if (subjectFilterVal) queryParams.append('subjectFilter', subjectFilterVal);
+
+    const response = await apiCall(`/scripts/examiner/${user.id}?${queryParams.toString()}`);
     
-    const expertiseIds = [user?.subjectId1, user?.subjectId2, user?.subjectId3].filter(id => id && id > 0);
-    let subjectsData = [];
-    try {
-      subjectsData = await Promise.all(
-        expertiseIds.map(id => apiCall(`/subject/${id}`))
-      );
-    } catch (err) {
-      console.error("Failed to load expertise subjects:", err);
-    }
-
-    const filtered = (allScripts || []).filter(script => {
-      const matchesSearch = 
-        (script.generatedBarcode || '').toLowerCase().includes(searchVal.toLowerCase()) ||
-        (script.paperName || '').toLowerCase().includes(searchVal.toLowerCase()) ||
-        (script.subjectName || '').toLowerCase().includes(searchVal.toLowerCase()) ||
-        `SCR-${script.id}`.toLowerCase().includes(searchVal.toLowerCase());
-      
-      const matchesStatus = 
-        statusFilterVal === 'all' ? true :
-        statusFilterVal === 'completed' ? script.status === 'completed' :
-        statusFilterVal === 'marking' ? script.status === 'marking' :
-        statusFilterVal === 'pending' ? (script.status === 'allocated' || script.status === 'pending') : true;
-
-      const matchesSubject = !subjectFilterVal || script.subjectId?.toString() === subjectFilterVal.toString();
-
-      return matchesSearch && matchesStatus && matchesSubject;
-    });
-
-    // Client-side Sorting Implementation
-    if (sortFieldVal) {
-      filtered.sort((a, b) => {
-        let aVal = a[sortFieldVal];
-        let bVal = b[sortFieldVal];
-
-        if (sortFieldVal === 'barcode') {
-          aVal = a.generatedBarcode || `SCR-${a.id}`;
-          bVal = b.generatedBarcode || `SCR-${b.id}`;
-        } else if (sortFieldVal === 'submittedAt') {
-          aVal = new Date(a.submittedAt || a.createdAt);
-          bVal = new Date(b.submittedAt || b.createdAt);
-        } else if (sortFieldVal === 'totalMarks') {
-          aVal = a.totalMarks !== null ? parseFloat(a.totalMarks) : -1;
-          bVal = b.totalMarks !== null ? parseFloat(b.totalMarks) : -1;
-        }
-
-        if (typeof aVal === 'string') {
-          return sortOrderVal === 'asc' 
-            ? aVal.localeCompare(bVal) 
-            : bVal.localeCompare(aVal);
-        } else {
-          return sortOrderVal === 'asc' 
-            ? (aVal > bVal ? 1 : -1) 
-            : (bVal > aVal ? 1 : -1);
-        }
-      });
-    } else {
-      filtered.sort((a, b) => new Date(b.submittedAt || b.createdAt) - new Date(a.submittedAt || a.createdAt));
-    }
-
-    const total = allScripts.length;
-    const evaluatedCount = allScripts.filter(s => s.status === 'completed').length;
-    const markingCount = allScripts.filter(s => s.status === 'marking').length;
-    const pendingCount = allScripts.filter(s => s.status === 'allocated' || s.status === 'pending').length;
-    const completedScripts = allScripts.filter(s => s.status === 'completed' && s.totalMarks !== null);
-    const sumMarks = completedScripts.reduce((sum, s) => sum + parseFloat(s.totalMarks), 0);
-    const avgScore = completedScripts.length > 0 ? (sumMarks / completedScripts.length) : 0;
-
-    setStats({
-      totalScripts: total,
-      evaluated: evaluatedCount,
-      inProgress: markingCount,
-      pending: pendingCount,
-      averageScore: parseFloat(avgScore.toFixed(1)),
-    });
-
-    // Calculate subject workloads based on user's expertise subjects and group papers under them
-    const workloads = subjectsData.map(sub => {
-      const subjectScripts = (allScripts || []).filter(s => s.subjectId === sub.subjectId);
-      
-      const papersMap = {};
-      subjectScripts.forEach(s => {
-        const pKey = s.paperId;
-        if (!papersMap[pKey]) {
-          papersMap[pKey] = {
-            paperId: s.paperId,
-            paperName: s.paperName || `Paper ID: ${s.paperId}`,
-            paperCode: s.paperCode || '',
-            count: 0
-          };
-        }
-        papersMap[pKey].count += 1;
-      });
-
-      return {
-        subjectId: sub.subjectId,
-        subjectName: sub.subjectName || sub.subName,
-        totalCount: subjectScripts.length,
-        papers: Object.values(papersMap)
-      };
-    });
-    setSubjectWorkloads(workloads);
-
-    const startIdx = (pageVal - 1) * pageSizeVal;
-    const paginated = filtered.slice(startIdx, startIdx + pageSizeVal);
-
     return {
-      items: paginated,
-      totalCount: filtered.length,
-      page: pageVal,
-      pageSize: pageSizeVal,
-      totalPages: Math.ceil(filtered.length / pageSizeVal) || 1
+      items: response.items || [],
+      totalCount: response.totalCount || 0,
+      page: response.page || 1,
+      pageSize: response.pageSize || 10,
+      totalPages: response.totalPages || 1
     };
+  }, [user]);
+
+  // Separate effect to load all scripts for dashboard stats
+  useEffect(() => {
+    const loadStats = async () => {
+      if (!user?.id) return;
+      try {
+        // Fetch all scripts for stats
+        const allScriptsResponse = await apiCall(`/scripts/examiner/${user.id}?pageSize=0`);
+        const allScripts = allScriptsResponse.items || [];
+
+        const expertiseIds = [user?.subjectId1, user?.subjectId2, user?.subjectId3].filter(id => id && id > 0);
+        let subjectsData = [];
+        if (expertiseIds.length > 0) {
+          subjectsData = await Promise.all(
+            expertiseIds.map(id => apiCall(`/subject/${id}`))
+          );
+        }
+
+        const total = allScripts.length;
+        const evaluatedCount = allScripts.filter(s => s.status === 'completed').length;
+        const markingCount = allScripts.filter(s => s.status === 'marking').length;
+        const pendingCount = allScripts.filter(s => s.status === 'allocated' || s.status === 'pending').length;
+        const completedScripts = allScripts.filter(s => s.status === 'completed' && s.totalMarks !== null);
+        const sumMarks = completedScripts.reduce((sum, s) => sum + parseFloat(s.totalMarks), 0);
+        const avgScore = completedScripts.length > 0 ? (sumMarks / completedScripts.length) : 0;
+
+        setStats({
+          totalScripts: total,
+          evaluated: evaluatedCount,
+          inProgress: markingCount,
+          pending: pendingCount,
+          averageScore: parseFloat(avgScore.toFixed(1)),
+        });
+
+        // Calculate subject workloads based on user's expertise subjects and group papers under them
+        const workloads = subjectsData.map(sub => {
+          const subjectScripts = allScripts.filter(s => s.subjectId === sub.subjectId);
+          
+          const papersMap = {};
+          subjectScripts.forEach(s => {
+            const pKey = s.paperId;
+            if (!papersMap[pKey]) {
+              papersMap[pKey] = {
+                paperId: s.paperId,
+                paperName: s.paperName,
+                paperCode: s.paperCode || '',
+                count: 0
+              };
+            }
+            papersMap[pKey].count += 1;
+          });
+
+          return {
+            subjectId: sub.subjectId,
+            subjectName: sub.subjectName || sub.subName,
+            totalCount: subjectScripts.length,
+            papers: Object.values(papersMap)
+          };
+        });
+        setSubjectWorkloads(workloads);
+      } catch (err) {
+        console.error("Failed to load stats:", err);
+      }
+    };
+    loadStats();
   }, [user]);
 
   const {
@@ -577,7 +548,7 @@ const Home = () => {
                       {script.subjectName || 'General Subject'}
                     </td>
                     <td className="px-5 py-3 text-xs text-gray-700 font-semibold">
-                      {script.paperName || `Paper ID: ${script.paperId}`}
+                      {script.paperName}
                     </td>
                     <td className="px-5 py-3">
                       <span

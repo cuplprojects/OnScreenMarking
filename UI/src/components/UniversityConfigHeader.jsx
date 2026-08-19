@@ -28,11 +28,18 @@ export default function UniversityConfigHeader() {
   }, [universityId]);
 
   const fetchUniversityDetails = async () => {
+    const cachedName = sessionStorage.getItem(`universityName_${universityId}`);
+    if (cachedName) {
+      setUniversityName(cachedName);
+      return;
+    }
+    
     try {
       setLoading(true);
       const data = await apiCall(`/universities/${universityId}`);
       if (data && data.universityName) {
         setUniversityName(data.universityName);
+        sessionStorage.setItem(`universityName_${universityId}`, data.universityName);
       }
     } catch (err) {
       try {
@@ -40,6 +47,7 @@ export default function UniversityConfigHeader() {
         const match = unis.find(u => u.universityId === parseInt(universityId, 10));
         if (match) {
           setUniversityName(match.universityName);
+          sessionStorage.setItem(`universityName_${universityId}`, match.universityName);
         }
       } catch (innerErr) {
         console.error('Failed to resolve university details:', innerErr);
@@ -81,7 +89,7 @@ export default function UniversityConfigHeader() {
       id: 'users',
       label: 'Personnel & Users',
       icon: <Users size={12} />,
-      path: '/admin/users'
+      path: userType === 'admin' ? '/admin/dashboard' : '/coordinator/dashboard'
     },
   ];
 

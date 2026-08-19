@@ -53,11 +53,15 @@ namespace API.Controllers
                     query = query.Where(a => a.Status == status);
 
                 var total = await query.CountAsync();
+                
+                if (limit > 0)
+                {
+                    query = query.Skip((page - 1) * limit).Take(limit);
+                }
+
                 var allocations = await query
                     .Include(a => a.Script)
                     .Include(a => a.Examiner)
-                    .Skip((page - 1) * limit)
-                    .Take(limit)
                     .OrderByDescending(a => a.AllocatedAt)
                     .ToListAsync();
 

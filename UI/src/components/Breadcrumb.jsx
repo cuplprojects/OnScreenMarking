@@ -26,7 +26,7 @@ export default function Breadcrumb() {
   }
 
   return (
-    <nav className="flex items-center gap-2 text-sm mb-6 px-4 lg:px-6 py-3 bg-white rounded-lg border border-gray-200" aria-label="Breadcrumb">
+    <nav className="flex items-center gap-2 text-sm mb-3 px-4 lg:px-6 py-3 bg-white rounded-lg border border-gray-200" aria-label="Breadcrumb">
       {breadcrumbs.map((item, index) => {
         const IconComponent = iconMap[item.icon] || Home;
         const isLast = index === breadcrumbs.length - 1;

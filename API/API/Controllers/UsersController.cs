@@ -90,7 +90,16 @@ namespace API.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<UserDto>>> GetUsers([FromQuery] int? universityId = null)
+        public async Task<ActionResult<object>> GetUsers(
+            [FromQuery] int? universityId = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? search = null,
+            [FromQuery] string? sortField = null,
+            [FromQuery] string? sortOrder = null,
+            [FromQuery] bool? isActive = null,
+            [FromQuery] string? userType = null,
+            [FromQuery] string? activeTab = null)
         {
             if (!await HasPermissionAsync("READ_USER"))
             {
@@ -106,10 +115,60 @@ namespace API.Controllers
                     query = query.Where(u => u.UniversityId == universityId.Value);
                 }
 
-                var users = await query
-                    .Include(u => u.University)
-                    .OrderBy(u => u.Name)
-                    .ToListAsync();
+                if (activeTab == "pending")
+                {
+                    query = query.Where(u => u.IsApproved == false && u.UserType.ToLower() != "admin");
+                }
+
+                if (isActive.HasValue)
+                {
+                    query = query.Where(u => u.IsActive == isActive.Value);
+                }
+
+                if (!string.IsNullOrEmpty(userType))
+                {
+                    query = query.Where(u => u.UserType.ToLower() == userType.ToLower());
+                }
+
+                if (!string.IsNullOrEmpty(search))
+                {
+                    var s = search.ToLower();
+                    query = query.Where(u => (u.Name != null && u.Name.ToLower().Contains(s)) || 
+                                             (u.Email != null && u.Email.ToLower().Contains(s)));
+                }
+
+                var totalCount = await query.CountAsync();
+
+                // Sorting
+                if (!string.IsNullOrEmpty(sortField))
+                {
+                    bool isDesc = sortOrder?.ToLower() == "desc";
+                    
+                    if (sortField.Equals("name", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(u => u.Name) : query.OrderBy(u => u.Name);
+                    else if (sortField.Equals("email", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(u => u.Email) : query.OrderBy(u => u.Email);
+                    else if (sortField.Equals("userType", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(u => u.UserType) : query.OrderBy(u => u.UserType);
+                    else if (sortField.Equals("universityName", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(u => u.University.UniversityName) : query.OrderBy(u => u.University.UniversityName);
+                    else if (sortField.Equals("isActive", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(u => u.IsActive) : query.OrderBy(u => u.IsActive);
+                    else
+                        query = query.OrderBy(u => u.Name);
+                }
+                else
+                {
+                    query = query.OrderBy(u => u.Name);
+                }
+
+                // Pagination
+                if (pageSize > 0)
+                {
+                    query = query.Skip((page - 1) * pageSize).Take(pageSize);
+                }
+
+                var users = await query.Include(u => u.University).ToListAsync();
 
                 var userDtos = users.Select(u => new UserDto
                 {
@@ -135,7 +194,14 @@ namespace API.Controllers
                     University = u.University != null ? new University { UniversityId = u.University.UniversityId, UniversityName = u.University.UniversityName } : null
                 }).ToList();
 
-                return Ok(userDtos);
+                var totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 1;
+
+                return Ok(new
+                {
+                    items = userDtos,
+                    totalCount = totalCount,
+                    totalPages = totalPages
+                });
             }
             catch (Exception ex)
             {
@@ -144,6 +210,31 @@ namespace API.Controllers
         }
 
 
+        [HttpGet("examiners/workload")]
+        public async Task<IActionResult> GetExaminersWorkload([FromQuery] int universityId)
+        {
+            try
+            {
+                var examiners = await _context.Users
+                    .AsNoTracking()
+                    .Where(u => u.UniversityId == universityId && u.UserType.ToLower() == "examiner")
+                    .Select(u => new
+                    {
+                        id = u.Id,
+                        name = u.Name,
+                        email = u.Email,
+                        phone = u.Phone,
+                        allocatedCount = _context.Allocations.Count(a => a.ExaminerId == u.Id)
+                    })
+                    .ToListAsync();
+
+                return Ok(examiners);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<UserDto>> GetUserById(int id)

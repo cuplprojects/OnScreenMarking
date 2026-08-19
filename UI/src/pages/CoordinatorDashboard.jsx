@@ -68,47 +68,52 @@ export default function CoordinatorDashboard() {
   };
 
   useEffect(() => {
-    fetchUniversityData();
-  }, [selectedSessionId]);
+    fetchBaseData();
+  }, []);
 
-  const fetchUniversityData = async () => {
+  useEffect(() => {
+    if (university && selectedSessionId) {
+      fetchDynamicData();
+    }
+  }, [selectedSessionId, university]);
+
+  const fetchBaseData = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // 1. Get coordinator's university
       const uniData = await apiCall('/universities/current/my-university');
       setUniversity(uniData);
 
-      // 2. Fetch Sessions
       const sessionsData = await apiCall('/session');
       setSessions(sessionsData || []);
       
-      // Set active session by default on initial load
       if (!selectedSessionId && sessionsData && sessionsData.length > 0) {
         const active = sessionsData.find(s => s.isActive) || sessionsData[0];
         setSelectedSessionId(active.sessionId.toString());
       }
+    } catch (err) {
+      console.error('Failed to fetch base data:', err);
+      setError(err.message || 'Failed to load university data');
+      setLoading(false);
+    }
+  };
+
+  const fetchDynamicData = async () => {
+    if (!university) return;
+    
+    try {
+      setLoading(true);
       
-      // 3. Fetch consolidated counts from stats endpoint
+      // Fetch consolidated counts
       let countsData = { departments: 0, courses: 0, subjects: 0, scripts: 0, completedMarking: 0 };
       try {
-        countsData = await apiCall(`/stats/counts?universityId=${uniData.universityId}`);
+        countsData = await apiCall(`/stats/counts?universityId=${university.universityId}`);
       } catch (statsErr) {
         console.error('Failed to fetch counts from stats API:', statsErr);
       }
 
-
-      // 5. Fetch all papers
-      // 5. Fetch all allocations
-      let allocationsData = [];
-      try {
-        allocationsData = await apiCall('/allocation');
-      } catch (allocErr) {
-        console.error('Failed to fetch allocations:', allocErr);
-      }
-
-      // Calculate project-wise statistics from consolidated stats response
+      // Calculate project-wise statistics
       const statsMap = {};
       const apiProjectsStats = countsData.projects || [];
       apiProjectsStats.forEach(p => {
@@ -121,36 +126,34 @@ export default function CoordinatorDashboard() {
         };
       });
       setProjectStats(statsMap);
+      
+      setUnassignedCount(countsData.unassignedScriptsCount);
 
-      // Filter projects by selected session
-      const rawProjects = uniData.projects || [];
+      // Load examiners workload
+      let examinersWithWorkload = [];
+      try {
+        const workloadData = await apiCall(`/users/examiners/workload?universityId=${university.universityId}`);
+        examinersWithWorkload = (workloadData || []).map(ex => {
+          const count = ex.allocatedCount || 0;
+          let workload = 'Free';
+          if (count > 20) workload = 'Fully Allocated';
+          else if (count > 0) workload = 'Partially Allocated';
+
+          return { ...ex, workload };
+        });
+      } catch (workloadErr) {
+        console.error('Failed to fetch examiners workload:', workloadErr);
+      }
+
+      setExaminers(examinersWithWorkload);
+
+      // Filter projects locally
+      const rawProjects = university.projects || [];
       const sessIdNum = parseInt(selectedSessionId || '0', 10);
       const filteredProj = sessIdNum 
         ? rawProjects.filter(p => p.sessionId === sessIdNum)
         : rawProjects;
       setActiveProjects(filteredProj);
-      
-      setUnassignedCount(countsData.unassignedScriptsCount);
-
-      // Load examiners workload
-      const usersData = await apiCall(`/users?universityId=${uniData.universityId}`);
-      const examinersList = (usersData || []).filter(u => u.userType?.toLowerCase() === 'examiner');
-
-      const examinersWithWorkload = examinersList.map(ex => {
-        const examinerAllocations = allocationsData.filter(a => a.examinerId === ex.id || a.allocatedUserId === ex.id);
-        const count = examinerAllocations.length;
-        
-        let workload = 'Free';
-        if (count > 20) workload = 'Fully Allocated';
-        else if (count > 0) workload = 'Partially Allocated';
-
-        return {
-          ...ex,
-          allocatedCount: count,
-          workload
-        };
-      });
-      setExaminers(examinersWithWorkload);
 
       setStats({
         departments: countsData.departments,
@@ -160,17 +163,18 @@ export default function CoordinatorDashboard() {
         totalScripts: countsData.scripts,
         assignedScripts: 0,
         completedScripts: countsData.completedMarking,
-        users: usersData?.length || 0
+        users: examinersWithWorkload.length
       });
+      
     } catch (err) {
-      console.error('Failed to fetch university data:', err);
-      setError(err.message || 'Failed to load university data');
+      console.error('Failed to fetch dynamic data:', err);
+      setError(err.message || 'Failed to load dynamic data');
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading) {
+  if (loading && !university) {
     return (
       <div className="min-h-screen bg-slate-50/50 flex flex-col items-center justify-center gap-3">
         <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-650 border-t-transparent"></div>
@@ -208,29 +212,27 @@ export default function CoordinatorDashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50/50 pb-12 w-full px-6 lg:px-10">
-      {/* Top Breadcrumb & Alert Bar */}
-      <div className="pt-6">
-        {unassignedCount > 0 && (
-          <div className="mb-6 bg-gradient-to-r from-amber-500/10 to-red-500/10 border border-amber-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-pulse">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-amber-500 text-white rounded-xl flex items-center justify-center shadow-md shrink-0">
-                <AlertCircle size={18} />
-              </div>
-              <div>
-                <h3 className="text-xs font-bold text-amber-900 uppercase tracking-wider">Attention Required</h3>
-                <p className="text-xs text-amber-800 mt-0.5">There are <span className="font-bold text-red-600">{unassignedCount}</span> scripts pending examiner allocation. Please assign them immediately.</p>
-              </div>
+    <div className="min-h-screen bg-slate-50/50 pb-12 w-full px-4 lg:px-6">
+      {/* Alert Bar */}
+      {unassignedCount > 0 && (
+        <div className="mb-4 mt-2 bg-gradient-to-r from-amber-500/10 to-red-500/10 border border-amber-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-pulse">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-amber-500 text-white rounded-xl flex items-center justify-center shadow-md shrink-0">
+              <AlertCircle size={18} />
             </div>
-            <Link 
-              to="/allocate-scripts" 
-              className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[10px] uppercase tracking-wider px-4 py-2 rounded-xl transition-all shadow-md shrink-0"
-            >
-              Allocate Scripts
-            </Link>
+            <div>
+              <h3 className="text-xs font-bold text-amber-900 uppercase tracking-wider">Attention Required</h3>
+              <p className="text-xs text-amber-800 mt-0.5">There are <span className="font-bold text-red-600">{unassignedCount}</span> scripts pending examiner allocation. Please assign them immediately.</p>
+            </div>
           </div>
-        )}
-      </div>
+          <Link 
+            to="/allocate-scripts" 
+            className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[10px] uppercase tracking-wider px-4 py-2 rounded-xl transition-all shadow-md shrink-0"
+          >
+            Allocate Scripts
+          </Link>
+        </div>
+      )}
 
       {/* Main Glass Header */}
       <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -242,7 +244,6 @@ export default function CoordinatorDashboard() {
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">
             {university?.universityName} Portal
           </h1>
-          <p className="text-slate-500 text-xs mt-0.5">University Examinations & Evaluation Control Room</p>
         </div>
         <div className="flex items-center gap-3">
           {/* Academic Session Selector */}
@@ -261,16 +262,6 @@ export default function CoordinatorDashboard() {
               ))}
             </select>
           </div>
-
-          <div className="bg-slate-50 px-4 py-2 rounded-2xl border border-slate-150 flex items-center gap-3">
-            <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl">
-              <Activity size={14} />
-            </div>
-            <div>
-              <p className="text-[9px] uppercase font-bold text-slate-400 leading-none mb-0.5"> Link</p>
-              <p className="text-xs font-bold text-slate-950">Active / Encrypted</p>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -287,9 +278,6 @@ export default function CoordinatorDashboard() {
                 <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800">Marking Status & Metric Board</h2>
                 <p className="text-[11px] text-slate-500">Real-time script evaluations status for university projects</p>
               </div>
-              <span className="bg-blue-50 text-blue-700 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-blue-100">
-                Evaluation Statistics
-              </span>
             </div>
 
             {/* Micro Metrics Rows */}
@@ -400,7 +388,6 @@ export default function CoordinatorDashboard() {
                           }`}>
                             {project.isActive ? 'Active' : 'Archived'}
                           </span>
-                          <span className="text-[9px] text-slate-400 font-semibold font-mono">ID: PRJ-{project.projectId}</span>
                         </div>
 
                         <h3 className="font-extrabold text-xs text-slate-900 group-hover:text-indigo-600 transition-colors leading-tight mb-2">
@@ -555,13 +542,6 @@ export default function CoordinatorDashboard() {
               <div className="border-b border-slate-50 pb-2">
                 <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">University Name</span>
                 <p className="text-xs font-bold text-slate-900 mt-0.5">{university?.universityName}</p>
-              </div>
-              <div className="border-b border-slate-50 pb-2">
-                <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">System Status</span>
-                <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 mt-0.5">
-                  <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></span>
-                  Active / Serving
-                </p>
               </div>
               <div>
                 <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Active Configs</span>

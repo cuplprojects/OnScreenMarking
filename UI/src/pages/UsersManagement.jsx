@@ -17,7 +17,10 @@ import {
   Loader,
   Search,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import userService from "../services/userService";
@@ -25,7 +28,6 @@ import universityService from "../services/universityService";
 import subjectService from "../services/subjectService";
 import roleService from "../services/roleService";
 import AssignRoleModal from "../components/RoleManagement/AssignRoleModal";
-import UniversityConfigHeader from "../components/UniversityConfigHeader";
 import departmentService from "../services/departmentService";
 import AddUserModal from "../components/AddUserModal";
 import { useTable } from "../services/tableService";
@@ -52,9 +54,6 @@ export default function UsersManagement() {
   const [generatedLink, setGeneratedLink] = useState("");
   const [copiedLink, setCopiedLink] = useState(false);
   const [emailStatus, setEmailStatus] = useState(null);
-
-  // Zoom / View User profile state
-  const [zoomUser, setZoomUser] = useState(null);
   const [subjects, setSubjects] = useState([]);
   const [roles, setRoles] = useState([]);
   const [showAssignRoleModal, setShowAssignRoleModal] = useState(false);
@@ -63,34 +62,7 @@ export default function UsersManagement() {
 
   // Define fetch function for useTable to load users with search, role and tab filters
   const fetchFn = useCallback(async (params) => {
-    const data = await userService.getAllUsers(activeUniversityId);
-    let result = data || [];
-
-    // Filter by Active Tab
-    if (activeTab === "pending") {
-      result = result.filter(u => u.isApproved === false && u.userType !== "admin");
-    }
-
-    // Apply Status Filter
-    if (params.isActive !== undefined && params.isActive !== "") {
-      const activeBool = params.isActive === "true";
-      result = result.filter(u => u.isActive === activeBool);
-    }
-
-    // Apply Role Filter
-    if (params.userType) {
-      result = result.filter(u => u.userType.toLowerCase() === params.userType.toLowerCase());
-    }
-
-    // Apply Search Term
-    if (params.search) {
-      const s = params.search.toLowerCase();
-      result = result.filter(
-        u => u.name.toLowerCase().includes(s) || u.email.toLowerCase().includes(s)
-      );
-    }
-
-    return result;
+    return await userService.getAllUsers(activeUniversityId, { ...params, activeTab });
   }, [activeUniversityId, activeTab]);
 
   // Centralized hook for users table states
@@ -109,10 +81,13 @@ export default function UsersManagement() {
     setError,
     filters,
     setFilter,
+    sortField,
+    sortOrder,
+    handleSort,
     refresh: refreshUsers
   } = useTable({
     fetchFn,
-    initialParams: { pageSize: 10 }
+    initialParams: { pageSize: 10, filters: { isActive: "true" } }
   });
 
   useEffect(() => {
@@ -124,16 +99,20 @@ export default function UsersManagement() {
 
   // Calculate quick count of total pending approvals globally
   const [pendingCount, setPendingCount] = useState(0);
-  useEffect(() => {
+  
+  const fetchPendingCount = useCallback(() => {
     if (activeUniversityId) {
-      userService.getAllUsers(activeUniversityId)
-        .then(data => {
-          const pending = data?.filter(u => u.isApproved === false && u.userType !== "admin") || [];
-          setPendingCount(pending.length);
+      userService.getAllUsers(activeUniversityId, { activeTab: "pending", pageSize: 1 })
+        .then(response => {
+          setPendingCount(response.totalCount || 0);
         })
         .catch(console.error);
     }
-  }, [activeUniversityId, users]);
+  }, [activeUniversityId]);
+
+  useEffect(() => {
+    fetchPendingCount();
+  }, [fetchPendingCount]);
 
   useEffect(() => {
     fetchUniversities();
@@ -146,8 +125,7 @@ export default function UsersManagement() {
   // Refresh table when tab changes
   useEffect(() => {
     setPage(1);
-    refreshUsers();
-  }, [activeTab, refreshUsers]);
+  }, [activeTab, setPage]);
 
   const fetchSubjects = async (universityId) => {
     try {
@@ -205,6 +183,7 @@ export default function UsersManagement() {
       await userService.approveUser(userId);
       message.success("Examiner approved and activated successfully!");
       refreshUsers();
+      fetchPendingCount();
       
     } catch (err) {
       setError(err.message || "Failed to approve examiner.");
@@ -271,23 +250,15 @@ export default function UsersManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 p-4 md:p-6 w-full max-w-none">
+    <div className="min-h-screen bg-transparent w-full max-w-none">
       <div className="w-full space-y-3">
-        {/* University Sub-navigation Operations Hub */}
-        <UniversityConfigHeader />
 
-        {/* Unified Dashboard Header & Filters Panel */}
         <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <div className="flex items-center gap-1 text-indigo-655 font-extrabold text-[10px] uppercase tracking-widest leading-none mb-1">
-                <Users size={11} />
-                <span>Personnel Governance</span>
-              </div>
               <h1 className="text-xl font-black text-slate-900 tracking-tight leading-none flex items-center gap-1.5">
                 <span>Personnel & Users</span>
               </h1>
-              <p className="text-slate-500 text-[10px] mt-0.5">Approve incoming examiner registrations, manage roles, and provision system accounts</p>
             </div>
             
             <div className="flex items-center gap-2 shrink-0">
@@ -444,11 +415,21 @@ export default function UsersManagement() {
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-450 uppercase tracking-widest select-none">
                       <th className="px-6 py-4">Photo</th>
-                      <th className="px-6 py-4">Name</th>
-                      <th className="px-6 py-4">Email</th>
-                      <th className="px-6 py-4">System Role</th>
-                      <th className="px-6 py-4">University</th>
-                      <th className="px-6 py-4 text-center">Status</th>
+                      <th className="px-6 py-4 cursor-pointer hover:text-slate-700 transition-colors" onClick={() => handleSort('name')}>
+                        <div className="flex items-center gap-1">Name {sortField === 'name' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}</div>
+                      </th>
+                      <th className="px-6 py-4 cursor-pointer hover:text-slate-700 transition-colors" onClick={() => handleSort('email')}>
+                        <div className="flex items-center gap-1">Email {sortField === 'email' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}</div>
+                      </th>
+                      <th className="px-6 py-4 cursor-pointer hover:text-slate-700 transition-colors" onClick={() => handleSort('userType')}>
+                        <div className="flex items-center gap-1">System Role {sortField === 'userType' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}</div>
+                      </th>
+                      <th className="px-6 py-4 cursor-pointer hover:text-slate-700 transition-colors" onClick={() => handleSort('universityName')}>
+                        <div className="flex items-center gap-1">University {sortField === 'universityName' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}</div>
+                      </th>
+                      <th className="px-6 py-4 text-center cursor-pointer hover:text-slate-700 transition-colors" onClick={() => handleSort('isActive')}>
+                        <div className="flex items-center justify-center gap-1">Status {sortField === 'isActive' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}</div>
+                      </th>
                       <th className="px-6 py-4 text-right">Actions</th>
                     </tr>
                   </thead>

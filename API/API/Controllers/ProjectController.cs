@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using API.Data;
@@ -20,7 +20,15 @@ namespace API.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Project>>> GetProjects([FromQuery] int? sessionId = null, [FromQuery] int? universityId = null)
+        public async Task<ActionResult<object>> GetProjects(
+            [FromQuery] int? sessionId = null, 
+            [FromQuery] int? universityId = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string search = "",
+            [FromQuery] string? sortField = null,
+            [FromQuery] string? sortOrder = null,
+            [FromQuery] bool? isActive = null)
         {
             try
             {
@@ -32,15 +40,70 @@ namespace API.Controllers
                 if (universityId.HasValue)
                     query = query.Where(p => p.UniversityId == universityId.Value);
 
-                var projects = await query
-                    .Where(p => p.IsActive)
-                    .Include(p => p.Session)
-                    .Include(p => p.University)
-                    .Include(p => p.Papers)
-                    .OrderBy(p => p.ProjectName)
-                    .ToListAsync();
+                if (isActive.HasValue)
+                    query = query.Where(p => p.IsActive == isActive.Value);
 
-                return Ok(projects);
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    var s = search.ToLower();
+                    query = query.Where(p => p.ProjectName.ToLower().Contains(s));
+                }
+
+                var totalCount = await query.CountAsync();
+
+                // Sorting
+                if (!string.IsNullOrEmpty(sortField))
+                {
+                    bool isDesc = sortOrder?.ToLower() == "desc";
+                    
+                    if (sortField.Equals("projectName", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(p => p.ProjectName) : query.OrderBy(p => p.ProjectName);
+                    else if (sortField.Equals("isActive", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(p => p.IsActive) : query.OrderBy(p => p.IsActive);
+                    else if (sortField.Equals("createdAt", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(p => p.CreatedAt) : query.OrderBy(p => p.CreatedAt);
+                    else
+                        query = query.OrderBy(p => p.ProjectName);
+                }
+                else
+                {
+                    query = query.OrderBy(p => p.ProjectName);
+                }
+
+                var projection = query.Select(p => new
+                {
+                    projectId = p.ProjectId,
+                    projectName = p.ProjectName,
+                    isActive = p.IsActive,
+                    createdAt = p.CreatedAt,
+                    sessionId = p.SessionId,
+                    universityId = p.UniversityId,
+                    session = p.Session != null ? new { sessionName = p.Session.SessionName } : null
+                });
+
+                object projects;
+                if (pageSize > 0)
+                {
+                    projects = await projection
+                        .Skip((page - 1) * pageSize)
+                        .Take(pageSize)
+                        .ToListAsync();
+                }
+                else
+                {
+                    projects = await projection.ToListAsync();
+                }
+
+                var totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 1;
+
+                return Ok(new
+                {
+                    items = projects,
+                    totalCount = totalCount,
+                    page = page,
+                    pageSize = pageSize,
+                    totalPages = totalPages
+                });
             }
             catch (Exception ex)
             {
