@@ -19,6 +19,7 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import AcceptInvitation from './pages/AcceptInvitation';
+import StudentPortal from './pages/StudentPortal';
 
 import Scripts from './pages/Scripts';
 import ExaminerMarking from './pages/ExaminerMarking';
@@ -165,6 +166,10 @@ function AppRoutes() {
           <Route 
             path="/subject-config" 
             element={userType === 'examiner' || userType === 'coordinator' ? <SubjectConfig /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+          <Route 
+            path="/admin/question-types" 
+            element={userType === 'admin' || userType === 'coordinator' ? <QuestionTypeMaster /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
 
           {/* Dynamic Permissions Controlled Routes */}
