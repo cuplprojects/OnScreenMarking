@@ -365,7 +365,7 @@ namespace API.Controllers
 
                 // Get pending scripts for this paper
                 var scripts = await _context.Scripts
-                    .Where(s => s.PaperId == paperId && s.Status == "pending")
+                    .Where(s => s.ProjectPaper.PaperId == paperId && s.Status == "pending")
                     .OrderBy(s => s.Id)
                     .ToListAsync();
 
@@ -390,7 +390,7 @@ namespace API.Controllers
                 var scriptDtos = scripts.Select(s => new
                 {
                     s.Id,
-                    s.PaperId,
+                    s.ProjectPaper.PaperId,
                     s.Status,
                     s.CreatedAt
                 }).ToList();
@@ -437,7 +437,7 @@ namespace API.Controllers
 
                 // Get pending scripts for this paper
                 var pendingScripts = await _context.Scripts
-                    .Where(s => s.PaperId == request.PaperId && s.Status == "pending")
+                    .Where(s => s.ProjectPaper.PaperId == request.PaperId && s.Status == "pending")
                     .ToListAsync();
 
                 var totalRequested = request.Allocations.Sum(a => a.Count);

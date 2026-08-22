@@ -6,6 +6,7 @@ import departmentService from '../services/departmentService';
 import { useTable } from '../services/tableService';
 import TablePagination from '../components/TablePagination';
 import AddSubjectModal from '../components/AddSubjectModal';
+import ColumnFilter from '../components/ColumnFilter';
 import { 
   BookOpen, 
   Plus, 
@@ -96,7 +97,7 @@ export default function SubjectManagement() {
 
   const getSortIcon = (field) => {
     if (filters.sortField !== field) return <ArrowUpDown size={12} className="text-slate-300" />;
-    return filters.sortOrder === 'asc' ? <ArrowUp size={12} className="text-indigo-500" /> : <ArrowDown size={12} className="text-indigo-500" />;
+    return filters.sortOrder === 'asc' ? <ArrowUp size={12} className="text-blue-500" /> : <ArrowDown size={12} className="text-blue-500" />;
   };
 
   // Load static departments for dropdown selects (pageSize: 0 retrieves all)
@@ -175,7 +176,7 @@ export default function SubjectManagement() {
             </div>
             <button
               onClick={() => setShowForm(!showForm)}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-650 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm hover:shadow self-start sm:self-center shrink-0"
+              className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm hover:shadow self-start sm:self-center shrink-0"
             >
               <Plus size={14} />
               <span>{showForm ? 'Cancel' : 'Add Subject'}</span>
@@ -267,7 +268,7 @@ export default function SubjectManagement() {
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
           {loading && subjects.length === 0 ? (
             <div className="p-12 text-center text-slate-400 font-bold text-xs flex flex-col items-center gap-3">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               <span>Fetching subjects...</span>
             </div>
           ) : subjects.length === 0 ? (
@@ -306,6 +307,7 @@ export default function SubjectManagement() {
                     >
                       <div className="flex items-center gap-1.5">
                         Subject Info {getSortIcon('subName')}
+                        <ColumnFilter columnKey="subName" currentFilter={filters.subName} setFilter={setFilter} placeholder="Filter subject name..." />
                       </div>
                     </th>
                     <th 
@@ -314,6 +316,7 @@ export default function SubjectManagement() {
                     >
                       <div className="flex items-center gap-1.5">
                         Subject Code {getSortIcon('subCode')}
+                        <ColumnFilter columnKey="subCode" currentFilter={filters.subCode} setFilter={setFilter} placeholder="Filter subject code..." />
                       </div>
                     </th>
                     <th className="px-6 py-4">Departments</th>
@@ -353,7 +356,7 @@ export default function SubjectManagement() {
                             {subject.departmentSubjects.map((ds) => ds.department?.name).filter(Boolean).map((name, idx) => (
                               <span 
                                 key={idx}
-                                className="px-2 py-1 bg-indigo-50 border border-indigo-100 text-indigo-750 rounded-md font-bold text-[9px] uppercase tracking-wider"
+                                className="px-2 py-1 bg-blue-50 border border-blue-100 text-blue-750 rounded-md font-bold text-[9px] uppercase tracking-wider"
                               >
                                 {name}
                               </span>

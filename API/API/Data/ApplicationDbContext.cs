@@ -18,6 +18,7 @@ namespace API.Data
         public DbSet<Session> Sessions { get; set; }
         public DbSet<Project> Projects { get; set; }
         public DbSet<Paper> Papers { get; set; }
+        public DbSet<ProjectPaper> ProjectPapers { get; set; }
         public DbSet<Section> Sections { get; set; }
         public DbSet<Question> Questions { get; set; }
         public DbSet<QuestionMark> QuestionMarks { get; set; }
@@ -139,9 +140,9 @@ namespace API.Data
             modelBuilder.Entity<Project>()
                 .HasKey(p => p.ProjectId);
             modelBuilder.Entity<Project>()
-                .HasMany(p => p.Papers)
-                .WithOne(p => p.Project)
-                .HasForeignKey(p => p.ProjectId)
+                .HasMany(p => p.ProjectPapers)
+                .WithOne(pp => pp.Project)
+                .HasForeignKey(pp => pp.ProjectId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             // Subject configuration
@@ -177,17 +178,31 @@ namespace API.Data
             modelBuilder.Entity<Paper>()
                 .HasKey(p => p.PaperId);
             modelBuilder.Entity<Paper>()
-                .HasIndex(p => p.PaperCode)
+                .HasIndex(p => new { p.PaperCode, p.UniversityId })
                 .IsUnique();
+            modelBuilder.Entity<Paper>()
+                .HasMany(p => p.ProjectPapers)
+                .WithOne(pp => pp.Paper)
+                .HasForeignKey(pp => pp.PaperId)
+                .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<Paper>()
                 .HasMany(p => p.Sections)
                 .WithOne(s => s.Paper)
-                .HasForeignKey(s => s.PaperId)
-                .OnDelete(DeleteBehavior.Cascade);
+                
             modelBuilder.Entity<Paper>()
-                .HasMany(p => p.Scripts)
-                .WithOne(s => s.Paper)
-                .HasForeignKey(s => s.PaperId)
+                
+                
+
+            // ProjectPaper configuration
+            modelBuilder.Entity<ProjectPaper>()
+                .HasKey(pp => pp.Id);
+            modelBuilder.Entity<ProjectPaper>()
+                .HasIndex(pp => new { pp.ProjectId, pp.PaperId })
+                .IsUnique();
+            modelBuilder.Entity<ProjectPaper>()
+                .HasMany(pp => pp.Scripts)
+                .WithOne(s => s.ProjectPaper)
+                .HasForeignKey(s => s.ProjectPaperId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             // Section configuration

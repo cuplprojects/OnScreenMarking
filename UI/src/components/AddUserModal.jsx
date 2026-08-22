@@ -166,12 +166,12 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 select-none">
+    <div className="fixed inset-0 z-50 bg-black/60  flex items-center justify-center p-4 select-none">
       <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden border border-slate-100 shadow-2xl flex flex-col animate-scale-up">
         {/* Header */}
         <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
           <div>
-            <div className="flex items-center gap-1.5 text-indigo-650 font-extrabold text-[10px] uppercase tracking-widest leading-none mb-1">
+            <div className="flex items-center gap-1.5 text-blue-650 font-extrabold text-[10px] uppercase tracking-widest leading-none mb-1">
               <ShieldCheck size={12} />
               <span>Direct Account Provisioning</span>
             </div>
@@ -206,7 +206,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g. Dr. Jane Smith"
-                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-indigo-600 font-medium transition"
+                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-blue-600 font-medium transition"
                 />
               </div>
             </div>
@@ -221,7 +221,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="jane.smith@university.edu"
-                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-indigo-600 font-medium transition"
+                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-blue-600 font-medium transition"
                 />
               </div>
             </div>
@@ -238,7 +238,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   placeholder="At least 8 chars + uppercase + symbol"
-                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-indigo-600 font-medium transition"
+                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-blue-600 font-medium transition"
                 />
               </div>
             </div>
@@ -252,7 +252,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   placeholder="10-digit mobile number"
-                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-indigo-600 font-medium transition"
+                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-blue-600 font-medium transition"
                 />
               </div>
             </div>
@@ -267,7 +267,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
                 <select
                   value={formData.userType}
                   onChange={(e) => setFormData({ ...formData, userType: e.target.value, subjectId1: '' })}
-                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-indigo-600 font-medium transition cursor-pointer appearance-none"
+                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-blue-600 font-medium transition cursor-pointer appearance-none"
                 >
                   {roles.filter(r => r.isActive).map((role) => {
                     if (role.roleName.toLowerCase() === 'admin' && userType !== 'admin') {
@@ -297,7 +297,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
                 <select
                   value={formData.departmentId}
                   onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
-                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-indigo-600 font-medium transition cursor-pointer appearance-none"
+                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-blue-600 font-medium transition cursor-pointer appearance-none"
                 >
                   <option value="">Select Department (Optional)</option>
                   {departments.map((dept) => (
@@ -314,13 +314,13 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
           {formData.userType === 'examiner' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50/60 p-4 rounded-2xl border border-slate-100">
               <div>
-                <label className="block text-[10px] font-black uppercase text-indigo-600 tracking-wider mb-1.5">Primary Subject Area *</label>
+                <label className="block text-[10px] font-black uppercase text-blue-600 tracking-wider mb-1.5">Primary Subject Area *</label>
                 <div className="relative">
                   <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                   <select
                     value={formData.subjectId1}
                     onChange={(e) => setFormData({ ...formData, subjectId1: e.target.value })}
-                    className="w-full bg-white border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-indigo-600 font-medium transition cursor-pointer appearance-none"
+                    className="w-full bg-white border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-blue-600 font-medium transition cursor-pointer appearance-none"
                   >
                     <option value="">Select Subject</option>
                     {subjects.map((sub) => (
@@ -333,7 +333,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
               </div>
 
               <div>
-                <label className="block text-[10px] font-black uppercase text-indigo-600 tracking-wider mb-1.5">Evaluation Experience</label>
+                <label className="block text-[10px] font-black uppercase text-blue-600 tracking-wider mb-1.5">Evaluation Experience</label>
                 <div className="relative">
                   <Award className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                   <input
@@ -341,7 +341,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
                     value={formData.experience}
                     onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
                     placeholder="e.g. 5 Years in University Grading"
-                    className="w-full bg-white border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-indigo-600 font-medium transition"
+                    className="w-full bg-white border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-blue-600 font-medium transition"
                   />
                 </div>
               </div>
@@ -396,7 +396,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
           <button
             onClick={handleSubmit}
             disabled={loading}
-            className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-650 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold text-xs cursor-pointer shadow transition disabled:opacity-50"
+            className="px-5 py-2 bg-gradient-to-r from-blue-600 to-blue-650 hover:from-blue-700 hover:to-blue-700 text-white rounded-xl font-bold text-xs cursor-pointer shadow transition disabled:opacity-50"
           >
             {loading ? 'Creating Account...' : 'Register User'}
           </button>

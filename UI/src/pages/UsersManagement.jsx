@@ -30,6 +30,7 @@ import roleService from "../services/roleService";
 import AssignRoleModal from "../components/RoleManagement/AssignRoleModal";
 import departmentService from "../services/departmentService";
 import AddUserModal from "../components/AddUserModal";
+import ColumnFilter from "../components/ColumnFilter";
 import { useTable } from "../services/tableService";
 import TablePagination from "../components/TablePagination";
 import message from '../services/messageService';
@@ -265,7 +266,7 @@ export default function UsersManagement() {
               {hasPermission('CREATE_USER') && (
                 <button
                   onClick={() => setShowAddUserModal(true)}
-                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-655 hover:from-blue-700 hover:to-indigo-755 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm hover:shadow shrink-0"
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm hover:shadow shrink-0"
                 >
                   <UserPlus size={14} />
                   <span>Add New User</span>
@@ -287,7 +288,7 @@ export default function UsersManagement() {
               <Users size={12} />
               <span>All Users</span>
               <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${
-                activeTab === "all" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                activeTab === "all" ? "bg-white text-white" : "bg-slate-100 text-slate-600"
               }`}>
                 {users.length}
               </span>
@@ -398,7 +399,7 @@ export default function UsersManagement() {
           <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-fade-in">
             {loading && users.length === 0 ? (
               <div className="p-12 text-center text-slate-400 font-bold text-xs flex flex-col items-center gap-3">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-650"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-650"></div>
                 <span>Loading users...</span>
               </div>
             ) : users.length === 0 ? (
@@ -415,11 +416,15 @@ export default function UsersManagement() {
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-450 uppercase tracking-widest select-none">
                       <th className="px-6 py-4">Photo</th>
-                      <th className="px-6 py-4 cursor-pointer hover:text-slate-700 transition-colors" onClick={() => handleSort('name')}>
-                        <div className="flex items-center gap-1">Name {sortField === 'name' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}</div>
+                      <th className="px-6 py-4 cursor-pointer hover:text-slate-700 transition-colors group" onClick={() => handleSort('name')}>
+                        <div className="flex items-center gap-1">Name {sortField === 'name' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}
+                          <ColumnFilter columnKey="name" currentFilter={filters.name} setFilter={setFilter} placeholder="Filter name..." />
+                        </div>
                       </th>
-                      <th className="px-6 py-4 cursor-pointer hover:text-slate-700 transition-colors" onClick={() => handleSort('email')}>
-                        <div className="flex items-center gap-1">Email {sortField === 'email' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}</div>
+                      <th className="px-6 py-4 cursor-pointer hover:text-slate-700 transition-colors group" onClick={() => handleSort('email')}>
+                        <div className="flex items-center gap-1">Email {sortField === 'email' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}
+                          <ColumnFilter columnKey="email" currentFilter={filters.email} setFilter={setFilter} placeholder="Filter email..." />
+                        </div>
                       </th>
                       <th className="px-6 py-4 cursor-pointer hover:text-slate-700 transition-colors" onClick={() => handleSort('userType')}>
                         <div className="flex items-center gap-1">System Role {sortField === 'userType' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}</div>
@@ -457,7 +462,7 @@ export default function UsersManagement() {
                         <td className="px-6 py-4">
                           <span className={`px-2 py-0.5 text-[9px] font-black rounded-lg capitalize border tracking-wider ${
                             user.userType === "admin"
-                              ? "bg-purple-50 text-purple-700 border-purple-100"
+                              ? "bg-blue-50 text-blue-700 border-blue-100"
                               : user.userType === "coordinator"
                                 ? "bg-amber-50 text-amber-700 border-amber-100"
                                 : "bg-emerald-50 text-emerald-700 border-emerald-100"
@@ -496,7 +501,7 @@ export default function UsersManagement() {
                                   setSelectedUser(user);
                                   setShowAssignRoleModal(true);
                                 }}
-                                className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold text-[10px] uppercase tracking-wider border border-indigo-150 transition cursor-pointer"
+                                className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl font-bold text-[10px] uppercase tracking-wider border border-blue-150 transition cursor-pointer"
                               >
                                 Assign Role
                               </button>
@@ -527,7 +532,7 @@ export default function UsersManagement() {
           <div className="max-w-xl mx-auto animate-fade-in mt-4">
             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-5">
               <div className="text-center">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-650 text-white rounded-2xl flex items-center justify-center mx-auto mb-2 shadow">
+                <div className="w-12 h-12 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-2 shadow">
                   <Mail size={22} />
                 </div>
                 <h3 className="text-lg font-black text-slate-900 tracking-tight">Issue Onboarding Invitation</h3>
@@ -546,7 +551,7 @@ export default function UsersManagement() {
                       value={inviteEmail}
                       onChange={(e) => setInviteEmail(e.target.value)}
                       placeholder="e.g. examiner.smith@board.org"
-                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-655 bg-slate-50/50 text-slate-900 outline-none transition"
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-655 bg-slate-50/50 text-slate-900 outline-none transition"
                     />
                   </div>
                 </div>
@@ -564,7 +569,7 @@ export default function UsersManagement() {
                           setInviteUniId(e.target.value);
                           setInviteDeptId("");
                         }}
-                        className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-655 bg-slate-50/50 text-slate-900 font-medium outline-none transition cursor-pointer appearance-none"
+                        className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-655 bg-slate-50/50 text-slate-900 font-medium outline-none transition cursor-pointer appearance-none"
                       >
                         <option value="">Select University</option>
                         {universities.map((uni) => (
@@ -585,7 +590,7 @@ export default function UsersManagement() {
                     <select
                       value={inviteDeptId}
                       onChange={(e) => setInviteDeptId(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-655 bg-slate-50/50 text-slate-900 font-medium outline-none transition cursor-pointer appearance-none disabled:bg-slate-100 disabled:cursor-not-allowed"
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-655 bg-slate-50/50 text-slate-900 font-medium outline-none transition cursor-pointer appearance-none disabled:bg-slate-100 disabled:cursor-not-allowed"
                       disabled={!(activeUniversityId || inviteUniId)}
                     >
                       <option value="">Select Department (Optional)</option>
@@ -606,7 +611,7 @@ export default function UsersManagement() {
                     <select
                       value={inviteUserType}
                       onChange={(e) => setInviteUserType(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-655 bg-slate-50/50 text-slate-900 font-medium outline-none transition cursor-pointer appearance-none"
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-655 bg-slate-50/50 text-slate-900 font-medium outline-none transition cursor-pointer appearance-none"
                     >
                       {roles.filter(r => r.isActive).map((role) => {
                         if (role.roleName.toLowerCase() === 'admin' && userType !== 'admin') return null;
@@ -630,7 +635,7 @@ export default function UsersManagement() {
                 <button
                   type="submit"
                   disabled={inviteLoading}
-                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-650 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3 rounded-xl transition shadow flex items-center justify-center gap-1.5 text-xs cursor-pointer disabled:opacity-50"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow flex items-center justify-center gap-1.5 text-xs cursor-pointer disabled:opacity-50"
                 >
                   {inviteLoading ? (
                     <>

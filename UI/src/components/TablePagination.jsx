@@ -9,6 +9,11 @@ export default function TablePagination({ page, totalPages, totalCount, pageSize
   const startItem = (page - 1) * pageSize + 1;
   const endItem = Math.min(page * pageSize, totalCount);
 
+  const handlePageChange = (newPage) => {
+    setPage(newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 bg-slate-50 border-t border-slate-100 select-none">
       <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
@@ -20,9 +25,9 @@ export default function TablePagination({ page, totalPages, totalCount, pageSize
           value={pageSize}
           onChange={(e) => {
             setPageSize(Number(e.target.value));
-            setPage(1);
+            handlePageChange(1);
           }}
-          className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-[11px] text-slate-700 uppercase focus:outline-none focus:border-indigo-600 transition cursor-pointer"
+          className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-[11px] text-slate-700 uppercase focus:outline-none focus:border-blue-600 transition cursor-pointer"
         >
           {[5, 10, 25, 50].map((size) => (
             <option key={size} value={size}>
@@ -34,12 +39,12 @@ export default function TablePagination({ page, totalPages, totalCount, pageSize
         {totalPages > 1 && (
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setPage(prev => Math.max(prev - 1, 1))}
+              onClick={() => handlePageChange(Math.max(page - 1, 1))}
               disabled={page === 1}
               className={`px-3 py-1.5 border rounded-xl font-extrabold text-[11px] uppercase transition cursor-pointer select-none ${
                 page === 1
                   ? 'bg-slate-50 border-slate-150 text-slate-350 cursor-not-allowed'
-                  : 'bg-white border-slate-200 hover:border-indigo-500 hover:text-indigo-600 text-slate-700'
+                  : 'bg-white border-slate-200 hover:border-blue-500 hover:text-blue-600 text-slate-700'
               }`}
             >
               Prev
@@ -62,11 +67,11 @@ export default function TablePagination({ page, totalPages, totalCount, pageSize
                 return (
                   <button
                     key={p}
-                    onClick={() => setPage(p)}
+                    onClick={() => handlePageChange(p)}
                     className={`w-7 h-7 flex items-center justify-center rounded-xl font-black text-[11px] transition cursor-pointer ${
                       page === p
-                        ? 'bg-indigo-600 border border-indigo-600 text-white'
-                        : 'bg-white border border-slate-200 hover:border-indigo-400 hover:text-indigo-600 text-slate-700'
+                        ? 'bg-blue-600 border border-blue-600 text-white'
+                        : 'bg-white border border-slate-200 hover:border-blue-400 hover:text-blue-600 text-slate-700'
                     }`}
                   >
                     {p}
@@ -76,12 +81,12 @@ export default function TablePagination({ page, totalPages, totalCount, pageSize
             </div>
 
             <button
-              onClick={() => setPage(prev => Math.min(prev + 1, totalPages))}
+              onClick={() => handlePageChange(Math.min(page + 1, totalPages))}
               disabled={page === totalPages}
               className={`px-3 py-1.5 border rounded-xl font-extrabold text-[11px] uppercase transition cursor-pointer select-none ${
                 page === totalPages
                   ? 'bg-slate-50 border-slate-150 text-slate-350 cursor-not-allowed'
-                  : 'bg-white border-slate-200 hover:border-indigo-500 hover:text-indigo-600 text-slate-700'
+                  : 'bg-white border-slate-200 hover:border-blue-500 hover:text-blue-600 text-slate-700'
               }`}
             >
                 Next

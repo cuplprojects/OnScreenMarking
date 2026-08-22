@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 /**
  * A centralized custom React hook for tables supporting pagination, search, and loading states.
  */
-export function useTable({ fetchFn, initialParams = {}, debounceDelay = 300 }) {
+export function useTable({ fetchFn, initialParams = {}, debounceDelay = 800 }) {
   const [items, setItems] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);

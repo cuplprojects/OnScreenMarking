@@ -20,6 +20,7 @@ import * as XLSX from 'xlsx';
 import attendanceService from '../services/attendanceService';
 import userService from '../services/userService';
 import message from '../services/messageService';
+import ProjectConfigHeader from '../components/ProjectConfigHeader';
 
 export default function Attendance() {
   const [attendanceLogs, setAttendanceLogs] = useState([]);
@@ -358,10 +359,12 @@ export default function Attendance() {
     <div className="min-h-screen bg-gray-50 p-4 lg:p-8">
       <div className="max-w-6xl mx-auto space-y-8">
         
+        <ProjectConfigHeader />
+
         {/* Header Title */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-extrabold bg-gradient-to-r bg-clip-text from-blue-700 to-indigo-600 text-transparent mb-2">
+            <h1 className="text-3xl font-extrabold text-blue-700 mb-2">
               Examiner Attendance
             </h1>
             <p className="text-gray-600 font-medium">

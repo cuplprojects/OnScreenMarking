@@ -76,7 +76,7 @@ export default function RoleStatistics() {
       label: 'Total Permissions',
       value: stats.totalPermissions,
       color: 'purple',
-      bgColor: 'bg-purple-50'
+      bgColor: 'bg-blue-50'
     },
     {
       icon: Zap,
@@ -96,7 +96,7 @@ export default function RoleStatistics() {
 
   const colorClasses = {
     blue: 'text-blue-600',
-    purple: 'text-purple-600',
+    purple: 'text-blue-600',
     green: 'text-green-600',
     orange: 'text-orange-600'
   };

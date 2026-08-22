@@ -34,7 +34,7 @@ namespace API.Controllers
 
                 // Retrieve all completed evaluated scripts matching the roll number
                 var scripts = await _context.Scripts
-                    .Include(s => s.Paper)
+                    .Include(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                         .ThenInclude(p => p.SubjectPapers)
                             .ThenInclude(sp => sp.Subject)
                     .Include(s => s.Markings)
@@ -43,14 +43,14 @@ namespace API.Controllers
                     .ToListAsync();
 
                 var results = scripts.Select(s => {
-                    var subjectPaper = s.Paper?.SubjectPapers?.FirstOrDefault();
+                    var subjectPaper = s.ProjectPaper?.Paper?.SubjectPapers?.FirstOrDefault();
                     var submittedMarking = s.Markings?.FirstOrDefault(m => m.Status == "submitted");
                     return new
                     {
                         ScriptId = s.Id,
                         RollNumber = s.RollNumber,
-                        PaperName = s.Paper?.PaperName ?? "N/A",
-                        PaperCode = s.Paper?.PaperCode ?? "N/A",
+                        PaperName = s.ProjectPaper?.Paper?.PaperName ?? "N/A",
+                        PaperCode = s.ProjectPaper?.Paper?.PaperCode ?? "N/A",
                         SubjectName = subjectPaper?.Subject?.SubName ?? "N/A",
                         TotalMarks = s.TotalMarks ?? 0,
                         Percentage = s.Percentage ?? 0,

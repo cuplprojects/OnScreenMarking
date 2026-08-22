@@ -16,12 +16,11 @@ namespace API.Models
         public int PaperNumber { get; set; } // 1, 2, 3, etc.
         public decimal MaxMarks { get; set; } = 100;
         public int TotalQuestions { get; set; }
-        public string Description { get; set; }
+        public string? Description { get; set; }
         public bool IsActive { get; set; } = true;
-        public int ProjectId { get; set; }
-        public Project Project { get; set; }
-        public string CatchNo { get; set; }
-        public string? QuestionPaperPdfUrl { get; set; }
+        public int? UniversityId { get; set; }
+        public University? University { get; set; }
+        public ICollection<ProjectPaper> ProjectPapers { get; set; } = new List<ProjectPaper>();
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
@@ -29,6 +28,6 @@ namespace API.Models
         public ICollection<SubjectPaper> SubjectPapers { get; set; }
     = new List<SubjectPaper>();
         public ICollection<Section> Sections { get; set; } = new List<Section>();
-        public ICollection<Script> Scripts { get; set; } = new List<Script>();
+
     }
 }

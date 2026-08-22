@@ -5,7 +5,7 @@ const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem('user');
+    const savedUser = sessionStorage.getItem('user');
     try {
       return savedUser ? JSON.parse(savedUser) : null;
     } catch (e) {
@@ -15,7 +15,7 @@ export function AuthProvider({ children }) {
   });
 
   const [permissions, setPermissions] = useState(() => {
-    const savedPermissions = localStorage.getItem('permissions');
+    const savedPermissions = sessionStorage.getItem('permissions');
     try {
       return savedPermissions ? JSON.parse(savedPermissions) : [];
     } catch (e) {
@@ -25,8 +25,8 @@ export function AuthProvider({ children }) {
   
   // Only show loading if we have a token but no user data yet
   const [loading, setLoading] = useState(() => {
-    const token = localStorage.getItem('token');
-    const savedUser = localStorage.getItem('user');
+    const token = sessionStorage.getItem('token');
+    const savedUser = sessionStorage.getItem('user');
     return !!token && !savedUser;
   });
   
@@ -34,13 +34,13 @@ export function AuthProvider({ children }) {
 
   // Fetch user data from token on mount or refresh
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     if (token) {
       fetchUserData();
     } else {
       setLoading(false);
-      localStorage.removeItem('user');
-      localStorage.removeItem('permissions');
+      sessionStorage.removeItem('user');
+      sessionStorage.removeItem('permissions');
       setUser(null);
       setPermissions([]);
     }
@@ -57,7 +57,7 @@ export function AuthProvider({ children }) {
         if (matchingRole) {
           const perms = matchingRole.permissionsList || [];
           setPermissions(perms);
-          localStorage.setItem('permissions', JSON.stringify(perms));
+          sessionStorage.setItem('permissions', JSON.stringify(perms));
           return perms;
         }
       }
@@ -74,7 +74,7 @@ export function AuthProvider({ children }) {
       
       const userData = await apiCall('/users/me');
       setUser(userData);
-      localStorage.setItem('user', JSON.stringify(userData));
+      sessionStorage.setItem('user', JSON.stringify(userData));
       await fetchUserPermissions(userData);
       setError(null);
     } catch (err) {
@@ -106,8 +106,8 @@ export function AuthProvider({ children }) {
       });
 
       // Store token and user data
-      localStorage.setItem('token', response.token);
-      localStorage.setItem('user', JSON.stringify(response.user));
+      sessionStorage.setItem('token', response.token);
+      sessionStorage.setItem('user', JSON.stringify(response.user));
       
       // Set user data
       setUser(response.user);
@@ -123,21 +123,22 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('permissions');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
+    sessionStorage.removeItem('permissions');
     // Clear other potential legacy items from authService.js
-    localStorage.removeItem('userType');
-    localStorage.removeItem('userName');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('userEmail');
-    localStorage.removeItem('profileImage');
-    localStorage.removeItem('universityId');
-    localStorage.removeItem('subjectId1');
+    sessionStorage.removeItem('userType');
+    sessionStorage.removeItem('userName');
+    sessionStorage.removeItem('userId');
+    sessionStorage.removeItem('userEmail');
+    sessionStorage.removeItem('profileImage');
+    sessionStorage.removeItem('universityId');
+    sessionStorage.removeItem('subjectId1');
     
     setUser(null);
     setPermissions([]);
     setError(null);
+    window.location.href = '/login';
   };
 
   const refreshUser = async () => {

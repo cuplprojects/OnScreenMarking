@@ -72,7 +72,7 @@ namespace API.Controllers
 
                 var projection = query.Select(p => new
                 {
-                    projectId = p.ProjectId,
+                    projectId = p.ProjectPapers.FirstOrDefault().ProjectId,
                     projectName = p.ProjectName,
                     isActive = p.IsActive,
                     createdAt = p.CreatedAt,
@@ -119,8 +119,9 @@ namespace API.Controllers
                 var project = await _context.Projects
                     .Include(p => p.Session)
                     .Include(p => p.University)
-                    .Include(p => p.Papers)
-                    .FirstOrDefaultAsync(p => p.ProjectId == id);
+                    .Include(p => p.ProjectPapers)
+                        .ThenInclude(pp => pp.Paper)
+                    .FirstOrDefaultAsync(p => p.ProjectPapers.FirstOrDefault().ProjectId == id);
 
                 if (project == null)
                     return NotFound(new { success = false, message = "Project not found" });
@@ -208,7 +209,7 @@ namespace API.Controllers
             try
             {
                 var papers = await _context.Papers
-                    .Where(p => p.ProjectId == id && p.IsActive)
+                    .Where(p => p.ProjectPapers.FirstOrDefault().ProjectId == id && p.IsActive)
                     .Include(p => p.SubjectPapers)
                         .ThenInclude(sp => sp.Subject)
                     .Include(p => p.Sections)

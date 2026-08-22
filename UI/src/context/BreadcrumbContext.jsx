@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 
@@ -9,12 +9,12 @@ const routeLabels = {
   // Admin paths
   '/admin/dashboard': { label: 'Dashboard', icon: 'LayoutDashboard' },
   '/admin/universities': { label: 'Universities', icon: 'Building2' },
-  '/admin/masters': { label: 'Masters', icon: 'Briefcase' },
+  '/admin/departments': { label: 'Departments', icon: 'Briefcase' },
   '/admin/subjects': { label: 'Subjects', icon: 'BookOpen' },
-  '/admin/sessions': { label: 'Sessions & Projects', icon: 'Calendar' },
-  '/admin/projects': { label: 'Sessions & Projects', icon: 'Calendar' },
+  '/admin/sessions': { label: 'Session Management', icon: 'Calendar' },
+  '/admin/projects': { label: 'Project Management', icon: 'ClipboardList' },
   '/admin/papers': { label: 'Paper Management', icon: 'FileText' },
-  '/admin/subject-config': { label: 'Subject Configuration', icon: 'Layers' },
+  '/admin/section-config': { label: 'Section Configuration', icon: 'Layers' },
   '/admin/users': { label: 'Users', icon: 'Users' },
   '/admin/role-management': { label: 'Roles & Permissions', icon: 'Shield' },
   '/admin/attendance': { label: 'Attendance', icon: 'Users' },
@@ -22,13 +22,13 @@ const routeLabels = {
 
   // Coordinator paths
   '/coordinator/dashboard': { label: 'Dashboard', icon: 'LayoutDashboard' },
-  '/masters': { label: 'Masters', icon: 'Briefcase' },
+  '/departments': { label: 'Departments', icon: 'Briefcase' },
   '/subjects': { label: 'Subjects', icon: 'BookOpen' },
-  '/sessions': { label: 'Sessions & Projects', icon: 'Calendar' },
-  '/projects': { label: 'Sessions & Projects', icon: 'Calendar' },
+  '/sessions': { label: 'Session Management', icon: 'Calendar' },
+  '/projects': { label: 'Project Management', icon: 'ClipboardList' },
   '/papers': { label: 'Paper Management', icon: 'FileText' },
   '/allocate-scripts': { label: 'Script Allocation', icon: 'Layers' },
-  '/subject-config': { label: 'Subject Configuration', icon: 'Layers' },
+  '/section-config': { label: 'Section Configuration', icon: 'Layers' },
 
   // Examiner paths
   '/': { label: 'Dashboard', icon: 'LayoutDashboard' },
@@ -42,11 +42,11 @@ export function BreadcrumbProvider({ children }) {
   const { userType } = useAuth();
   const location = useLocation();
 
-  const getDashboardPath = () => {
+  const getDashboardPath = useCallback(() => {
     if (userType === 'admin') return '/admin/dashboard';
     if (userType === 'coordinator') return '/coordinator/dashboard';
     return '/'; // Examiner / Default
-  };
+  }, [userType]);
 
   const dashboardPath = getDashboardPath();
 
@@ -79,10 +79,11 @@ export function BreadcrumbProvider({ children }) {
     
     const hasVisitedSession = navigationHistory.some(isProjectOrSessionPath);
     const isCurrentlySession = isProjectOrSessionPath(path);
-    const isConfig = path.includes('subject-config');
+    const isConfig = path.includes('section-config');
     const isMainPage = path.includes('papers') || path.includes('allocate-scripts') || path.includes('users') || path.includes('project-dashboard');
+    const isDashboardPath = path === '/admin/dashboard' || path === '/coordinator/dashboard' || path === '/';
 
-    if ((hasVisitedSession || isConfig) && !isCurrentlySession && !isMainPage) {
+    if ((hasVisitedSession || isConfig) && !isCurrentlySession && !isMainPage && !isDashboardPath) {
       newBreadcrumbs.push({
         label: 'Sessions & Projects',
         path: sessionPath,
@@ -107,6 +108,10 @@ export function BreadcrumbProvider({ children }) {
 
     // Update navigation history
     setNavigationHistory((prev) => {
+      const isDashboardPath = path === '/admin/dashboard' || path === '/coordinator/dashboard' || path === '/';
+      if (isDashboardPath) {
+        return [path];
+      }
       // Don't add duplicate consecutive paths
       if (prev[prev.length - 1] !== path) {
         return [...prev, path];
@@ -115,23 +120,23 @@ export function BreadcrumbProvider({ children }) {
     });
   }, [location, userType]);
 
-  const setBreadcrumb = (items) => {
+  const setBreadcrumb = useCallback((items) => {
     const activeDashboard = getDashboardPath();
     const dashboardItem = { label: 'Dashboard', path: activeDashboard, icon: 'LayoutDashboard' };
     setBreadcrumbs([dashboardItem, ...items]);
-  };
+  }, [getDashboardPath]);
 
-  const addBreadcrumb = (item) => {
+  const addBreadcrumb = useCallback((item) => {
     setBreadcrumbs((prev) => [...prev, item]);
-  };
+  }, []);
 
-  const clearBreadcrumbs = () => {
+  const clearBreadcrumbs = useCallback(() => {
     const activeDashboard = getDashboardPath();
     setBreadcrumbs([
       { label: 'Dashboard', path: activeDashboard, icon: 'LayoutDashboard' }
     ]);
     setNavigationHistory([activeDashboard]);
-  };
+  }, [getDashboardPath]);
 
   const resetBreadcrumbs = () => {
     clearBreadcrumbs();

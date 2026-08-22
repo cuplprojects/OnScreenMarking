@@ -43,12 +43,12 @@ namespace API.Controllers
                 {
                     var marking = await _context.Markings
                         .Include(m => m.Script)
-                            .ThenInclude(s => s.Paper)
+                            .ThenInclude(s => s.ProjectPaper)
                         .FirstOrDefaultAsync(m => m.Id == markingId.Value);
 
-                    if (marking != null && marking.Script != null && marking.Script.Paper != null)
+                    if (marking != null && marking.Script != null && marking.Script.ProjectPaper != null)
                     {
-                        var projectId = marking.Script.Paper.ProjectId;
+                        var projectId = marking.Script.ProjectPaper.ProjectId;
                         var barcode = !string.IsNullOrEmpty(marking.Script.GeneratedBarcode) 
                             ? marking.Script.GeneratedBarcode 
                             : (!string.IsNullOrEmpty(marking.Script.InBuiltBarcode) ? marking.Script.InBuiltBarcode : marking.ScriptId.ToString());

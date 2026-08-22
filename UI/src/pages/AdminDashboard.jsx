@@ -85,29 +85,12 @@ export default function AdminDashboard() {
 
   const systemModules = [
     {
-      id: 'users',
-      title: 'User Directory',
-      description: 'Manage admins, coordinators, and examiners',
-      icon: <Users size={16} />,
-      path: '/admin/users',
-      color: 'text-orange-600 bg-orange-50'
-    },
-   
-    {
       id: 'attendance',
       title: 'Attendance Audit',
       description: 'Review logs',
       icon: <Activity size={16} />,
       path: '/admin/attendance',
       color: 'text-emerald-600 bg-emerald-50'
-    },
-    {
-      id: 'config',
-      title: 'Security & Rules',
-      description: 'Roles management',
-      icon: <ShieldCheck size={16} />,
-      path: '/admin/role-management',
-      color: 'text-slate-600 bg-slate-50'
     }
   ];
 
@@ -126,7 +109,7 @@ export default function AdminDashboard() {
       {/* Dynamic Unallocated Alert Warning Banner */}
       <div className="pt-6">
         {unassignedCount > 0 && (
-          <div className="mb-6 bg-gradient-to-r from-amber-500/10 to-red-500/10 border border-amber-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-pulse">
+          <div className="mb-6 bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-pulse">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-amber-500 text-white rounded-xl flex items-center justify-center shadow-md shrink-0">
                 <AlertCircle size={18} />
@@ -160,8 +143,22 @@ export default function AdminDashboard() {
         </div>
         <div className="flex items-center gap-3">
           <Link
+            to="/admin/users"
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all shadow-md hover:shadow-lg hover:bg-blue-700 cursor-pointer"
+          >
+            <Users size={14} />
+            Manage Users
+          </Link>
+          <Link
+            to="/admin/role-management"
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all shadow-md hover:shadow-lg hover:bg-blue-700 cursor-pointer"
+          >
+            <ShieldCheck size={14} />
+            Manage Roles
+          </Link>
+          <Link
             to="/admin/universities"
-            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all shadow-md shadow-blue-100 hover:shadow-lg hover:shadow-blue-200 cursor-pointer"
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all shadow-md hover:shadow-lg hover:bg-blue-700 cursor-pointer"
           >
             <Plus size={14} />
             Add University
@@ -200,7 +197,7 @@ export default function AdminDashboard() {
                 <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Active Projects</span>
                 <span className="text-base font-bold text-slate-900 mt-1">{stats.totalProjects}</span>
               </div>
-              <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-3 rounded-xl text-white flex flex-col justify-between shadow-md shadow-blue-100">
+              <div className="bg-blue-600 p-3 rounded-xl text-white flex flex-col justify-between shadow-md">
                 <span className="text-[9px] uppercase font-bold text-blue-100 tracking-wider">Global Completion</span>
                 <span className="text-base font-bold mt-1">
                   {stats.completedScripts} <span className="text-[10px] font-normal text-blue-200">/ {stats.totalScripts}</span>
@@ -218,7 +215,7 @@ export default function AdminDashboard() {
               </div>
               <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200">
                 <div
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600 h-full rounded-full transition-all duration-500"
+                  className="bg-blue-600 h-full rounded-full transition-all duration-500"
                   style={{ width: `${stats.totalScripts > 0 ? (stats.completedScripts / stats.totalScripts) * 100 : 0}%` }}
                 ></div>
               </div>
@@ -286,10 +283,10 @@ export default function AdminDashboard() {
                         <td className="px-5 py-4 text-right">
                           <div className="flex justify-end gap-1.5">
                             <Link 
-                              to={`/admin/masters?universityId=${uni.universityId}`}
+                              to={`/admin/departments?universityId=${uni.universityId}`}
                               className="px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg font-bold text-[9px] uppercase tracking-wider transition-all"
                             >
-                              Config Masters
+                              Config Departments
                             </Link>
                           </div>
                         </td>

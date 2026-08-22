@@ -12,8 +12,8 @@ namespace API.Models
         public int Id { get; set; }
         public string? InBuiltBarcode { get; set; }
         public string GeneratedBarcode { get; set; }
-        public int PaperId { get; set; }
-        public Paper Paper { get; set; }
+        public int ProjectPaperId { get; set; }
+        public ProjectPaper ProjectPaper { get; set; }
         public string CleanPdfUrl { get; set; }
         public string Status { get; set; } = "pending"; // pending, in_progress, completed
         public bool? IsReEvaluationRequested { get; set; }

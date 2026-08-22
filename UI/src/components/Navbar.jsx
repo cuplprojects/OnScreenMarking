@@ -25,19 +25,6 @@ const Navbar = () => {
     } else if (userType === 'coordinator') {
       links.push({ label: 'Dashboard', path: '/coordinator/dashboard' });
       links.push({ label: 'Sessions & Projects', path: '/sessions' });
-      links.push({ label: 'Papers', path: '/papers' });
-      if (hasPermission("READ_ALLOCATION")) {
-        links.push({ label: 'Allocations', path: '/allocate-scripts' });
-      }
-      if (hasPermission("READ_USER")) {
-        links.push({ label: 'Users', path: '/admin/users' });
-      }
-      if (hasPermission("READ_ROLE")) {
-        links.push({ label: 'Roles', path: '/admin/role-management' });
-      }
-      if (hasPermission("VIEW_LOGS")) {
-        links.push({ label: 'Attendance', path: '/admin/attendance' });
-      }
     } else if (userType === 'examiner') {
       links.push({ label: 'Dashboard', path: '/' });
       if (hasPermission("READ_SCRIPT")) {

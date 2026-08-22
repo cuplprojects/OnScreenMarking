@@ -128,8 +128,8 @@ export default function Profile() {
           
           {/* Main Profile Identity Card */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="h-28 bg-gradient-to-r from-blue-600 to-indigo-600 relative">
-              <span className="absolute top-4 right-4 bg-white/20 backdrop-blur-md text-white border border-white/10 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+            <div className="h-28 bg-gradient-to-r from-blue-600 to-blue-600 relative">
+              <span className="absolute top-4 right-4 bg-white  text-white border border-white/10 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                 {profileData.userType || 'Examiner'}
               </span>
             </div>
@@ -177,7 +177,7 @@ export default function Profile() {
             </div>
 
             <div className="flex items-center gap-3 border-b border-slate-50 pb-3">
-              <div className="p-2 bg-purple-50 text-purple-600 rounded-xl">
+              <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
                 <Building size={14} />
               </div>
               <div className="min-w-0">

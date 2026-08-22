@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   ChevronDown,
@@ -336,14 +336,14 @@ const ExaminerMarking = () => {
         landmarkerRef.current = localLandmarker;
         setIsLandmarkerLoaded(true);
 
-        let profileImageBase64 = localStorage.getItem("profileImage") || user?.profileImage;
+        let profileImageBase64 = sessionStorage.getItem("profileImage") || user?.profileImage;
         if (!profileImageBase64 && examinerId) {
           try {
             console.log(`OSM Proctoring: Profile image not found locally. Fetching details for user: ${examinerId}...`);
             const fetchedUser = await userService.getUserById(examinerId);
             if (fetchedUser && fetchedUser.profileImage) {
               profileImageBase64 = fetchedUser.profileImage;
-              localStorage.setItem("profileImage", profileImageBase64);
+              sessionStorage.setItem("profileImage", profileImageBase64);
               console.log("OSM Proctoring: Successfully fetched and cached profile image from DB.");
             } else {
               console.warn("OSM Proctoring: Fetched user does not have a profile image.");
@@ -799,7 +799,7 @@ const ExaminerMarking = () => {
       
       // Sync marks from right panel directly back into the annotations
       if (scriptId) {
-        const saved = localStorage.getItem(`annotations_${scriptId}`);
+        const saved = sessionStorage.getItem(`annotations_${scriptId}`);
         if (saved) {
           try {
             const parsed = JSON.parse(saved);
@@ -814,7 +814,7 @@ const ExaminerMarking = () => {
               }
               return anno;
             });
-            localStorage.setItem(`annotations_${scriptId}`, JSON.stringify(updatedAnnos));
+            sessionStorage.setItem(`annotations_${scriptId}`, JSON.stringify(updatedAnnos));
             
             // Trigger instant sync to redraw the canvas
             annotatorRef.current?.syncAnnotations();
@@ -926,7 +926,7 @@ const ExaminerMarking = () => {
       
       const payload = buildQuestionMarksPayload();
       await markingService.saveQuestionMarks(markingId, payload);
-      showStatus("success", "Draft saved — marks & evaluated PDF stored successfully.");
+      showStatus("success", "Draft saved â€” marks & evaluated PDF stored successfully.");
     } catch (err) {
       showStatus("error", "Error saving marks: " + (err?.message || err));
     } finally {
@@ -1002,7 +1002,7 @@ const ExaminerMarking = () => {
     <div className="bg-gray-50 min-h-screen flex flex-col overflow-hidden secure-marking-container relative">
       {/* SECURITY BLUR OVERLAY */}
       {isBlurred && (
-        <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md z-[9999] flex flex-col items-center justify-center text-center p-6 select-none pointer-events-auto">
+        <div className="absolute inset-0 bg-slate-900/90  z-[9999] flex flex-col items-center justify-center text-center p-6 select-none pointer-events-auto">
           <div className="w-20 h-20 bg-red-500/10 border border-red-500/30 rounded-3xl flex items-center justify-center text-red-500 mb-6 shadow-lg animate-pulse">
             <AlertCircle size={44} />
           </div>
@@ -1135,7 +1135,7 @@ const ExaminerMarking = () => {
             {paperInfo?.questionPaperPdfUrl && (
               <button 
                 onClick={() => setShowQpModal(true)}
-                className="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:from-blue-700 hover:to-indigo-700 transition-all text-xs uppercase cursor-pointer"
+                className="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:from-blue-700 hover:to-blue-700 transition-all text-xs uppercase cursor-pointer"
               >
                 <FileText size={16} /> View Question Paper
               </button>
@@ -1318,7 +1318,7 @@ const ExaminerMarking = () => {
         {/* Semi-transparent Backdrop Warning on PIP Window */}
         {proctorWarning && (
           <div className="absolute inset-0 bg-red-950/90 backdrop-blur-[2px] flex flex-col items-center justify-center p-2 text-center select-none animate-fade-in z-20">
-            <span className="text-lg">⚠️</span>
+            <span className="text-lg">âš ï¸</span>
             <h4 className="font-extrabold text-red-200 text-[10px] leading-tight mt-1 uppercase tracking-wider">
               {proctorWarning === "No Face" 
                 ? "No Face" 
@@ -1339,7 +1339,7 @@ const ExaminerMarking = () => {
 
       {/* QUESTION PAPER MODAL */}
       {showQpModal && paperInfo?.questionPaperPdfUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60  p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-2xl w-full max-w-4xl h-[85vh] overflow-hidden shadow-2xl flex flex-col">
             <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
               <div>

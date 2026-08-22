@@ -47,6 +47,22 @@ const sectionService = {
       body: JSON.stringify(questionData),
     });
   },
+
+  // Bulk create sections for multiple papers
+  bulkCreateSections: async (bulkData) => {
+    return apiCall('/section/bulk-create', {
+      method: 'POST',
+      body: JSON.stringify(bulkData),
+    });
+  },
+
+  // Import sections from one paper to multiple target papers
+  importSections: async (importData) => {
+    return apiCall('/section/import', {
+      method: 'POST',
+      body: JSON.stringify(importData),
+    });
+  },
 };
 
 export default sectionService;

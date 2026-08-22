@@ -6,7 +6,7 @@ import { encryptId } from '../utils/encryption';
 const Sidebar = () => {
   const { userType, hasPermission } = useAuth();
   
-  const selectedProjectId = localStorage.getItem('selectedProjectId');
+  const selectedProjectId = sessionStorage.getItem('selectedProjectId');
   const encryptedProjId = selectedProjectId ? encryptId(selectedProjectId) : '';
 
   const getMenuItems = () => {
@@ -24,7 +24,7 @@ const Sidebar = () => {
       items.push({ icon: <Home size={20} />, label: 'Dashboard', path: '/admin/dashboard' });
       items.push({ icon: <School size={20} />, label: 'Universities', path: '/admin/universities' });
       items.push({ icon: <Building2 size={20} />, label: 'Colleges', path: '/admin/colleges' });
-      items.push({ icon: <Building2 size={20} />, label: 'Departments', path: '/admin/masters' });
+      items.push({ icon: <Building2 size={20} />, label: 'Departments', path: '/admin/departments' });
       items.push({ icon: <GraduationCap size={20} />, label: 'Courses', path: '/admin/courses' });
       items.push({ icon: <BookOpen size={20} />, label: 'Subjects', path: '/admin/subjects' });
       items.push({ icon: <Calendar size={20} />, label: 'Sessions & Projects', path: '/admin/sessions' });
@@ -41,12 +41,12 @@ const Sidebar = () => {
         items.push({ icon: <Shield size={20} />, label: 'Roles & Permissions', path: '/admin/role-management' });
       }
       if (hasPermission("VIEW_LOGS")) {
-        items.push({ icon: <UserCheck size={20} />, label: 'Attendance', path: '/admin/attendance' });
+
       }
       items.push({ icon: <Settings size={20} />, label: 'Settings', path: '/settings' });
     } else if (userType === 'coordinator') {
       items.push({ icon: <Home size={20} />, label: 'Dashboard', path: '/coordinator/dashboard' });
-      items.push({ icon: <Building2 size={20} />, label: 'Masters', path: '/masters' });
+      items.push({ icon: <Building2 size={20} />, label: 'Departments', path: '/departments' });
       items.push({ icon: <GraduationCap size={20} />, label: 'Courses', path: '/courses' });
       items.push({ icon: <BookOpen size={20} />, label: 'Subjects', path: '/subjects' });
       items.push({ icon: <Calendar size={20} />, label: 'Sessions & Projects', path: '/sessions' });
@@ -63,7 +63,7 @@ const Sidebar = () => {
         items.push({ icon: <Shield size={20} />, label: 'Roles & Permissions', path: '/admin/role-management' });
       }
       if (hasPermission("VIEW_LOGS")) {
-        items.push({ icon: <UserCheck size={20} />, label: 'Attendance', path: '/admin/attendance' });
+
       }
       items.push({ icon: <Settings size={20} />, label: 'Settings', path: '/settings' });
     } else if (userType === 'examiner') {
@@ -75,7 +75,6 @@ const Sidebar = () => {
       if (hasPermission("READ_MARKING")) {
         items.push({ icon: <PenTool size={20} />, label: 'Marking', path: '/marking' });
       }
-      items.push({ icon: <Layers size={20} />, label: 'Subject Config', path: '/subject-config' });
       
       if (hasPermission("VIEW_REPORTS")) {
         items.push({ icon: <BarChart3 size={20} />, label: 'Reports', path: '/reports' });

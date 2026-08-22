@@ -208,7 +208,7 @@ export default function CollegeManagement() {
             </button>
             <button
               onClick={handleOpenAddModal}
-              className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-650 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl font-bold text-xs uppercase tracking-wider transition shadow-md hover:shadow-lg cursor-pointer"
+              className="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-xs uppercase tracking-wider transition shadow-md hover:shadow-lg cursor-pointer"
             >
               <Plus size={16} />
               <span>Add College</span>
@@ -528,7 +528,7 @@ export default function CollegeManagement() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-650 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer shadow-md hover:shadow-lg disabled:opacity-50"
+                  className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer shadow-md hover:shadow-lg disabled:opacity-50"
                 >
                   {loading ? 'Saving...' : 'Save College'}
                 </button>

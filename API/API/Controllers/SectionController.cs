@@ -30,7 +30,7 @@ namespace API.Controllers
                     query = query.Where(s => s.PaperId == paperId.Value);
 
                 var sections = await query
-                    .Include(s => s.Paper)
+                    .Include(s => s.Paper).ThenInclude(pp => pp.Paper)
                     .Include(s => s.Questions)
                     .OrderBy(s => s.Id)
                     .ToListAsync();
@@ -49,7 +49,7 @@ namespace API.Controllers
             try
             {
                 var section = await _context.Sections
-                    .Include(s => s.Paper)
+                    .Include(s => s.Paper).ThenInclude(pp => pp.Paper)
                     .Include(s => s.Questions)
                     .FirstOrDefaultAsync(s => s.Id == id);
 
@@ -257,6 +257,169 @@ namespace API.Controllers
             }
         }
 
+        [HttpPost("bulk-create")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> BulkCreateSections([FromBody] BulkSectionDto request)
+        {
+            try
+            {
+                if (request.PaperIds == null || !request.PaperIds.Any())
+                    return BadRequest(new { success = false, message = "At least one Paper ID is required" });
+
+                if (string.IsNullOrEmpty(request.SectionDetails.Name))
+                    return BadRequest(new { success = false, message = "Section name is required" });
+
+                var createdSections = new List<Section>();
+
+                foreach (var paperId in request.PaperIds)
+                {
+                    // Check if paper exists
+                    var paper = await _context.Papers.FindAsync(paperId);
+                    if (paper == null) continue;
+
+                    int calculatedTotalQuestions = request.SectionDetails.Questions != null && request.SectionDetails.Questions.Count > 0
+                        ? request.SectionDetails.Questions.Count
+                        : (request.SectionDetails.EndQuestion >= request.SectionDetails.StartQuestion ? request.SectionDetails.EndQuestion - request.SectionDetails.StartQuestion + 1 : 0);
+
+                    var section = new Section
+                    {
+                        PaperId = paperId,
+                        Name = request.SectionDetails.Name,
+                        Description = request.SectionDetails.Description,
+                        TotalQuestions = request.SectionDetails.TotalQuestions > 0 ? request.SectionDetails.TotalQuestions : calculatedTotalQuestions,
+                        TotalMarks = request.SectionDetails.TotalMarks,
+                        StartQuestion = request.SectionDetails.StartQuestion,
+                        EndQuestion = request.SectionDetails.EndQuestion,
+                        MaxQuestionsToAttempt = request.SectionDetails.MaxQuestionsToAttempt,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    _context.Sections.Add(section);
+                    await _context.SaveChangesAsync();
+                    createdSections.Add(section);
+
+                    var questions = new List<Question>();
+
+                    if (request.SectionDetails.Questions != null && request.SectionDetails.Questions.Count > 0)
+                    {
+                        foreach (var questionDto in request.SectionDetails.Questions)
+                        {
+                            questions.Add(new Question
+                            {
+                                SectionId = section.Id,
+                                QuestionNo = questionDto.QuestionNo,
+                                Marks = questionDto.Marks,
+                                Type = questionDto.Type ?? "MCQ",
+                                IsOptional = questionDto.IsOptional,
+                                OptionalGroupCode = questionDto.OptionalGroupCode,
+                                CreatedAt = DateTime.UtcNow
+                            });
+                        }
+                    }
+                    else
+                    {
+                        decimal marksPerQuestion = section.TotalQuestions > 0 ? (decimal)section.TotalMarks / section.TotalQuestions : 0;
+                        for (int i = section.StartQuestion; i <= section.EndQuestion; i++)
+                        {
+                            questions.Add(new Question
+                            {
+                                SectionId = section.Id,
+                                QuestionNo = i.ToString(),
+                                Marks = marksPerQuestion,
+                                Type = "MCQ",
+                                IsOptional = false,
+                                CreatedAt = DateTime.UtcNow
+                            });
+                        }
+                    }
+
+                    _context.Questions.AddRange(questions);
+                    await _context.SaveChangesAsync();
+                }
+
+                return Ok(new { success = true, message = $"{createdSections.Count} sections created successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("import")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> ImportSections([FromBody] ImportSectionDto request)
+        {
+            try
+            {
+                if (request.TargetPaperIds == null || !request.TargetPaperIds.Any())
+                    return BadRequest(new { success = false, message = "At least one target Paper ID is required" });
+
+                var sourceSections = await _context.Sections
+                    .Include(s => s.Questions)
+                    .Where(s => s.PaperId == request.SourcePaperId)
+                    .ToListAsync();
+
+                if (!sourceSections.Any())
+                    return BadRequest(new { success = false, message = "Source paper has no sections to import" });
+
+                int importedCount = 0;
+
+                foreach (var targetPaperId in request.TargetPaperIds)
+                {
+                    if (targetPaperId == request.SourcePaperId) continue; // Skip if source = target
+
+                    // OPTIONAL: Overwrite existing sections
+                    var existingSections = await _context.Sections.Where(s => s.PaperId == targetPaperId).ToListAsync();
+                    if (existingSections.Any())
+                    {
+                        _context.Sections.RemoveRange(existingSections);
+                        await _context.SaveChangesAsync();
+                    }
+
+                    foreach (var sourceSection in sourceSections)
+                    {
+                        var newSection = new Section
+                        {
+                            PaperId = targetPaperId,
+                            Name = sourceSection.Name,
+                            Description = sourceSection.Description,
+                            TotalQuestions = sourceSection.TotalQuestions,
+                            TotalMarks = sourceSection.TotalMarks,
+                            StartQuestion = sourceSection.StartQuestion,
+                            EndQuestion = sourceSection.EndQuestion,
+                            MaxQuestionsToAttempt = sourceSection.MaxQuestionsToAttempt,
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        _context.Sections.Add(newSection);
+                        await _context.SaveChangesAsync();
+
+                        var newQuestions = sourceSection.Questions.Select(q => new Question
+                        {
+                            SectionId = newSection.Id,
+                            QuestionNo = q.QuestionNo,
+                            Marks = q.Marks,
+                            Type = q.Type,
+                            IsOptional = q.IsOptional,
+                            OptionalGroupCode = q.OptionalGroupCode,
+                            CreatedAt = DateTime.UtcNow
+                        }).ToList();
+
+                        _context.Questions.AddRange(newQuestions);
+                        await _context.SaveChangesAsync();
+                    }
+                    
+                    importedCount++;
+                }
+
+                return Ok(new { success = true, message = $"Sections imported to {importedCount} papers successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpGet("{id}/questions")]
         public async Task<ActionResult<IEnumerable<Question>>> GetSectionQuestions(int id)
         {
@@ -300,5 +463,17 @@ namespace API.Controllers
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
+    }
+
+    public class BulkSectionDto
+    {
+        public SectionDto SectionDetails { get; set; }
+        public List<int> PaperIds { get; set; }
+    }
+
+    public class ImportSectionDto
+    {
+        public int SourcePaperId { get; set; }
+        public List<int> TargetPaperIds { get; set; }
     }
 }

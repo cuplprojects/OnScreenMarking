@@ -24,7 +24,7 @@ import StudentPortal from './pages/StudentPortal';
 
 import Scripts from './pages/Scripts';
 import ExaminerMarking from './pages/ExaminerMarking';
-import SubjectConfig from './pages/SubjectConfig';
+import SectionConfig from './pages/SectionConfig';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Profile from './pages/Profile';
@@ -39,7 +39,10 @@ import DepartmentManagement from './pages/DepartmentManagement';
 import CourseManagement from './pages/CourseManagement';
 import SubjectManagement from './pages/SubjectManagement';
 import SessionProjectManagement from './pages/SessionProjectManagement';
+import ProjectManagement from './pages/ProjectManagement';
+import MasterPapersManagement from './pages/MasterPapersManagement';
 import PapersManagement from './pages/PapersManagement';
+import ImportPapers from './pages/ImportPapers';
 import UsersManagement from './pages/UsersManagement';
 import RoleManagement from './pages/RoleManagement';
 import Attendance from './pages/Attendance';
@@ -116,11 +119,11 @@ function AppRoutes() {
           {/* Config Layout Wrapper */}
           <Route element={<ConfigLayout />}>
             <Route 
-              path="/admin/masters" 
+              path="/admin/departments" 
               element={userType === 'admin' ? <DepartmentManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
-              path="/masters" 
+              path="/departments" 
               element={userType === 'coordinator' ? <DepartmentManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
@@ -140,26 +143,30 @@ function AppRoutes() {
               element={userType === 'coordinator' ? <SubjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
-              path="/admin/sessions" 
-              element={userType === 'admin' ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+              path="/admin/master-papers" 
+              element={userType === 'admin' ? <MasterPapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
-              path="/admin/projects" 
+              path="/master-papers" 
+              element={userType === 'coordinator' ? <MasterPapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+            <Route 
+              path="/admin/sessions" 
               element={userType === 'admin' ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
               path="/sessions" 
               element={userType === 'coordinator' ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
-            <Route 
-              path="/projects" 
-              element={userType === 'coordinator' ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-            />
-            <Route 
-              path="/admin/users" 
-              element={userType === 'admin' ? <UsersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-            />
           </Route>
+          <Route 
+            path="/admin/projects" 
+            element={userType === 'admin' ? <ProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+          <Route 
+            path="/projects" 
+            element={userType === 'coordinator' ? <ProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
 
           <Route 
             path="/admin/papers" 
@@ -170,12 +177,20 @@ function AppRoutes() {
             element={userType === 'coordinator' ? <PapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
-            path="/admin/subject-config" 
-            element={userType === 'admin' ? <SubjectConfig /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            path="/admin/import-papers" 
+            element={userType === 'admin' ? <ImportPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
-            path="/subject-config" 
-            element={userType === 'examiner' || userType === 'coordinator' ? <SubjectConfig /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            path="/import-papers" 
+            element={userType === 'coordinator' ? <ImportPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+          <Route 
+            path="/admin/section-config" 
+            element={userType === 'admin' ? <SectionConfig /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+          <Route 
+            path="/section-config" 
+            element={userType === 'examiner' || userType === 'coordinator' ? <SectionConfig /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/admin/question-types" 
@@ -185,7 +200,7 @@ function AppRoutes() {
           {/* Dynamic Permissions Controlled Routes */}
           <Route 
             path="/admin/users" 
-            element={hasPermission("READ_USER") ? <UsersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            element={userType === 'admin' || userType === 'coordinator' || hasPermission("READ_USER") ? <UsersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/admin/role-management" 

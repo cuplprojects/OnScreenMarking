@@ -126,7 +126,7 @@ export default function AddDepartmentModal({
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" 
+        className="fixed inset-0 bg-slate-900/40  transition-opacity" 
         onClick={onClose}
       />
 
@@ -217,7 +217,7 @@ export default function AddDepartmentModal({
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:shadow-lg text-white font-extrabold text-[10px] uppercase tracking-wider py-2.5 rounded-xl transition-all disabled:opacity-50"
+                className="flex-1 bg-gradient-to-r from-blue-600 to-blue-600 hover:shadow-lg text-white font-extrabold text-[10px] uppercase tracking-wider py-2.5 rounded-xl transition-all disabled:opacity-50"
               >
                 {loading ? 'Saving...' : editingId ? 'Update Department' : 'Create Department'}
               </button>

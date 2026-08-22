@@ -191,14 +191,14 @@ export default function PermissionSelector({ permissions, selectedPermissions, o
       })}
 
       {/* Summary Footer */}
-      <div className="mt-4 p-4 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl text-white flex items-center justify-between shadow-md shadow-blue-500/10 shrink-0">
+      <div className="mt-4 p-4 bg-gradient-to-r from-blue-600 to-blue-600 rounded-xl text-white flex items-center justify-between shadow-md shadow-blue-500/10 shrink-0">
         <div className="flex items-center gap-2">
           <Shield size={16} className="text-blue-100" />
           <p className="text-xs font-semibold tracking-wide uppercase">
             Total Selected Permissions
           </p>
         </div>
-        <span className="bg-white/20 text-white font-extrabold text-sm px-3.5 py-1 rounded-lg border border-white/20">
+        <span className="bg-white text-white font-extrabold text-sm px-3.5 py-1 rounded-lg border border-white/20">
           {selectedPermissions.length}
         </span>
       </div>

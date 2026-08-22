@@ -20,6 +20,7 @@ import { useAuth } from '../context/AuthContext';
 import apiCall from '../services/api';
 import { useTable } from '../services/tableService';
 import TablePagination from '../components/TablePagination';
+import ColumnFilter from '../components/ColumnFilter';
 
 const Home = () => {
   const { user } = useAuth();
@@ -207,7 +208,7 @@ const Home = () => {
     tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const SortHeader = ({ label, field, isCenter = false }) => {
+  const SortHeader = ({ label, field, isCenter = false, hasFilter = false }) => {
     const isSorted = sortField === field;
     return (
       <th 
@@ -219,6 +220,9 @@ const Home = () => {
           <span className="text-[9px] text-slate-400 group-hover/header:text-slate-655 transition-colors">
             {isSorted ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}
           </span>
+          {hasFilter && (
+            <ColumnFilter columnKey={field} currentFilter={filters[field]} setFilter={setFilter} placeholder={`Filter ${label.toLowerCase()}...`} />
+          )}
         </div>
       </th>
     );
@@ -243,13 +247,13 @@ const Home = () => {
     <div className="space-y-6 pb-12 transition-all duration-300">
       
       {/* Dynamic Greetings & Info Card */}
-      <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-850 p-6 rounded-3xl text-white shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
-        <div className="absolute bottom-0 left-1/3 w-40 h-40 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
+      <div className="bg-gradient-to-r from-blue-700 via-blue-700 to-violet-850 p-6 rounded-3xl text-white shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-full sm:w-64 h-64 bg-white rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
+        <div className="absolute bottom-0 left-1/3 w-40 h-40 bg-blue-500/10 rounded-full blur-2xl pointer-events-none"></div>
         
         <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-6 relative z-10">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-bold tracking-wide">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white  border border-white/20 text-xs font-bold tracking-wide">
               <Sparkles size={13} className="text-amber-300 animate-pulse" />
               <span>{greeting.icon} {greeting.text}</span>
             </div>
@@ -261,8 +265,8 @@ const Home = () => {
             </p>
           </div>
 
-          <div className="flex flex-row sm:flex-row items-center gap-4 bg-white/10 backdrop-blur-lg border border-white/10 p-4 rounded-2xl self-start lg:self-center shrink-0">
-            <div className="p-2 bg-white/10 rounded-xl text-center shrink-0">
+          <div className="flex flex-row sm:flex-row items-center gap-4 bg-white  border border-white/10 p-4 rounded-2xl self-start lg:self-center shrink-0">
+            <div className="p-2 bg-white rounded-xl text-center shrink-0">
               <Calendar size={18} className="mx-auto text-amber-300 mb-0.5" />
               <span className="block text-[8px] font-black uppercase text-blue-200">Date</span>
             </div>
@@ -356,7 +360,7 @@ const Home = () => {
         <div className="space-y-2">
           <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden border border-gray-100 flex p-0.5">
             <div
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 h-full rounded-full transition-all duration-700"
+              className="bg-gradient-to-r from-blue-600 to-blue-600 h-full rounded-full transition-all duration-700"
               style={{ width: `${stats.totalScripts > 0 ? (stats.evaluated / stats.totalScripts) * 100 : 0}%` }}
             ></div>
           </div>
@@ -371,7 +375,7 @@ const Home = () => {
       {/* Subject Expertise & Workload Section */}
       <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-100">
         <h2 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-3 flex items-center gap-1.5">
-          <Award size={13} className="text-indigo-650" />
+          <Award size={13} className="text-blue-650" />
           <span>Subject Expertise & Script Allocation</span>
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -379,8 +383,8 @@ const Home = () => {
             <div 
               key={sw.subjectId} 
               onClick={() => handleSubjectClick(sw.subjectId)}
-              className={`bg-slate-50 border p-3 rounded-xl flex flex-col justify-between hover:border-indigo-400 transition-all duration-300 shadow-sm cursor-pointer ${
-                filters.subjectFilter === sw.subjectId.toString() ? 'ring-2 ring-indigo-500 border-indigo-500' : 'border-slate-200/50'
+              className={`bg-slate-50 border p-3 rounded-xl flex flex-col justify-between hover:border-blue-400 transition-all duration-300 shadow-sm cursor-pointer ${
+                filters.subjectFilter === sw.subjectId.toString() ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-200/50'
               }`}
             >
               <div className="space-y-2.5">
@@ -399,7 +403,7 @@ const Home = () => {
                             <span className="text-[9px] font-extrabold text-slate-800 block truncate leading-tight">{p.paperName}</span>
                             {p.paperCode && <span className="text-[8px] text-slate-400 font-mono block truncate">{p.paperCode}</span>}
                           </div>
-                          <span className="bg-indigo-50 border border-indigo-100 text-indigo-700 text-[8px] font-black px-1.5 py-0.5 rounded uppercase shrink-0">
+                          <span className="bg-blue-50 border border-blue-100 text-blue-700 text-[8px] font-black px-1.5 py-0.5 rounded uppercase shrink-0">
                             {p.count} scr
                           </span>
                         </div>
@@ -413,7 +417,7 @@ const Home = () => {
               
               <div className="mt-3 pt-2.5 border-t border-slate-205 flex justify-between items-center">
                 <span className="text-[8px] text-slate-500 font-bold uppercase">Total Workload</span>
-                <span className="bg-indigo-600 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm">
+                <span className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm">
                   {sw.totalCount} scripts
                 </span>
               </div>
@@ -504,7 +508,7 @@ const Home = () => {
                 </span>
               )}
               {filters.subjectFilter && (
-                <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 text-[9px] font-black px-2.5 py-1 rounded-lg border border-indigo-150">
+                <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-[9px] font-black px-2.5 py-1 rounded-lg border border-blue-150">
                   Subject: {subjectWorkloads.find(sw => sw.subjectId.toString() === filters.subjectFilter)?.subjectName || 'Selected Subject'}
                   <X size={10} className="cursor-pointer" onClick={() => setFilter('subjectFilter', '')} />
                 </span>
@@ -515,7 +519,7 @@ const Home = () => {
         
         {tableLoading && scripts.length === 0 ? (
           <div className="p-12 text-center text-slate-400 font-bold text-xs flex flex-col items-center gap-3">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-650 animate-pulse"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-650 animate-pulse"></div>
             <span>Fetching allocated scripts...</span>
           </div>
         ) : scripts.length === 0 ? (
@@ -529,9 +533,9 @@ const Home = () => {
             <table className="w-full text-left min-w-[900px]">
               <thead className="bg-slate-50/70 border-b border-gray-100">
                 <tr>
-                  <SortHeader label="Barcode / Script ID" field="barcode" />
-                  <SortHeader label="Subject" field="subjectName" />
-                  <SortHeader label="Paper Name" field="paperName" />
+                  <SortHeader label="Barcode / Script ID" field="barcode" hasFilter={true} />
+                  <SortHeader label="Subject" field="subjectName" hasFilter={true} />
+                  <SortHeader label="Paper Name" field="paperName" hasFilter={true} />
                   <SortHeader label="Status" field="status" />
                   <SortHeader label="Marks Obtained" field="totalMarks" />
                   <SortHeader label="Last Activity" field="submittedAt" />
@@ -590,7 +594,7 @@ const Home = () => {
                       ) : (
                         <button
                           onClick={() => handleStartMarking(script)}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-650 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-extrabold text-[9px] uppercase tracking-wider transition-all shadow-md cursor-pointer animate-pulse hover:scale-105"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-blue-650 hover:from-blue-700 hover:to-blue-700 text-white rounded-xl font-extrabold text-[9px] uppercase tracking-wider transition-all shadow-md cursor-pointer animate-pulse hover:scale-105"
                         >
                           <Zap size={10} className="fill-white" />
                           Evaluate Script

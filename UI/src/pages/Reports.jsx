@@ -8,7 +8,7 @@ const Reports = () => {
   const summaryStats = [
     { label: 'Total Scripts Evaluated', value: '320', change: '+12%', icon: FileText, color: 'bg-blue-500' },
     { label: 'Average Score', value: '78.5%', change: '+2.3%', icon: TrendingUp, color: 'bg-green-500' },
-    { label: 'Examiners Active', value: '24', change: '+3', icon: Users, color: 'bg-purple-500' },
+    { label: 'Examiners Active', value: '24', change: '+3', icon: Users, color: 'bg-blue-500' },
     { label: 'Completion Rate', value: '71%', change: '+5%', icon: BarChart3, color: 'bg-orange-500' },
   ];
 

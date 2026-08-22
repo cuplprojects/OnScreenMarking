@@ -1,16 +1,18 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import projectService from '../services/projectService';
 import sessionService from '../services/sessionService';
 import { useTable } from '../services/tableService';
 import TablePagination from '../components/TablePagination';
-import AddSessionModal from '../components/AddSessionModal';
+import AddProjectModal from '../components/AddProjectModal';
 import ColumnFilter from '../components/ColumnFilter';
-import { 
-  Calendar, 
-  Plus, 
-  Search, 
-  Edit2, 
+import { encryptId } from '../utils/encryption';
+import {
+  ClipboardList,
+  Plus,
+  Search,
+  Edit2,
   ArrowUpDown,
   ArrowUp,
   ArrowDown
@@ -18,26 +20,43 @@ import {
 import message from '../services/messageService';
 import { useBreadcrumb } from '../context/BreadcrumbContext';
 
-export default function SessionProjectManagement() {
+export default function ProjectManagement() {
   const [searchParams] = useSearchParams();
-  const { userType } = useAuth();
+  const { userType, universityId: userUniversityId } = useAuth();
+  const universityIdFromUrl = searchParams.get('universityId');
+  const activeUniversityId = userType === 'coordinator' ? userUniversityId : universityIdFromUrl;
   const { setBreadcrumb } = useBreadcrumb();
 
   useEffect(() => {
-    const sessionPath = userType === 'admin' ? '/admin/sessions' : '/sessions';
+    const projectPath = userType === 'admin' ? '/admin/projects' : '/projects';
     setBreadcrumb([
-      { label: 'Session Management', path: sessionPath, icon: 'Calendar' }
+      { label: 'Project Management', path: projectPath, icon: 'ClipboardList' }
     ]);
   }, [userType, setBreadcrumb]);
 
+  // Fetch active sessions for the modal
+  const [sessions, setSessions] = useState([]);
+
+  useEffect(() => {
+    const fetchSessions = async () => {
+      try {
+        const res = await sessionService.getAllSessions({ pageSize: 0 }); // Fetch all
+        setSessions(res.items || []);
+      } catch (err) {
+        console.error("Failed to load sessions", err);
+      }
+    };
+    fetchSessions();
+  }, []);
+
   // Define fetch function for useTable hook
   const fetchFn = useCallback((params) => {
-    return sessionService.getAllSessions(params);
-  }, []);
+    return projectService.getAllProjects(activeUniversityId, params);
+  }, [activeUniversityId]);
 
   // Centralized hook for table states
   const {
-    items: sessions,
+    items: projects,
     totalCount,
     totalPages,
     page,
@@ -86,37 +105,39 @@ export default function SessionProjectManagement() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
-    sessionName: '',
+    projectName: '',
+    sessionId: '',
     isActive: true
   });
 
-  const handleEdit = (session) => {
+  const handleEdit = (project) => {
     setFormData({
-      sessionName: session.sessionName,
-      isActive: session.isActive
+      projectName: project.projectName,
+      sessionId: project.sessionId,
+      isActive: project.isActive
     });
-    setEditingId(session.sessionId);
+    setEditingId(project.projectId);
     setShowForm(true);
   };
 
   const handleCancel = () => {
-    setFormData({ sessionName: '', isActive: true });
+    setFormData({ projectName: '', sessionId: '', isActive: true });
     setEditingId(null);
     setShowForm(false);
   };
 
-  const handleSessionSubmit = async (data) => {
+  const handleProjectSubmit = async (data) => {
     try {
       if (editingId) {
-        await sessionService.updateSession(editingId, data);
+        await projectService.updateProject(editingId, data);
       } else {
-        await sessionService.createSession(data);
+        await projectService.createProject({ ...data, universityId: activeUniversityId ? parseInt(activeUniversityId, 10) : 1 });
       }
-      message.success(editingId ? 'Session updated successfully!' : 'Session created successfully!');
+      message.success(editingId ? 'Project updated successfully!' : 'Project created successfully!');
       refresh();
       handleCancel();
     } catch (err) {
-      message.error(err.message || 'Error saving session');
+      message.error(err.message || 'Error saving project');
     }
   };
 
@@ -128,7 +149,7 @@ export default function SessionProjectManagement() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h1 className="text-xl font-black text-slate-900 tracking-tight leading-none flex items-center gap-1.5">
-                <span>Session Management</span>
+                <span>Project Management</span>
               </h1>
             </div>
             <button
@@ -136,7 +157,7 @@ export default function SessionProjectManagement() {
               className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer self-start sm:self-center shrink-0"
             >
               <Plus size={14} />
-              <span>{showForm ? 'Cancel' : 'Add Session'}</span>
+              <span>{showForm ? 'Cancel' : 'Add Project'}</span>
             </button>
           </div>
 
@@ -147,13 +168,13 @@ export default function SessionProjectManagement() {
               <Search size={14} className="text-slate-400 shrink-0" />
               <input
                 type="text"
-                placeholder="Search sessions by name..."
+                placeholder="Search projects by name..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full bg-transparent text-slate-800 placeholder-slate-400 font-semibold text-[11px] focus:outline-none"
               />
               {search && (
-                <button 
+                <button
                   onClick={() => setSearch('')}
                   className="text-[9px] font-black uppercase text-slate-400 hover:text-slate-600 transition cursor-pointer"
                 >
@@ -161,7 +182,7 @@ export default function SessionProjectManagement() {
                 </button>
               )}
             </div>
-            
+
             {/* Filter Dropdown */}
             <select
               value={filters.isActive !== undefined ? filters.isActive : ''}
@@ -169,33 +190,34 @@ export default function SessionProjectManagement() {
               className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-[10px] text-slate-700 focus:outline-none cursor-pointer"
             >
               <option value="">All Statuses</option>
-              <option value="true">Active Sessions</option>
-              <option value="false">Inactive Sessions</option>
+              <option value="true">Active Projects</option>
+              <option value="false">Inactive Projects</option>
             </select>
           </div>
         </div>
 
-        <AddSessionModal
+        <AddProjectModal
           isOpen={showForm}
           onClose={handleCancel}
-          onSubmit={handleSessionSubmit}
+          onSubmit={handleProjectSubmit}
           editingId={editingId}
           initialData={formData}
+          sessions={sessions}
         />
 
         {/* Main List Grid */}
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-          {loading && sessions.length === 0 ? (
+          {loading && projects.length === 0 ? (
             <div className="p-12 text-center text-slate-450 font-bold text-xs flex flex-col items-center gap-3">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-650"></div>
-              <span>Loading sessions...</span>
+              <span>Loading projects...</span>
             </div>
-          ) : sessions.length === 0 ? (
+          ) : projects.length === 0 ? (
             <div className="p-16 text-center text-slate-555 leading-relaxed max-w-sm mx-auto space-y-3">
-              <Calendar className="mx-auto text-slate-400" size={32} />
+              <ClipboardList className="mx-auto text-slate-400" size={32} />
               <div>
-                <h3 className="font-extrabold text-slate-900 text-xs uppercase tracking-wider">No Sessions Configured</h3>
-                <p className="text-[10px] text-slate-400 mt-1">Create a session to begin tracking academic operations.</p>
+                <h3 className="font-extrabold text-slate-900 text-xs uppercase tracking-wider">No Projects Configured</h3>
+                <p className="text-[10px] text-slate-400 mt-1">Create an evaluation project to map papers.</p>
               </div>
             </div>
           ) : (
@@ -203,16 +225,25 @@ export default function SessionProjectManagement() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-450 uppercase tracking-widest select-none">
-                    <th 
-                      className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors group w-2/3"
+                    <th
+                      className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors group"
+                      onClick={() => handleSort('projectName')}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        Project Name {getSortIcon('projectName')}
+                        <ColumnFilter columnKey="projectName" currentFilter={filters.projectName} setFilter={setFilter} placeholder="Filter project name..." />
+                      </div>
+                    </th>
+                    <th
+                      className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors group"
                       onClick={() => handleSort('sessionName')}
                     >
                       <div className="flex items-center gap-1.5">
-                        Session Details {getSortIcon('sessionName')}
+                        Session {getSortIcon('sessionName')}
                         <ColumnFilter columnKey="sessionName" currentFilter={filters.sessionName} setFilter={setFilter} placeholder="Filter session name..." />
                       </div>
                     </th>
-                    <th 
+                    <th
                       className="px-6 py-4 text-center cursor-pointer hover:bg-slate-100 transition-colors group"
                       onClick={() => handleSort('isActive')}
                     >
@@ -224,40 +255,50 @@ export default function SessionProjectManagement() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs">
-                  {sessions.map((session) => (
-                    <tr key={session.sessionId} className="hover:bg-slate-50/50 transition-colors">
+                  {projects.map((project) => (
+                    <tr key={project.projectId} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-6 py-5">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-600 font-extrabold shadow-sm shrink-0 border border-slate-100">
-                            <Calendar size={18} />
+                            <ClipboardList size={18} />
                           </div>
                           <div>
-                            <span className="font-extrabold text-slate-900 tracking-tight block text-sm">{session.sessionName}</span>
-                            <span className="text-[10px] text-slate-400 font-semibold mt-0.5 block">
-                              Created: {new Date(session.createdAt).toLocaleDateString()}
-                            </span>
+                            <span className="font-extrabold text-slate-900 tracking-tight block text-sm">{project.projectName}</span>
+                            
                           </div>
                         </div>
                       </td>
+                      <td className="px-6 py-5">
+                        <span className="font-extrabold text-slate-900 tracking-tight block text-sm">
+                          Session: {project.session?.sessionName || 'Unknown Session'}
+                        </span>
+                      </td>
                       <td className="px-6 py-5 text-center">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${
-                          session.isActive
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${project.isActive
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-100 shadow-sm'
                             : 'bg-slate-50 text-slate-500 border-slate-200'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${session.isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
-                          {session.isActive ? 'Active' : 'Inactive'}
+                          }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${project.isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                          {project.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </td>
                       <td className="px-6 py-5 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => handleEdit(session)}
+                            onClick={() => handleEdit(project)}
                             className="p-2 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 text-slate-600 rounded-xl border border-slate-200 hover:border-blue-200 transition-all cursor-pointer shadow-sm group"
-                            title="Edit Session"
+                            title="Edit Project"
                           >
                             <Edit2 size={14} className="group-hover:scale-110 transition-transform" />
                           </button>
+                          <Link
+                            to={userType === 'admin'
+                              ? `/admin/papers?projectId=${encryptId(project.projectId)}`
+                              : `/papers?projectId=${encryptId(project.projectId)}`}
+                            className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl font-bold text-[10px] uppercase tracking-wider border border-blue-150 transition cursor-pointer"
+                          >
+                            Configure Paper
+                          </Link>
                         </div>
                       </td>
                     </tr>

@@ -32,7 +32,7 @@ namespace API.Controllers
                 // Verify allocation exists
                 var allocation = await _context.Allocations
                     .Include(a => a.Script)
-                        .ThenInclude(s => s.Paper)
+                        .ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                     .FirstOrDefaultAsync(a => a.AllocationId == request.AllocationId);
 
                 if (allocation == null)
@@ -156,7 +156,7 @@ namespace API.Controllers
             {
                 var existingMarking = await _context.Markings
                     .Include(m => m.Script)
-                        .ThenInclude(s => s.Paper)
+                        .ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                     .FirstOrDefaultAsync(m => m.Id == id);
 
                 if (existingMarking == null)
@@ -391,7 +391,7 @@ namespace API.Controllers
             {
                 var marking = await _context.Markings
                     .Include(m => m.Script)
-                        .ThenInclude(s => s.Paper)
+                        .ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                             .ThenInclude(p => p.Sections)
                                 .ThenInclude(sec => sec.Questions)
                     .Include(m => m.Examiner)
@@ -414,7 +414,7 @@ namespace API.Controllers
                     }
                 }
 
-                var sections = marking.Script.Paper.Sections.Select(s => new
+                var sections = marking.Script.ProjectPaper.Paper.Sections.Select(s => new
                 {
                     id = s.Id,
                     name = s.Name,
@@ -461,7 +461,7 @@ namespace API.Controllers
                     script = new
                     {
                         id = marking.Script.Id,
-                        paperId = marking.Script.PaperId,
+                        paperId = marking.Script.ProjectPaper.PaperId,
                         cleanPdfUrl = marking.Script.CleanPdfUrl,
                         status = marking.Script.Status,
                     },
@@ -483,7 +483,7 @@ namespace API.Controllers
                 var marking = await _context.Markings
                     .Include(m => m.QuestionMarks)
                     .Include(m => m.Script)
-                        .ThenInclude(s => s.Paper)
+                        .ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                     .FirstOrDefaultAsync(m => m.Id == markingId);
 
                 if (marking == null)

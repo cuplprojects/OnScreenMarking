@@ -58,9 +58,9 @@ export default function UniversityDashboard() {
       description: 'Manage academic departments',
       icon: <Building2 size={24} />,
       path: `/admin/masters?universityId=${universityId}`,
-      color: 'text-purple-400',
-      bgColor: 'bg-purple-400/10',
-      borderColor: 'border-purple-500/20'
+      color: 'text-blue-400',
+      bgColor: 'bg-blue-400/10',
+      borderColor: 'border-blue-500/20'
     },
     {
       id: 'subjects',
@@ -98,9 +98,9 @@ export default function UniversityDashboard() {
       description: 'Configure exam papers',
       icon: <FileText size={24} />,
       path: `/admin/papers?universityId=${universityId}`,
-      color: 'text-indigo-400',
-      bgColor: 'bg-indigo-400/10',
-      borderColor: 'border-indigo-500/20'
+      color: 'text-blue-400',
+      bgColor: 'bg-blue-400/10',
+      borderColor: 'border-blue-500/20'
     },
     {
       id: 'users',
@@ -127,7 +127,7 @@ export default function UniversityDashboard() {
       {/* Background Ambience */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
          <div className="absolute top-[-5%] right-[-5%] w-[40%] h-[40%] bg-blue-500/5 rounded-full blur-[120px]"></div>
-         <div className="absolute bottom-[-5%] left-[-5%] w-[40%] h-[40%] bg-indigo-500/5 rounded-full blur-[120px]"></div>
+         <div className="absolute bottom-[-5%] left-[-5%] w-[40%] h-[40%] bg-blue-500/5 rounded-full blur-[120px]"></div>
       </div>
 
       <div className="max-w-[1600px] mx-auto px-8 relative z-10">
@@ -167,8 +167,8 @@ export default function UniversityDashboard() {
         {/* Scoped Stats Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
           <QuickStat label="Departments" value={stats.departments} color="text-blue-600" />
-          <QuickStat label="Subjects" value={stats.subjects} color="text-indigo-600" />
-          <QuickStat label="Active Papers" value={stats.papers} color="text-purple-600" />
+          <QuickStat label="Subjects" value={stats.subjects} color="text-blue-600" />
+          <QuickStat label="Active Papers" value={stats.papers} color="text-blue-600" />
           <QuickStat label="Staff Users" value={stats.users} color="text-emerald-600" />
         </div>
 

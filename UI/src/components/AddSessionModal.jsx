@@ -35,7 +35,7 @@ export default function AddSessionModal({
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" 
+        className="fixed inset-0 bg-slate-900/40  transition-opacity" 
         onClick={onClose}
       />
 
@@ -76,7 +76,7 @@ export default function AddSessionModal({
                 type="checkbox"
                 checked={isActive}
                 onChange={(e) => setIsActive(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-350 accent-indigo-650 cursor-pointer"
+                className="w-4 h-4 rounded border-slate-350 accent-blue-650 cursor-pointer"
                 id="active-session-modal"
               />
               <label className="text-xs text-slate-600 font-bold cursor-pointer" htmlFor="active-session-modal">
@@ -88,7 +88,7 @@ export default function AddSessionModal({
             <div className="flex gap-2.5 pt-3 border-t border-slate-100 mt-5">
               <button
                 type="submit"
-                className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-650 hover:shadow-lg text-white font-extrabold text-[10px] uppercase tracking-wider py-2.5 rounded-xl transition-all"
+                className="flex-1 bg-gradient-to-r from-blue-600 to-blue-650 hover:shadow-lg text-white font-extrabold text-[10px] uppercase tracking-wider py-2.5 rounded-xl transition-all"
               >
                 Save Changes
               </button>

@@ -17,6 +17,6 @@ namespace API.Models
         public University University { get; set; }
         public bool IsActive { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public ICollection<Paper> Papers { get; set; } = new List<Paper>();
+        public ICollection<ProjectPaper> ProjectPapers { get; set; } = new List<ProjectPaper>();
     }
 }

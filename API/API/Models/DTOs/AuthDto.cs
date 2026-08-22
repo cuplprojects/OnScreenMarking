@@ -72,7 +72,8 @@ namespace API.Models.DTOs
         public int PaperId { get; set; }
         public List<int> SubjectIds { get; set; }
         public List<string>? SubjectNames { get; set; }
-        public int ProjectId { get; set; }
+        public int? ProjectId { get; set; }
+        public int? UniversityId { get; set; }
         public string PaperCode { get; set; }
         public string PaperName { get; set; }
         public int PaperNumber { get; set; }

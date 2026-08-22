@@ -34,11 +34,11 @@ namespace API.Controllers
                     query = query.Where(s => s.Status == status);
 
                 if (paperId.HasValue)
-                    query = query.Where(s => s.PaperId == paperId.Value);
+                    query = query.Where(s => s.ProjectPaper.PaperId == paperId.Value);
 
                 var total = await query.CountAsync();
                 var scripts = await query
-                    .Include(s => s.Paper)
+                    .Include(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                         .ThenInclude(p => p.SubjectPapers)
                             .ThenInclude(sp => sp.Subject)
                     .Skip((page - 1) * limit)
@@ -47,13 +47,13 @@ namespace API.Controllers
                     .ToListAsync();
 
                 var scriptDtos = scripts.Select(s => {
-                    var subjectPaper = s.Paper?.SubjectPapers?.FirstOrDefault();
+                    var subjectPaper = s.ProjectPaper?.Paper?.SubjectPapers?.FirstOrDefault();
                     return new ScriptDto
                     {
                         Id = s.Id,
                         GeneratedBarcode = s.GeneratedBarcode,
                         InBuiltBarCode = s.InBuiltBarcode,
-                        PaperId = s.PaperId,
+                        PaperId = s.ProjectPaper.PaperId,
                         CleanPdfUrl = s.CleanPdfUrl,
                         Status = s.Status,
                         IsReEvaluationRequested = s.IsReEvaluationRequested,
@@ -62,8 +62,8 @@ namespace API.Controllers
                         Percentage = s.Percentage,
                         Remarks = s.Remarks,
                         SubmittedAt = s.SubmittedAt,
-                        PaperName = s.Paper?.PaperName,
-                        PaperCode = s.Paper?.PaperCode,
+                        PaperName = s.ProjectPaper?.Paper?.PaperName,
+                        PaperCode = s.ProjectPaper?.Paper?.PaperCode,
                         SubjectId = subjectPaper?.SubjectId,
                         SubjectName = subjectPaper?.Subject?.SubName
                     };
@@ -87,7 +87,7 @@ namespace API.Controllers
             try
             {
                 var script = await _context.Scripts
-                    .Include(s => s.Paper)
+                    .Include(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                         .ThenInclude(p => p.SubjectPapers)
                             .ThenInclude(sp => sp.Subject)
                     .FirstOrDefaultAsync(s => s.Id == id);
@@ -95,13 +95,13 @@ namespace API.Controllers
                 if (script == null)
                     return NotFound(new { success = false, message = "Script not found" });
 
-                var subjectPaper = script.Paper?.SubjectPapers?.FirstOrDefault();
+                var subjectPaper = script.ProjectPaper?.Paper?.SubjectPapers?.FirstOrDefault();
                 var scriptDto = new ScriptDto
                 {
                     Id = script.Id,
                     GeneratedBarcode = script.GeneratedBarcode,
                     InBuiltBarCode = script.InBuiltBarcode,
-                    PaperId = script.PaperId,
+                    PaperId = script.ProjectPaper.PaperId,
                     CleanPdfUrl = script.CleanPdfUrl,
                     Status = script.Status,
                     IsReEvaluationRequested = script.IsReEvaluationRequested,
@@ -110,8 +110,8 @@ namespace API.Controllers
                     Percentage = script.Percentage,
                     Remarks = script.Remarks,
                     SubmittedAt = script.SubmittedAt,
-                    PaperName = script.Paper?.PaperName,
-                    PaperCode = script.Paper?.PaperCode,
+                    PaperName = script.ProjectPaper?.Paper?.PaperName,
+                    PaperCode = script.ProjectPaper?.Paper?.PaperCode,
                     SubjectId = subjectPaper?.SubjectId,
                     SubjectName = subjectPaper?.Subject?.SubName
                 };
@@ -162,7 +162,7 @@ namespace API.Controllers
              
                 var script = new Script
                 {
-                    PaperId = scriptDto.PaperId,
+                    ProjectPaperId = scriptDto.PaperId,
                     CleanPdfUrl = scriptDto.CleanPdfUrl,
                     RollNumber = scriptDto.RollNumber,
                     Status = "pending",
@@ -213,7 +213,7 @@ namespace API.Controllers
             try
             {
                 var script = await _context.Scripts
-                    .Include(s => s.Paper)
+                    .Include(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                     .FirstOrDefaultAsync(s => s.Id == id);
                 
                 if (script == null)
@@ -269,7 +269,7 @@ namespace API.Controllers
 
                 var query = _context.Scripts
                     .Where(s => scriptIds.Contains(s.Id))
-                    .Include(s => s.Paper)
+                    .Include(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                         .ThenInclude(p => p.SubjectPapers)
                             .ThenInclude(sp => sp.Subject)
                     .AsQueryable();
@@ -281,7 +281,7 @@ namespace API.Controllers
 
                 if (subjectFilter.HasValue)
                 {
-                    query = query.Where(s => s.Paper != null && s.Paper.SubjectPapers.Any(sp => sp.SubjectId == subjectFilter.Value));
+                    query = query.Where(s => s.ProjectPaper.Paper != null && s.ProjectPaper?.Paper?.SubjectPapers.Any(sp => sp.SubjectId == subjectFilter.Value));
                 }
 
                 if (!string.IsNullOrWhiteSpace(search))
@@ -331,13 +331,13 @@ namespace API.Controllers
 
                 var scriptDtos = scripts.Select(s => {
                     var alloc = allocations.FirstOrDefault(a => a.ScriptId == s.Id);
-                    var subjectPaper = s.Paper?.SubjectPapers?.FirstOrDefault();
+                    var subjectPaper = s.ProjectPaper?.Paper?.SubjectPapers?.FirstOrDefault();
                     return new ScriptDto
                     {
                         Id = s.Id,
                         GeneratedBarcode = s.GeneratedBarcode,
                         InBuiltBarCode = s.InBuiltBarcode,
-                        PaperId = s.PaperId,
+                        PaperId = s.ProjectPaper.PaperId,
                         CleanPdfUrl = s.CleanPdfUrl,
                         Status = s.Status,
                         IsReEvaluationRequested = s.IsReEvaluationRequested,
@@ -347,8 +347,8 @@ namespace API.Controllers
                         Remarks = s.Remarks,
                         SubmittedAt = s.SubmittedAt,
                         AllocationId = alloc?.AllocationId,
-                        PaperName = s.Paper?.PaperName,
-                        PaperCode = s.Paper?.PaperCode,
+                        PaperName = s.ProjectPaper?.Paper?.PaperName,
+                        PaperCode = s.ProjectPaper?.Paper?.PaperCode,
                         SubjectId = subjectPaper?.SubjectId,
                         SubjectName = subjectPaper?.Subject?.SubName
                     };
@@ -377,8 +377,8 @@ namespace API.Controllers
             try
             {
                 var scripts = await _context.Scripts
-                    .Where(s => s.PaperId == paperId)
-                    .Include(s => s.Paper)
+                    .Where(s => s.ProjectPaper.PaperId == paperId)
+                    .Include(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                     .OrderByDescending(s => s.CreatedAt)
                     .ToListAsync();
 
@@ -387,7 +387,7 @@ namespace API.Controllers
                     Id = s.Id,
                     GeneratedBarcode = s.GeneratedBarcode,
                     CleanPdfUrl = s.CleanPdfUrl,
-                    PaperId = s.PaperId,
+                    PaperId = s.ProjectPaper.PaperId,
                     InBuiltBarCode = s.InBuiltBarcode,
                     Status = s.Status,
                     IsReEvaluationRequested = s.IsReEvaluationRequested,

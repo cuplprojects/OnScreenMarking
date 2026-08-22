@@ -573,5 +573,120 @@ namespace API.Controllers
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
+        [HttpGet("project-examiners/{projectId}")]
+        public async Task<IActionResult> GetProjectExaminers(
+            int projectId,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 5,
+            [FromQuery] string? search = null,
+            [FromQuery] string? statusFilter = null)
+        {
+            try
+            {
+                var userIdStr = User.FindFirst("id")?.Value;
+                if (!int.TryParse(userIdStr, out int userId))
+                    return Unauthorized(new { success = false, message = "Invalid token claims" });
+
+                var currentUser = await _context.Users.FindAsync(userId);
+                if (currentUser == null || !currentUser.UniversityId.HasValue)
+                    return Unauthorized(new { success = false, message = "User not associated with a university." });
+
+                var universityId = currentUser.UniversityId.Value;
+
+                // 1. Get papers for this project to calculate project specific allocations
+                var projectPaperIds = await _context.Papers
+                    .Where(p => p.ProjectId == projectId)
+                    .Select(p => p.PaperId)
+                    .ToListAsync();
+
+                // 2. Query examiners in this university
+                var examinersQuery = _context.Users
+                    .Include(u => u.Expertise)
+                        .ThenInclude(ee => ee.Subject)
+                    .Where(u => u.UniversityId == universityId && u.UserType == "examiner");
+
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    search = search.ToLower();
+                    examinersQuery = examinersQuery.Where(u => 
+                        (u.Name != null && u.Name.ToLower().Contains(search)) ||
+                        (u.Email != null && u.Email.ToLower().Contains(search)));
+                }
+
+                // Retrieve all matching examiners first, then calculate allocations/workload
+                var examinersList = await examinersQuery.ToListAsync();
+                var examinerIds = examinersList.Select(e => e.Id).ToList();
+
+                // Get all allocations for these examiners
+                var allAllocations = await _context.Allocations
+                    .Include(a => a.Script)
+                    .Where(a => examinerIds.Contains(a.ExaminerId))
+                    .ToListAsync();
+
+                var processedExaminers = new List<ProjectExaminerDto>();
+
+                foreach (var ex in examinersList)
+                {
+                    var examinerAllocations = allAllocations.Where(a => a.ExaminerId == ex.Id).ToList();
+                    var projAllocationsCount = examinerAllocations.Count(a => a.Script != null && projectPaperIds.Contains(a.Script.ProjectPaper.PaperId));
+                    var totalAllocatedCount = examinerAllocations.Count;
+
+                    string workload = "Free";
+                    if (totalAllocatedCount > 20) workload = "Fully Allocated";
+                    else if (totalAllocatedCount > 0) workload = "Partially Allocated";
+
+                    // Only include active/available examiners (either allocated to this project, or generally have allocations)
+                    if (projAllocationsCount > 0 || totalAllocatedCount >= 0)
+                    {
+                        var subjects = ex.Expertise != null 
+                            ? string.Join(", ", ex.Expertise.Where(ee => ee.Subject != null).Select(ee => ee.Subject.SubName))
+                            : "";
+
+                        processedExaminers.Add(new ProjectExaminerDto
+                        {
+                            Id = ex.Id,
+                            Name = ex.Name ?? "",
+                            Email = ex.Email ?? "",
+                            AllocatedCount = totalAllocatedCount,
+                            ProjectAllocatedCount = projAllocationsCount,
+                            Workload = workload,
+                            SubjectExpertise = subjects
+                        });
+                    }
+                }
+
+                // Apply status filter
+                if (!string.IsNullOrWhiteSpace(statusFilter) && statusFilter != "All")
+                {
+                    if (statusFilter == "Free")
+                    {
+                        processedExaminers = processedExaminers.Where(e => e.Workload == "Free").ToList();
+                    }
+                    else if (statusFilter == "Busy")
+                    {
+                        processedExaminers = processedExaminers.Where(e => e.Workload != "Free").ToList();
+                    }
+                }
+
+                var totalCount = processedExaminers.Count;
+                var paginatedItems = processedExaminers
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList();
+
+                return Ok(new
+                {
+                    items = paginatedItems,
+                    totalCount = totalCount,
+                    page = page,
+                    pageSize = pageSize,
+                    totalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
     }
 }

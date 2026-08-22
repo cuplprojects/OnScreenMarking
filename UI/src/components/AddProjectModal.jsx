@@ -6,17 +6,21 @@ export default function AddProjectModal({
   onClose,
   onSubmit,
   editingId,
-  initialData
+  initialData,
+  sessions = []
 }) {
   const [projectName, setProjectName] = useState('');
+  const [sessionId, setSessionId] = useState('');
   const [isActive, setIsActive] = useState(true);
 
   useEffect(() => {
     if (editingId && initialData) {
       setProjectName(initialData.projectName || '');
+      setSessionId(initialData.sessionId ? initialData.sessionId.toString() : '');
       setIsActive(initialData.isActive !== undefined ? initialData.isActive : true);
     } else {
       setProjectName('');
+      setSessionId('');
       setIsActive(true);
     }
   }, [editingId, initialData, isOpen]);
@@ -27,6 +31,7 @@ export default function AddProjectModal({
     e.preventDefault();
     onSubmit({
       projectName: projectName.trim(),
+      sessionId: parseInt(sessionId, 10),
       isActive
     });
   };
@@ -35,7 +40,7 @@ export default function AddProjectModal({
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" 
+        className="fixed inset-0 bg-slate-900/40 transition-opacity" 
         onClick={onClose}
       />
 
@@ -59,6 +64,25 @@ export default function AddProjectModal({
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+                Session *
+              </label>
+              <select
+                value={sessionId}
+                onChange={(e) => setSessionId(e.target.value)}
+                className="w-full text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-1 focus:ring-blue-500 outline-none transition-all cursor-pointer"
+                required
+              >
+                <option value="" disabled>-- Select a Session --</option>
+                {sessions.map(s => (
+                  <option key={s.sessionId} value={s.sessionId}>
+                    {s.sessionName} {s.isActive ? '(Active)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
                 Project Title *
               </label>
               <input
@@ -76,7 +100,7 @@ export default function AddProjectModal({
                 type="checkbox"
                 checked={isActive}
                 onChange={(e) => setIsActive(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-350 accent-indigo-650 cursor-pointer"
+                className="w-4 h-4 rounded border-slate-350 accent-blue-650 cursor-pointer"
                 id="active-project-modal"
               />
               <label className="text-xs text-slate-600 font-bold cursor-pointer" htmlFor="active-project-modal">
@@ -88,7 +112,7 @@ export default function AddProjectModal({
             <div className="flex gap-2.5 pt-3 border-t border-slate-100 mt-5">
               <button
                 type="submit"
-                className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-650 hover:shadow-lg text-white font-extrabold text-[10px] uppercase tracking-wider py-2.5 rounded-xl transition-all"
+                className="flex-1 bg-gradient-to-r from-blue-600 to-blue-650 hover:shadow-lg text-white font-extrabold text-[10px] uppercase tracking-wider py-2.5 rounded-xl transition-all"
               >
                 Save Project
               </button>

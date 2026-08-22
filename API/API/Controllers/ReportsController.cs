@@ -82,7 +82,7 @@ namespace API.Controllers
 
                     // Get scripts
                     var scripts = await _context.Scripts
-                        .Where(s => paperIds.Contains(s.PaperId))
+                        .Where(s => paperIds.Contains(s.ProjectPaper.PaperId))
                         .ToListAsync();
 
                     var scriptIds = scripts
@@ -187,7 +187,7 @@ namespace API.Controllers
                     .Where(m => m.ExaminerId == examinerId &&
                                 m.Status == "submitted")
                     .Include(m => m.Script)
-                        .ThenInclude(s => s.Paper)
+                        .ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                             .ThenInclude(p => p.SubjectPapers)
                                 .ThenInclude(sp => sp.Subject)
                     .Include(m => m.Allocation)
@@ -201,7 +201,7 @@ namespace API.Controllers
 
                 var subjectBreakdown = markings
                     .SelectMany(m =>
-                        m.Script.Paper.SubjectPapers.Select(sp => new
+                        m.Script.ProjectPaper.Paper.SubjectPapers.Select(sp => new
                         {
                             SubjectName = sp.Subject.SubName,
                             Marking = m

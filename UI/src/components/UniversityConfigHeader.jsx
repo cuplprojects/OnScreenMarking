@@ -7,7 +7,10 @@ import {
   Users,
   School,
   ChevronRight,
-  GraduationCap
+  GraduationCap,
+  Shield,
+  Activity,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import apiCall from '../services/api';
@@ -65,7 +68,7 @@ export default function UniversityConfigHeader() {
       id: 'departments',
       label: 'Departments',
       icon: <Building2 size={12} />,
-      path: userType === 'admin' ? '/admin/masters' : '/masters'
+      path: userType === 'admin' ? '/admin/departments' : '/departments'
     },
     {
       id: 'courses',
@@ -81,16 +84,16 @@ export default function UniversityConfigHeader() {
     },
     {
       id: 'sessions',
-      label: 'Sessions & Projects',
+      label: 'Sessions',
       icon: <Calendar size={12} />,
       path: userType === 'admin' ? '/admin/sessions' : '/sessions'
     },
     {
-      id: 'users',
-      label: 'Personnel & Users',
-      icon: <Users size={12} />,
-      path: userType === 'admin' ? '/admin/dashboard' : '/coordinator/dashboard'
-    },
+      id: 'master-papers',
+      label: 'Papers',
+      icon: <FileText size={12} />,
+      path: userType === 'admin' ? '/admin/master-papers' : '/master-papers'
+    }
   ];
 
 
@@ -103,7 +106,7 @@ export default function UniversityConfigHeader() {
     <div className="bg-white rounded-2xl p-3 border border-slate-150 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-3 select-none mb-3">
       {/* Brand & Identity */}
       <div className="flex items-center gap-2">
-        <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm">
+        <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-white shrink-0">
           <School size={16} />
         </div>
         <div>
@@ -134,7 +137,7 @@ export default function UniversityConfigHeader() {
               key={tab.id}
               to={targetUrl}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-150 cursor-pointer ${isActive
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-650 text-white shadow-sm'
+                  ? 'bg-blue-600 text-white'
                   : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
                 }`}
             >

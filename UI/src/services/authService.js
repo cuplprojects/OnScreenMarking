@@ -1,4 +1,4 @@
-import apiCall from './api';
+﻿import apiCall from './api';
 
 const authService = {
   login: async (email, password) => {
@@ -27,14 +27,14 @@ const authService = {
   },
 
   logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('userType');
-    localStorage.removeItem('userName');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('userEmail');
-    localStorage.removeItem('profileImage');
-    localStorage.removeItem('universityId');
-    localStorage.removeItem('subjectId1');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('userType');
+    sessionStorage.removeItem('userName');
+    sessionStorage.removeItem('userId');
+    sessionStorage.removeItem('userEmail');
+    sessionStorage.removeItem('profileImage');
+    sessionStorage.removeItem('universityId');
+    sessionStorage.removeItem('subjectId1');
   }
 };
 

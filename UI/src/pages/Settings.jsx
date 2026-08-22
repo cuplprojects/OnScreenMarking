@@ -142,7 +142,7 @@ export default function Settings() {
         {/* Privacy & Access Control */}
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
-            <Shield className="text-purple-500" size={24} />
+            <Shield className="text-blue-500" size={24} />
             <h2 className="text-xl font-bold text-gray-900">Privacy & Access</h2>
           </div>
           <div className="space-y-3">
@@ -168,7 +168,7 @@ export default function Settings() {
         {/* Display Settings */}
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
-            <Eye className="text-indigo-500" size={24} />
+            <Eye className="text-blue-500" size={24} />
             <h2 className="text-xl font-bold text-gray-900">Display Settings</h2>
           </div>
           <div className="space-y-4">

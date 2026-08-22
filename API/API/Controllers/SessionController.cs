@@ -20,24 +20,79 @@ namespace API.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Session>>> GetSessions()
+        public async Task<ActionResult<object>> GetSessions(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string search = "",
+            [FromQuery] string? sortField = null,
+            [FromQuery] string? sortOrder = null,
+            [FromQuery] bool? isActive = null)
         {
             try
             {
-                var sessions = await _context.Sessions
-                    .AsNoTracking()
-                    .Where(s => s.IsActive)
-                    .OrderByDescending(s => s.SessionId)
-                    .Select(s => new
-                    {
-                        sessionId = s.SessionId,
-                        sessionName = s.SessionName,
-                        isActive = s.IsActive,
-                        createdAt = s.CreatedAt
-                    })
-                    .ToListAsync();
+                var query = _context.Sessions.AsNoTracking();
 
-                return Ok(sessions);
+                if (isActive.HasValue)
+                    query = query.Where(s => s.IsActive == isActive.Value);
+
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    var searchLower = search.ToLower();
+                    query = query.Where(s => s.SessionName.ToLower().Contains(searchLower));
+                }
+
+                var totalCount = await query.CountAsync();
+
+                // Sorting
+                if (!string.IsNullOrEmpty(sortField))
+                {
+                    bool isDesc = sortOrder?.ToLower() == "desc";
+                    
+                    if (sortField.Equals("sessionName", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(s => s.SessionName) : query.OrderBy(s => s.SessionName);
+                    else if (sortField.Equals("isActive", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(s => s.IsActive) : query.OrderBy(s => s.IsActive);
+                    else if (sortField.Equals("createdAt", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(s => s.CreatedAt) : query.OrderBy(s => s.CreatedAt);
+                    else
+                        query = query.OrderByDescending(s => s.SessionId);
+                }
+                else
+                {
+                    query = query.OrderByDescending(s => s.SessionId);
+                }
+
+                var projection = query.Select(s => new
+                {
+                    sessionId = s.SessionId,
+                    sessionName = s.SessionName,
+                    isActive = s.IsActive,
+                    createdAt = s.CreatedAt
+                });
+
+                object sessions;
+                if (pageSize > 0)
+                {
+                    sessions = await projection
+                        .Skip((page - 1) * pageSize)
+                        .Take(pageSize)
+                        .ToListAsync();
+                }
+                else
+                {
+                    sessions = await projection.ToListAsync();
+                }
+
+                var totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 1;
+
+                return Ok(new
+                {
+                    items = sessions,
+                    totalCount = totalCount,
+                    page = page,
+                    pageSize = pageSize,
+                    totalPages = totalPages
+                });
             }
             catch (Exception ex)
             {
@@ -81,6 +136,13 @@ namespace API.Controllers
                     CreatedAt = DateTime.UtcNow
                 };
 
+                // Deactivate all other sessions since only one can be active at a time
+                var activeSessions = await _context.Sessions.Where(s => s.IsActive).ToListAsync();
+                foreach (var activeSession in activeSessions)
+                {
+                    activeSession.IsActive = false;
+                }
+
                 _context.Sessions.Add(session);
                 await _context.SaveChangesAsync();
 
@@ -103,6 +165,17 @@ namespace API.Controllers
                     return NotFound(new { success = false, message = "Session not found" });
 
                 session.SessionName = sessionDto.SessionName;
+                
+                if (sessionDto.IsActive && !session.IsActive)
+                {
+                    // If setting this session to active, deactivate all others
+                    var activeSessions = await _context.Sessions.Where(s => s.IsActive && s.SessionId != id).ToListAsync();
+                    foreach (var activeSession in activeSessions)
+                    {
+                        activeSession.IsActive = false;
+                    }
+                }
+                
                 session.IsActive = sessionDto.IsActive;
 
                 _context.Sessions.Update(session);
@@ -123,7 +196,8 @@ namespace API.Controllers
             {
                 var projects = await _context.Projects
                     .Where(p => p.SessionId == id && p.IsActive)
-                    .Include(p => p.Papers)
+                    .Include(p => p.ProjectPapers)
+                        .ThenInclude(pp => pp.Paper)
                     .OrderBy(p => p.ProjectName)
                     .ToListAsync();
 

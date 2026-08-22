@@ -58,16 +58,16 @@ namespace API.Controllers
                     .CountAsync(ds => ds.Department.UniversityId == targetUniversityId && ds.Subject.Status && ds.Department.IsActive);
 
                 var scriptsCount = await _context.Scripts
-                    .CountAsync(s => s.Paper.Project.UniversityId == targetUniversityId);
+                    .CountAsync(s => s.ProjectPaper.Project.UniversityId == targetUniversityId);
 
                 var completedMarking = await _context.Scripts
-                    .CountAsync(s => s.Paper.Project.UniversityId == targetUniversityId && s.Status == "completed");
+                    .CountAsync(s => s.ProjectPaper.Project.UniversityId == targetUniversityId && s.Status == "completed");
 
                 var unassignedScriptsCount = await _context.Scripts
-                    .CountAsync(s => s.Paper.Project.UniversityId == targetUniversityId && (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any())));
+                    .CountAsync(s => s.ProjectPaper.Project.UniversityId == targetUniversityId && (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any())));
 
-                var unconfiguredPapersCount = await _context.Papers
-                    .CountAsync(p => p.Project.UniversityId == targetUniversityId && !p.Sections.Any());
+                var unconfiguredPapersCount = await _context.ProjectPapers
+                    .CountAsync(pp => pp.Project.UniversityId == targetUniversityId && !pp.Paper.Sections.Any());
 
                 var projectsStats = await _context.Projects
                     .AsNoTracking()
@@ -75,12 +75,12 @@ namespace API.Controllers
                     .Select(p => new
                     {
                         projectId = p.ProjectId,
-                        papersCount = p.Papers.Count(),
-                        totalScripts = p.Papers.SelectMany(pa => pa.Scripts).Count(),
-                        pendingScripts = p.Papers.SelectMany(pa => pa.Scripts).Count(s => s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any())),
-                        allocatedScripts = p.Papers.SelectMany(pa => pa.Scripts).Count(s => s.Status == "allocated" || s.Status == "marking"),
-                        completedScripts = p.Papers.SelectMany(pa => pa.Scripts).Count(s => s.Status == "completed"),
-                        unconfiguredPapersCount = p.Papers.Count(pa => !pa.Sections.Any())
+                        papersCount = p.ProjectPapers.Count(),
+                        totalScripts = p.ProjectPapers.SelectMany(pp => pp.Scripts).Count(),
+                        pendingScripts = p.ProjectPapers.SelectMany(pp => pp.Scripts).Count(s => s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any())),
+                        allocatedScripts = p.ProjectPapers.SelectMany(pp => pp.Scripts).Count(s => s.Status == "allocated" || s.Status == "marking"),
+                        completedScripts = p.ProjectPapers.SelectMany(pp => pp.Scripts).Count(s => s.Status == "completed"),
+                        unconfiguredPapersCount = p.ProjectPapers.Count(pp => !pp.Paper.Sections.Any())
                     })
                     .ToListAsync();
 

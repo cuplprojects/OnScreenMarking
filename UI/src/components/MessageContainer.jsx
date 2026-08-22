@@ -53,7 +53,7 @@ export default function MessageContainer() {
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`flex items-start justify-between gap-3 p-3.5 rounded-xl border shadow-lg backdrop-blur-md pointer-events-auto transition-all duration-300 ${getColorClass(
+          className={`flex items-start justify-between gap-3 p-3.5 rounded-xl border shadow-lg  pointer-events-auto transition-all duration-300 ${getColorClass(
             toast.type
           )}`}
         >

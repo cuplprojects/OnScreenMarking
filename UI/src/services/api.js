@@ -1,9 +1,10 @@
-// Centralized API configuration
+﻿// Centralized API configuration
 const API_URL = import.meta.env.VITE_API_URL;
+import message from './messageService';
 
-const getToken = () => localStorage.getItem('token');
+const getToken = () => sessionStorage.getItem('token');
 
-const handleResponse = async (response) => {
+const handleResponse = async (response, options = {}) => {
   if (!response.ok) {
     let errorMessage = `HTTP error! status: ${response.status}`;
     try {
@@ -18,9 +19,18 @@ const handleResponse = async (response) => {
         }
       } catch (textErr) {}
     }
+    message.error(errorMessage);
     throw new Error(errorMessage);
   }
-  return response.json();
+  
+  const data = await response.json();
+  
+  // Show success messages for mutations if they provide a message
+  if (response.ok && data?.success && data?.message && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
+    message.success(data.message);
+  }
+  
+  return data;
 };
 
 const apiCall = async (endpoint, options = {}) => {
@@ -36,7 +46,7 @@ const apiCall = async (endpoint, options = {}) => {
     headers,
   });
 
-  return handleResponse(response);
+  return handleResponse(response, options);
 };
 
 export default apiCall;

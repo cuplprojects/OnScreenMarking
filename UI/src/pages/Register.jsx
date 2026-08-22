@@ -1090,7 +1090,7 @@ const Register = () => {
                     <canvas ref={canvasRef} style={{ display: 'none' }} width="640" height="480" />
                     
                     {/* Smart Auto-Capture Status Overlay */}
-                    <div className="absolute top-3 left-3 right-3 bg-slate-900/90 backdrop-blur-md text-white py-2 px-3 rounded-lg flex items-center justify-between text-xs border border-white/10 shadow-lg select-none z-10">
+                    <div className="absolute top-3 left-3 right-3 bg-slate-900/90  text-white py-2 px-3 rounded-lg flex items-center justify-between text-xs border border-white/10 shadow-lg select-none z-10">
                       <div className="flex items-center gap-2">
                         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
                           isLandmarkerLoaded 
@@ -1124,7 +1124,7 @@ const Register = () => {
 
                     {/* Multi-Face Block Overlay */}
                     {hasMultipleFaces && (
-                      <div className="absolute inset-0 bg-red-950/85 backdrop-blur-md flex flex-col items-center justify-center p-4 text-center select-none animate-fade-in z-20">
+                      <div className="absolute inset-0 bg-red-950/85  flex flex-col items-center justify-center p-4 text-center select-none animate-fade-in z-20">
                         <span className="text-3xl mb-2">⚠️</span>
                         <h4 className="font-extrabold text-red-200 text-sm">Multiple People Detected!</h4>
                         <p className="text-xs text-red-300 mt-1 max-w-[200px]">

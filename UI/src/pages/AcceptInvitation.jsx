@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Camera, X, CheckCircle, Mail, Lock, User, Phone, MapPin, Building, BookOpen, AlertCircle, Loader } from 'lucide-react';
 import authService from '../services/authService';
@@ -534,17 +534,17 @@ const AcceptInvitation = () => {
       const data = await authService.acceptInvitation(payload);
 
       // Store token and user info (Log user in instantly!)
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('userType', data.user.userType);
-      localStorage.setItem('userName', data.user.name);
-      localStorage.setItem('userId', data.user.id);
-      localStorage.setItem('userEmail', data.user.email);
-      localStorage.setItem('profileImage', data.user.profileImage || '');
+      sessionStorage.setItem('token', data.token);
+      sessionStorage.setItem('userType', data.user.userType);
+      sessionStorage.setItem('userName', data.user.name);
+      sessionStorage.setItem('userId', data.user.id);
+      sessionStorage.setItem('userEmail', data.user.email);
+      sessionStorage.setItem('profileImage', data.user.profileImage || '');
       if (data.user.universityId) {
-        localStorage.setItem('universityId', data.user.universityId);
+        sessionStorage.setItem('universityId', data.user.universityId);
       }
       if (data.user.subjectId1) {
-        localStorage.setItem('subjectId1', data.user.subjectId1);
+        sessionStorage.setItem('subjectId1', data.user.subjectId1);
       }
 
       message.success(true);
@@ -622,7 +622,7 @@ const AcceptInvitation = () => {
 
         {/* Invitation Summary Banner */}
         {invitationDetails && (
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-5 mb-8 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <div className="bg-gradient-to-r from-blue-50 to-blue-50 border border-blue-100 rounded-xl p-5 mb-8 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             <div>
               <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Invitation Context</p>
               <h3 className="text-lg font-bold text-gray-950 mt-1">{invitationDetails.universityName}</h3>
@@ -681,7 +681,7 @@ const AcceptInvitation = () => {
                   type="password"
                   required
                   className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 outline-none transition-all"
-                  placeholder="••••••••"
+                  placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   disabled={loading}
@@ -698,7 +698,7 @@ const AcceptInvitation = () => {
                   type="password"
                   required
                   className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 outline-none transition-all"
-                  placeholder="••••••••"
+                  placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                   disabled={loading}
@@ -742,7 +742,7 @@ const AcceptInvitation = () => {
                     <canvas ref={canvasRef} style={{ display: 'none' }} width="640" height="480" />
                     
                     {/* Smart Auto-Capture Status Overlay */}
-                    <div className="absolute top-3 left-3 right-3 bg-slate-900/90 backdrop-blur-md text-white py-2 px-3 rounded-lg flex items-center justify-between text-xs border border-white/10 shadow-lg select-none z-10">
+                    <div className="absolute top-3 left-3 right-3 bg-slate-900/90  text-white py-2 px-3 rounded-lg flex items-center justify-between text-xs border border-white/10 shadow-lg select-none z-10">
                       <div className="flex items-center gap-2">
                         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
                           isLandmarkerLoaded 
@@ -776,8 +776,8 @@ const AcceptInvitation = () => {
 
                     {/* Multi-Face Block Overlay */}
                     {hasMultipleFaces && (
-                      <div className="absolute inset-0 bg-red-950/85 backdrop-blur-md flex flex-col items-center justify-center p-4 text-center select-none animate-fade-in z-20">
-                        <span className="text-3xl mb-2">⚠️</span>
+                      <div className="absolute inset-0 bg-red-950/85  flex flex-col items-center justify-center p-4 text-center select-none animate-fade-in z-20">
+                        <span className="text-3xl mb-2">âš ï¸</span>
                         <h4 className="font-extrabold text-red-200 text-sm">Multiple People Detected!</h4>
                         <p className="text-xs text-red-300 mt-1 max-w-[200px]">
                           Please ensure only one person is in the camera frame to proceed.
@@ -869,7 +869,7 @@ const AcceptInvitation = () => {
                     </div>
 
                     <div className="text-[10px] text-gray-400 leading-tight mt-3 bg-gray-50 p-2 rounded">
-                      💡 Ensure you are in a well-lit room, facing forward, and hold still for auto-capture.
+                      ðŸ’¡ Ensure you are in a well-lit room, facing forward, and hold still for auto-capture.
                     </div>
                   </div>
                 </div>

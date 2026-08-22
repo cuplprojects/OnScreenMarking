@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+﻿import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { RotateCcw, Copy, Type, ZoomIn, ZoomOut, Check, X, Undo, Move, Trash2, FileText } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -89,7 +89,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
         const formData = new FormData();
         formData.append('file', pdfBlob, `evaluated_${scriptId}.pdf`);
 
-        const token = localStorage.getItem('token');
+        const token = sessionStorage.getItem('token');
         const uploadUrl = mId 
           ? `${import.meta.env.VITE_API_URL}/upload?markingId=${mId}`
           : `${import.meta.env.VITE_API_URL}/upload`;
@@ -111,7 +111,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
     },
     syncAnnotations: () => {
       if (scriptId) {
-        const saved = localStorage.getItem(`annotations_${scriptId}`);
+        const saved = sessionStorage.getItem(`annotations_${scriptId}`);
         if (saved) {
           try {
             setAnnotations(JSON.parse(saved));
@@ -138,21 +138,21 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
   // Helper to save annotations to storage
   const saveAnnotationsToStorage = (updatedAnnos) => {
     if (scriptId) {
-      localStorage.setItem(`annotations_${scriptId}`, JSON.stringify(updatedAnnos));
+      sessionStorage.setItem(`annotations_${scriptId}`, JSON.stringify(updatedAnnos));
     }
   };
 
-  // Sync annotations from localStorage based on scriptId
+  // Sync annotations from sessionStorage based on scriptId
   useEffect(() => {
     if (scriptId) {
-      const saved = localStorage.getItem(`annotations_${scriptId}`);
+      const saved = sessionStorage.getItem(`annotations_${scriptId}`);
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
           setAnnotations(parsed);
           onAnnotationsChange?.(parsed);
         } catch (e) {
-          console.error("Failed to parse annotations from localStorage:", e);
+          console.error("Failed to parse annotations from sessionStorage:", e);
         }
       } else {
         setAnnotations([]);
@@ -187,7 +187,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
   const loadPdfFromUrl = async (url) => {
     try {
       setLoadingLoadingPdf(true);
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -765,7 +765,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       <div className="bg-white rounded-lg shadow-sm p-3 space-y-2 border border-gray-200">
         <div className="flex gap-2 items-center border-b border-gray-200 pb-2">
           <span className="text-xs font-medium text-gray-600 uppercase tracking-wider">Evaluation Mode: </span>
-          <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100 uppercase">Q{currentQuestionId || "—"}</span>
+          <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100 uppercase">Q{currentQuestionId || "â€”"}</span>
           <div className="h-4 w-px bg-gray-300 mx-2" />
           <span className="text-xs font-medium text-gray-500 italic">
             {readOnly ? "Read-Only Mode (Submitted Script)" : "Right-click anywhere on the script to mark"}

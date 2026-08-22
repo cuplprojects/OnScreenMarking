@@ -6,6 +6,7 @@ import { useTable } from '../services/tableService';
 import TablePagination from '../components/TablePagination';
 import AddDepartmentModal from '../components/AddDepartmentModal';
 import AddCourseModal from '../components/AddCourseModal';
+import ColumnFilter from '../components/ColumnFilter';
 import { 
   Building2, 
   Plus, 
@@ -79,7 +80,7 @@ export default function DepartmentManagement() {
 
   const getSortIcon = (field) => {
     if (filters.sortField !== field) return <ArrowUpDown size={12} className="text-slate-300" />;
-    return filters.sortOrder === 'asc' ? <ArrowUp size={12} className="text-indigo-500" /> : <ArrowDown size={12} className="text-indigo-500" />;
+    return filters.sortOrder === 'asc' ? <ArrowUp size={12} className="text-blue-500" /> : <ArrowDown size={12} className="text-blue-500" />;
   };
 
   const [showForm, setShowForm] = useState(false);
@@ -136,7 +137,7 @@ export default function DepartmentManagement() {
             </div>
             <button
               onClick={() => setShowForm(!showForm)}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-655 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm hover:shadow self-start sm:self-center shrink-0"
+              className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer self-start sm:self-center shrink-0"
             >
               <Plus size={14} />
               <span>{showForm ? 'Cancel' : 'Add Department'}</span>
@@ -207,7 +208,7 @@ export default function DepartmentManagement() {
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
           {loading && departments.length === 0 ? (
             <div className="p-12 text-center text-slate-400 font-bold text-xs flex flex-col items-center gap-3">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               <span>Fetching departments...</span>
             </div>
           ) : departments.length === 0 ? (
@@ -239,6 +240,7 @@ export default function DepartmentManagement() {
                     >
                       <div className="flex items-center gap-1.5">
                         Department Info {getSortIcon('name')}
+                        <ColumnFilter columnKey="name" currentFilter={filters.name} setFilter={setFilter} placeholder="Filter department..." />
                       </div>
                     </th>
                     <th className="px-6 py-4">Courses</th>
@@ -296,7 +298,7 @@ export default function DepartmentManagement() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleAddCourse(department)}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 hover:text-indigo-800 rounded-xl font-bold text-[10px] uppercase tracking-wider border border-indigo-150 transition cursor-pointer text-indigo-700"
+                            className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 hover:text-blue-800 rounded-xl font-bold text-[10px] uppercase tracking-wider border border-blue-150 transition cursor-pointer text-blue-700"
                             title="Add Course"
                           >
                             <PlusCircle size={12} />
