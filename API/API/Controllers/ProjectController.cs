@@ -72,7 +72,7 @@ namespace API.Controllers
 
                 var projection = query.Select(p => new
                 {
-                    projectId = p.ProjectPapers.FirstOrDefault().ProjectId,
+                    projectId = p.ProjectId,
                     projectName = p.ProjectName,
                     isActive = p.IsActive,
                     createdAt = p.CreatedAt,

@@ -37,6 +37,29 @@ namespace API.Controllers
             }
         }
 
+        [HttpGet("examiner/{examinerId}")]
+        public async Task<ActionResult<IEnumerable<object>>> GetExaminerPapers(int examinerId)
+        {
+            try
+            {
+                var assignments = await _context.PaperExaminers
+                    .Include(pe => pe.Paper)
+                    .Where(pe => pe.ExaminerId == examinerId)
+                    .Select(pe => new {
+                        pe.PaperId,
+                        pe.Paper.PaperCode,
+                        pe.Paper.PaperName
+                    })
+                    .ToListAsync();
+
+                return Ok(assignments);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpPost("assign")]
         [Authorize(Roles = "admin,coordinator")]
         public async Task<IActionResult> AssignExaminer([FromBody] PaperExaminerAssignDto assignDto)
@@ -102,5 +125,50 @@ namespace API.Controllers
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
+        [HttpPost("bulk-assign")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> BulkAssign([FromBody] BulkAssignRequest request)
+        {
+            try
+            {
+                int assignedCount = 0;
+                
+                foreach (var paperId in request.PaperIds)
+                {
+                    foreach (var examinerId in request.ExaminerIds)
+                    {
+                        var exists = await _context.PaperExaminers
+                            .AnyAsync(pe => pe.PaperId == paperId && pe.ExaminerId == examinerId);
+                            
+                        if (!exists)
+                        {
+                            _context.PaperExaminers.Add(new PaperExaminer
+                            {
+                                PaperId = paperId,
+                                ExaminerId = examinerId
+                            });
+                            assignedCount++;
+                        }
+                    }
+                }
+                
+                if (assignedCount > 0)
+                {
+                    await _context.SaveChangesAsync();
+                }
+
+                return Ok(new { success = true, message = $"Successfully assigned {request.ExaminerIds.Count} examiners to {request.PaperIds.Count} papers. ({assignedCount} new assignments)" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+    }
+
+    public class BulkAssignRequest
+    {
+        public List<int> PaperIds { get; set; }
+        public List<int> ExaminerIds { get; set; }
     }
 }

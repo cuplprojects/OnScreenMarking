@@ -281,7 +281,7 @@ namespace API.Controllers
 
                 if (subjectFilter.HasValue)
                 {
-                    query = query.Where(s => s.ProjectPaper.Paper != null && s.ProjectPaper?.Paper?.SubjectPapers.Any(sp => sp.SubjectId == subjectFilter.Value));
+                    query = query.Where(s => s.ProjectPaper.Paper != null && (s.ProjectPaper.Paper.SubjectPapers.Any(sp => sp.SubjectId == subjectFilter.Value)));
                 }
 
                 if (!string.IsNullOrWhiteSpace(search))

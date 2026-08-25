@@ -188,11 +188,8 @@ namespace API.Data
             modelBuilder.Entity<Paper>()
                 .HasMany(p => p.Sections)
                 .WithOne(s => s.Paper)
-                
-            modelBuilder.Entity<Paper>()
-                
-                
-
+                .HasForeignKey(s => s.PaperId)
+                .OnDelete(DeleteBehavior.Cascade);
             // ProjectPaper configuration
             modelBuilder.Entity<ProjectPaper>()
                 .HasKey(pp => pp.Id);

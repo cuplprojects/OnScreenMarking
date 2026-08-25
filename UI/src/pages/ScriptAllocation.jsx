@@ -45,6 +45,7 @@ export default function ScriptAllocation() {
   const [bulkMode, setBulkMode] = useState('even'); // 'even' or 'custom'
   const [examinerCounts, setExaminerCounts] = useState({});
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('allocate'); // 'allocate' | 'manage'
 
   const fetchFn = useCallback((params) => {
     if (projectId) {
@@ -68,6 +69,8 @@ export default function ScriptAllocation() {
     setPageSize,
     search: paperSearchQuery,
     setSearch: setPaperSearchQuery,
+    filters,
+    setFilter,
     sortField,
     sortOrder,
     handleSort,
@@ -121,13 +124,15 @@ export default function ScriptAllocation() {
       }
 
       // Fetch scripts
-      const scriptsData = await apiCall(`/scripts?paperId=${paper.paperId}`);
+      const scriptsData = await apiCall(`/scripts?paperId=${paper.paperId}&limit=1000`);
       const paperScripts = (scriptsData || []).map(s => ({...s, paperId: paper.paperId, paperName: paper.paperName}));
       setScripts(paperScripts);
 
       const allocation = {};
       paperScripts.forEach(script => {
-        allocation[script.Id] = null;
+        // Also fallback to consider it pending if it has no allocationId and is not completed
+        const isPending = script.status?.toLowerCase() === 'pending' || (script.status?.toLowerCase() !== 'completed' && !script.allocationId);
+        allocation[script.id] = isPending ? null : (script.allocationId || 'allocated');
       });
       setAllocationData(allocation);
 
@@ -186,8 +191,8 @@ export default function ScriptAllocation() {
     }
   };
 
-  const pendingCount = scripts.filter(s => !allocationData[s.Id]).length;
-  const allocatedCount = scripts.filter(s => allocationData[s.Id]).length;
+  const pendingCount = scripts.filter(s => !allocationData[s.id]).length;
+  const allocatedCount = scripts.filter(s => allocationData[s.id]).length;
 
   const filteredScripts = scripts.filter(script =>
     script.studentName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -199,7 +204,7 @@ export default function ScriptAllocation() {
   };
 
   const calculateEvenDistribution = () => {
-    const pendingScripts = scripts.filter(s => !allocationData[s.Id]);
+    const pendingScripts = scripts.filter(s => !allocationData[s.id]);
     const activeExaminers = examiners.filter(e => e.examinerId);
     
     if (activeExaminers.length === 0 || pendingScripts.length === 0) {
@@ -221,49 +226,42 @@ export default function ScriptAllocation() {
   const handleBulkAllocate = async () => {
     try {
       setBulkLoading(true);
-      const pendingScripts = scripts.filter(s => !allocationData[s.Id]);
+      const pendingScripts = scripts.filter(s => !allocationData[s.id]);
       
-      if (pendingScripts.length === 0) {
-        message.warning('No pending scripts to allocate');
-        return;
-      }
-
-      const totalAllocated = Object.values(examinerCounts).reduce((sum, count) => sum + count, 0);
-      if (totalAllocated !== pendingScripts.length) {
-        message.warning(`Total allocation (${totalAllocated}) must equal pending scripts (${pendingScripts.length})`);
-        return;
-      }
-
-      // Create a pool of examiners with their requested allocation counts
-      let examinerPool = Object.entries(examinerCounts)
-        .map(([examinerId, count]) => ({ examinerId: parseInt(examinerId), remainingCount: count }))
-        .filter(ex => ex.remainingCount > 0);
-
-      // Perform bulk allocation for the single paper
-      const allocations = examinerPool.map(ex => ({
-        examinerId: ex.examinerId,
-        count: ex.remainingCount
-      }));
-
-      const response = await allocationService.bulkAllocateScripts(activePaper.paperId, allocations);
-
-      const newAllocationData = { ...allocationData };
-      if (response && response.results) {
-        response.results.forEach(res => {
-          newAllocationData[res.scriptId] = res.examinerId;
-        });
-      }
-      setAllocationData(newAllocationData);
-
-      message.success(`Successfully allocated scripts`);
+      const payload = {
+        paperId: activePaper.paperId,
+        allocations: examiners.map(e => ({
+          examinerId: e.examinerId,
+          count: examinerCounts[e.examinerId] || 0
+        })).filter(a => a.count > 0)
+      };
       
-      // Update the table by refetching stats
-      refreshTable();
+      const res = await apiCall('/allocations/bulk-allocate', {
+        method: 'POST',
+        body: payload
+      });
+      
+      message.success(res.message || 'Bulk allocation completed successfully');
+      openAllocationPane(activePaper); // refresh
     } catch (err) {
-      message.error('Failed to perform bulk allocation');
-      console.error(err);
+      message.error(err.message || 'Failed to perform bulk allocation');
     } finally {
       setBulkLoading(false);
+    }
+  };
+
+  const [isRevokingAll, setIsRevokingAll] = useState(false);
+  const handleRevokeAll = async () => {
+    if (!window.confirm("Are you sure you want to revoke ALL allocations for this paper? This will return all assigned scripts back to the pending pool.")) return;
+    setIsRevokingAll(true);
+    try {
+      const res = await apiCall(`/allocations/paper/${activePaper.paperId}/revoke-all`, { method: 'POST' });
+      message.success(res.message);
+      openAllocationPane(activePaper); // refresh
+    } catch (err) {
+      message.error(err.message || 'Failed to revoke allocations');
+    } finally {
+      setIsRevokingAll(false);
     }
   };
 
@@ -302,7 +300,7 @@ export default function ScriptAllocation() {
         </div>
       </div>
 
-      <div className="px-6 lg:px-10 w-full max-w-[1600px] mx-auto flex flex-col xl:flex-row gap-8 items-start">
+      <div className="px-6 lg:px-10 w-full flex flex-col xl:flex-row gap-8 items-start">
 
         {/* Left Column: Master List */}
         <div className={`w-full ${activePaper ? 'xl:w-[50%]' : 'xl:w-full'} flex flex-col transition-all duration-300`}>
@@ -404,24 +402,53 @@ export default function ScriptAllocation() {
         {activePaper && (
         <div className="w-full xl:w-[50%] flex flex-col animate-in slide-in-from-right-4 duration-300">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex-1 flex flex-col overflow-hidden">
-            <div className="p-6 bg-gradient-to-r from-blue-50 to-white border-b border-slate-100">
+            <div className="p-6 bg-slate-50 border-b border-slate-100">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                    <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-md flex items-center justify-center font-bold text-xs">
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="w-7 h-7 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center font-bold text-sm">
                       2
                     </div>
-                    Bulk Allocate Scripts
-                  </h2>
-                  <p className="text-sm font-semibold text-slate-500 mt-1 ml-8">
-                    {activePaper.paperName} ({activePaper.paperCode})
-                  </p>
+                    <h2 className="text-lg font-black text-slate-900 tracking-tight">
+                      Bulk Allocate Scripts
+                    </h2>
+                  </div>
+                  <div className="flex items-center gap-2 ml-10">
+                    <p className="text-sm font-semibold text-slate-600">
+                      {activePaper.paperName}
+                    </p>
+                    <span className="text-xs font-bold text-slate-400 bg-slate-200/50 px-2 py-0.5 rounded-md">
+                      {activePaper.paperCode}
+                    </span>
+                  </div>
                 </div>
                 <button 
                   onClick={() => openAllocationPane(activePaper)}
-                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition"
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-full transition-all"
                 >
                   <X size={20} />
+                </button>
+              </div>
+              <div className="mt-4 flex gap-4 border-b border-slate-200">
+                <button
+                  onClick={() => setActiveTab('allocate')}
+                  className={`pb-2 text-sm font-bold transition-all border-b-2 ${
+                    activeTab === 'allocate' 
+                      ? 'border-blue-600 text-blue-600' 
+                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Allocate Scripts
+                </button>
+                <button
+                  onClick={() => setActiveTab('manage')}
+                  className={`pb-2 text-sm font-bold transition-all border-b-2 ${
+                    activeTab === 'manage' 
+                      ? 'border-blue-600 text-blue-600' 
+                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Manage Allocations
                 </button>
               </div>
             </div>
@@ -438,15 +465,17 @@ export default function ScriptAllocation() {
                 </div>
               ) : (
                 <>
-                  {/* Mode Selection */}
+                  {activeTab === 'allocate' ? (
+                    <>
+                      {/* Mode Selection */}
                   <div className="mb-6">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Allocation Mode</p>
-                    <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Allocation Strategy</p>
+                    <div className="flex gap-2 p-1.5 bg-slate-100 rounded-xl border border-slate-200/60">
                       <button
                         onClick={() => setBulkMode('even')}
                         className={`flex-1 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
                           bulkMode === 'even'
-                            ? 'bg-white text-blue-600 shadow-sm'
+                            ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50'
                             : 'text-slate-500 hover:text-slate-700'
                         }`}
                       >
@@ -456,7 +485,7 @@ export default function ScriptAllocation() {
                         onClick={() => setBulkMode('custom')}
                         className={`flex-1 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
                           bulkMode === 'custom'
-                            ? 'bg-white text-blue-600 shadow-sm'
+                            ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50'
                             : 'text-slate-500 hover:text-slate-700'
                         }`}
                       >
@@ -467,19 +496,22 @@ export default function ScriptAllocation() {
 
                   {/* Even Distribution */}
                   {bulkMode === 'even' && (
-                    <div className="mb-8 p-5 bg-blue-50/50 rounded-xl border border-blue-100">
-                      <div className="flex items-start gap-3">
-                        <div className="p-2 bg-white rounded-lg shadow-sm text-blue-600">
-                          <Zap size={20} />
+                    <div className="mb-8 p-6 bg-gradient-to-br from-blue-50 to-indigo-50/30 rounded-2xl border border-blue-100/60 shadow-sm relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity duration-500 pointer-events-none">
+                        <Zap size={120} />
+                      </div>
+                      <div className="flex items-start gap-4 relative z-10">
+                        <div className="p-3 bg-white rounded-xl shadow-sm text-blue-600 ring-1 ring-black/5">
+                          <Zap size={22} className="fill-blue-600/20" />
                         </div>
-                        <div>
-                          <p className="text-sm font-bold text-slate-900 mb-1">Automatic Distribution</p>
-                          <p className="text-xs text-slate-600 mb-4 leading-relaxed">
-                            Distribute <span className="font-bold text-slate-900">{scripts.filter(s => !allocationData[s.Id]).length}</span> pending scripts evenly among <span className="font-bold text-slate-900">{examiners.length}</span> available examiners.
+                        <div className="flex-1">
+                          <p className="text-base font-black text-slate-900 mb-1 tracking-tight">Automatic Distribution</p>
+                          <p className="text-sm text-slate-600 mb-5 leading-relaxed">
+                            Distribute <span className="font-bold text-slate-900 px-1">{scripts.filter(s => !allocationData[s.id]).length}</span> pending scripts evenly among <span className="font-bold text-slate-900 px-1">{examiners.length}</span> available examiners.
                           </p>
                           <button
                             onClick={calculateEvenDistribution}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm"
+                            className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 hover:shadow-md hover:-translate-y-0.5 transition-all active:translate-y-0"
                           >
                             Calculate Distribution
                           </button>
@@ -490,40 +522,40 @@ export default function ScriptAllocation() {
 
                   {/* Examiner List */}
                   <div className="mb-8">
-                    <div className="flex items-center justify-between mb-4">
-                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Examiners Pool</p>
-                      <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                    <div className="flex items-center justify-between mb-5">
+                      <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Examiners Pool</p>
+                      <span className="text-[10px] font-black text-blue-700 bg-blue-100/50 px-2.5 py-1 rounded-full border border-blue-200/50 uppercase tracking-wide shadow-sm">
                         {examiners.length} Available
                       </span>
                     </div>
                     
                     {examiners.length === 0 ? (
-                      <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                        <Users className="mx-auto text-slate-300 mb-2" size={24} />
-                        <p className="text-sm font-semibold text-slate-500">No subject experts assigned</p>
+                      <div className="p-10 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                        <Users className="mx-auto text-slate-300 mb-3" size={32} />
+                        <p className="text-sm font-bold text-slate-500">No subject experts assigned</p>
                       </div>
                     ) : (
-                      <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                      <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
                         {examiners.map(examiner => (
-                          <div key={examiner.examinerId} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl hover:border-blue-300 hover:shadow-sm transition-all group">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs uppercase shadow-inner">
+                          <div key={examiner.examinerId} className="flex items-center justify-between p-4 bg-white border border-slate-200/75 rounded-2xl hover:border-blue-300 hover:shadow-md hover:bg-blue-50/20 transition-all duration-300 group">
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-indigo-50 text-blue-700 flex items-center justify-center font-black text-sm uppercase shadow-sm border border-blue-100/50 group-hover:scale-110 transition-transform duration-300">
                                 {(examiner.examinerName || 'E').charAt(0)}
                               </div>
                               <div>
-                                <p className="text-sm font-bold text-slate-900 leading-none">{examiner.examinerName || 'Unknown Examiner'}</p>
-                                <p className="text-[10px] text-slate-500 mt-1">ID: {examiner.examinerId}</p>
+                                <p className="text-sm font-black text-slate-900 tracking-tight group-hover:text-blue-700 transition-colors">{examiner.examinerName || 'Unknown Examiner'}</p>
+                                <p className="text-[10px] font-bold text-slate-400 mt-0.5 tracking-wider uppercase">ID: {examiner.examinerId}</p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-slate-400">Allocate</span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider group-hover:text-blue-500 transition-colors">Allocate</span>
                               <input
                                 type="number"
                                 min="0"
                                 max={scripts.length}
                                 value={examinerCounts[examiner.examinerId] || 0}
                                 onChange={(e) => updateExaminerCount(examiner.examinerId, parseInt(e.target.value) || 0)}
-                                className="w-20 px-3 py-1.5 text-center text-sm font-bold border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                className="w-24 px-3 py-2 text-center text-sm font-black border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm group-hover:border-blue-200 bg-slate-50 focus:bg-white"
                               />
                             </div>
                           </div>
@@ -532,24 +564,45 @@ export default function ScriptAllocation() {
                     )}
                   </div>
 
-                  <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 sticky bottom-0 bg-white">
+                  <div className="flex justify-end gap-4 pt-6 mt-4 border-t border-slate-100 sticky bottom-0 bg-white/95 backdrop-blur-sm pb-2">
                     <button
                       onClick={() => openAllocationPane(activePaper)}
-                      className="px-5 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition"
+                      className="px-6 py-2.5 text-sm font-black text-slate-500 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all duration-300"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleBulkAllocate}
                       disabled={bulkLoading || examiners.length === 0}
-                      className="px-5 py-2 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      className="px-8 py-2.5 text-sm font-black text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 hover:-translate-y-0.5 active:translate-y-0"
                     >
-                      {bulkLoading ? <Loader className="animate-spin" size={16} /> : <Zap size={16} />}
+                      {bulkLoading ? <Loader className="animate-spin" size={18} /> : <Zap size={18} />}
                       {bulkLoading ? 'Allocating...' : 'Confirm Allocation'}
                     </button>
                   </div>
                 </>
+              ) : (
+                <div className="space-y-6">
+                  <div className="bg-amber-50 p-6 rounded-2xl border border-amber-200/60 shadow-sm">
+                    <h3 className="text-sm font-black text-amber-900 mb-2 flex items-center gap-2">
+                      <AlertCircle size={16} /> Danger Zone
+                    </h3>
+                    <p className="text-xs text-amber-800 font-medium leading-relaxed mb-6">
+                      Revoking allocations will immediately remove scripts from all examiners assigned to <span className="font-bold">{activePaper.paperCode}</span> and return them to the "Pending" pool. Examiners will lose access to mark these scripts.
+                    </p>
+                    <button 
+                      onClick={handleRevokeAll}
+                      disabled={isRevokingAll || scripts.filter(s => allocationData[s.id]).length === 0}
+                      className="px-5 py-2.5 bg-rose-600 text-white text-sm font-bold rounded-xl hover:bg-rose-700 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed w-full flex items-center justify-center gap-2"
+                    >
+                      {isRevokingAll ? <Loader className="animate-spin" size={16} /> : <X size={16} />}
+                      {isRevokingAll ? 'Revoking...' : `Revoke All Allocations (${scripts.filter(s => allocationData[s.id]).length} active)`}
+                    </button>
+                  </div>
+                </div>
               )}
+            </>
+          )}
             </div>
           </div>
         </div>

@@ -594,7 +594,7 @@ namespace API.Controllers
                 var universityId = currentUser.UniversityId.Value;
 
                 // 1. Get papers for this project to calculate project specific allocations
-                var projectPaperIds = await _context.Papers
+                var projectPaperIds = await _context.ProjectPapers
                     .Where(p => p.ProjectId == projectId)
                     .Select(p => p.PaperId)
                     .ToListAsync();
@@ -620,6 +620,7 @@ namespace API.Controllers
                 // Get all allocations for these examiners
                 var allAllocations = await _context.Allocations
                     .Include(a => a.Script)
+                        .ThenInclude(s => s.ProjectPaper)
                     .Where(a => examinerIds.Contains(a.ExaminerId))
                     .ToListAsync();
 

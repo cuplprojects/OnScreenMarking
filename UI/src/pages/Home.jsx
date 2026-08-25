@@ -21,6 +21,7 @@ import apiCall from '../services/api';
 import { useTable } from '../services/tableService';
 import TablePagination from '../components/TablePagination';
 import ColumnFilter from '../components/ColumnFilter';
+import RequestScriptsModal from '../components/RequestScriptsModal';
 
 const Home = () => {
   const { user } = useAuth();
@@ -32,6 +33,8 @@ const Home = () => {
     averageScore: 0,
   });
   const [subjectWorkloads, setSubjectWorkloads] = useState([]);
+  const [assignedPapers, setAssignedPapers] = useState([]);
+  const [requestModalPaper, setRequestModalPaper] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   
   const tableRef = useRef(null);
@@ -107,6 +110,11 @@ const Home = () => {
   useEffect(() => {
     const loadStats = async () => {
       if (!user?.id) return;
+      try {
+        const papers = await apiCall(`/PaperExaminers/examiner/${user.id}`);
+        if (Array.isArray(papers)) setAssignedPapers(papers);
+      } catch(e) { console.error("Failed to load papers:", e); }
+      
       try {
         // Fetch all scripts for stats
         const allScriptsResponse = await apiCall(`/scripts/examiner/${user.id}?pageSize=0`);
@@ -515,6 +523,31 @@ const Home = () => {
               )}
             </div>
           )}
+          {/* Assigned Papers for Requesting Scripts */}
+          {assignedPapers.length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <FileText size={16} className="text-blue-500" />
+                <span>Assigned Papers (Request Scripts)</span>
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {assignedPapers.map((paper, idx) => (
+                  <div key={idx} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm hover:border-blue-300 transition-colors flex flex-col justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-slate-400 uppercase">{paper.paperCode}</div>
+                      <div className="text-sm font-bold text-slate-800 mt-1">{paper.paperName}</div>
+                    </div>
+                    <button 
+                      onClick={() => setRequestModalPaper(paper)}
+                      className="mt-4 w-full py-2 bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Zap size={14} /> Request Scripts
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         
         {tableLoading && scripts.length === 0 ? (
@@ -619,6 +652,17 @@ const Home = () => {
         )}
       </div>
 
+      <RequestScriptsModal 
+        isOpen={!!requestModalPaper}
+        onClose={() => setRequestModalPaper(null)}
+        paper={requestModalPaper}
+        examinerId={user?.id}
+        onRequested={() => {
+          refreshTable();
+          // reload stats to update pending count
+          const timer = setTimeout(() => window.location.reload(), 1500);
+        }}
+      />
     </div>
   );
 };

@@ -437,7 +437,8 @@ namespace API.Controllers
 
                 // Get pending scripts for this paper
                 var pendingScripts = await _context.Scripts
-                    .Where(s => s.ProjectPaper.PaperId == request.PaperId && s.Status == "pending")
+                    .Where(s => s.ProjectPaper.PaperId == request.PaperId && 
+                               (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any())))
                     .ToListAsync();
 
                 var totalRequested = request.Allocations.Sum(a => a.Count);
@@ -526,6 +527,251 @@ namespace API.Controllers
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
+        
+        [HttpPost("paper/{paperId}/revoke-all")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> RevokeAllForPaper(int paperId)
+        {
+            try
+            {
+                var allocations = await _context.Allocations
+                    .Include(a => a.Script)
+                    .Where(a => a.Script.ProjectPaper.PaperId == paperId)
+                    .ToListAsync();
+                    
+                if (!allocations.Any()) return Ok(new { success = true, message = "No allocations to revoke." });
+
+                var scripts = allocations.Select(a => a.Script).ToList();
+                foreach (var script in scripts)
+                {
+                    script.Status = "pending";
+                }
+                
+                _context.Allocations.RemoveRange(allocations);
+                _context.Scripts.UpdateRange(scripts);
+                
+                await _context.SaveChangesAsync();
+                return Ok(new { success = true, message = $"Successfully revoked {allocations.Count} allocations." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+        
+        [HttpPost("revoke")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> RevokeAllocations([FromBody] RevokeAllocationRequest request)
+        {
+            try
+            {
+                var allocations = await _context.Allocations
+                    .Where(a => request.AllocationIds.Contains(a.AllocationId))
+                    .ToListAsync();
+                    
+                if (!allocations.Any()) return NotFound(new { success = false, message = "No allocations found" });
+
+                var scriptIds = allocations.Select(a => a.ScriptId).ToList();
+                var scripts = await _context.Scripts.Where(s => scriptIds.Contains(s.Id)).ToListAsync();
+                
+                foreach (var script in scripts)
+                {
+                    script.Status = "pending";
+                }
+                
+                _context.Allocations.RemoveRange(allocations);
+                _context.Scripts.UpdateRange(scripts);
+                
+                await _context.SaveChangesAsync();
+                return Ok(new { success = true, message = $"Successfully revoked {allocations.Count} allocations." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+        
+        [HttpPost("project/{projectId}/auto-allocate")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> ProjectAutoAllocate(int projectId)
+        {
+            try
+            {
+                var papers = await _context.Papers
+                    .Include(p => p.ProjectPapers)
+                    .Include(p => p.Sections)
+                    .Where(p => p.ProjectPapers.Any(pp => pp.ProjectId == projectId) && p.Sections.Any())
+                    .ToListAsync();
+
+                int totalAllocated = 0;
+                
+                foreach (var paper in papers)
+                {
+                    var examiners = await _context.PaperExaminers
+                        .Where(pe => pe.PaperId == paper.PaperId)
+                        .Select(pe => pe.ExaminerId)
+                        .ToListAsync();
+                        
+                    if (!examiners.Any()) continue;
+                    
+                    var pendingScripts = await _context.Scripts
+                        .Where(s => s.ProjectPaper.PaperId == paper.PaperId && 
+                                   (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any())))
+                        .ToListAsync();
+                        
+                    if (!pendingScripts.Any()) continue;
+                    
+                    int scriptCount = pendingScripts.Count;
+                    int baseShare = scriptCount / examiners.Count;
+                    int remainder = scriptCount % examiners.Count;
+                    
+                    int scriptIndex = 0;
+                    for (int i = 0; i < examiners.Count; i++)
+                    {
+                        int share = baseShare + (i < remainder ? 1 : 0);
+                        if (share == 0) break;
+                        
+                        var examinerId = examiners[i];
+                        for (int j = 0; j < share; j++)
+                        {
+                            var script = pendingScripts[scriptIndex++];
+                            
+                            var allocation = new Allocation
+                            {
+                                ScriptId = script.Id,
+                                ExaminerId = examinerId,
+                                AllocatedAt = DateTime.UtcNow,
+                                Deadline = DateTime.UtcNow.AddDays(7)
+                            };
+                            
+                            _context.Allocations.Add(allocation);
+                            script.Status = "allocated";
+                            _context.Scripts.Update(script);
+                            totalAllocated++;
+                        }
+                    }
+                }
+                
+                await _context.SaveChangesAsync();
+                return Ok(new { success = true, message = $"Successfully auto-allocated {totalAllocated} scripts across project." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+        [HttpPost("cleanup-expired")]
+        [Authorize]
+        public async Task<IActionResult> CleanupExpiredAllocations()
+        {
+            try
+            {
+                var expiredAllocations = await _context.Allocations
+                    .Include(a => a.Script)
+                    .Where(a => a.Status != "submitted" && a.Deadline.HasValue && a.Deadline.Value < DateTime.UtcNow)
+                    .ToListAsync();
+                    
+                if (!expiredAllocations.Any())
+                    return Ok(new { success = true, message = "No expired allocations found.", count = 0 });
+
+                var scriptsToReset = expiredAllocations.Select(a => a.Script).ToList();
+                foreach(var s in scriptsToReset)
+                {
+                    s.Status = "pending";
+                }
+                
+                _context.Allocations.RemoveRange(expiredAllocations);
+                _context.Scripts.UpdateRange(scriptsToReset);
+                await _context.SaveChangesAsync();
+                
+                return Ok(new { success = true, message = $"Cleaned up {expiredAllocations.Count} expired allocations.", count = expiredAllocations.Count });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+        
+        [HttpPost("request-scripts")]
+        [Authorize(Roles = "examiner")]
+        public async Task<IActionResult> RequestScripts([FromBody] DynamicPullRequest request)
+        {
+            try
+            {
+                var loggedInUserIdStr = User.FindFirst("id")?.Value;
+                if (string.IsNullOrEmpty(loggedInUserIdStr))
+                    return Unauthorized(new { success = false, message = "Invalid user token" });
+                    
+                int examinerId = int.Parse(loggedInUserIdStr);
+                
+                if (request.RequestCount <= 0 || request.RequestCount > 50)
+                    return BadRequest(new { success = false, message = "Request count must be between 1 and 50 scripts." });
+
+                // Cleanup expired ones first to be safe
+                var expiredAllocations = await _context.Allocations
+                    .Include(a => a.Script)
+                    .Where(a => a.ExaminerId == examinerId && a.Status != "submitted" && a.Deadline.HasValue && a.Deadline.Value < DateTime.UtcNow)
+                    .ToListAsync();
+                
+                if (expiredAllocations.Any())
+                {
+                    var scriptsToReset = expiredAllocations.Select(a => a.Script).ToList();
+                    foreach(var s in scriptsToReset) s.Status = "pending";
+                    _context.Allocations.RemoveRange(expiredAllocations);
+                    _context.Scripts.UpdateRange(scriptsToReset);
+                    await _context.SaveChangesAsync();
+                }
+
+                // Check active allocations count
+                var activeCount = await _context.Allocations
+                    .CountAsync(a => a.ExaminerId == examinerId && a.Status != "submitted");
+                
+                if (activeCount + request.RequestCount > 50)
+                {
+                    return BadRequest(new { success = false, message = $"Cannot request {request.RequestCount} scripts. You already have {activeCount} active scripts. Maximum allowed active scripts is 50." });
+                }
+
+                var pendingScripts = await _context.Scripts
+                    .Where(s => s.ProjectPaper.PaperId == request.PaperId && 
+                               (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any())))
+                    .Take(request.RequestCount)
+                    .ToListAsync();
+
+                if (!pendingScripts.Any())
+                    return Ok(new { success = false, message = "No pending scripts available for this paper." });
+
+                var endOfDay = DateTime.UtcNow.Date.AddDays(1).AddTicks(-1); // End of current UTC day
+                
+                var newAllocations = new List<Allocation>();
+                foreach (var script in pendingScripts)
+                {
+                    script.Status = "allocated";
+                    newAllocations.Add(new Allocation
+                    {
+                        ScriptId = script.Id,
+                        ExaminerId = examinerId,
+                        AllocatedAt = DateTime.UtcNow,
+                        Deadline = endOfDay,
+                        Status = "assigned"
+                    });
+                }
+
+                _context.Scripts.UpdateRange(pendingScripts);
+                await _context.Allocations.AddRangeAsync(newAllocations);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = $"Successfully allocated {newAllocations.Count} scripts. Deadline is end of today.", allocatedCount = newAllocations.Count });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+    }
+
+    public class RevokeAllocationRequest
+    {
+        public List<int> AllocationIds { get; set; }
     }
 
     public class BulkAllocationRequest
@@ -538,5 +784,11 @@ namespace API.Controllers
     {
         public int ExaminerId { get; set; }
         public int Count { get; set; }
+    }
+
+    public class DynamicPullRequest
+    {
+        public int PaperId { get; set; }
+        public int RequestCount { get; set; }
     }
 }

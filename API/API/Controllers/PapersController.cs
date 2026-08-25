@@ -43,7 +43,7 @@ namespace API.Controllers
 
                 if (!string.IsNullOrWhiteSpace(search))
                 {
-                    query = query.Where(p => p.PaperName.Contains(search) || p.PaperCode.Contains(search) || p.ProjectPapers.FirstOrDefault().CatchNo.Contains(search));
+                    query = query.Where(p => p.PaperName.Contains(search) || p.PaperCode.Contains(search) || p.ProjectPapers.Select(pp => pp.CatchNo).FirstOrDefault().Contains(search));
                 }
 
                 // Filter by card status
@@ -79,7 +79,7 @@ namespace API.Controllers
                             query = isDesc ? query.OrderByDescending(p => p.PaperName) : query.OrderBy(p => p.PaperName);
                             break;
                         case "catchno":
-                            query = isDesc ? query.OrderByDescending(p => p.ProjectPapers.FirstOrDefault().CatchNo) : query.OrderBy(p => p.ProjectPapers.FirstOrDefault().CatchNo);
+                            query = isDesc ? query.OrderByDescending(p => p.ProjectPapers.Select(pp => pp.CatchNo).FirstOrDefault()) : query.OrderBy(p => p.ProjectPapers.Select(pp => pp.CatchNo).FirstOrDefault());
                             break;
                         case "subjectname":
                             query = isDesc 
@@ -136,7 +136,9 @@ namespace API.Controllers
                         completedScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.Status == "completed"),
                         allocatedScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (s.Status == "allocated" || s.Status == "marking")),
                         pendingScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any()))),
-                        isSectionsConfigured = p.Sections.Any()
+                        isSectionsConfigured = p.Sections.Any(),
+                        configuredMarks = p.Sections.Sum(s => (int?)s.TotalMarks) ?? 0,
+                        expertsCount = _context.PaperExaminers.Count(pe => pe.PaperId == p.PaperId)
                     })
                     .ToListAsync();
 
@@ -177,7 +179,7 @@ namespace API.Controllers
                     query = query.Where(p => p.ProjectPapers.Any(pp => pp.ProjectId == projectId.Value));
 
                 if (universityId.HasValue)
-                    query = query.Where(p => p.Project.UniversityId == universityId.Value);
+                    query = query.Where(p => p.ProjectPapers.Any(pp => pp.Project.UniversityId == universityId.Value));
 
                 var papers = await query
                     .OrderBy(p => p.PaperNumber)
@@ -234,8 +236,8 @@ namespace API.Controllers
                     MaxMarks = paper.MaxMarks,
                     TotalQuestions = paper.TotalQuestions,
                     Description = paper.Description,
-                    CatchNo = //paper.CatchNo,
-                    QuestionPaperPdfUrl = //paper.QuestionPaperPdfUrl,
+                    CatchNo = "",
+                    QuestionPaperPdfUrl = "",
                     IsActive = paper.IsActive,
                     SubjectIds = paper.SubjectPapers
                 .Select(sp => sp.SubjectId)
@@ -301,15 +303,12 @@ namespace API.Controllers
 
                 var paper = new Paper
                 {
-                    ProjectId = paperDto.ProjectId,
                     PaperCode = paperDto.PaperCode,
                     PaperName = paperDto.PaperName,
                     PaperNumber = paperDto.PaperNumber,
                     MaxMarks = paperDto.MaxMarks,
                     TotalQuestions = paperDto.TotalQuestions,
                     Description = paperDto.Description,
-                    CatchNo = paperDto.CatchNo,
-                    QuestionPaperPdfUrl = paperDto.QuestionPaperPdfUrl,
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -403,7 +402,7 @@ namespace API.Controllers
             try
             {
                 var sections = await _context.Sections
-                    .Where(s => s.ProjectPaper.PaperId == id)
+                    .Where(s => s.PaperId == id)
                     .Include(s => s.Questions)
                     .OrderBy(s => s.Id)
                     .ToListAsync();

@@ -55,6 +55,7 @@ export default function SectionConfig() {
   const [showQuestionPreview, setShowQuestionPreview] = useState(false);
   const [editingSectionId, setEditingSectionId] = useState(null);
   const [expandedSections, setExpandedSections] = useState({});
+  const [sectionToDelete, setSectionToDelete] = useState(null);
 
   const [sectionForm, setSectionForm] = useState({
     name: '',
@@ -243,9 +244,32 @@ export default function SectionConfig() {
       return;
     }
 
+    const expectedTotalMarks = parseFloat(sectionForm.totalMarks) || 0;
+
+    // Validate that the section's total marks don't exceed the paper's max marks
+    if (selectedPaper) {
+      const currentOtherSectionMarks = sections
+        .filter(s => s.id !== editingSectionId)
+        .reduce((sum, s) => sum + s.totalMarks, 0);
+        
+      if (currentOtherSectionMarks + expectedTotalMarks > selectedPaper.maxMarks) {
+        message.error(`Cannot save section! The total allocated marks (${currentOtherSectionMarks + expectedTotalMarks}) would exceed the paper's maximum marks (${selectedPaper.maxMarks}).`);
+        return;
+      }
+      
+      const maxEndQuestion = Math.max(
+        ...sections.filter(s => s.id !== editingSectionId).map(s => s.endQuestion),
+        sectionForm.endQuestion
+      );
+      
+      if (selectedPaper.totalQuestions > 0 && maxEndQuestion > selectedPaper.totalQuestions) {
+        message.error(`Cannot save section! The end question (Q${sectionForm.endQuestion}) exceeds the paper's total questions (${selectedPaper.totalQuestions}).`);
+        return;
+      }
+    }
+
     // Validate if the sum of individual question marks matches the section's total marks
     const maxAttempts = parseInt(sectionForm.maxQuestionsToAttempt) || questions.length;
-    const expectedTotalMarks = parseFloat(sectionForm.totalMarks) || 0;
 
     // Build the pool of available marks that a student can choose from
     const compulsoryMarks = questions.filter(q => !q.isOptional).map(q => parseFloat(q.marks) || 0);
@@ -328,19 +352,23 @@ export default function SectionConfig() {
     }
   };
 
-  const handleDeleteSection = async (sectionId) => {
-    if (window.confirm('Are you sure you want to delete this section?')) {
-      try {
-        setLoading(true);
-        await sectionService.deleteSection(sectionId);
-        message.success('Section deleted successfully!');
-        await fetchSections();
-      } catch (err) {
-        message.error('Failed to delete section');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
+  const confirmDeleteSection = (sectionId) => {
+    setSectionToDelete(sectionId);
+  };
+
+  const executeDeleteSection = async () => {
+    if (!sectionToDelete) return;
+    try {
+      setLoading(true);
+      await sectionService.deleteSection(sectionToDelete);
+      message.success('Section deleted successfully!');
+      await fetchSections();
+    } catch (err) {
+      message.error('Failed to delete section');
+      console.error(err);
+    } finally {
+      setLoading(false);
+      setSectionToDelete(null);
     }
   };
 
@@ -597,14 +625,12 @@ export default function SectionConfig() {
                         />
                       </div>
                     </div>
-                    {!showQuestionPreview && (
-                      <button
-                        onClick={generateQuestions}
-                        className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-sm font-bold transition-all"
-                      >
-                        Generate Questions
-                      </button>
-                    )}
+                    <button
+                      onClick={generateQuestions}
+                      className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-sm font-bold transition-all"
+                    >
+                      {showQuestionPreview ? "Regenerate Questions" : "Generate Questions"}
+                    </button>
                   </div>
 
                   {showQuestionPreview && (
@@ -860,12 +886,11 @@ export default function SectionConfig() {
                               >
                                 <Edit className="w-4 h-4" />
                               </button>
-                              <button
-                                onClick={() => handleDeleteSection(section.id)}
-                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Delete Section"
-                              >
-                                <Trash2 className="w-4 h-4" />
+                                    <button
+                                      onClick={() => confirmDeleteSection(section.id)}
+                                      className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                      title="Delete Section"
+                                    >                             <Trash2 className="w-4 h-4" />
                               </button>
                             </div>
                           </td>
@@ -891,6 +916,39 @@ export default function SectionConfig() {
             </button>
           </div>
         )}
+
+      {/* Delete Confirmation Modal */}
+      {sectionToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-black text-slate-900 mb-2">Delete Section?</h3>
+              <p className="text-sm text-slate-500 mb-6">
+                Are you sure you want to delete this section? This action cannot be undone and will remove all questions configured within it.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setSectionToDelete(null)}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition-colors"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={executeDeleteSection}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl transition-colors flex justify-center items-center"
+                  disabled={loading}
+                >
+                  {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Yes, Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
       </div>
     </div>

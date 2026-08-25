@@ -30,7 +30,7 @@ namespace API.Controllers
                     query = query.Where(s => s.PaperId == paperId.Value);
 
                 var sections = await query
-                    .Include(s => s.Paper).ThenInclude(pp => pp.Paper)
+                    .Include(s => s.Paper)
                     .Include(s => s.Questions)
                     .OrderBy(s => s.Id)
                     .ToListAsync();
@@ -49,7 +49,7 @@ namespace API.Controllers
             try
             {
                 var section = await _context.Sections
-                    .Include(s => s.Paper).ThenInclude(pp => pp.Paper)
+                    .Include(s => s.Paper)
                     .Include(s => s.Questions)
                     .FirstOrDefaultAsync(s => s.Id == id);
 
@@ -237,7 +237,7 @@ namespace API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin")]
+        [Authorize(Roles = "admin,coordinator")]
         public async Task<IActionResult> DeleteSection(int id)
         {
             try

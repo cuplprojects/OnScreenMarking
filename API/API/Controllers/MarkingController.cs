@@ -61,7 +61,7 @@ namespace API.Controllers
                     return Ok(existingMarkingDto);
                 }
 
-                decimal maxMarks = allocation.Script?.Paper?.MaxMarks ?? 100;
+                decimal maxMarks = allocation.Script?.ProjectPaper?.Paper?.MaxMarks ?? 100;
                 if (maxMarks <= 0) maxMarks = 100;
 
                 var marking = new Marking
@@ -165,7 +165,7 @@ namespace API.Controllers
                 if (existingMarking.Status == "submitted")
                     return BadRequest(new { success = false, message = "Cannot update submitted marking" });
 
-                decimal maxMarks = existingMarking.Script?.Paper?.MaxMarks ?? 100;
+                decimal maxMarks = existingMarking.Script?.ProjectPaper?.Paper?.MaxMarks ?? 100;
                 if (maxMarks <= 0) maxMarks = 100;
 
                 existingMarking.TotalMarks = request.TotalMarks;
@@ -613,7 +613,7 @@ namespace API.Controllers
                 }
 
                 // Update marking totals
-                decimal maxMarks = marking.Script?.Paper?.MaxMarks ?? 100;
+                decimal maxMarks = marking.Script?.ProjectPaper?.Paper?.MaxMarks ?? 100;
                 if (maxMarks <= 0) maxMarks = 100;
 
                 marking.TotalMarks = totalMarks;
