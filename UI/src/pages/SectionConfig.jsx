@@ -56,6 +56,7 @@ export default function SectionConfig() {
   const [editingSectionId, setEditingSectionId] = useState(null);
   const [expandedSections, setExpandedSections] = useState({});
   const [sectionToDelete, setSectionToDelete] = useState(null);
+  const [sectionMasters, setSectionMasters] = useState([]);
 
   const [sectionForm, setSectionForm] = useState({
     name: '',
@@ -113,9 +114,18 @@ export default function SectionConfig() {
         { label: 'Subject Configuration', path: configPath, icon: 'Layers' }
       ]);
       fetchQuestionTypes();
+      fetchSectionMasters();
     }
   }, [projectId, encryptedProjectId, userType, searchParams]);
 
+  const fetchSectionMasters = async () => {
+    try {
+      const data = await sectionService.getSectionMasters();
+      setSectionMasters(data || []);
+    } catch (err) {
+      console.error("Failed to load section masters", err);
+    }
+  };
 
   useEffect(() => {
     if (urlPaperId) {
@@ -155,6 +165,24 @@ export default function SectionConfig() {
 
   const handleSectionFormChange = (e) => {
     const { name, value } = e.target;
+    
+    // Auto-fill from master if name matches and it's being typed
+    if (name === 'name') {
+      const matchedMaster = sectionMasters.find(m => m.name.toLowerCase() === value.trim().toLowerCase());
+      if (matchedMaster && !editingSectionId) {
+        setSectionForm(prev => ({
+          ...prev,
+          name: value,
+          description: matchedMaster.description || prev.description,
+          startQuestion: matchedMaster.startQuestion || prev.startQuestion,
+          endQuestion: matchedMaster.endQuestion || prev.endQuestion,
+          totalMarks: matchedMaster.totalMarks || prev.totalMarks,
+          maxQuestionsToAttempt: matchedMaster.maxQuestionsToAttempt || prev.maxQuestionsToAttempt,
+        }));
+        return;
+      }
+    }
+    
     setSectionForm(prev => ({
       ...prev,
       [name]: name === 'startQuestion' || name === 'endQuestion' || name === 'totalMarks' || name === 'maxQuestionsToAttempt'
@@ -566,11 +594,18 @@ export default function SectionConfig() {
                       <input
                         type="text"
                         name="name"
+                        list="sectionMastersList"
                         value={sectionForm.name}
                         onChange={handleSectionFormChange}
                         className="w-full bg-white text-gray-900 px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                         placeholder="Section Name"
+                        autoComplete="off"
                       />
+                      <datalist id="sectionMastersList">
+                        {sectionMasters.map(m => (
+                          <option key={m.id} value={m.name} />
+                        ))}
+                      </datalist>
                       <textarea
                         name="description"
                         value={sectionForm.description}

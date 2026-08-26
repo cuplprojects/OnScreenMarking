@@ -20,6 +20,7 @@ namespace API.Data
         public DbSet<Paper> Papers { get; set; }
         public DbSet<ProjectPaper> ProjectPapers { get; set; }
         public DbSet<Section> Sections { get; set; }
+        public DbSet<SectionMaster> SectionMasters { get; set; }
         public DbSet<Question> Questions { get; set; }
         public DbSet<QuestionMark> QuestionMarks { get; set; }
         public DbSet<ExaminerExpertise> ExaminerExpertises { get; set; }
@@ -206,10 +207,22 @@ namespace API.Data
             modelBuilder.Entity<Section>()
                 .HasKey(s => s.Id);
             modelBuilder.Entity<Section>()
+                .HasOne(s => s.SectionMaster)
+                .WithMany()
+                .HasForeignKey(s => s.SectionMasterId)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<Section>()
                 .HasMany(s => s.Questions)
                 .WithOne(q => q.Section)
                 .HasForeignKey(q => q.SectionId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // SectionMaster configuration
+            modelBuilder.Entity<SectionMaster>()
+                .HasKey(sm => sm.Id);
+            modelBuilder.Entity<SectionMaster>()
+                .HasIndex(sm => sm.Name)
+                .IsUnique();
 
             // Question configuration
             modelBuilder.Entity<Question>()

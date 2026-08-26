@@ -12,6 +12,10 @@ namespace API.Models
         public int Id { get; set; }
         public int PaperId { get; set; }
         public Paper Paper { get; set; }
+        
+        public int? SectionMasterId { get; set; }
+        public SectionMaster SectionMaster { get; set; }
+
         public string Name { get; set; }
         public string Description { get; set; }
         public int TotalQuestions { get; set; }

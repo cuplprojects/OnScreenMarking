@@ -19,6 +19,20 @@ namespace API.Controllers
             _context = context;
         }
 
+        [HttpGet("Masters")]
+        public async Task<ActionResult<IEnumerable<SectionMaster>>> GetSectionMasters()
+        {
+            try
+            {
+                var masters = await _context.SectionMasters.OrderBy(m => m.Name).ToListAsync();
+                return Ok(masters);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Section>>> GetSections([FromQuery] int? paperId = null)
         {
@@ -92,9 +106,30 @@ namespace API.Controllers
                     sectionDto.TotalQuestions = calculatedTotalQuestions;
                 }
 
+                // Handle SectionMaster
+                var masterName = sectionDto.Name.Trim();
+                var master = await _context.SectionMasters.FirstOrDefaultAsync(sm => sm.Name == masterName);
+                if (master == null)
+                {
+                    master = new SectionMaster
+                    {
+                        Name = masterName,
+                        Description = sectionDto.Description,
+                        TotalQuestions = sectionDto.TotalQuestions,
+                        TotalMarks = sectionDto.TotalMarks,
+                        StartQuestion = sectionDto.StartQuestion,
+                        EndQuestion = sectionDto.EndQuestion,
+                        MaxQuestionsToAttempt = sectionDto.MaxQuestionsToAttempt,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _context.SectionMasters.Add(master);
+                    await _context.SaveChangesAsync();
+                }
+
                 var section = new Section
                 {
                     PaperId = sectionDto.PaperId,
+                    SectionMasterId = master.Id,
                     Name = sectionDto.Name,
                     Description = sectionDto.Description,
                     TotalQuestions = sectionDto.TotalQuestions,
@@ -174,6 +209,27 @@ namespace API.Controllers
                 if (section == null)
                     return NotFound(new { success = false, message = "Section not found" });
 
+                // Handle SectionMaster updates
+                var masterName = sectionDto.Name.Trim();
+                var master = await _context.SectionMasters.FirstOrDefaultAsync(sm => sm.Name == masterName);
+                if (master == null)
+                {
+                    master = new SectionMaster
+                    {
+                        Name = masterName,
+                        Description = sectionDto.Description,
+                        TotalQuestions = sectionDto.TotalQuestions,
+                        TotalMarks = sectionDto.TotalMarks,
+                        StartQuestion = sectionDto.StartQuestion,
+                        EndQuestion = sectionDto.EndQuestion,
+                        MaxQuestionsToAttempt = sectionDto.MaxQuestionsToAttempt,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _context.SectionMasters.Add(master);
+                    await _context.SaveChangesAsync();
+                }
+
+                section.SectionMasterId = master.Id;
                 section.Name = sectionDto.Name;
                 section.Description = sectionDto.Description;
                 section.TotalQuestions = sectionDto.TotalQuestions;
@@ -281,9 +337,30 @@ namespace API.Controllers
                         ? request.SectionDetails.Questions.Count
                         : (request.SectionDetails.EndQuestion >= request.SectionDetails.StartQuestion ? request.SectionDetails.EndQuestion - request.SectionDetails.StartQuestion + 1 : 0);
 
+                    // Handle SectionMaster
+                    var masterName = request.SectionDetails.Name.Trim();
+                    var master = await _context.SectionMasters.FirstOrDefaultAsync(sm => sm.Name == masterName);
+                    if (master == null)
+                    {
+                        master = new SectionMaster
+                        {
+                            Name = masterName,
+                            Description = request.SectionDetails.Description,
+                            TotalQuestions = request.SectionDetails.TotalQuestions > 0 ? request.SectionDetails.TotalQuestions : calculatedTotalQuestions,
+                            TotalMarks = request.SectionDetails.TotalMarks,
+                            StartQuestion = request.SectionDetails.StartQuestion,
+                            EndQuestion = request.SectionDetails.EndQuestion,
+                            MaxQuestionsToAttempt = request.SectionDetails.MaxQuestionsToAttempt,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        _context.SectionMasters.Add(master);
+                        await _context.SaveChangesAsync();
+                    }
+
                     var section = new Section
                     {
                         PaperId = paperId,
+                        SectionMasterId = master.Id,
                         Name = request.SectionDetails.Name,
                         Description = request.SectionDetails.Description,
                         TotalQuestions = request.SectionDetails.TotalQuestions > 0 ? request.SectionDetails.TotalQuestions : calculatedTotalQuestions,
@@ -378,9 +455,30 @@ namespace API.Controllers
 
                     foreach (var sourceSection in sourceSections)
                     {
+                        // Handle SectionMaster
+                        var masterName = sourceSection.Name.Trim();
+                        var master = await _context.SectionMasters.FirstOrDefaultAsync(sm => sm.Name == masterName);
+                        if (master == null)
+                        {
+                            master = new SectionMaster
+                            {
+                                Name = masterName,
+                                Description = sourceSection.Description,
+                                TotalQuestions = sourceSection.TotalQuestions,
+                                TotalMarks = sourceSection.TotalMarks,
+                                StartQuestion = sourceSection.StartQuestion,
+                                EndQuestion = sourceSection.EndQuestion,
+                                MaxQuestionsToAttempt = sourceSection.MaxQuestionsToAttempt,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            _context.SectionMasters.Add(master);
+                            await _context.SaveChangesAsync();
+                        }
+
                         var newSection = new Section
                         {
                             PaperId = targetPaperId,
+                            SectionMasterId = master.Id,
                             Name = sourceSection.Name,
                             Description = sourceSection.Description,
                             TotalQuestions = sourceSection.TotalQuestions,

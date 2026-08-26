@@ -1,6 +1,11 @@
 import apiCall from './api';
 
 const sectionService = {
+  // Get all section masters
+  getSectionMasters: async () => {
+    return apiCall('/section/Masters');
+  },
+
   // Get all sections
   getAllSections: async (paperId = null) => {
     const query = paperId ? `?paperId=${paperId}` : '';
