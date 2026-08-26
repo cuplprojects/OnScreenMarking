@@ -64,10 +64,12 @@ export default function Profile() {
     const fetchSubjects = async () => {
       if (!profileData?.universityId) return;
       try {
-        const data = await subjectService.getSubjectByUniversity(profileData.universityId);
-        setSubjects(data);
+        const data = await subjectService.getSubjectByUniversity(profileData.universityId, { pageSize: 0 });
+        const list = Array.isArray(data) ? data : (data?.items || []);
+        setSubjects(list);
       } catch (err) {
         console.error("Failed to load subjects:", err);
+        setSubjects([]);
       }
     };
     if (profileData) {
@@ -303,14 +305,14 @@ export default function Profile() {
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500 font-semibold">Primary Specialization:</span>
                       <span className="font-bold text-slate-800">
-                        {subjects.find(s => s.subjectId === profileData.subjectId1)?.subName || `Subject #${profileData.subjectId1}`}
+                        {(Array.isArray(subjects) ? subjects.find(s => s.subjectId === profileData.subjectId1)?.subName : null) || `Subject #${profileData.subjectId1}`}
                       </span>
                     </div>
                     {profileData.subjectId2 && (
                       <div className="flex items-center justify-between border-t border-slate-100/50 pt-2">
                         <span className="text-slate-500 font-semibold">Secondary Scope:</span>
                         <span className="font-bold text-slate-800">
-                          {subjects.find(s => s.subjectId === profileData.subjectId2)?.subName || `Subject #${profileData.subjectId2}`}
+                          {(Array.isArray(subjects) ? subjects.find(s => s.subjectId === profileData.subjectId2)?.subName : null) || `Subject #${profileData.subjectId2}`}
                         </span>
                       </div>
                     )}
@@ -318,7 +320,7 @@ export default function Profile() {
                       <div className="flex items-center justify-between border-t border-slate-100/50 pt-2">
                         <span className="text-slate-500 font-semibold">Tertiary Scope:</span>
                         <span className="font-bold text-slate-800">
-                          {subjects.find(s => s.subjectId === profileData.subjectId3)?.subName || `Subject #${profileData.subjectId3}`}
+                          {(Array.isArray(subjects) ? subjects.find(s => s.subjectId === profileData.subjectId3)?.subName : null) || `Subject #${profileData.subjectId3}`}
                         </span>
                       </div>
                     )}

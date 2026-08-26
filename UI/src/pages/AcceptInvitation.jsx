@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Camera, X, CheckCircle, Mail, Lock, User, Phone, MapPin, Building, BookOpen, AlertCircle, Loader } from 'lucide-react';
 import authService from '../services/authService';
@@ -72,8 +72,7 @@ const AcceptInvitation = () => {
   const [loadingDetails, setLoadingDetails] = useState(true);
   const [invitationDetails, setInvitationDetails] = useState(null);
   const [loading, setLoading] = useState(false);
-  
-  
+  const [error, setError] = useState('');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -202,7 +201,13 @@ const AcceptInvitation = () => {
 
   const startCamera = async () => {
     try {
-      
+      if (!navigator?.mediaDevices?.getUserMedia && !navigator?.getUserMedia && !navigator?.webkitGetUserMedia && !navigator?.mozGetUserMedia) {
+        const msg = "Camera access is not supported in this browser or requires a secure HTTPS/localhost connection.";
+        setError(msg);
+        message.error(msg);
+        return;
+      }
+
       setBlinkCount(0);
       blinkCountRef.current = 0;
       eyesClosedRef.current = false;
@@ -227,15 +232,75 @@ const AcceptInvitation = () => {
         offscreenCanvasRef.current = canvas;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      let stream = null;
+
+      // 1. Try with standard resolution
+      try {
+        if (navigator?.mediaDevices?.getUserMedia) {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              width: { ideal: 640 },
+              height: { ideal: 480 }
+            }
+          });
+        }
+      } catch (e1) {
+        console.warn("Standard constraints failed, trying basic video:true", e1);
+      }
+
+      // 2. Fallback to basic { video: true } if constraint failed
+      if (!stream && navigator?.mediaDevices?.getUserMedia) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        } catch (e2) {
+          console.warn("Basic getUserMedia failed, querying all videoinput devices...", e2);
+        }
+      }
+
+      // 3. Try enumerating all videoinput devices and attempt connecting to each one
+      if (!stream && navigator?.mediaDevices?.enumerateDevices) {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevices = devices.filter(d => d.kind === "videoinput");
+          for (const dev of videoDevices) {
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: { exact: dev.deviceId } }
+              });
+              if (stream) {
+                console.log("Connected to camera device:", dev.label || dev.deviceId);
+                break;
+              }
+            } catch (devErr) {
+              console.warn("Failed to open camera device:", dev.label || dev.deviceId, devErr);
+            }
+          }
+        } catch (enumErr) {
+          console.warn("Device enumeration failed:", enumErr);
+        }
+      }
+
+      // 4. Fallback to legacy browser vendor APIs
+      if (!stream) {
+        const legacyGUM = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia;
+        if (legacyGUM) {
+          stream = await new Promise((resolve, reject) => {
+            legacyGUM.call(navigator, { video: true }, resolve, reject);
+          });
+        } else {
+          throw new Error("Unable to obtain video stream from any available camera device.");
+        }
+      }
+
       setVideoStream(stream);
       setShowCamera(true);
+      setError("");
 
       if (!landmarkerRef.current || !detectorRef.current) {
         setIsLandmarkerLoaded(false);
         try {
           const { FaceLandmarker, ObjectDetector, FilesetResolver } = await import(
-            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8"
+            /* @vite-ignore */ "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8"
           );
           const vision = await FilesetResolver.forVisionTasks(
             "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm"
@@ -268,14 +333,30 @@ const AcceptInvitation = () => {
 
           setIsLandmarkerLoaded(true);
         } catch (mErr) {
-          console.error("Failed to load MediaPipe tasks, auto-capture disabled:", mErr);
+          console.warn("MediaPipe smart validation unavailable, manual snapshot enabled:", mErr);
           setIsLandmarkerLoaded(false);
         }
       } else {
         setIsLandmarkerLoaded(true);
       }
     } catch (err) {
-      setError('Unable to access camera. Please allow camera permissions or upload an image.');
+      console.error("Camera access error details:", err);
+      let errMsg = "Unable to access camera. Please check permissions or upload an image file.";
+      
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        errMsg = "Camera permission was blocked. Click the camera/lock icon in your browser URL bar and choose 'Allow', then click 'Use Webcam' again.";
+      } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+        errMsg = "No webcam device was found on your computer. Please connect a webcam or use the 'Upload File' button.";
+      } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
+        errMsg = "Your webcam is currently being used by another program (e.g. Teams, Zoom, or another browser window). Please close that program and try again.";
+      } else if (err.name === "SecurityError" || (typeof window !== 'undefined' && !window.isSecureContext)) {
+        errMsg = "Camera access requires HTTPS or localhost. Please access this portal via localhost or HTTPS.";
+      } else if (err.message) {
+        errMsg = err.message;
+      }
+      
+      setError(errMsg);
+      message.error(errMsg);
     }
   };
 
@@ -470,6 +551,9 @@ const AcceptInvitation = () => {
   useEffect(() => {
     if (showCamera && videoStream && videoRef.current) {
       videoRef.current.srcObject = videoStream;
+      videoRef.current.play().catch((e) => {
+        console.warn("Video auto-play warning:", e);
+      });
       if (isLandmarkerLoaded && landmarkerRef.current) {
         activeLoopRef.current = true;
         requestAnimationFrame(detectLoop);
@@ -618,7 +702,12 @@ const AcceptInvitation = () => {
           <p className="text-gray-600 mt-2">Activate your account with CBC On-Screen Marking Portal</p>
         </div>
 
-        
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-3 text-sm">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-500" />
+            <span>{error}</span>
+          </div>
+        )}
 
         {/* Invitation Summary Banner */}
         {invitationDetails && (
@@ -736,6 +825,7 @@ const AcceptInvitation = () => {
                       ref={videoRef}
                       autoPlay
                       playsInline
+                      muted
                       className="w-full h-full object-cover"
                       style={{ minHeight: '260px', transform: 'scaleX(-1)' }}
                     />
@@ -869,18 +959,26 @@ const AcceptInvitation = () => {
                     </div>
 
                     <div className="text-[10px] text-gray-400 leading-tight mt-3 bg-gray-50 p-2 rounded">
-                      ðŸ’¡ Ensure you are in a well-lit room, facing forward, and hold still for auto-capture.
+                      💡 Ensure you are in a well-lit room, facing forward, and hold still for auto-capture.
                     </div>
                   </div>
                 </div>
 
-                <div className="flex gap-4">
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => capturePhoto(true)}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl font-semibold shadow-md transition flex items-center justify-center gap-2"
+                  >
+                    <Camera size={18} />
+                    Take Snapshot
+                  </button>
                   <button
                     type="button"
                     onClick={stopCamera}
-                    className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2.5 rounded-xl font-semibold transition flex items-center justify-center gap-2"
+                    className="px-6 bg-gray-200 hover:bg-gray-300 text-gray-800 py-2.5 rounded-xl font-semibold transition flex items-center justify-center gap-2"
                   >
-                    Cancel Camera
+                    Cancel
                   </button>
                 </div>
               </div>

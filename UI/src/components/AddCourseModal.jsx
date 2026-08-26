@@ -32,8 +32,9 @@ export default function AddCourseModal({
 
         // 1. Fetch all subjects for this university
         if (activeUniversityId) {
-          const response = await subjectService.getSubjectByUniversity(activeUniversityId);
-          setSubjects(response?.items || response || []);
+          const response = await subjectService.getSubjectByUniversity(activeUniversityId, { pageSize: 0 });
+          const list = Array.isArray(response) ? response : (response?.items || []);
+          setSubjects(list);
         }
 
         if (editingId && initialData) {
