@@ -189,9 +189,8 @@ export default function CollegeManagement() {
           <div>
             <div className="flex items-center gap-2 text-blue-600 font-extrabold text-xs uppercase tracking-widest mb-1.5">
               <Building2 size={14} />
-              <span>Affiliated Curriculum Centers</span>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Colleges Registry</h1>
+           
+            <h1 className="text-xl md:text-xl font-black text-slate-900 tracking-tight">Colleges Registry</h1> </div>
             <p className="text-slate-500 text-xs mt-1">Manage exam centers, affiliated academies, and handle bulk imports</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 self-start md:self-center">

@@ -149,7 +149,7 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
             </div>
 
             <div className="space-y-1.5 relative">
-              <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 ml-1">Link to Subjects *</label>
+              <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 ml-1">Associated Subjects *</label>
               <div
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold flex flex-wrap gap-1 p-1.5 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all min-h-[42px] cursor-text"
                 onClick={() => setIsDropdownOpen(true)}
@@ -361,36 +361,38 @@ export default function MasterPapersManagement() {
               </h1>
               <p className="text-xs text-slate-500 font-semibold mt-1">Manage global academic papers available for project import.</p>
             </div>
-            <button
-              onClick={() => {
-                setEditingData(null);
-                setShowForm(true);
-              }}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer self-start sm:self-center shrink-0"
-            >
-              <Plus size={14} />
-              <span>Add Academic Paper</span>
-            </button>
-          </div>
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              {/* Search Bar */}
+              <div className="flex-1 sm:w-64 flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-150 transition-all focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500">
+                <Search size={14} className="text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search papers by code or name..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-transparent text-slate-800 placeholder-slate-400 font-semibold text-[11px] focus:outline-none"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="text-[9px] font-black uppercase text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
 
-          <div className="flex flex-col md:flex-row gap-3 pt-2 border-t border-slate-100">
-            <div className="flex-1 flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-150">
-              <Search size={14} className="text-slate-400 shrink-0" />
-              <input
-                type="text"
-                placeholder="Search papers by code or name..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-transparent text-slate-800 placeholder-slate-400 font-semibold text-[11px] focus:outline-none"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="text-[9px] font-black uppercase text-slate-400 hover:text-slate-600 transition cursor-pointer"
-                >
-                  Clear
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  setEditingData(null);
+                  setShowForm(true);
+                }}
+                className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer shrink-0 h-[34px]"
+              >
+                <Plus size={14} />
+                <span className="hidden sm:inline">Add Academic Paper</span>
+                <span className="sm:hidden">Add</span>
+              </button>
             </div>
           </div>
         </div>

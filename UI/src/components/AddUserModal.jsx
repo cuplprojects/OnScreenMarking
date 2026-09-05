@@ -170,11 +170,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
       <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden border border-slate-100 shadow-2xl flex flex-col animate-scale-up">
         {/* Header */}
         <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-          <div>
-            <div className="flex items-center gap-1.5 text-blue-650 font-extrabold text-[10px] uppercase tracking-widest leading-none mb-1">
-              <ShieldCheck size={12} />
-              <span>Direct Account Provisioning</span>
-            </div>
+            <div>
             <h3 className="text-lg font-black text-slate-900 tracking-tight leading-none">Add New User</h3>
           </div>
           <button 

@@ -57,9 +57,52 @@ export default function UsersManagement() {
   const [emailStatus, setEmailStatus] = useState(null);
   const [subjects, setSubjects] = useState([]);
   const [roles, setRoles] = useState([]);
+  const [editingUserId, setEditingUserId] = useState(null);
+  const [editFormData, setEditFormData] = useState({});
+  const [savingUserId, setSavingUserId] = useState(null);
   const [showAssignRoleModal, setShowAssignRoleModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
+
+  const handleEditClick = (user) => {
+    setEditingUserId(user.id);
+    setEditFormData({
+      name: user.name || "",
+      email: user.email || "",
+      userType: user.userType || "",
+      universityId: user.universityId || "",
+      isActive: user.isActive ? "true" : "false"
+    });
+  };
+
+  const handleEditChange = (field, value) => {
+    setEditFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleCancelEdit = () => {
+    setEditingUserId(null);
+    setEditFormData({});
+  };
+
+  const handleSaveEdit = async (userId) => {
+    try {
+      setSavingUserId(userId);
+      await userService.updateUser(userId, {
+        name: editFormData.name,
+        email: editFormData.email,
+        userType: editFormData.userType,
+        universityId: editFormData.universityId ? parseInt(editFormData.universityId) : null,
+        isActive: editFormData.isActive === "true"
+      });
+      message.success("User updated successfully!");
+      setEditingUserId(null);
+      refreshUsers();
+    } catch (err) {
+      setError(err.message || "Failed to update user.");
+    } finally {
+      setSavingUserId(null);
+    }
+  };
 
   // Define fetch function for useTable to load users with search, role and tab filters
   const fetchFn = useCallback(async (params) => {
@@ -101,19 +144,17 @@ export default function UsersManagement() {
   // Calculate quick count of total pending approvals globally
   const [pendingCount, setPendingCount] = useState(0);
   
-  const fetchPendingCount = useCallback(() => {
-    if (activeUniversityId) {
-      userService.getAllUsers(activeUniversityId, { activeTab: "pending", pageSize: 1 })
-        .then(response => {
-          setPendingCount(response.totalCount || 0);
-        })
-        .catch(console.error);
-    }
+  const fetchGlobalCounts = useCallback(() => {
+    userService.getUserCounts(activeUniversityId)
+      .then(response => {
+        setPendingCount(response.pendingUsers || 0);
+      })
+      .catch(console.error);
   }, [activeUniversityId]);
 
   useEffect(() => {
-    fetchPendingCount();
-  }, [fetchPendingCount]);
+    fetchGlobalCounts();
+  }, [fetchGlobalCounts]);
 
   useEffect(() => {
     fetchUniversities();
@@ -140,7 +181,7 @@ export default function UsersManagement() {
   const fetchRoles = async () => {
     try {
       const res = await roleService.getAllRoles();
-      const loadedRoles = res.data || [];
+      const loadedRoles = Array.isArray(res) ? res : (res.data || []);
       setRoles(loadedRoles);
       
       const activeRoles = loadedRoles.filter(r => r.isActive);
@@ -179,13 +220,10 @@ export default function UsersManagement() {
 
   const handleApprove = async (userId) => {
     try {
-      
-      
       await userService.approveUser(userId);
       message.success("Examiner approved and activated successfully!");
       refreshUsers();
-      fetchPendingCount();
-      
+      fetchGlobalCounts();
     } catch (err) {
       setError(err.message || "Failed to approve examiner.");
     }
@@ -288,9 +326,9 @@ export default function UsersManagement() {
               <Users size={12} />
               <span>All Users</span>
               <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${
-                activeTab === "all" ? "bg-white text-white" : "bg-slate-100 text-slate-600"
+                activeTab === "all" ? "bg-white text-slate-900" : "bg-slate-100 text-slate-600"
               }`}>
-                {users.length}
+                {totalCount}
               </span>
             </button>
 
@@ -374,11 +412,14 @@ export default function UsersManagement() {
                   {userType === 'admin' && <option value="admin">Administrators</option>}
                 </select>
 
-                {(filters.isActive || filters.userType) && (
+                {(filters.isActive || filters.userType || filters.universityId || filters.name || filters.email) && (
                   <button
                     onClick={() => {
                       setFilter('isActive', '');
                       setFilter('userType', '');
+                      setFilter('universityId', '');
+                      setFilter('name', '');
+                      setFilter('email', '');
                     }}
                     className="text-[9px] font-black uppercase text-rose-500 hover:text-rose-700 transition cursor-pointer"
                   >
@@ -426,11 +467,15 @@ export default function UsersManagement() {
                           <ColumnFilter columnKey="email" currentFilter={filters.email} setFilter={setFilter} placeholder="Filter email..." />
                         </div>
                       </th>
-                      <th className="px-6 py-4 cursor-pointer hover:text-slate-700 transition-colors" onClick={() => handleSort('userType')}>
-                        <div className="flex items-center gap-1">System Role {sortField === 'userType' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}</div>
+                      <th className="px-6 py-4 cursor-pointer hover:text-slate-700 transition-colors group" onClick={() => handleSort('userType')}>
+                        <div className="flex items-center gap-1">System Role {sortField === 'userType' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}
+                          <ColumnFilter columnKey="userType" currentFilter={filters.userType} setFilter={setFilter} placeholder="Filter role..." options={roles.length > 0 ? roles.map(r => ({ value: r.roleName.toLowerCase(), label: r.roleName })) : [ { value: 'examiner', label: 'Examiner' }, { value: 'coordinator', label: 'Coordinator' }, { value: 'admin', label: 'Administrator' } ]} />
+                        </div>
                       </th>
-                      <th className="px-6 py-4 cursor-pointer hover:text-slate-700 transition-colors" onClick={() => handleSort('universityName')}>
-                        <div className="flex items-center gap-1">University {sortField === 'universityName' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}</div>
+                      <th className="px-6 py-4 cursor-pointer hover:text-slate-700 transition-colors group" onClick={() => handleSort('universityName')}>
+                        <div className="flex items-center gap-1">University {sortField === 'universityName' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}
+                          <ColumnFilter columnKey="universityId" currentFilter={filters.universityId} setFilter={setFilter} placeholder="Filter university..." options={universities.map(u => ({ value: u.universityId, label: u.universityName }))} />
+                        </div>
                       </th>
                       <th className="px-6 py-4 text-center cursor-pointer hover:text-slate-700 transition-colors" onClick={() => handleSort('isActive')}>
                         <div className="flex items-center justify-center gap-1">Status {sortField === 'isActive' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}</div>
@@ -457,34 +502,117 @@ export default function UsersManagement() {
                             )}
                           </Link>
                         </td>
-                        <td className="px-6 py-4 font-extrabold text-slate-900">{user.name}</td>
-                        <td className="px-6 py-4 text-slate-600 font-medium">{user.email}</td>
+                        <td className="px-6 py-4 font-extrabold text-slate-900">
+                          {editingUserId === user.id ? (
+                            <input
+                              type="text"
+                              value={editFormData.name}
+                              onChange={(e) => handleEditChange('name', e.target.value)}
+                              className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 font-semibold"
+                            />
+                          ) : (
+                            user.name
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-slate-600 font-medium">
+                          {editingUserId === user.id ? (
+                            <input
+                              type="email"
+                              value={editFormData.email}
+                              onChange={(e) => handleEditChange('email', e.target.value)}
+                              className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500"
+                            />
+                          ) : (
+                            user.email
+                          )}
+                        </td>
                         <td className="px-6 py-4">
-                          <span className={`px-2 py-0.5 text-[9px] font-black rounded-lg capitalize border tracking-wider ${
-                            user.userType === "admin"
-                              ? "bg-blue-50 text-blue-700 border-blue-100"
-                              : user.userType === "coordinator"
-                                ? "bg-amber-50 text-amber-700 border-amber-100"
-                                : "bg-emerald-50 text-emerald-700 border-emerald-100"
-                          }`}>
-                            {user.userType}
-                          </span>
+                          {editingUserId === user.id ? (
+                            <select
+                              value={editFormData.userType}
+                              onChange={(e) => handleEditChange('userType', e.target.value)}
+                              className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
+                            >
+                              {(roles.length > 0 ? roles : [
+                                { roleName: 'Examiner' },
+                                { roleName: 'Coordinator' },
+                                { roleName: 'Admin' }
+                              ]).map(r => (
+                                <option key={r.roleName} value={r.roleName.toLowerCase()}>
+                                  {r.roleName}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className={`px-2 py-0.5 text-[9px] font-black rounded-lg capitalize border tracking-wider ${
+                              user.userType === "admin"
+                                ? "bg-blue-50 text-blue-700 border-blue-100"
+                                : user.userType === "coordinator"
+                                  ? "bg-amber-50 text-amber-700 border-amber-100"
+                                  : "bg-emerald-50 text-emerald-700 border-emerald-100"
+                            }`}>
+                              {user.userType}
+                            </span>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-slate-600 text-sm font-semibold">
-                          {user.university?.universityName || "-"}
+                          {editingUserId === user.id ? (
+                            <select
+                              value={editFormData.universityId}
+                              onChange={(e) => handleEditChange('universityId', e.target.value)}
+                              className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white max-w-[140px] truncate"
+                            >
+                              <option value="">None</option>
+                              {universities.map(u => (
+                                <option key={u.universityId} value={u.universityId}>
+                                  {u.universityName}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            user.university?.universityName || "-"
+                          )}
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${
-                            user.isActive
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                              : "bg-rose-50 text-rose-700 border-rose-100"
-                          }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${user.isActive ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`}></span>
-                            {user.isActive ? "Active" : "Pending / Inactive"}
-                          </span>
+                          {editingUserId === user.id ? (
+                            <select
+                              value={editFormData.isActive}
+                              onChange={(e) => handleEditChange('isActive', e.target.value)}
+                              className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
+                            >
+                              <option value="true">Active</option>
+                              <option value="false">Inactive</option>
+                            </select>
+                          ) : (
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${
+                              user.isActive
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                : "bg-rose-50 text-rose-700 border-rose-100"
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${user.isActive ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`}></span>
+                              {user.isActive ? "Active" : "Pending / Inactive"}
+                            </span>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-right whitespace-nowrap">
-                          {activeTab === "pending" ? (
+                          {editingUserId === user.id ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleSaveEdit(user.id)}
+                                disabled={savingUserId === user.id}
+                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition cursor-pointer shadow-sm disabled:opacity-50"
+                              >
+                                {savingUserId === user.id ? 'Saving...' : 'Save'}
+                              </button>
+                              <button
+                                onClick={handleCancelEdit}
+                                disabled={savingUserId === user.id}
+                                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-[10px] uppercase tracking-wider transition cursor-pointer disabled:opacity-50"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : activeTab === "pending" ? (
                             hasPermission('UPDATE_USER') && (
                               <button
                                 onClick={() => handleApprove(user.id)}
@@ -497,13 +625,10 @@ export default function UsersManagement() {
                           ) : (
                             hasPermission('UPDATE_USER') && (
                               <button
-                                onClick={() => {
-                                  setSelectedUser(user);
-                                  setShowAssignRoleModal(true);
-                                }}
+                                onClick={() => handleEditClick(user)}
                                 className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl font-bold text-[10px] uppercase tracking-wider border border-blue-150 transition cursor-pointer"
                               >
-                                Assign Role
+                                Edit
                               </button>
                             )
                           )}

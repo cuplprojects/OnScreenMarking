@@ -4,7 +4,11 @@ const userService = {
   getAllUsers: async (universityId, params = {}) => {
     let url = `/users`;
     const queryParams = [];
-    if (universityId) queryParams.push(`universityId=${universityId}`);
+    if (universityId) {
+      queryParams.push(`universityId=${universityId}`);
+    } else if (params.universityId) {
+      queryParams.push(`universityId=${params.universityId}`);
+    }
     
     // Append standard table parameters
     if (params.page) queryParams.push(`page=${params.page}`);
@@ -26,6 +30,11 @@ const userService = {
 
   getUserById: async (userId) => {
     return apiCall(`/users/${userId}`);
+  },
+
+  getUserCounts: async (universityId) => {
+    const url = universityId ? `/users/counts?universityId=${universityId}` : '/users/counts';
+    return apiCall(url);
   },
 
   createUser: async (userData) => {

@@ -76,7 +76,7 @@ namespace API.Controllers
                     universityId = d.UniversityId,
                     createdAt = d.CreatedAt,
                     updatedAt = d.UpdatedAt,
-                    courses = d.Courses.Select(c => new { id = c.Id, name = c.Name }).ToList()
+                    courses = d.DepartmentCourses.Select(dc => new { id = dc.Course.Id, name = dc.Course.Name }).ToList()
                 });
 
                 object departments;
@@ -119,7 +119,8 @@ namespace API.Controllers
             try
             {
                 var department = await _context.Departments
-                    .Include(d => d.Courses)
+                    .Include(d => d.DepartmentCourses)
+                        .ThenInclude(dc => dc.Course)
                     .Include(d => d.DepartmentSubjects)
                     .ThenInclude (ds => ds.Subject)
                     .FirstOrDefaultAsync(d => d.DepartmentId == id);
@@ -228,6 +229,56 @@ namespace API.Controllers
                     success = false,
                     message = ex.Message
                 });
+            }
+        }
+
+        [HttpPost("{departmentId}/courses/{courseId}")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> AddCourseToDepartment(int departmentId, int courseId)
+        {
+            try
+            {
+                var exists = await _context.DepartmentCourses
+                    .AnyAsync(dc => dc.DepartmentId == departmentId && dc.CourseId == courseId);
+
+                if (!exists)
+                {
+                    _context.DepartmentCourses.Add(new DepartmentCourse
+                    {
+                        DepartmentId = departmentId,
+                        CourseId = courseId
+                    });
+                    await _context.SaveChangesAsync();
+                }
+
+                return Ok(new { success = true, message = "Course mapped successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpDelete("{departmentId}/courses/{courseId}")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> RemoveCourseFromDepartment(int departmentId, int courseId)
+        {
+            try
+            {
+                var mapping = await _context.DepartmentCourses
+                    .FirstOrDefaultAsync(dc => dc.DepartmentId == departmentId && dc.CourseId == courseId);
+
+                if (mapping != null)
+                {
+                    _context.DepartmentCourses.Remove(mapping);
+                    await _context.SaveChangesAsync();
+                }
+
+                return Ok(new { success = true, message = "Course unmapped successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
     }

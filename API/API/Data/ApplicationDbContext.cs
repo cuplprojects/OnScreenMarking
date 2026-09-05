@@ -38,6 +38,7 @@ namespace API.Data
         public DbSet<Role> Roles { get; set; }
         public DbSet<Attendance> Attendances { get; set; }
         public DbSet<QuestionType> QuestionTypes { get; set; }
+        public DbSet<DepartmentCourse> DepartmentCourses { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -75,13 +76,22 @@ namespace API.Data
             // Courses configuration
             modelBuilder.Entity<Courses>()
                 .HasKey(c => c.Id);
-            modelBuilder.Entity<Courses>()
-                .HasIndex(c => new { c.DepartmentId, c.Name })
+
+            // DepartmentCourse configuration
+            modelBuilder.Entity<DepartmentCourse>()
+                .HasKey(dc => dc.Id);
+            modelBuilder.Entity<DepartmentCourse>()
+                .HasIndex(dc => new { dc.DepartmentId, dc.CourseId })
                 .IsUnique();
-            modelBuilder.Entity<Courses>()
-                .HasOne(c => c.Department)
-                .WithMany(d => d.Courses)
-                .HasForeignKey(c => c.DepartmentId)
+            modelBuilder.Entity<DepartmentCourse>()
+                .HasOne(dc => dc.Department)
+                .WithMany(d => d.DepartmentCourses)
+                .HasForeignKey(dc => dc.DepartmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<DepartmentCourse>()
+                .HasOne(dc => dc.Course)
+                .WithMany(c => c.DepartmentCourses)
+                .HasForeignKey(dc => dc.CourseId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             // CourseSubject configuration

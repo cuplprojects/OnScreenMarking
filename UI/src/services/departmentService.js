@@ -50,6 +50,18 @@ const departmentService = {
     return apiCall(`/department/${departmentId}`, {
       method: 'DELETE'
     });
+  },
+
+  addCourseToDepartment: async (departmentId, courseId) => {
+    return apiCall(`/department/${departmentId}/courses/${courseId}`, {
+      method: 'POST'
+    });
+  },
+
+  removeCourseFromDepartment: async (departmentId, courseId) => {
+    return apiCall(`/department/${departmentId}/courses/${courseId}`, {
+      method: 'DELETE'
+    });
   }
 };
 

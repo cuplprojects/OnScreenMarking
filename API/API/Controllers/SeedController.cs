@@ -58,12 +58,23 @@ namespace API.Controllers
                 var courses = new List<Courses>();
                 foreach (var dept in departments)
                 {
-                    var deptCourses = courseFaker.Clone()
-                        .RuleFor(c => c.DepartmentId, dept.DepartmentId)
-                        .Generate(2);
+                    var deptCourses = courseFaker.Generate(2);
                     courses.AddRange(deptCourses);
                 }
                 _context.Courses.AddRange(courses);
+                await _context.SaveChangesAsync();
+
+                var mappings = new List<DepartmentCourse>();
+                int courseIndex = 0;
+                foreach (var dept in departments)
+                {
+                    for (int i = 0; i < 2; i++)
+                    {
+                        mappings.Add(new DepartmentCourse { DepartmentId = dept.DepartmentId, CourseId = courses[courseIndex].Id });
+                        courseIndex++;
+                    }
+                }
+                _context.DepartmentCourses.AddRange(mappings);
                 await _context.SaveChangesAsync();
 
                 // 3. Generate Fake Subjects

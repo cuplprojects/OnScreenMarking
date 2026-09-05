@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, ChevronDown, Search, Check } from 'lucide-react';
 import departmentService from '../services/departmentService';
 import courseService from '../services/courseService';
 
@@ -18,6 +18,10 @@ export default function AddDepartmentModal({
   const [initialCourses, setInitialCourses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [courseSearch, setCourseSearch] = useState('');
+
+  const filteredCourses = courses.filter(c => c.name.toLowerCase().includes(courseSearch.toLowerCase()));
 
   useEffect(() => {
     const loadModalData = async () => {
@@ -100,15 +104,18 @@ export default function AddDepartmentModal({
 
       if (deptId) {
         // Sync Mapped Courses
+        
+        // Add new courses mapped to this department
         for (const courseId of selectedCourses) {
           if (!initialCourses.includes(courseId)) {
-            const courseObj = courses.find(c => c.id === courseId);
-            if (courseObj) {
-              await courseService.updateCourse(courseId, {
-                ...courseObj,
-                departmentId: deptId
-              });
-            }
+            await departmentService.addCourseToDepartment(deptId, courseId);
+          }
+        }
+        
+        // Delete courses that were unmapped
+        for (const courseId of initialCourses) {
+          if (!selectedCourses.includes(courseId)) {
+            await departmentService.removeCourseFromDepartment(deptId, courseId);
           }
         }
       }
@@ -131,7 +138,7 @@ export default function AddDepartmentModal({
       />
 
       <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative w-full max-w-lg transform overflow-hidden rounded-2xl bg-white p-6 shadow-xl border border-slate-100 transition-all">
+        <div className="relative w-full max-w-lg transform overflow-visible rounded-2xl bg-white p-6 shadow-xl border border-slate-100 transition-all">
           
           {/* Header */}
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
@@ -169,33 +176,90 @@ export default function AddDepartmentModal({
             </div>
 
             {/* Courses Selector */}
-            <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
-                Assign Courses ({selectedCourses.length} selected)
-              </label>
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 max-h-48 overflow-y-auto">
-                {courses.length === 0 ? (
-                  <p className="text-xs text-slate-400 py-2 text-center font-semibold">
-                    No courses available
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {courses.map((course) => (
-                      <label key={course.id} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedCourses.includes(course.id)}
-                          onChange={() => toggleCourse(course.id)}
-                          className="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                        />
-                        <span className="text-[11px] font-semibold text-slate-700 leading-tight">
-                          {course.name}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                )}
+            <div className="space-y-1.5 relative">
+              <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 ml-1">Assign Courses ({selectedCourses.length} selected)</label>
+              <div
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold flex flex-wrap gap-1 p-1.5 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all min-h-[42px] cursor-text"
+                onClick={() => setIsDropdownOpen(true)}
+              >
+                {selectedCourses.map(id => {
+                  const course = courses.find(c => c.id === id);
+                  return course ? (
+                    <span key={id} className="flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded-lg text-xs font-bold border border-blue-200/50 shadow-sm animate-fade-in-up">
+                      {course.name}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleCourse(id);
+                        }}
+                        className="hover:bg-blue-200 p-0.5 rounded-full transition-colors"
+                      >
+                        <X size={12} className="text-blue-500" />
+                      </button>
+                    </span>
+                  ) : null;
+                })}
+                <div className="flex-1 min-w-[120px] flex items-center">
+                  <input
+                    type="text"
+                    value={courseSearch}
+                    onChange={(e) => {
+                      setCourseSearch(e.target.value);
+                      setIsDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsDropdownOpen(true)}
+                    placeholder={selectedCourses.length === 0 ? "Search and select courses..." : ""}
+                    className="w-full bg-transparent border-none focus:outline-none text-slate-700 text-xs font-semibold placeholder:text-slate-400 placeholder:font-medium min-w-[120px]"
+                  />
+                  <ChevronDown size={14} className={`text-slate-400 mr-2 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                </div>
               </div>
+
+              {isDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)} />
+                  <div className="relative z-50 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="max-h-48 overflow-y-auto p-1.5 scrollbar-thin scrollbar-thumb-slate-200">
+                      {filteredCourses.length === 0 ? (
+                        <div className="p-3 text-center text-xs font-semibold text-slate-400 flex flex-col items-center gap-1">
+                          <Search size={16} className="opacity-50" />
+                          No courses found
+                        </div>
+                      ) : (
+                        filteredCourses.map(course => {
+                          const isSelected = selectedCourses.includes(course.id);
+                          return (
+                            <div
+                              key={course.id}
+                              onClick={() => {
+                                toggleCourse(course.id);
+                                setCourseSearch('');
+                              }}
+                              className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all duration-150 ${
+                                isSelected 
+                                  ? 'bg-blue-50/80 text-blue-700 hover:bg-blue-100/80' 
+                                  : 'hover:bg-slate-50 text-slate-700'
+                              }`}
+                            >
+                              <div className="flex flex-col">
+                                <span className="text-xs font-bold">{course.name}</span>
+                              </div>
+                              <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-colors ${
+                                isSelected 
+                                  ? 'bg-blue-600 border-blue-600' 
+                                  : 'border-slate-300'
+                              }`}>
+                                {isSelected && <Check size={12} className="text-white" />}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Status */}

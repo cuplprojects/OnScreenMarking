@@ -1,42 +1,51 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, CheckCircle } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { Plus, Edit2, Trash2, Search, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import universityService from '../services/universityService';
 import message from '../services/messageService';
+import { useTable } from '../services/tableService';
+import TablePagination from '../components/TablePagination';
 
 export default function UniversityManagement() {
-  const [universities, setUniversities] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
     universityName: '',
     isActive: true
   });
-  const [loading, setLoading] = useState(false);
-  
-  
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    fetchUniversities();
+  // Define fetch function for useTable to load universities with pagination
+  const fetchFn = useCallback(async (params) => {
+    return await universityService.getAllUniversities(params);
   }, []);
 
-  const fetchUniversities = async () => {
-    try {
-      setLoading(true);
-      const data = await universityService.getAllUniversities();
-      setUniversities(data);
-    } catch (err) {
-      message.error('Failed to fetch universities');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const {
+    items: universities,
+    totalCount,
+    totalPages,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    search,
+    setSearch,
+    loading,
+    filters,
+    setFilter,
+    sortField,
+    sortOrder,
+    handleSort,
+    refresh: refreshUniversities
+  } = useTable({
+    fetchFn,
+    initialParams: { pageSize: 10 }
+  });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      setLoading(true);
+      setSaving(true);
       if (editingId) {
         await universityService.updateUniversity(editingId, formData);
         message.success('University updated successfully');
@@ -47,12 +56,12 @@ export default function UniversityManagement() {
       setFormData({ universityName: '', isActive: true });
       setEditingId(null);
       setShowForm(false);
-      fetchUniversities();
+      refreshUniversities();
     } catch (err) {
       message.error(err.message || 'Error saving university');
       console.error(err);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -63,20 +72,21 @@ export default function UniversityManagement() {
     });
     setEditingId(university.universityId);
     setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDelete = async (universityId) => {
-    if (window.confirm('Are you sure you want to delete this university?')) {
+  const handleDelete = async (university) => {
+    if (window.confirm('Are you sure you want to mark this university as inactive?')) {
       try {
-        setLoading(true);
-        await universityService.deleteUniversity(universityId);
-        message.success('University deleted successfully');
-        fetchUniversities();
+        await universityService.updateUniversity(university.universityId, {
+          universityName: university.universityName,
+          isActive: false
+        });
+        message.success('University marked as inactive');
+        refreshUniversities();
       } catch (err) {
-        message.error('Failed to delete university');
+        message.error('Failed to update university status');
         console.error(err);
-      } finally {
-        setLoading(false);
       }
     }
   };
@@ -85,75 +95,128 @@ export default function UniversityManagement() {
     setFormData({ universityName: '', isActive: true });
     setEditingId(null);
     setShowForm(false);
-    
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 lg:p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Universities</h1>
-            <p className="text-gray-600">Manage all universities in the system</p>
+    <div className="min-h-screen bg-transparent w-full max-w-none p-4 lg:p-8">
+      <div className="w-full space-y-4">
+        
+        {/* Header & Controls */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-black text-slate-900 tracking-tight leading-none">
+                Universities
+              </h1>
+              <p className="text-xs text-slate-500 mt-1">Manage all universities in the system</p>
+            </div>
+            
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setShowForm(!showForm)}
+                className={`flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm hover:shadow ${
+                  showForm 
+                    ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' 
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+              >
+                <Plus size={16} className={showForm ? 'rotate-45 transition-transform' : 'transition-transform'} />
+                <span>{showForm ? 'Cancel' : 'Add University'}</span>
+              </button>
+            </div>
           </div>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition flex items-center gap-2"
-          >
-            <Plus className="w-5 h-5" />
-            {showForm ? 'Cancel' : 'Add University'}
-          </button>
-        </div>
 
-        {/* Notifications */}
-        
-        
+          <div className="flex flex-col md:flex-row gap-3 pt-4 border-t border-slate-100 items-center justify-between">
+            {/* Search Bar */}
+            <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-150 flex-1 w-full max-w-md">
+              <Search size={16} className="text-slate-400 shrink-0" />
+              <input
+                type="text"
+                placeholder="Search universities..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-transparent text-slate-800 placeholder-slate-400 font-semibold text-xs focus:outline-none"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {/* Filters */}
+            <div className="flex flex-wrap items-center gap-2 select-none">
+              <select
+                value={filters.isActive === undefined ? '' : filters.isActive}
+                onChange={(e) => setFilter('isActive', e.target.value)}
+                className="px-3 py-2 bg-slate-50 border border-slate-150 rounded-xl font-bold text-xs text-slate-700 focus:outline-none cursor-pointer"
+              >
+                <option value="">All Statuses</option>
+                <option value="true">Active</option>
+                <option value="false">Inactive</option>
+              </select>
+
+              {filters.isActive !== undefined && filters.isActive !== '' && (
+                <button
+                  onClick={() => setFilter('isActive', '')}
+                  className="text-[10px] font-black uppercase text-rose-500 hover:text-rose-700 transition cursor-pointer ml-2"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* Form */}
         {showForm && (
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 animate-fade-in">
+            <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <Edit2 size={18} className="text-blue-600" />
               {editingId ? 'Edit University' : 'Add New University'}
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  University Name
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">
+                  University Name *
                 </label>
                 <input
                   type="text"
                   value={formData.universityName}
                   onChange={(e) => setFormData({ ...formData, universityName: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-semibold text-sm transition-all"
                   placeholder="Enter university name"
                   required
                 />
               </div>
               <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  checked={formData.isActive}
-                  onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                  className="w-4 h-4 rounded"
-                />
-                <label htmlFor="isActive" className="text-sm font-semibold text-gray-700">
-                  Active
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={formData.isActive}
+                    onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span className="text-xs font-bold text-slate-700 group-hover:text-slate-900 transition-colors uppercase tracking-wider">
+                    Active Status
+                  </span>
                 </label>
               </div>
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="submit"
-                  disabled={loading}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition disabled:opacity-50"
+                  disabled={saving}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-50 shadow-sm cursor-pointer"
                 >
-                  {loading ? 'Saving...' : editingId ? 'Update' : 'Create'}
+                  {saving ? 'Saving...' : editingId ? 'Update University' : 'Create University'}
                 </button>
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-900 px-6 py-2 rounded-lg font-semibold transition"
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -162,61 +225,107 @@ export default function UniversityManagement() {
           </div>
         )}
 
-        {/* Universities List */}
-        {loading && !showForm ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading universities...</p>
-          </div>
-        ) : universities.length === 0 ? (
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-12 text-center">
-            <p className="text-gray-600 text-lg mb-4">No universities found</p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition"
-            >
-              Create First University
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {universities.map((university) => (
-              <div
-                key={university.universityId}
-                className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition p-6"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <h3 className="text-lg font-bold text-gray-900">{university.universityName}</h3>
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      university.isActive
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-red-100 text-red-700'
-                    }`}
-                  >
-                    {university.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleEdit(university)}
-                    className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 px-4 py-2 rounded-lg font-semibold transition flex items-center justify-center gap-2"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(university.universityId)}
-                    className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg font-semibold transition flex items-center justify-center gap-2"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete
-                  </button>
-                </div>
+        {/* Universities Data Table */}
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-fade-in">
+          {loading && universities.length === 0 ? (
+            <div className="p-12 text-center text-slate-400 font-bold text-xs flex flex-col items-center gap-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <span>Loading universities...</span>
+            </div>
+          ) : universities.length === 0 ? (
+            <div className="p-16 text-center text-slate-500 font-medium leading-relaxed max-w-sm mx-auto space-y-3">
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-xs uppercase tracking-wider">No Records Found</h3>
+                <p className="text-[10px] text-slate-400 mt-1">There are no universities matching your filters or search terms.</p>
               </div>
-            ))}
-          </div>
-        )}
+              {!showForm && (
+                <button
+                  onClick={() => setShowForm(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold text-xs transition mt-4"
+                >
+                  Add First University
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-450 uppercase tracking-widest select-none">
+                    <th className="px-6 py-4 cursor-pointer hover:text-slate-700 transition-colors group" onClick={() => handleSort('universityName')}>
+                      <div className="flex items-center gap-1">
+                        University Name 
+                        {sortField === 'universityName' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 cursor-pointer hover:text-slate-700 transition-colors group" onClick={() => handleSort('createdAt')}>
+                      <div className="flex items-center gap-1">
+                        Created On 
+                        {sortField === 'createdAt' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-center cursor-pointer hover:text-slate-700 transition-colors" onClick={() => handleSort('isActive')}>
+                      <div className="flex items-center justify-center gap-1">
+                        Status 
+                        {sortField === 'isActive' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-slate-300"/>}
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-sm">
+                  {universities.map((university) => (
+                    <tr key={university.universityId} className="hover:bg-slate-50/50 transition-colors group">
+                      <td className="px-6 py-4 font-extrabold text-slate-900">
+                        {university.universityName}
+                      </td>
+                      <td className="px-6 py-4 text-slate-500 font-medium text-xs">
+                        {new Date(university.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${
+                          university.isActive
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                            : "bg-rose-50 text-rose-700 border-rose-100"
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${university.isActive ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`}></span>
+                          {university.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-2 transition-opacity">
+                          <button
+                            onClick={() => handleEdit(university)}
+                            className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors"
+                            title="Edit"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(university)}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors"
+                            title="Mark Inactive"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <TablePagination
+                page={page}
+                totalPages={totalPages}
+                totalCount={totalCount}
+                pageSize={pageSize}
+                setPage={setPage}
+                setPageSize={setPageSize}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

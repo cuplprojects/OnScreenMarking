@@ -42,11 +42,11 @@ namespace API.Controllers
 
                 if (departmentId.HasValue)
                 {
-                    query = query.Where(c => c.DepartmentId == departmentId.Value);
+                    query = query.Where(c => c.DepartmentCourses.Any(dc => dc.DepartmentId == departmentId.Value));
                 }
                 else if (universityId.HasValue)
                 {
-                    query = query.Where(c => c.Department.UniversityId == universityId.Value);
+                    query = query.Where(c => c.DepartmentCourses.Any(dc => dc.Department.UniversityId == universityId.Value));
                 }
 
                 if (isActive.HasValue)
@@ -92,8 +92,8 @@ namespace API.Controllers
                     name = c.Name,
                     type = c.Type,
                     isActive = c.IsActive,
-                    departmentId = c.DepartmentId,
-                    department = c.Department != null ? new { name = c.Department.Name } : null,
+                    departmentId = c.DepartmentCourses.Select(dc => dc.DepartmentId).FirstOrDefault(),
+                    department = c.DepartmentCourses.Select(dc => new { name = dc.Department.Name }).FirstOrDefault(),
                     courseSubjects = c.CourseSubjects.Select(cs => new
                     {
                         subject = cs.Subject != null ? new { subName = cs.Subject.SubName, subCode = cs.Subject.SubCode } : null
@@ -136,7 +136,8 @@ namespace API.Controllers
             try
             {
                 var course = await _context.Courses
-                    .Include(c => c.Department)
+                    .Include(c => c.DepartmentCourses)
+                        .ThenInclude(dc => dc.Department)
                     .Include(c => c.CourseSubjects)
                         .ThenInclude(cs => cs.Subject)
                     .FirstOrDefaultAsync(c => c.Id == id);
@@ -172,11 +173,18 @@ namespace API.Controllers
                 {
                     Name = courseDto.Name,
                     Type = courseDto.Type,
-                    DepartmentId = courseDto.DepartmentId,
                     IsActive = true
                 };
 
                 _context.Courses.Add(course);
+                await _context.SaveChangesAsync();
+
+                var departmentCourse = new DepartmentCourse
+                {
+                    DepartmentId = courseDto.DepartmentId,
+                    CourseId = course.Id
+                };
+                _context.DepartmentCourses.Add(departmentCourse);
                 await _context.SaveChangesAsync();
 
                 return CreatedAtAction(nameof(GetCourse), new { id = course.Id }, course);
@@ -203,7 +211,22 @@ namespace API.Controllers
                 course.Type = courseDto.Type;
                 course.IsActive = courseDto.IsActive;
                 if (courseDto.DepartmentId > 0)
-                    course.DepartmentId = courseDto.DepartmentId;
+                {
+                    // For single department mapping from existing API payload
+                    var existingMapping = await _context.DepartmentCourses.FirstOrDefaultAsync(dc => dc.CourseId == course.Id);
+                    if (existingMapping != null)
+                    {
+                        if (existingMapping.DepartmentId != courseDto.DepartmentId)
+                        {
+                            _context.DepartmentCourses.Remove(existingMapping);
+                            _context.DepartmentCourses.Add(new DepartmentCourse { CourseId = course.Id, DepartmentId = courseDto.DepartmentId });
+                        }
+                    }
+                    else
+                    {
+                        _context.DepartmentCourses.Add(new DepartmentCourse { CourseId = course.Id, DepartmentId = courseDto.DepartmentId });
+                    }
+                }
 
                 _context.Courses.Update(course);
                 await _context.SaveChangesAsync();

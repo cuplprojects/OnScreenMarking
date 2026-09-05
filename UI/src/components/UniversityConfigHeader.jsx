@@ -112,18 +112,9 @@ export default function UniversityConfigHeader() {
         <div>
           <h2 className="text-xs font-black text-slate-900 tracking-tight leading-tight flex items-center gap-1.5">
             {universityName}
-            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">(UNIV-{universityId})</span>
           </h2>
         </div>
-        {userType === 'admin' && (
-          <Link
-            to="/admin/dashboard"
-            className="flex items-center gap-0.5 px-2 py-0.5 bg-slate-50 hover:bg-slate-100 text-slate-650 border border-slate-200 rounded-lg font-bold text-[9px] uppercase tracking-wider transition-all cursor-pointer shadow-sm shrink-0 ml-2"
-          >
-            Back to Dashboard
-            <ChevronRight size={10} />
-          </Link>
-        )}
+       
       </div>
 
       {/* Modern Compact Tabs */}

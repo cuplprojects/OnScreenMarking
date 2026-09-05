@@ -209,6 +209,38 @@ namespace API.Controllers
             }
         }
 
+        [HttpGet("counts")]
+        public async Task<IActionResult> GetUserCounts([FromQuery] int? universityId = null)
+        {
+            if (!await HasPermissionAsync("READ_USER"))
+            {
+                return StatusCode(403, new { success = false, message = "You do not have permission to view user counts." });
+            }
+
+            try
+            {
+                var query = _context.Users.AsQueryable();
+
+                if (universityId.HasValue && universityId.Value > 0)
+                {
+                    query = query.Where(u => u.UniversityId == universityId.Value);
+                }
+
+                var totalUsers = await query.CountAsync();
+                var pendingUsers = await query.CountAsync(u => u.IsApproved == false && u.UserType.ToLower() != "admin");
+
+                return Ok(new
+                {
+                    totalUsers = totalUsers,
+                    pendingUsers = pendingUsers
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
 
         [HttpGet("examiners/workload")]
         public async Task<IActionResult> GetExaminersWorkload([FromQuery] int universityId)
@@ -561,6 +593,10 @@ namespace API.Controllers
                 if (request.AadharNo != null) user.AadharNo = request.AadharNo;
                 if (request.PanNo != null) user.PanNo = request.PanNo;
                 if (request.Experience != null) user.Experience = request.Experience;
+                
+                if (!string.IsNullOrWhiteSpace(request.Name)) user.Name = request.Name;
+                if (!string.IsNullOrWhiteSpace(request.Email)) user.Email = request.Email;
+                if (request.IsActive.HasValue) user.IsActive = request.IsActive.Value;
 
                 user.UpdatedAt = DateTime.UtcNow;
                 _context.Entry(user).State = EntityState.Modified;

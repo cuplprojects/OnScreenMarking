@@ -115,6 +115,8 @@ namespace API.Models.DTOs
 
     public class UpdateUserRequest
     {
+        public string? Name { get; set; }
+        public string? Email { get; set; }
         public string UserType { get; set; }
         public int? UniversityId { get; set; }
         public int? SubjectId1 { get; set; }
@@ -126,5 +128,6 @@ namespace API.Models.DTOs
         public string? PanNo { get; set; }
         public int? CollegeId { get; set; }
         public string? Experience { get; set; }
+        public bool? IsActive { get; set; }
     }
 }

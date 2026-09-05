@@ -183,36 +183,40 @@ export default function CourseManagement() {
                 <span>Courses Management</span>
               </h1>
             </div>
-            <button
-              onClick={handleOpenAddModal}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm hover:shadow self-start sm:self-center shrink-0"
-            >
-              <Plus size={14} />
-              <span>Add New Course</span>
-            </button>
+            <div className="flex items-center gap-3 w-full sm:w-auto mt-3 sm:mt-0">
+              {/* Search bar */}
+              <div className="flex-1 sm:w-64 flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-150 transition-all focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500">
+                <Search size={14} className="text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search courses by name..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-transparent text-slate-800 placeholder-slate-400 font-semibold text-[11px] focus:outline-none"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="text-[9px] font-black uppercase text-slate-400 hover:text-slate-655 transition cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              <button
+                onClick={handleOpenAddModal}
+                className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm hover:shadow shrink-0 h-[34px]"
+              >
+                <Plus size={14} />
+                <span className="hidden sm:inline">Add New Course</span>
+                <span className="sm:hidden">Add</span>
+              </button>
+            </div>
           </div>
 
           {/* Filters Row */}
           <div className="flex flex-col md:flex-row gap-3 pt-2 border-t border-slate-100">
-            {/* Search bar */}
-            <div className="flex-1 flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-150">
-              <Search size={14} className="text-slate-400 shrink-0" />
-              <input
-                type="text"
-                placeholder="Search courses by name..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-transparent text-slate-800 placeholder-slate-400 font-semibold text-[11px] focus:outline-none"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="text-[9px] font-black uppercase text-slate-400 hover:text-slate-655 transition cursor-pointer"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
 
             {/* Filters */}
             <div className="flex flex-wrap items-center gap-2">

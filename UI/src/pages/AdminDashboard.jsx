@@ -20,7 +20,7 @@ import { useAuth } from '../context/AuthContext';
 import apiCall from '../services/api';
 
 export default function AdminDashboard() {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const [universities, setUniversities] = useState([]);
   const [stats, setStats] = useState({
     totalUniversities: 0,
@@ -45,27 +45,21 @@ export default function AdminDashboard() {
       const uniData = await apiCall('/universities');
       setUniversities(uniData);
 
-      // Fetch all users to get active user counts
+      // Fetch optimized global stats counts
       let usersCount = 0;
-      try {
-        const users = await apiCall('/users');
-        usersCount = users.length;
-      } catch (uErr) {
-        console.error('Failed to fetch users count:', uErr);
-      }
-
-      // Fetch all scripts to compute global evaluations progress
       let pendingCount = 0;
       let totalCount = 0;
       let completedCount = 0;
+
       try {
-        const scripts = await apiCall('/scripts?limit=5000');
-        totalCount = scripts.length;
-        pendingCount = scripts.filter(s => s.status === 'pending').length;
-        completedCount = scripts.filter(s => s.status === 'completed').length;
+        const counts = await apiCall('/stats/admin-counts');
+        usersCount = counts.totalUsers || 0;
+        totalCount = counts.totalScripts || 0;
+        pendingCount = counts.pendingScripts || 0;
+        completedCount = counts.completedScripts || 0;
         setUnassignedCount(pendingCount);
-      } catch (sErr) {
-        console.error('Failed to fetch scripts progress:', sErr);
+      } catch (err) {
+        console.error('Failed to fetch global counts:', err);
       }
 
       setStats({
@@ -85,6 +79,30 @@ export default function AdminDashboard() {
 
   const systemModules = [
     {
+      id: 'universities',
+      title: 'Universities',
+      description: 'Manage universities',
+      icon: <School size={16} />,
+      path: '/admin/universities',
+      color: 'text-blue-600 bg-blue-50'
+    },
+    {
+      id: 'colleges',
+      title: 'Colleges',
+      description: 'Manage colleges',
+      icon: <Building2 size={16} />,
+      path: '/admin/colleges',
+      color: 'text-purple-600 bg-purple-50'
+    },
+    {
+      id: 'question-types',
+      title: 'Question Types',
+      description: 'Manage question types',
+      icon: <ClipboardList size={16} />,
+      path: '/admin/question-types',
+      color: 'text-amber-600 bg-amber-50'
+    },
+    {
       id: 'attendance',
       title: 'Attendance Audit',
       description: 'Review logs',
@@ -93,6 +111,17 @@ export default function AdminDashboard() {
       color: 'text-emerald-600 bg-emerald-50'
     }
   ];
+
+  if (hasPermission && hasPermission("READ_ROLE")) {
+    systemModules.push({
+      id: 'roles',
+      title: 'Roles',
+      description: 'Manage roles',
+      icon: <ShieldCheck size={16} />,
+      path: '/admin/role-management',
+      color: 'text-rose-600 bg-rose-50'
+    });
+  }
 
   if (loading) {
     return (
@@ -107,7 +136,7 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-slate-50/50 pb-12 w-full px-6 lg:px-10">
       
       {/* Dynamic Unallocated Alert Warning Banner */}
-      <div className="pt-6">
+      {/* <div className="pt-6">
         {unassignedCount > 0 && (
           <div className="mb-6 bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-pulse">
             <div className="flex items-center gap-3">
@@ -127,18 +156,17 @@ export default function AdminDashboard() {
             </Link>
           </div>
         )}
-      </div>
+      </div> */}
 
       {/* Main Glass Header */}
       <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-2 text-blue-600 font-semibold mb-1">
             <ShieldCheck size={14} />
-            <span className="uppercase tracking-widest text-[9px] font-extrabold">Administrator Cockpit</span>
-          </div>
+         
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">
             OSM Admin Console
-          </h1>
+          </h1> </div>
           <p className="text-slate-500 text-xs mt-0.5">Global System Configurations & Evaluation Monitor Room</p>
         </div>
         <div className="flex items-center gap-3">
@@ -149,20 +177,7 @@ export default function AdminDashboard() {
             <Users size={14} />
             Manage Users
           </Link>
-          <Link
-            to="/admin/role-management"
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all shadow-md hover:shadow-lg hover:bg-blue-700 cursor-pointer"
-          >
-            <ShieldCheck size={14} />
-            Manage Roles
-          </Link>
-          <Link
-            to="/admin/universities"
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all shadow-md hover:shadow-lg hover:bg-blue-700 cursor-pointer"
-          >
-            <Plus size={14} />
-            Add University
-          </Link>
+         
         </div>
       </div>
 
@@ -206,7 +221,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* Overall Progress Slider */}
-            <div className="mt-4 border-t border-slate-100 pt-4">
+            {/* <div className="mt-4 border-t border-slate-100 pt-4">
               <div className="flex justify-between items-center mb-1.5">
                 <span className="text-[11px] font-bold text-slate-700">Global Answer Sheets Progress Ratio</span>
                 <span className="text-[11px] font-bold text-blue-600">
@@ -219,7 +234,7 @@ export default function AdminDashboard() {
                   style={{ width: `${stats.totalScripts > 0 ? (stats.completedScripts / stats.totalScripts) * 100 : 0}%` }}
                 ></div>
               </div>
-            </div>
+            </div> */}
           </div>
 
           {/* Registered Boards Table */}
@@ -266,7 +281,6 @@ export default function AdminDashboard() {
                             </div>
                             <div>
                               <p className="font-bold text-xs text-slate-900 leading-none">{uni.universityName}</p>
-                              <p className="text-[9px] text-slate-400 uppercase font-bold mt-1 tracking-wider">Code: UNIV-{uni.universityId}</p>
                             </div>
                           </div>
                         </td>
@@ -286,7 +300,7 @@ export default function AdminDashboard() {
                               to={`/admin/departments?universityId=${uni.universityId}`}
                               className="px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg font-bold text-[9px] uppercase tracking-wider transition-all"
                             >
-                              Config Departments
+                              Config University
                             </Link>
                           </div>
                         </td>
@@ -328,7 +342,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Compact Metadata Details Card */}
-          <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+          {/* <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">System Status</h3>
             <div className="space-y-3">
               <div className="border-b border-slate-50 pb-2">
@@ -349,7 +363,7 @@ export default function AdminDashboard() {
                 </p>
               </div>
             </div>
-          </div>
+          </div> */}
           
         </div>
       </div>

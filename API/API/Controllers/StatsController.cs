@@ -52,7 +52,7 @@ namespace API.Controllers
                     .CountAsync(d => d.UniversityId == targetUniversityId && d.IsActive);
 
                 var coursesCount = await _context.Courses
-                    .CountAsync(c => c.Department.UniversityId == targetUniversityId && c.IsActive && c.Department.IsActive);
+                    .CountAsync(c => c.DepartmentCourses.Any(dc => dc.Department.UniversityId == targetUniversityId && dc.Department.IsActive) && c.IsActive);
 
                 var subjectsCount = await _context.DepartmentSubjects
                     .CountAsync(ds => ds.Department.UniversityId == targetUniversityId && ds.Subject.Status && ds.Department.IsActive);
@@ -94,6 +94,29 @@ namespace API.Controllers
                     unassignedScriptsCount = unassignedScriptsCount,
                     unconfiguredPapersCount = unconfiguredPapersCount,
                     projects = projectsStats
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+        [HttpGet("admin-counts")]
+        public async Task<IActionResult> GetAdminCounts()
+        {
+            try
+            {
+                var totalUsers = await _context.Users.CountAsync();
+                var totalScripts = await _context.Scripts.CountAsync();
+                var completedScripts = await _context.Scripts.CountAsync(s => s.Status == "completed");
+                var pendingScripts = await _context.Scripts.CountAsync(s => s.Status == "pending");
+
+                return Ok(new
+                {
+                    totalUsers,
+                    totalScripts,
+                    completedScripts,
+                    pendingScripts
                 });
             }
             catch (Exception ex)
