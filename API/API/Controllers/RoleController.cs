@@ -134,7 +134,7 @@ namespace API.Controllers
                     RoleName = request.RoleName.Trim(),
                     Description = request.Description?.Trim(),
                     HierarchyLevel = request.HierarchyLevel,
-                    IsActive = true,
+                    IsActive = request.IsActive ?? true,
                     PermissionsList = request.Permissions ?? new List<string>(),
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -194,6 +194,10 @@ namespace API.Controllers
                 role.RoleName = request.RoleName.Trim();
                 role.Description = request.Description?.Trim();
                 role.HierarchyLevel = request.HierarchyLevel;
+                if (request.IsActive.HasValue)
+                {
+                    role.IsActive = request.IsActive.Value;
+                }
                 role.PermissionsList = request.Permissions ?? new List<string>();
                 role.UpdatedAt = DateTime.UtcNow;
 
@@ -243,27 +247,52 @@ namespace API.Controllers
             {
                 var permissions = new List<string>
                 {
-                    // User Management
-                    "CREATE_USER", "READ_USER", "UPDATE_USER", "DELETE_USER",
-                    
-                    // Paper Management
+                    // University Management
+                    "CREATE_UNIVERSITY", "READ_UNIVERSITY", "UPDATE_UNIVERSITY", "DELETE_UNIVERSITY",
+
+                    // College Management
+                    "CREATE_COLLEGE", "READ_COLLEGE", "UPDATE_COLLEGE", "DELETE_COLLEGE",
+
+                    // Department Management
+                    "CREATE_DEPARTMENT", "READ_DEPARTMENT", "UPDATE_DEPARTMENT", "DELETE_DEPARTMENT",
+
+                    // Course Management
+                    "CREATE_COURSE", "READ_COURSE", "UPDATE_COURSE", "DELETE_COURSE",
+
+                    // Subject Management
+                    "CREATE_SUBJECT", "READ_SUBJECT", "UPDATE_SUBJECT", "DELETE_SUBJECT",
+
+                    // Session Management
+                    "CREATE_SESSION", "READ_SESSION", "UPDATE_SESSION", "DELETE_SESSION",
+
+                    // Project Management
+                    "CREATE_PROJECT", "READ_PROJECT", "UPDATE_PROJECT", "DELETE_PROJECT",
+
+                    // Paper & Section Management
                     "CREATE_PAPER", "READ_PAPER", "UPDATE_PAPER", "DELETE_PAPER",
-                    
+                    "IMPORT_PAPERS", "MANAGE_SECTIONS", "MANAGE_QUESTIONS",
+
                     // Script Management
                     "CREATE_SCRIPT", "READ_SCRIPT", "UPDATE_SCRIPT", "DELETE_SCRIPT",
-                    
-                    // Marking Management
-                    "CREATE_MARKING", "READ_MARKING", "UPDATE_MARKING", "DELETE_MARKING",
-                    
+
                     // Allocation Management
                     "CREATE_ALLOCATION", "READ_ALLOCATION", "UPDATE_ALLOCATION", "DELETE_ALLOCATION",
-                    
+
+                    // Marking Management
+                    "CREATE_MARKING", "READ_MARKING", "UPDATE_MARKING", "DELETE_MARKING",
+
+                    // Attendance Management
+                    "CREATE_ATTENDANCE", "READ_ATTENDANCE", "UPDATE_ATTENDANCE", "DELETE_ATTENDANCE",
+
+                    // User Management
+                    "CREATE_USER", "READ_USER", "UPDATE_USER", "DELETE_USER", "INVITE_USER",
+
+                    // Role & Permission Management
+                    "CREATE_ROLE", "READ_ROLE", "UPDATE_ROLE", "DELETE_ROLE",
+
                     // Report Management
                     "VIEW_REPORTS", "EXPORT_REPORTS",
-                    
-                    // Role Management
-                    "CREATE_ROLE", "READ_ROLE", "UPDATE_ROLE", "DELETE_ROLE",
-                    
+
                     // System Administration
                     "VIEW_LOGS", "MANAGE_SETTINGS", "VIEW_ANALYTICS"
                 };

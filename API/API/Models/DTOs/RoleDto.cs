@@ -18,16 +18,18 @@ namespace API.Models.DTOs
     public class CreateRoleRequest
     {
         public string RoleName { get; set; }
-        public string Description { get; set; }
+        public string? Description { get; set; }
         public int HierarchyLevel { get; set; }
-        public List<string> Permissions { get; set; }
+        public bool? IsActive { get; set; } = true;
+        public List<string>? Permissions { get; set; }
     }
 
     public class UpdateRoleRequest
     {
         public string RoleName { get; set; }
-        public string Description { get; set; }
+        public string? Description { get; set; }
         public int HierarchyLevel { get; set; }
-        public List<string> Permissions { get; set; }
+        public bool? IsActive { get; set; }
+        public List<string>? Permissions { get; set; }
     }
 }

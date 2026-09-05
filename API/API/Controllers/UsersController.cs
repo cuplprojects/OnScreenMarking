@@ -424,6 +424,7 @@ namespace API.Controllers
                 }
 
                 targetUser.IsApproved = true;
+                targetUser.IsActive = true;
                 targetUser.UpdatedAt = DateTime.UtcNow;
                 
                 await _context.SaveChangesAsync();
