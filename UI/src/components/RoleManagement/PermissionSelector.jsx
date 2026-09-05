@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, Shield, CheckSquare, Square } from 'lucide-react';
+import { Check } from 'lucide-react';
 
 export default function PermissionSelector({ permissions, selectedPermissions, onChange }) {
   const [expandedCategories, setExpandedCategories] = useState(new Set());
@@ -7,12 +7,14 @@ export default function PermissionSelector({ permissions, selectedPermissions, o
   // Group permissions by module (Module-wise)
   const groupedPermissions = permissions.reduce((acc, permission) => {
     let category = permission.split('_').slice(1).join('_');
-    
-    // Group system admin tasks together under 'SYSTEM'
+
+    // Grouping aliases
     if (category === 'LOGS' || category === 'SETTINGS' || category === 'ANALYTICS') {
       category = 'SYSTEM';
+    } else if (category === 'PAPERS' || category === 'SECTIONS' || category === 'QUESTIONS') {
+      category = 'PAPER';
     }
-    
+
     if (!acc[category]) {
       acc[category] = [];
     }
@@ -20,7 +22,8 @@ export default function PermissionSelector({ permissions, selectedPermissions, o
     return acc;
   }, {});
 
-  const toggleCategory = (category) => {
+  const toggleCategoryExpand = (category, e) => {
+    e?.stopPropagation();
     const newExpanded = new Set(expandedCategories);
     if (newExpanded.has(category)) {
       newExpanded.delete(category);
@@ -30,17 +33,19 @@ export default function PermissionSelector({ permissions, selectedPermissions, o
     setExpandedCategories(newExpanded);
   };
 
-  const togglePermission = (permission) => {
+  const togglePermission = (permission, e) => {
+    e?.stopPropagation();
     const newSelected = selectedPermissions.includes(permission)
       ? selectedPermissions.filter(p => p !== permission)
       : [...selectedPermissions, permission];
     onChange(newSelected);
   };
 
-  const toggleCategoryPermissions = (category) => {
-    const categoryPermissions = groupedPermissions[category];
-    const allSelected = categoryPermissions.every(p => selectedPermissions.includes(p));
-    
+  const toggleCategoryAll = (category, e) => {
+    e?.stopPropagation();
+    const categoryPermissions = groupedPermissions[category] || [];
+    const allSelected = categoryPermissions.length > 0 && categoryPermissions.every(p => selectedPermissions.includes(p));
+
     let newSelected;
     if (allSelected) {
       newSelected = selectedPermissions.filter(p => !categoryPermissions.includes(p));
@@ -52,136 +57,136 @@ export default function PermissionSelector({ permissions, selectedPermissions, o
 
   const getCategoryLabel = (category) => {
     const labels = {
-      'USER': 'User Management',
-      'PAPER': 'Paper Management',
+      'UNIVERSITY': 'University Management',
+      'COLLEGE': 'College Management',
+      'DEPARTMENT': 'Department Management',
+      'COURSE': 'Course Management',
+      'SUBJECT': 'Subject Management',
+      'SESSION': 'Session Management',
+      'PROJECT': 'Project Management',
+      'PAPER': 'Paper & Assessment',
       'SCRIPT': 'Script Management',
+      'ALLOCATION': 'Script Allocation',
       'MARKING': 'Marking & Evaluation',
-      'ALLOCATION': 'Allocation Management',
+      'ATTENDANCE': 'Attendance Management',
+      'USER': 'User Management',
+      'ROLE': 'Role & Permission',
       'REPORTS': 'Report Management',
-      'ROLE': 'Role & Permission Management',
       'SYSTEM': 'System Administration'
     };
     return labels[category] || category;
   };
 
   const getPermissionLabel = (permission) => {
-    if (permission === 'VIEW_LOGS') return 'View System Logs';
-    if (permission === 'MANAGE_SETTINGS') return 'Manage System Settings';
-    if (permission === 'VIEW_ANALYTICS') return 'View Performance Analytics';
-    if (permission === 'VIEW_REPORTS') return 'View Reports';
-    if (permission === 'EXPORT_REPORTS') return 'Export Reports';
-    
-    const action = permission.split('_')[0];
-    const labels = {
-      'CREATE': 'Create/Add',
-      'READ': 'Read/View',
-      'UPDATE': 'Update/Edit',
-      'DELETE': 'Delete/Remove'
+    const customLabels = {
+      'VIEW_LOGS': 'View System Logs',
+      'MANAGE_SETTINGS': 'Manage System Settings',
+      'VIEW_ANALYTICS': 'View Performance Analytics',
+      'VIEW_REPORTS': 'View Reports',
+      'EXPORT_REPORTS': 'Export Reports',
+      'IMPORT_PAPERS': 'Import Papers (CSV/Excel)',
+      'MANAGE_SECTIONS': 'Configure Sections',
+      'MANAGE_QUESTIONS': 'Configure Questions',
+      'INVITE_USER': 'Invite Users'
     };
-    return labels[action] || action;
+
+    if (customLabels[permission]) return customLabels[permission];
+
+    const action = permission.split('_')[0];
+    const moduleName = permission.split('_').slice(1).join(' ').toLowerCase();
+    const actionLabels = {
+      'CREATE': 'Create / Add',
+      'READ': 'View / Read',
+      'UPDATE': 'Edit / Update',
+      'DELETE': 'Delete / Remove'
+    };
+
+    return actionLabels[action] ? `${actionLabels[action]} ${moduleName}` : permission.replace(/_/g, ' ');
   };
 
   return (
-    <div className="space-y-4 border border-slate-200 rounded-xl p-5 bg-slate-50/50 max-h-[28rem] overflow-y-auto shadow-inner">
+    <div className="space-y-1.5 max-h-72 overflow-y-auto pr-2 text-sm text-gray-800 select-none">
       {Object.entries(groupedPermissions).map(([category, categoryPerms]) => {
-        const allSelected = categoryPerms.every(p => selectedPermissions.includes(p));
-        const someSelected = categoryPerms.some(p => selectedPermissions.includes(p)) && !allSelected;
-        const selectedCount = categoryPerms.filter(p => selectedPermissions.includes(p)).length;
+        const isExpanded = expandedCategories.has(category);
+        const allSelected = categoryPerms.length > 0 && categoryPerms.every(p => selectedPermissions.includes(p));
+        const someSelected = !allSelected && categoryPerms.some(p => selectedPermissions.includes(p));
 
         return (
-          <div 
-            key={category} 
-            className={`border rounded-xl bg-white shadow-sm transition-all duration-300 ${
-              allSelected 
-                ? 'border-blue-200 shadow-blue-500/5' 
-                : someSelected 
-                ? 'border-slate-300' 
-                : 'border-slate-200 hover:border-slate-300'
-            }`}
-          >
-            {/* Category Header */}
-            <div
-              onClick={() => toggleCategory(category)}
-              className="flex items-center gap-3 p-4 hover:bg-slate-50/50 cursor-pointer select-none"
-            >
+          <div key={category} className="space-y-1">
+            {/* Category Row */}
+            <div className="flex items-center gap-1.5 py-0.5 hover:bg-blue-50/50 rounded px-1 group cursor-pointer">
+              
+              {/* Expand / Collapse Caret */}
               <button
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleCategoryPermissions(category);
-                }}
-                className={`p-1 rounded-md transition-colors ${
-                  allSelected 
-                    ? 'text-blue-600 bg-blue-50' 
-                    : someSelected 
-                    ? 'text-blue-500 bg-blue-50/50' 
-                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-                }`}
+                onClick={(e) => toggleCategoryExpand(category, e)}
+                className="w-4 h-4 flex items-center justify-center text-blue-600 hover:text-blue-800"
               >
-                {allSelected ? (
-                  <CheckSquare size={20} className="fill-current text-blue-600 text-white" />
-                ) : someSelected ? (
-                  <div className="w-5 h-5 flex items-center justify-center border-2 border-blue-500 rounded bg-blue-50">
-                    <div className="w-2.5 h-0.5 bg-blue-500 rounded"></div>
-                  </div>
+                {categoryPerms.length > 1 ? (
+                  isExpanded ? (
+                    <span className="text-[10px] leading-none transform rotate-0 font-bold">▼</span>
+                  ) : (
+                    <span className="text-[10px] leading-none transform rotate-0 font-bold">▶</span>
+                  )
                 ) : (
-                  <Square size={20} />
+                  <span className="w-2.5"></span>
                 )}
               </button>
-              
-              <ChevronDown
-                size={18}
-                className={`text-slate-400 transition-transform duration-300 ${
-                  expandedCategories.has(category) ? 'rotate-180' : ''
+
+              {/* Checkbox (Blue Square with White Checkmark) */}
+              <button
+                type="button"
+                onClick={(e) => toggleCategoryAll(category, e)}
+                className={`w-4 h-4 rounded-[3px] flex items-center justify-center transition-colors border ${
+                  allSelected
+                    ? 'bg-blue-600 border-blue-600 text-white'
+                    : someSelected
+                    ? 'bg-blue-600/80 border-blue-600 text-white'
+                    : 'bg-white border-gray-300 hover:border-blue-400 text-transparent'
                 }`}
-              />
-              
-              <div className="flex-1 min-w-0">
-                <span className="font-bold text-sm text-slate-800 tracking-tight flex items-center gap-2">
-                  {getCategoryLabel(category)}
-                  {allSelected && (
-                    <span className="bg-blue-50 text-blue-600 font-extrabold text-[9px] uppercase tracking-wider px-2 py-0.5 rounded border border-blue-100">
-                      Full Access
-                    </span>
-                  )}
-                </span>
-              </div>
-              
-              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                selectedCount === 0 
-                  ? 'bg-slate-100 text-slate-400' 
-                  : selectedCount === categoryPerms.length 
-                  ? 'bg-blue-50 text-blue-600' 
-                  : 'bg-amber-50 text-amber-600'
-              }`}>
-                {selectedCount} / {categoryPerms.length}
+              >
+                {allSelected && <Check size={12} strokeWidth={3.5} />}
+                {someSelected && <div className="w-2 h-0.5 bg-white rounded-full"></div>}
+              </button>
+
+              {/* Category Label */}
+              <span
+                onClick={(e) => toggleCategoryAll(category, e)}
+                className="font-normal text-gray-800 text-[13.5px] cursor-pointer hover:text-blue-900"
+              >
+                {getCategoryLabel(category)}
               </span>
             </div>
 
-            {/* Category Permissions List */}
-            {expandedCategories.has(category) && (
-              <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50/30 border-t border-slate-150 animate-in fade-in duration-200">
+            {/* Sub-Permissions (when expanded) */}
+            {isExpanded && (
+              <div className="pl-8 space-y-1 py-0.5 border-l border-blue-100 ml-3">
                 {categoryPerms.map(permission => {
                   const isChecked = selectedPermissions.includes(permission);
                   return (
-                    <label
+                    <div
                       key={permission}
-                      className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer select-none transition-all duration-200 ${
-                        isChecked
-                          ? 'bg-blue-50/40 border-blue-200 text-blue-900 shadow-sm'
-                          : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                      }`}
+                      onClick={(e) => togglePermission(permission, e)}
+                      className="flex items-center gap-2 py-0.5 hover:bg-blue-50/40 rounded px-1 cursor-pointer"
                     >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => togglePermission(permission)}
-                        className="w-4.5 h-4.5 text-blue-600 rounded-md cursor-pointer border-slate-300 focus:ring-blue-500"
-                      />
-                      <span className="text-xs font-semibold leading-none">
+                      {/* Checkbox */}
+                      <button
+                        type="button"
+                        onClick={(e) => togglePermission(permission, e)}
+                        className={`w-3.5 h-3.5 rounded-[3px] flex items-center justify-center transition-colors border ${
+                          isChecked
+                            ? 'bg-blue-600 border-blue-600 text-white'
+                            : 'bg-white border-gray-300 hover:border-blue-400 text-transparent'
+                        }`}
+                      >
+                        {isChecked && <Check size={10} strokeWidth={3.5} />}
+                      </button>
+
+                      {/* Sub-item Label */}
+                      <span className="text-gray-700 text-xs hover:text-blue-900">
                         {getPermissionLabel(permission)}
                       </span>
-                    </label>
+                    </div>
                   );
                 })}
               </div>
@@ -189,19 +194,6 @@ export default function PermissionSelector({ permissions, selectedPermissions, o
           </div>
         );
       })}
-
-      {/* Summary Footer */}
-      <div className="mt-4 p-4 bg-gradient-to-r from-blue-600 to-blue-600 rounded-xl text-white flex items-center justify-between shadow-md shadow-blue-500/10 shrink-0">
-        <div className="flex items-center gap-2">
-          <Shield size={16} className="text-blue-100" />
-          <p className="text-xs font-semibold tracking-wide uppercase">
-            Total Selected Permissions
-          </p>
-        </div>
-        <span className="bg-white text-white font-extrabold text-sm px-3.5 py-1 rounded-lg border border-white/20">
-          {selectedPermissions.length}
-        </span>
-      </div>
     </div>
   );
 }

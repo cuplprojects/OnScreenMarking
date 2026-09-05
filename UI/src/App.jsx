@@ -208,7 +208,11 @@ function AppRoutes() {
           />
           <Route 
             path="/admin/attendance" 
-            element={hasPermission("VIEW_LOGS") ? <Attendance /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            element={userType === 'admin' || userType === 'coordinator' || hasPermission("READ_ATTENDANCE") || hasPermission("VIEW_LOGS") ? <Attendance /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+          <Route 
+            path="/attendance" 
+            element={userType === 'admin' || userType === 'coordinator' || hasPermission("READ_ATTENDANCE") || hasPermission("VIEW_LOGS") ? <Attendance /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/admin/allocate-scripts" 

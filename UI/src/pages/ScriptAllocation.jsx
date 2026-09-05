@@ -340,10 +340,10 @@ export default function ScriptAllocation() {
                     <tr className="border-b border-slate-100 bg-slate-50/50">
                       <SortHeader label="Code" field="paperCode" hasFilter={true} />
                       <SortHeader label="Paper Name" field="paperName" hasFilter={true} />
-                      <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-wider">Pending</th>
-                      <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-wider">Allocated</th>
-                      <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-wider">Experts</th>
-                      <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-wider text-right">Action</th>
+                      <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-wider text-center">Pending</th>
+                      <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-wider text-center">Allocated</th>
+                      <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-wider text-center">Experts</th>
+                      <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-wider text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -354,28 +354,28 @@ export default function ScriptAllocation() {
                       >
                         <td className="p-3 text-sm font-bold text-slate-700">{paper.paperCode}</td>
                         <td className="p-3 text-sm font-semibold text-slate-900">{paper.paperName}</td>
-                        <td className="p-3">
+                        <td className="p-3 text-center">
                           <span className="inline-flex items-center gap-1.5 bg-yellow-50 text-yellow-700 px-2.5 py-0.5 rounded-md text-xs font-bold border border-yellow-100">
                             <Clock size={12} />
                             {paper.pendingScripts}
                           </span>
                         </td>
-                        <td className="p-3">
+                        <td className="p-3 text-center">
                           <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 px-2.5 py-0.5 rounded-md text-xs font-bold border border-green-100">
                             <CheckCircle2 size={12} />
                             {paper.allocatedScripts}
                           </span>
                         </td>
-                        <td className="p-3">
+                        <td className="p-3 text-center">
                           <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-md text-xs font-bold border border-blue-100">
                             <Users size={12} />
                             {paper.expertsCount || 0}
                           </span>
                         </td>
-                        <td className="p-3 text-right">
+                        <td className="p-3 text-center">
                           <button
                             onClick={() => openAllocationPane(paper)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 ml-auto ${activePaper?.paperId === paper.paperId ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'}`}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm inline-flex items-center justify-center gap-1.5 ${activePaper?.paperId === paper.paperId ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'}`}
                           >
                             <Zap size={14} />
                             {activePaper?.paperId === paper.paperId ? 'Close' : 'Bulk Allocate'}

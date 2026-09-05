@@ -60,7 +60,6 @@ export default function Attendance() {
   const fetchInitialData = async () => {
     try {
       setLoading(true);
-      message.error(null);
       
       // Fetch users (examiners) for client-side validation
       const usersData = await userService.getAllUsers();
@@ -87,13 +86,13 @@ export default function Attendance() {
 
   const calculateStats = () => {
     const todayStr = new Date().toISOString().split('T')[0];
-    const todayLogs = attendanceLogs.filter(log => log.date.split('T')[0] === todayStr);
+    const todayLogs = (attendanceLogs || []).filter(log => log?.date && (typeof log.date === 'string' ? log.date.split('T')[0] : '') === todayStr);
 
     setStats({
-      total: attendanceLogs.length,
-      present: todayLogs.filter(log => log.status.toLowerCase() === 'present').length,
-      absent: todayLogs.filter(log => log.status.toLowerCase() === 'absent').length,
-      halfDay: todayLogs.filter(log => ['half-day', 'half day'].includes(log.status.toLowerCase())).length
+      total: (attendanceLogs || []).length,
+      present: todayLogs.filter(log => (log?.status || '').toLowerCase() === 'present').length,
+      absent: todayLogs.filter(log => (log?.status || '').toLowerCase() === 'absent').length,
+      halfDay: todayLogs.filter(log => ['half-day', 'half day'].includes((log?.status || '').toLowerCase())).length
     });
   };
 
@@ -346,9 +345,9 @@ export default function Attendance() {
     document.body.removeChild(link);
   };
 
-  const filteredLogs = attendanceLogs.filter(log =>
-    log.examinerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.examinerEmail.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredLogs = (attendanceLogs || []).filter(log =>
+    (log?.examinerName || '').toLowerCase().includes((searchTerm || '').toLowerCase()) ||
+    (log?.examinerEmail || '').toLowerCase().includes((searchTerm || '').toLowerCase())
   );
 
   const previewRowsToDisplay = onlyShowErrors 
@@ -704,27 +703,27 @@ export default function Attendance() {
                   {filteredLogs.map((log) => (
                     <tr key={log.attendanceId} className="hover:bg-gray-50/50 transition-colors">
                       <td className="py-4 px-6 font-semibold text-gray-900">
-                        {new Date(log.date).toLocaleDateString(undefined, {
+                        {log?.date ? new Date(log.date).toLocaleDateString(undefined, {
                           year: 'numeric',
                           month: 'short',
                           day: 'numeric'
-                        })}
+                        }) : '-'}
                       </td>
                       <td className="py-4 px-6 font-medium text-gray-800">
-                        {log.examinerName}
+                        {log?.examinerName || 'Unknown'}
                       </td>
                       <td className="py-4 px-6 text-gray-600">
-                        {log.examinerEmail}
+                        {log?.examinerEmail || '-'}
                       </td>
                       <td className="py-4 px-6">
                         <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
-                          log.status.toLowerCase() === 'present'
+                          (log?.status || '').toLowerCase() === 'present'
                             ? 'bg-green-100 text-green-700 border border-green-200'
-                            : log.status.toLowerCase() === 'absent'
+                            : (log?.status || '').toLowerCase() === 'absent'
                             ? 'bg-red-100 text-red-700 border border-red-200'
                             : 'bg-amber-100 text-amber-700 border border-amber-200'
                         }`}>
-                          {log.status}
+                          {log?.status || 'Unknown'}
                         </span>
                       </td>
                       <td className="py-4 px-6 text-gray-500 max-w-xs truncate">

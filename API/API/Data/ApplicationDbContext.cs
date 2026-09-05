@@ -38,6 +38,19 @@ namespace API.Data
         public DbSet<Role> Roles { get; set; }
         public DbSet<Attendance> Attendances { get; set; }
         public DbSet<QuestionType> QuestionTypes { get; set; }
+        public DbSet<TemplateConfiguration> TemplateConfigurations { get; set; }
+        public DbSet<BarcodeConfiguration> BarcodeConfigurations { get; set; }
+        public DbSet<ProjectConfiguration> ProjectConfigurations { get; set; }
+        public DbSet<PdfRecord> PdfRecords { get; set; }
+        public DbSet<ExamBatch> ExamBatches { get; set; }
+        public DbSet<Operator> Operators { get; set; }
+        public DbSet<BookletConfig> BookletConfigs { get; set; }
+        public DbSet<ScanSession> ScanSessions { get; set; }
+        public DbSet<Booklet> Booklets { get; set; }
+        public DbSet<ScannedPage> ScannedPages { get; set; }
+        public DbSet<PageEvent> PageEvents { get; set; }
+        public DbSet<GeneratedPdf> GeneratedPdfs { get; set; }
+        public DbSet<UploadQueue> UploadQueues { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -150,25 +163,25 @@ namespace API.Data
             modelBuilder.Entity<Subject>()
                 .HasKey(s => s.SubjectId);
             modelBuilder.Entity<DepartmentSubject>()
-    .HasOne(ds => ds.Department)
-    .WithMany(d => d.DepartmentSubjects)
-    .HasForeignKey(ds => ds.DepartmentId)
-    .OnDelete(DeleteBehavior.Cascade);
+                .HasOne(ds => ds.Department)
+                .WithMany(d => d.DepartmentSubjects)
+                .HasForeignKey(ds => ds.DepartmentId)
+                .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<DepartmentSubject>()
-    .HasOne(ds => ds.Subject)
-    .WithMany(s => s.DepartmentSubjects)
-    .HasForeignKey(ds => ds.SubjectId)
-    .OnDelete(DeleteBehavior.Cascade);
+                .HasOne(ds => ds.Subject)
+                .WithMany(s => s.DepartmentSubjects)
+                .HasForeignKey(ds => ds.SubjectId)
+                .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<SubjectPaper>()
-    .HasOne(sp => sp.Paper)
-    .WithMany(p => p.SubjectPapers)
-    .HasForeignKey(sp => sp.PaperId)
-    .OnDelete(DeleteBehavior.Cascade);
+                .HasOne(sp => sp.Paper)
+                .WithMany(p => p.SubjectPapers)
+                .HasForeignKey(sp => sp.PaperId)
+                .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<SubjectPaper>()
-    .HasOne(sp => sp.Subject)
-    .WithMany(s => s.SubjectPapers)
-    .HasForeignKey(sp => sp.SubjectId)
-    .OnDelete(DeleteBehavior.Cascade);
+                .HasOne(sp => sp.Subject)
+                .WithMany(s => s.SubjectPapers)
+                .HasForeignKey(sp => sp.SubjectId)
+                .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<Subject>()
                 .HasMany(s => s.ExaminerExpertises)
                 .WithOne(ee => ee.Subject)
@@ -191,6 +204,7 @@ namespace API.Data
                 .WithOne(s => s.Paper)
                 .HasForeignKey(s => s.PaperId)
                 .OnDelete(DeleteBehavior.Cascade);
+
             // ProjectPaper configuration
             modelBuilder.Entity<ProjectPaper>()
                 .HasKey(pp => pp.Id);
@@ -308,6 +322,9 @@ namespace API.Data
                 .WithMany()
                 .HasForeignKey(pe => pe.ExaminerId)
                 .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PaperExaminer>()
+                .HasIndex(pe => new { pe.PaperId, pe.ExaminerId })
+                .IsUnique();
 
             // QuestionMark configuration
             modelBuilder.Entity<QuestionMark>()
@@ -326,9 +343,7 @@ namespace API.Data
                 .WithMany()
                 .HasForeignKey(i => i.DepartmentId)
                 .OnDelete(DeleteBehavior.SetNull);
-            modelBuilder.Entity<PaperExaminer>()
-    .HasIndex(pe => new { pe.PaperId, pe.ExaminerId })
-    .IsUnique();
+
             // Attendance configuration
             modelBuilder.Entity<Attendance>()
                 .HasKey(a => a.AttendanceId);
@@ -341,6 +356,194 @@ namespace API.Data
             // QuestionType configuration
             modelBuilder.Entity<QuestionType>()
                 .HasKey(qt => qt.QuestionTypeId);
+
+            // TemplateConfiguration configuration
+            modelBuilder.Entity<TemplateConfiguration>()
+                .HasKey(tc => tc.TemplateId);
+            modelBuilder.Entity<TemplateConfiguration>()
+                .HasIndex(tc => tc.Status);
+            modelBuilder.Entity<TemplateConfiguration>()
+                .HasIndex(tc => tc.SkipPages);
+
+            // BarcodeConfiguration configuration
+            modelBuilder.Entity<BarcodeConfiguration>()
+                .HasKey(bc => bc.BarcodeId);
+            modelBuilder.Entity<BarcodeConfiguration>()
+                .HasIndex(bc => bc.Barcode)
+                .IsUnique();
+            modelBuilder.Entity<BarcodeConfiguration>()
+                .HasIndex(bc => bc.SubjectCode);
+
+            // ProjectConfiguration configuration
+            modelBuilder.Entity<ProjectConfiguration>()
+                .HasKey(pc => pc.ProjectConfigId);
+            modelBuilder.Entity<ProjectConfiguration>()
+                .HasOne(pc => pc.Project)
+                .WithMany()
+                .HasForeignKey(pc => pc.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ProjectConfiguration>()
+                .HasOne(pc => pc.Subject)
+                .WithMany()
+                .HasForeignKey(pc => pc.SubjectId)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<ProjectConfiguration>()
+                .HasOne(pc => pc.TemplateConfiguration)
+                .WithMany()
+                .HasForeignKey(pc => pc.TemplateId)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<ProjectConfiguration>()
+                .HasOne(pc => pc.BarcodeConfiguration)
+                .WithMany()
+                .HasForeignKey(pc => pc.BarcodeId)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<ProjectConfiguration>()
+                .HasOne(pc => pc.Paper)
+                .WithMany()
+                .HasForeignKey(pc => pc.PaperId)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<ProjectConfiguration>()
+                .HasIndex(pc => pc.ProjectId);
+            modelBuilder.Entity<ProjectConfiguration>()
+                .HasIndex(pc => pc.SubjectId);
+            modelBuilder.Entity<ProjectConfiguration>()
+                .HasIndex(pc => pc.TemplateId);
+            modelBuilder.Entity<ProjectConfiguration>()
+                .HasIndex(pc => pc.PaperId);
+
+            // PdfRecord configuration
+            modelBuilder.Entity<PdfRecord>()
+                .HasKey(pr => pr.PdfId);
+            modelBuilder.Entity<PdfRecord>()
+                .HasIndex(pr => pr.GeneratedBarcode);
+
+            // ExamBatch configuration
+            modelBuilder.Entity<ExamBatch>()
+                .HasKey(eb => eb.Id);
+            modelBuilder.Entity<ExamBatch>()
+                .HasMany(eb => eb.ScanSessions)
+                .WithOne(ss => ss.ExamBatch)
+                .HasForeignKey(ss => ss.ExamBatchId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Operator configuration
+            modelBuilder.Entity<Operator>()
+                .HasKey(o => o.Id);
+            modelBuilder.Entity<Operator>()
+                .HasMany(o => o.ScanSessions)
+                .WithOne(ss => ss.Operator)
+                .HasForeignKey(ss => ss.OperatorId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // BookletConfig configuration
+            modelBuilder.Entity<BookletConfig>()
+                .HasKey(bc => bc.Id);
+            modelBuilder.Entity<BookletConfig>()
+                .HasMany(bc => bc.ScanSessions)
+                .WithOne(ss => ss.BookletConfig)
+                .HasForeignKey(ss => ss.BookletConfigId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // ScanSession configuration
+            modelBuilder.Entity<ScanSession>()
+                .HasKey(ss => ss.Id);
+            modelBuilder.Entity<ScanSession>()
+                .HasOne(ss => ss.ExamBatch)
+                .WithMany(eb => eb.ScanSessions)
+                .HasForeignKey(ss => ss.ExamBatchId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ScanSession>()
+                .HasOne(ss => ss.Operator)
+                .WithMany(o => o.ScanSessions)
+                .HasForeignKey(ss => ss.OperatorId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ScanSession>()
+                .HasOne(ss => ss.BookletConfig)
+                .WithMany(bc => bc.ScanSessions)
+                .HasForeignKey(ss => ss.BookletConfigId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ScanSession>()
+                .HasMany(ss => ss.Booklets)
+                .WithOne(b => b.ScanSession)
+                .HasForeignKey(b => b.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ScanSession>()
+                .HasMany(ss => ss.ScannedPages)
+                .WithOne(sp => sp.ScanSession)
+                .HasForeignKey(sp => sp.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Booklet configuration
+            modelBuilder.Entity<Booklet>()
+                .HasKey(b => b.Id);
+            modelBuilder.Entity<Booklet>()
+                .HasOne(b => b.ScanSession)
+                .WithMany(ss => ss.Booklets)
+                .HasForeignKey(b => b.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<Booklet>()
+                .HasMany(b => b.ScannedPages)
+                .WithOne(sp => sp.Booklet)
+                .HasForeignKey(sp => sp.BookletId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<Booklet>()
+                .HasMany(b => b.GeneratedPdfs)
+                .WithOne(gp => gp.Booklet)
+                .HasForeignKey(gp => gp.BookletId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // ScannedPage configuration
+            modelBuilder.Entity<ScannedPage>()
+                .HasKey(sp => sp.Id);
+            modelBuilder.Entity<ScannedPage>()
+                .HasOne(sp => sp.ScanSession)
+                .WithMany(ss => ss.ScannedPages)
+                .HasForeignKey(sp => sp.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ScannedPage>()
+                .HasOne(sp => sp.Booklet)
+                .WithMany(b => b.ScannedPages)
+                .HasForeignKey(sp => sp.BookletId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ScannedPage>()
+                .HasMany(sp => sp.PageEvents)
+                .WithOne(pe => pe.ScannedPage)
+                .HasForeignKey(pe => pe.PageId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ScannedPage>()
+                .HasIndex(sp => sp.BookletId);
+
+            // PageEvent configuration
+            modelBuilder.Entity<PageEvent>()
+                .HasKey(pe => pe.Id);
+            modelBuilder.Entity<PageEvent>()
+                .HasOne(pe => pe.ScannedPage)
+                .WithMany(sp => sp.PageEvents)
+                .HasForeignKey(pe => pe.PageId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // GeneratedPdf configuration
+            modelBuilder.Entity<GeneratedPdf>()
+                .HasKey(gp => gp.Id);
+            modelBuilder.Entity<GeneratedPdf>()
+                .HasOne(gp => gp.Booklet)
+                .WithMany(b => b.GeneratedPdfs)
+                .HasForeignKey(gp => gp.BookletId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<GeneratedPdf>()
+                .HasMany(gp => gp.UploadQueues)
+                .WithOne(uq => uq.GeneratedPdf)
+                .HasForeignKey(uq => uq.PdfId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // UploadQueue configuration
+            modelBuilder.Entity<UploadQueue>()
+                .HasKey(uq => uq.Id);
+            modelBuilder.Entity<UploadQueue>()
+                .HasOne(uq => uq.GeneratedPdf)
+                .WithMany(gp => gp.UploadQueues)
+                .HasForeignKey(uq => uq.PdfId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

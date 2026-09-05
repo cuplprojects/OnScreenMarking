@@ -91,6 +91,151 @@ namespace API.Migrations
                     b.ToTable("Attendances");
                 });
 
+            modelBuilder.Entity("API.Models.BarcodeConfiguration", b =>
+                {
+                    b.Property<int>("BarcodeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("BarcodeId");
+
+                    b.Property<string>("Barcode")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("Barcode");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Prefix")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("prefix");
+
+                    b.Property<bool>("Status")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("Status");
+
+                    b.Property<string>("SubjectCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("subject_code");
+
+                    b.Property<string>("Suffix")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("suffix");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("BarcodeId");
+
+                    b.HasIndex("Barcode")
+                        .IsUnique();
+
+                    b.HasIndex("SubjectCode");
+
+                    b.ToTable("barcode_configuration");
+                });
+
+            modelBuilder.Entity("API.Models.Booklet", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CandidateRef")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("candidate_ref");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("SessionId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("session_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("status");
+
+                    b.Property<int>("TotalPagesExpected")
+                        .HasColumnType("int")
+                        .HasColumnName("total_pages_expected");
+
+                    b.Property<int>("TotalPagesReceived")
+                        .HasColumnType("int")
+                        .HasColumnName("total_pages_received");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId");
+
+                    b.ToTable("booklets");
+                });
+
+            modelBuilder.Entity("API.Models.BookletConfig", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ConfigName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("config_name");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("IntegrationPath")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("integration_path");
+
+                    b.Property<float>("RoiXEnd")
+                        .HasColumnType("float")
+                        .HasColumnName("roi_x_end");
+
+                    b.Property<float>("RoiXStart")
+                        .HasColumnType("float")
+                        .HasColumnName("roi_x_start");
+
+                    b.Property<float>("RoiYEnd")
+                        .HasColumnType("float")
+                        .HasColumnName("roi_y_end");
+
+                    b.Property<float>("RoiYStart")
+                        .HasColumnType("float")
+                        .HasColumnName("roi_y_start");
+
+                    b.Property<int>("TotalPages")
+                        .HasColumnType("int")
+                        .HasColumnName("total_pages");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("booklet_configs");
+                });
+
             modelBuilder.Entity("API.Models.College", b =>
                 {
                     b.Property<int>("Id")
@@ -291,6 +436,47 @@ namespace API.Migrations
                     b.ToTable("EventLogs");
                 });
 
+            modelBuilder.Entity("API.Models.ExamBatch", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("ExamCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("exam_code");
+
+                    b.Property<DateTime?>("ExamDate")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("exam_date");
+
+                    b.Property<string>("ExamTitle")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("exam_title");
+
+                    b.Property<int?>("ExpectedBookletCount")
+                        .HasColumnType("int")
+                        .HasColumnName("expected_booklet_count");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("exam_batches");
+                });
+
             modelBuilder.Entity("API.Models.ExaminerExpertise", b =>
                 {
                     b.Property<int>("Id")
@@ -317,6 +503,53 @@ namespace API.Migrations
                         .IsUnique();
 
                     b.ToTable("ExaminerExpertises");
+                });
+
+            modelBuilder.Entity("API.Models.GeneratedPdf", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BookletId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("booklet_id");
+
+                    b.Property<long?>("FileSizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("file_size_bytes");
+
+                    b.Property<DateTime>("GeneratedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("generated_at");
+
+                    b.Property<int>("PageCount")
+                        .HasColumnType("int")
+                        .HasColumnName("page_count");
+
+                    b.Property<string>("PdfPath")
+                        .IsRequired()
+                        .HasColumnType("longtext")
+                        .HasColumnName("pdf_path");
+
+                    b.Property<string>("Sha256Checksum")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("sha256_checksum");
+
+                    b.Property<string>("XmpMetadata")
+                        .HasColumnType("longtext")
+                        .HasColumnName("xmp_metadata");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookletId");
+
+                    b.ToTable("generated_pdfs");
                 });
 
             modelBuilder.Entity("API.Models.Invitation", b =>
@@ -417,6 +650,72 @@ namespace API.Migrations
                     b.ToTable("Markings");
                 });
 
+            modelBuilder.Entity("API.Models.Operator", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("WorkstationId")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("workstation_id");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("operators");
+                });
+
+            modelBuilder.Entity("API.Models.PageEvent", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("EventDetail")
+                        .HasColumnType("longtext")
+                        .HasColumnName("event_detail");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("event_type");
+
+                    b.Property<string>("PageId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("page_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PageId");
+
+                    b.ToTable("page_events");
+                });
+
             modelBuilder.Entity("API.Models.Paper", b =>
                 {
                     b.Property<int>("PaperId")
@@ -496,6 +795,43 @@ namespace API.Migrations
                     b.ToTable("PaperExaminers");
                 });
 
+            modelBuilder.Entity("API.Models.PdfRecord", b =>
+                {
+                    b.Property<int>("PdfId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("Pdf_Id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("GeneratedBarcode")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("generated_barcode");
+
+                    b.Property<string>("InbuiltBarcode")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("inbuilt_barcode");
+
+                    b.Property<string>("PdfLocation")
+                        .HasColumnType("longtext")
+                        .HasColumnName("pdf_location");
+
+                    b.Property<string>("PdfName")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("pdf_name");
+
+                    b.HasKey("PdfId");
+
+                    b.HasIndex("GeneratedBarcode");
+
+                    b.ToTable("pdf_records");
+                });
+
             modelBuilder.Entity("API.Models.Project", b =>
                 {
                     b.Property<int>("ProjectId")
@@ -525,6 +861,79 @@ namespace API.Migrations
                     b.HasIndex("UniversityId");
 
                     b.ToTable("Projects");
+                });
+
+            modelBuilder.Entity("API.Models.ProjectConfiguration", b =>
+                {
+                    b.Property<int>("ProjectConfigId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("ProjectConfigId");
+
+                    b.Property<int?>("BarcodeId")
+                        .HasColumnType("int")
+                        .HasColumnName("BarcodeId");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("EnableManualCorrection")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("enable_manual_correction");
+
+                    b.Property<bool>("EnableOcrValidation")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("enable_ocr_validation");
+
+                    b.Property<string>("InputFolder")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("input_folder");
+
+                    b.Property<string>("OutputFolder")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("output_folder");
+
+                    b.Property<string>("PaperCode")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("PaperCode");
+
+                    b.Property<int?>("PaperId")
+                        .HasColumnType("int")
+                        .HasColumnName("PaperId");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int")
+                        .HasColumnName("ProjectId");
+
+                    b.Property<int?>("SubjectId")
+                        .HasColumnType("int")
+                        .HasColumnName("SubjectId");
+
+                    b.Property<int?>("TemplateId")
+                        .HasColumnType("int")
+                        .HasColumnName("TemplateId");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("ProjectConfigId");
+
+                    b.HasIndex("BarcodeId");
+
+                    b.HasIndex("PaperId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("SubjectId");
+
+                    b.HasIndex("TemplateId");
+
+                    b.ToTable("project_configuration");
                 });
 
             modelBuilder.Entity("API.Models.ProjectPaper", b =>
@@ -688,6 +1097,126 @@ namespace API.Migrations
                     b.HasKey("RoleId");
 
                     b.ToTable("Roles");
+                });
+
+            modelBuilder.Entity("API.Models.ScanSession", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BookletConfigId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("booklet_config_id");
+
+                    b.Property<string>("CandidateRef")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("candidate_ref");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("completed_at");
+
+                    b.Property<string>("ExamBatchId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("exam_batch_id");
+
+                    b.Property<string>("IntegrationPath")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("integration_path");
+
+                    b.Property<string>("OperatorId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("operator_id");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookletConfigId");
+
+                    b.HasIndex("ExamBatchId");
+
+                    b.HasIndex("OperatorId");
+
+                    b.ToTable("scan_sessions");
+                });
+
+            modelBuilder.Entity("API.Models.ScannedPage", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BookletId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("booklet_id");
+
+                    b.Property<int?>("DetectedPageNumber")
+                        .HasColumnType("int")
+                        .HasColumnName("detected_page_number");
+
+                    b.Property<string>("DetectionSource")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("detection_source");
+
+                    b.Property<long?>("FileSizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("file_size_bytes");
+
+                    b.Property<string>("ImagePath")
+                        .IsRequired()
+                        .HasColumnType("longtext")
+                        .HasColumnName("image_path");
+
+                    b.Property<int?>("ManualPageNumber")
+                        .HasColumnType("int")
+                        .HasColumnName("manual_page_number");
+
+                    b.Property<int?>("OcrConfidence")
+                        .HasColumnType("int")
+                        .HasColumnName("ocr_confidence");
+
+                    b.Property<DateTime?>("ScannedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("scanned_at");
+
+                    b.Property<string>("SessionId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("session_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookletId");
+
+                    b.HasIndex("SessionId");
+
+                    b.ToTable("scanned_pages");
                 });
 
             modelBuilder.Entity("API.Models.Script", b =>
@@ -908,6 +1437,80 @@ namespace API.Migrations
                     b.ToTable("SubjectPapers");
                 });
 
+            modelBuilder.Entity("API.Models.TemplateConfiguration", b =>
+                {
+                    b.Property<int>("TemplateId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("template_id");
+
+                    b.Property<string>("BarcodeAvailability")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("barcode_availability");
+
+                    b.Property<string>("BarcodeDimensions")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("barcode_dimensions");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("HasBarcode")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("has_barcode");
+
+                    b.Property<bool>("HasPageNumber")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("has_page_number");
+
+                    b.Property<string>("PageDimension")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("page_dimension");
+
+                    b.Property<string>("PageNoPosition")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("page_no_position");
+
+                    b.Property<string>("PageRange")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("page_range");
+
+                    b.Property<int>("SkipPages")
+                        .HasColumnType("int")
+                        .HasColumnName("skip_pages");
+
+                    b.Property<bool>("Status")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TemplateName")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("template_name");
+
+                    b.Property<int?>("TotalPages")
+                        .HasColumnType("int")
+                        .HasColumnName("total_pages");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("TemplateId");
+
+                    b.HasIndex("SkipPages");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("template_configuration");
+                });
+
             modelBuilder.Entity("API.Models.University", b =>
                 {
                     b.Property<int>("UniversityId")
@@ -930,6 +1533,57 @@ namespace API.Migrations
                     b.HasKey("UniversityId");
 
                     b.ToTable("Universities");
+                });
+
+            modelBuilder.Entity("API.Models.UploadQueue", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("LastAttemptedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("last_attempted_at");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("longtext")
+                        .HasColumnName("last_error");
+
+                    b.Property<string>("PdfId")
+                        .IsRequired()
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("pdf_id");
+
+                    b.Property<DateTime>("QueuedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("queued_at");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("int")
+                        .HasColumnName("retry_count");
+
+                    b.Property<string>("ServerUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("server_url");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("UploadedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("uploaded_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PdfId");
+
+                    b.ToTable("upload_queue");
                 });
 
             modelBuilder.Entity("API.Models.User", b =>
@@ -1052,6 +1706,17 @@ namespace API.Migrations
                     b.Navigation("Examiner");
                 });
 
+            modelBuilder.Entity("API.Models.Booklet", b =>
+                {
+                    b.HasOne("API.Models.ScanSession", "ScanSession")
+                        .WithMany("Booklets")
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ScanSession");
+                });
+
             modelBuilder.Entity("API.Models.CourseSubject", b =>
                 {
                     b.HasOne("API.Models.Courses", "Course")
@@ -1131,6 +1796,17 @@ namespace API.Migrations
                     b.Navigation("Subject");
                 });
 
+            modelBuilder.Entity("API.Models.GeneratedPdf", b =>
+                {
+                    b.HasOne("API.Models.Booklet", "Booklet")
+                        .WithMany("GeneratedPdfs")
+                        .HasForeignKey("BookletId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Booklet");
+                });
+
             modelBuilder.Entity("API.Models.Invitation", b =>
                 {
                     b.HasOne("API.Models.Department", "Department")
@@ -1174,6 +1850,17 @@ namespace API.Migrations
                     b.Navigation("Examiner");
 
                     b.Navigation("Script");
+                });
+
+            modelBuilder.Entity("API.Models.PageEvent", b =>
+                {
+                    b.HasOne("API.Models.ScannedPage", "ScannedPage")
+                        .WithMany("PageEvents")
+                        .HasForeignKey("PageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ScannedPage");
                 });
 
             modelBuilder.Entity("API.Models.Paper", b =>
@@ -1221,6 +1908,45 @@ namespace API.Migrations
                     b.Navigation("Session");
 
                     b.Navigation("University");
+                });
+
+            modelBuilder.Entity("API.Models.ProjectConfiguration", b =>
+                {
+                    b.HasOne("API.Models.BarcodeConfiguration", "BarcodeConfiguration")
+                        .WithMany()
+                        .HasForeignKey("BarcodeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("API.Models.Paper", "Paper")
+                        .WithMany()
+                        .HasForeignKey("PaperId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("API.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("API.Models.Subject", "Subject")
+                        .WithMany()
+                        .HasForeignKey("SubjectId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("API.Models.TemplateConfiguration", "TemplateConfiguration")
+                        .WithMany()
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("BarcodeConfiguration");
+
+                    b.Navigation("Paper");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("Subject");
+
+                    b.Navigation("TemplateConfiguration");
                 });
 
             modelBuilder.Entity("API.Models.ProjectPaper", b =>
@@ -1272,6 +1998,52 @@ namespace API.Migrations
                     b.Navigation("Question");
                 });
 
+            modelBuilder.Entity("API.Models.ScanSession", b =>
+                {
+                    b.HasOne("API.Models.BookletConfig", "BookletConfig")
+                        .WithMany("ScanSessions")
+                        .HasForeignKey("BookletConfigId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("API.Models.ExamBatch", "ExamBatch")
+                        .WithMany("ScanSessions")
+                        .HasForeignKey("ExamBatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("API.Models.Operator", "Operator")
+                        .WithMany("ScanSessions")
+                        .HasForeignKey("OperatorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BookletConfig");
+
+                    b.Navigation("ExamBatch");
+
+                    b.Navigation("Operator");
+                });
+
+            modelBuilder.Entity("API.Models.ScannedPage", b =>
+                {
+                    b.HasOne("API.Models.Booklet", "Booklet")
+                        .WithMany("ScannedPages")
+                        .HasForeignKey("BookletId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("API.Models.ScanSession", "ScanSession")
+                        .WithMany("ScannedPages")
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Booklet");
+
+                    b.Navigation("ScanSession");
+                });
+
             modelBuilder.Entity("API.Models.Script", b =>
                 {
                     b.HasOne("API.Models.ProjectPaper", "ProjectPaper")
@@ -1320,6 +2092,17 @@ namespace API.Migrations
                     b.Navigation("Subject");
                 });
 
+            modelBuilder.Entity("API.Models.UploadQueue", b =>
+                {
+                    b.HasOne("API.Models.GeneratedPdf", "GeneratedPdf")
+                        .WithMany("UploadQueues")
+                        .HasForeignKey("PdfId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("GeneratedPdf");
+                });
+
             modelBuilder.Entity("API.Models.User", b =>
                 {
                     b.HasOne("API.Models.University", "University")
@@ -1328,6 +2111,18 @@ namespace API.Migrations
                         .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("University");
+                });
+
+            modelBuilder.Entity("API.Models.Booklet", b =>
+                {
+                    b.Navigation("GeneratedPdfs");
+
+                    b.Navigation("ScannedPages");
+                });
+
+            modelBuilder.Entity("API.Models.BookletConfig", b =>
+                {
+                    b.Navigation("ScanSessions");
                 });
 
             modelBuilder.Entity("API.Models.Courses", b =>
@@ -1342,9 +2137,24 @@ namespace API.Migrations
                     b.Navigation("DepartmentSubjects");
                 });
 
+            modelBuilder.Entity("API.Models.ExamBatch", b =>
+                {
+                    b.Navigation("ScanSessions");
+                });
+
+            modelBuilder.Entity("API.Models.GeneratedPdf", b =>
+                {
+                    b.Navigation("UploadQueues");
+                });
+
             modelBuilder.Entity("API.Models.Marking", b =>
                 {
                     b.Navigation("QuestionMarks");
+                });
+
+            modelBuilder.Entity("API.Models.Operator", b =>
+                {
+                    b.Navigation("ScanSessions");
                 });
 
             modelBuilder.Entity("API.Models.Paper", b =>
@@ -1369,6 +2179,18 @@ namespace API.Migrations
             modelBuilder.Entity("API.Models.Question", b =>
                 {
                     b.Navigation("QuestionMarks");
+                });
+
+            modelBuilder.Entity("API.Models.ScanSession", b =>
+                {
+                    b.Navigation("Booklets");
+
+                    b.Navigation("ScannedPages");
+                });
+
+            modelBuilder.Entity("API.Models.ScannedPage", b =>
+                {
+                    b.Navigation("PageEvents");
                 });
 
             modelBuilder.Entity("API.Models.Script", b =>
