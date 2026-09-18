@@ -111,7 +111,7 @@ const Scripts = () => {
                 placeholder="Search by name, roll number, or script ID..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
               />
             </div>
           </div>
@@ -120,7 +120,7 @@ const Scripts = () => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
             >
               <option value="all">All Status</option>
               <option value="Pending">Pending</option>
@@ -135,7 +135,7 @@ const Scripts = () => {
       <div className="bg-white rounded-lg shadow overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader className="animate-spin text-blue-600 mr-3" size={24} />
+            <Loader className="animate-spin text-teal-700 mr-3" size={24} />
             <p className="text-gray-600 font-medium">Loading your allocated scripts...</p>
           </div>
         ) : scripts.length === 0 ? (
@@ -159,9 +159,9 @@ const Scripts = () => {
               <tbody className="divide-y divide-gray-200">
                 {filteredScripts.map((script) => (
                   <tr key={script.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{script.barCode || 'N/A'}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{script.paper?.paperName || 'N/A'}</td>
-                    <td className="px-6 py-4 text-sm">
+                    <td className="px-6 py-2.5 text-sm font-medium text-gray-900">{script.barCode || 'N/A'}</td>
+                    <td className="px-6 py-2.5 text-sm text-gray-600">{script.paper?.paperName || 'N/A'}</td>
+                    <td className="px-6 py-2.5 text-sm">
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 w-fit ${script.status === 'completed'
                             ? 'bg-green-100 text-green-800'
@@ -174,12 +174,12 @@ const Scripts = () => {
                         {script.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{script.score || '-'}</td>
-                    <td className="px-6 py-4 text-sm">
+                    <td className="px-6 py-2.5 text-sm font-medium text-gray-900">{script.score || '-'}</td>
+                    <td className="px-6 py-2.5 text-sm">
                       <div className="flex gap-2">
                         <button
                           onClick={() => handleStartMarking(script)}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-xs font-medium flex items-center gap-2"
+                          className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg transition-colors text-xs font-medium flex items-center gap-2"
                           title="Start Marking"
                         >
                           <Eye size={16} />
@@ -199,3 +199,4 @@ const Scripts = () => {
 };
 
 export default Scripts;
+

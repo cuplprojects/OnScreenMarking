@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   ChevronDown,
@@ -926,7 +926,7 @@ const ExaminerMarking = () => {
       
       const payload = buildQuestionMarksPayload();
       await markingService.saveQuestionMarks(markingId, payload);
-      showStatus("success", "Draft saved â€” marks & evaluated PDF stored successfully.");
+      showStatus("success", "Draft saved — marks & evaluated PDF stored successfully.");
     } catch (err) {
       showStatus("error", "Error saving marks: " + (err?.message || err));
     } finally {
@@ -977,7 +977,7 @@ const ExaminerMarking = () => {
   if (loading) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-gray-50">
-        <Loader className="w-12 h-12 text-blue-600 animate-spin mb-4" />
+        <Loader className="w-12 h-12 text-teal-700 animate-spin mb-4" />
         <p className="text-gray-600 font-bold animate-pulse">Initializing Marking Interface...</p>
       </div>
     );
@@ -990,7 +990,7 @@ const ExaminerMarking = () => {
         <p className="text-gray-600 font-bold text-center mb-6">{error}</p>
         <button
           onClick={() => navigate('/scripts')}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="px-6 py-2 bg-teal-700 text-white rounded-lg hover:bg-teal-800 transition-colors"
         >
           Back to Scripts
         </button>
@@ -1002,12 +1002,12 @@ const ExaminerMarking = () => {
     <div className="bg-gray-50 min-h-screen flex flex-col overflow-hidden secure-marking-container relative">
       {/* SECURITY BLUR OVERLAY */}
       {isBlurred && (
-        <div className="absolute inset-0 bg-slate-900/90  z-[9999] flex flex-col items-center justify-center text-center p-6 select-none pointer-events-auto">
-          <div className="w-20 h-20 bg-red-500/10 border border-red-500/30 rounded-3xl flex items-center justify-center text-red-500 mb-6 shadow-lg animate-pulse">
+        <div className="absolute inset-0 bg-gray-900/90  z-[9999] flex flex-col items-center justify-center text-center p-6 select-none pointer-events-auto">
+          <div className="w-20 h-20 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center justify-center text-red-500 mb-6 shadow-lg animate-pulse">
             <AlertCircle size={44} />
           </div>
           <h2 className="text-2xl font-black text-white uppercase tracking-wider mb-2">Screen Capture Protection Active</h2>
-          <p className="text-slate-450 text-sm max-w-md font-semibold leading-relaxed">
+          <p className="text-gray-450 text-sm max-w-md font-semibold leading-relaxed">
             Screenshots and window switching are strictly restricted. Please refocus your browser window to resume marking.
           </p>
         </div>
@@ -1016,19 +1016,19 @@ const ExaminerMarking = () => {
       {/* SCREENSHOT KEY OPAQUE OVERLAY */}
       <div 
         id="secure-screenshot-mask" 
-        className="fixed inset-0 bg-slate-950 z-[99999] hidden flex-col items-center justify-center text-center p-6 select-none pointer-events-auto"
+        className="fixed inset-0 bg-gray-950 z-[99999] hidden flex-col items-center justify-center text-center p-6 select-none pointer-events-auto"
       >
-        <div className="w-20 h-20 bg-red-500/10 border border-red-500/30 rounded-3xl flex items-center justify-center text-red-500 mb-6 shadow-lg animate-pulse">
+        <div className="w-20 h-20 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center justify-center text-red-500 mb-6 shadow-lg animate-pulse">
           <AlertCircle size={44} />
         </div>
         <h2 className="text-2xl font-black text-white uppercase tracking-wider mb-2">Screen Capture Prohibited</h2>
-        <p className="text-slate-400 text-sm max-w-md font-medium leading-relaxed">
+        <p className="text-gray-400 text-sm max-w-md font-medium leading-relaxed">
           The PrintScreen key is disabled. Screen captures are strictly prohibited on this secure marking page.
         </p>
       </div>
 
       {/* HEADER */}
-      <header className="bg-white text-gray-900 shadow-md px-6 py-4 flex justify-between items-center z-50 border-b border-gray-200">
+      <header className="bg-white text-gray-900 shadow-md px-6 py-2.5 flex justify-between items-center z-50 border-b border-gray-200">
         <div className="flex items-center gap-6">
           <button
             onClick={() => navigate('/scripts')}
@@ -1040,7 +1040,7 @@ const ExaminerMarking = () => {
           
           <div className="border-r border-gray-300 pr-6">
             <h1 className="text-2xl font-bold text-gray-900">
-              OSM <span className="text-blue-600">Marking</span>
+              OSM <span className="text-teal-700">Marking</span>
             </h1>
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mt-1">Answer Sheet Evaluation</p>
           </div>
@@ -1059,17 +1059,17 @@ const ExaminerMarking = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="bg-blue-50 px-6 py-3 rounded-lg border border-blue-200 flex flex-col items-center">
-            <p className="text-xs uppercase font-semibold text-blue-600 mb-1">Total Score</p>
-            <p className="text-3xl font-bold text-blue-900">
-              {totalObtained.toFixed(1)} <span className="text-sm font-normal text-blue-600">/ {paperInfo?.maxMarks || 100}</span>
+          <div className="bg-teal-50 px-6 py-3 rounded-lg border border-teal-200 flex flex-col items-center">
+            <p className="text-xs uppercase font-semibold text-teal-700 mb-1">Total Score</p>
+            <p className="text-3xl font-bold text-teal-900">
+              {totalObtained.toFixed(1)} <span className="text-sm font-normal text-teal-700">/ {paperInfo?.maxMarks || 100}</span>
             </p>
           </div>
           
           <button
             onClick={handleSubmitMarking}
             disabled={submitted || saving}
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-semibold uppercase text-sm transition-colors shadow-md cursor-pointer disabled:cursor-not-allowed"
+            className="bg-teal-700 hover:bg-teal-800 disabled:bg-gray-400 text-white px-6 py-3 rounded-md font-semibold uppercase text-sm transition-colors shadow-md cursor-pointer disabled:cursor-not-allowed"
             title="Submit evaluation"
           >
             {saving ? "Saving..." : "Submit"}
@@ -1120,7 +1120,7 @@ const ExaminerMarking = () => {
               <button 
                 onClick={handleSaveMarks}
                 disabled={submitted}
-                className="flex items-center justify-center gap-2 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:bg-gray-100 disabled:text-gray-400 font-semibold py-2 rounded-lg shadow-sm transition-colors text-xs uppercase disabled:cursor-not-allowed"
+                className="flex items-center justify-center gap-2 bg-white border border-teal-200 text-teal-700 hover:bg-teal-50 disabled:bg-gray-100 disabled:text-gray-400 font-semibold py-2 rounded-md shadow-sm transition-colors text-xs uppercase disabled:cursor-not-allowed"
               >
                 <Save size={16} /> Save
               </button>
@@ -1135,7 +1135,7 @@ const ExaminerMarking = () => {
             {paperInfo?.questionPaperPdfUrl && (
               <button 
                 onClick={() => setShowQpModal(true)}
-                className="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:from-blue-700 hover:to-blue-700 transition-all text-xs uppercase cursor-pointer"
+                className="flex items-center justify-center gap-2 bg-gradient-to-r from-teal-600 to-teal-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:from-teal-700 hover:to-teal-700 transition-all text-xs uppercase cursor-pointer"
               >
                 <FileText size={16} /> View Question Paper
               </button>
@@ -1146,7 +1146,7 @@ const ExaminerMarking = () => {
           <div className="bg-white rounded-lg border border-gray-200 flex-1 flex flex-col overflow-hidden shadow-md">
             <div className="bg-gray-900 text-white px-4 py-3 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2">
-                <FileText size={16} className="text-blue-400" />
+                <FileText size={16} className="text-teal-500" />
                 <h3 className="font-semibold text-xs uppercase tracking-wide">Questions</h3>
               </div>
               <div className="flex items-center gap-1">
@@ -1184,7 +1184,7 @@ const ExaminerMarking = () => {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100">
+                      <span className="text-xs font-semibold text-teal-700 bg-teal-50 px-2 py-1 rounded border border-teal-100">
                         {getSectionMarks(sec.id)} / {sec.totalMarks}
                       </span>
                       {expandedSections[sec.id] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -1204,20 +1204,20 @@ const ExaminerMarking = () => {
                             onClick={() => setSelectedQuestion(q.questionId)}
                             className={`group flex items-center justify-between p-2 rounded-lg border-2 cursor-pointer transition-all ${
                               isSelected 
-                                ? "bg-blue-50 border-blue-500 ring-2 ring-blue-100" 
-                                : "bg-white border-gray-200 hover:border-blue-300"
+                                ? "bg-teal-50 border-teal-500 ring-2 ring-teal-100" 
+                                : "bg-white border-gray-200 hover:border-teal-300"
                             }`}
                           >
                             <div className="flex items-center gap-2">
                               <div className={`w-8 h-8 flex items-center justify-center rounded-lg font-bold text-xs transition-colors ${
                                 isMarked 
                                   ? "bg-green-100 text-green-700 border border-green-300" 
-                                  : isSelected ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-600"
+                                  : isSelected ? "bg-teal-700 text-white" : "bg-gray-200 text-gray-600"
                               }`}>
                                 {q.questionNo}
                               </div>
                               <div className="leading-tight">
-                                <p className={`text-xs font-semibold mb-0.5 ${isSelected ? "text-blue-900" : "text-gray-500"}`}>
+                                <p className={`text-xs font-semibold mb-0.5 ${isSelected ? "text-teal-900" : "text-gray-500"}`}>
                                   Max: {q.marks}
                                 </p>
                                 {m.isSkipped && (
@@ -1235,8 +1235,8 @@ const ExaminerMarking = () => {
                                 disabled={submitted}
                                 className={`w-16 text-center font-semibold rounded-lg border-2 py-1 text-sm outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                                   isSelected 
-                                    ? "bg-white text-blue-900 border-blue-400 focus:ring-2 ring-blue-300" 
-                                    : "bg-gray-50 text-gray-900 border-gray-300 focus:border-blue-400"
+                                    ? "bg-white text-teal-900 border-teal-400 focus:ring-2 ring-teal-300" 
+                                    : "bg-gray-50 text-gray-900 border-gray-300 focus:border-teal-400"
                                 } ${isMarked && !isSelected ? "border-green-300 bg-green-50" : ""}`}
                                 placeholder="0"
                               />
@@ -1267,14 +1267,14 @@ const ExaminerMarking = () => {
           {/* REMARKS */}
           <div className="bg-white rounded-lg border border-gray-200 p-3 shadow-md">
             <div className="flex items-center gap-2 mb-2 text-gray-900">
-              <Type size={16} className="text-blue-600" />
+              <Type size={16} className="text-teal-700" />
               <h3 className="font-semibold text-xs uppercase tracking-wide">Remarks</h3>
             </div>
             <textarea
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
               placeholder="Enter examiner feedback..."
-              className="w-full p-2 border border-gray-300 rounded-lg bg-white text-sm font-medium focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
+              className="w-full p-2 border border-gray-300 rounded-lg bg-white text-sm font-medium focus:border-teal-400 focus:ring-2 focus:ring-teal-100 outline-none transition-all"
               rows="3"
             />
           </div>
@@ -1283,7 +1283,7 @@ const ExaminerMarking = () => {
 
       {/* STATUS TOAST */}
       {saveStatus && (
-        <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-lg shadow-lg font-semibold flex items-center gap-3 animate-in slide-in-from-bottom duration-300 ${
+        <div className={`fixed bottom-6 right-6 px-6 py-2.5 rounded-lg shadow-lg font-semibold flex items-center gap-3 animate-in slide-in-from-bottom duration-300 ${
           saveStatus.type === "success"
             ? "bg-green-600 text-white"
             : "bg-red-600 text-white"
@@ -1295,13 +1295,13 @@ const ExaminerMarking = () => {
 
       {/* ERROR FEEDBACK */}
       {error && (
-        <div className="fixed bottom-6 right-6 bg-red-600 text-white px-6 py-4 rounded-lg shadow-lg font-semibold flex items-center gap-3 animate-in slide-in-from-bottom duration-300">
+        <div className="fixed bottom-6 right-6 bg-red-600 text-white px-6 py-2.5 rounded-lg shadow-lg font-semibold flex items-center gap-3 animate-in slide-in-from-bottom duration-300">
           <AlertCircle size={20} />
           <p>{error}</p>
         </div>
       )}
       {/* LIVE CAMERA CAPTURE PIP */}
-      <div className={`fixed bottom-6 left-6 z-40 bg-gray-900 border-2 ${proctorWarning ? 'border-red-600 animate-pulse scale-105 shadow-red-500/40' : 'border-blue-500 shadow-blue-500/10'} rounded-2xl overflow-hidden shadow-2xl w-44 h-32 flex flex-col group hover:scale-105 transition-all`}>
+      <div className={`fixed bottom-6 left-6 z-40 bg-gray-900 border-2 ${proctorWarning ? 'border-red-600 animate-pulse scale-105 shadow-red-500/40' : 'border-teal-500 shadow-teal-500/10'} rounded-xl overflow-hidden shadow-2xl w-44 h-32 flex flex-col group hover:scale-105 transition-all`}>
         <video 
           ref={videoRef} 
           autoPlay 
@@ -1310,7 +1310,7 @@ const ExaminerMarking = () => {
           className="w-full h-full object-cover bg-gray-800"
           style={{ transform: 'scaleX(-1)' }}
         />
-        <div className={`absolute top-2 left-2 ${proctorWarning ? 'bg-red-600/90' : 'bg-blue-600/90'} text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm`}>
+        <div className={`absolute top-2 left-2 ${proctorWarning ? 'bg-red-600/90' : 'bg-teal-700/90'} text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm`}>
           <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></div>
           {proctorWarning ? "PROCTOR ALERT" : "PROCTOR ACTIVE"}
         </div>
@@ -1318,7 +1318,7 @@ const ExaminerMarking = () => {
         {/* Semi-transparent Backdrop Warning on PIP Window */}
         {proctorWarning && (
           <div className="absolute inset-0 bg-red-950/90 backdrop-blur-[2px] flex flex-col items-center justify-center p-2 text-center select-none animate-fade-in z-20">
-            <span className="text-lg">âš ï¸</span>
+            <span className="text-lg">⚠️</span>
             <h4 className="font-extrabold text-red-200 text-[10px] leading-tight mt-1 uppercase tracking-wider">
               {proctorWarning === "No Face" 
                 ? "No Face" 
@@ -1340,11 +1340,11 @@ const ExaminerMarking = () => {
       {/* QUESTION PAPER MODAL */}
       {showQpModal && paperInfo?.questionPaperPdfUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60  p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-2xl w-full max-w-4xl h-[85vh] overflow-hidden shadow-2xl flex flex-col">
+          <div className="bg-white rounded-xl w-full max-w-4xl h-[85vh] overflow-hidden shadow-2xl flex flex-col">
             <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                  <FileText className="text-blue-600" />
+                  <FileText className="text-teal-700" />
                   Question Paper: {paperInfo.paperName} ({paperInfo.paperCode})
                 </h3>
               </div>
@@ -1370,3 +1370,4 @@ const ExaminerMarking = () => {
 };
 
 export default ExaminerMarking;
+

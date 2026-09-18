@@ -82,7 +82,7 @@ export default function StudentPortal() {
             </Link>
             <div>
               <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <Layers className="text-blue-600 w-5 h-5" />
+                <Layers className="text-teal-700 w-5 h-5" />
                 Student Evaluation Portal
               </h1>
               <p className="text-xs text-gray-500">View evaluated answer keys & request re-evaluation</p>
@@ -90,7 +90,7 @@ export default function StudentPortal() {
           </div>
           <Link 
             to="/login" 
-            className="text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+            className="text-sm font-semibold text-teal-700 hover:text-teal-800 transition-colors"
           >
             Staff Login
           </Link>
@@ -100,7 +100,7 @@ export default function StudentPortal() {
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 flex flex-col items-center">
         {/* Search Container */}
-        <div className="w-full max-w-xl bg-white rounded-3xl p-6 md:p-8 shadow-md border border-gray-150 mb-8 transition-all hover:shadow-lg">
+        <div className="w-full max-w-xl bg-white rounded-2xl p-6 md:p-8 shadow-md border border-gray-150 mb-8 transition-all hover:shadow-lg">
           <h2 className="text-lg font-bold text-gray-900 mb-2">Check Exam Evaluation Status</h2>
           <p className="text-sm text-gray-500 mb-6">Enter your unique examination roll number to fetch your verified copy records.</p>
           
@@ -112,14 +112,14 @@ export default function StudentPortal() {
                 placeholder="Enter Roll Number (e.g. ROLL1001)"
                 value={rollNumber}
                 onChange={(e) => setRollNumber(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-200 text-gray-900 px-4 py-3 pl-12 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all outline-none text-sm font-semibold"
+                className="w-full bg-gray-50 border border-gray-200 text-gray-900 px-4 py-3 pl-12 rounded-xl focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all outline-none text-sm font-semibold"
                 disabled={loading}
               />
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-2xl transition-all shadow-md active:scale-95 text-sm flex items-center justify-center gap-2 disabled:opacity-70 disabled:pointer-events-none"
+              className="bg-teal-700 hover:bg-teal-800 text-white font-bold px-6 py-3 rounded-md transition-all shadow-md active:scale-95 text-sm flex items-center justify-center gap-2 disabled:opacity-70 disabled:pointer-events-none"
             >
               {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
               {loading ? "Searching..." : "Fetch Records"}
@@ -129,13 +129,13 @@ export default function StudentPortal() {
 
         {/* Results Section */}
         {searched && (
-          <div className="w-full bg-white rounded-3xl shadow-md border border-gray-150 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="w-full bg-white rounded-2xl shadow-md border border-gray-150 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="px-6 py-5 bg-gray-50/50 border-b border-gray-100 flex justify-between items-center flex-wrap gap-4">
               <div>
                 <h3 className="text-base font-bold text-gray-900">Evaluated Sheet Records</h3>
-                <p className="text-xs text-gray-500 mt-0.5">Showing completed papers for Roll Number: <span className="font-bold text-blue-600">{rollNumber}</span></p>
+                <p className="text-xs text-gray-500 mt-0.5">Showing completed papers for Roll Number: <span className="font-bold text-teal-700">{rollNumber}</span></p>
               </div>
-              <span className="bg-blue-50 text-blue-700 text-xs font-bold px-3 py-1 rounded-full border border-blue-100">
+              <span className="bg-teal-50 text-teal-700 text-xs font-bold px-3 py-1 rounded-md border border-teal-100">
                 {scripts.length} Result{scripts.length !== 1 && "s"}
               </span>
             </div>
@@ -153,19 +153,19 @@ export default function StudentPortal() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-gray-50/30 border-b border-gray-100">
-                      <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Paper / Course</th>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Total Marks</th>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Percentage</th>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Status</th>
-                      <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Actions</th>
+                      <th className="px-6 py-2.5 text-xs font-bold text-gray-400 uppercase tracking-wider">Paper / Course</th>
+                      <th className="px-6 py-2.5 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Total Marks</th>
+                      <th className="px-6 py-2.5 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Percentage</th>
+                      <th className="px-6 py-2.5 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Status</th>
+                      <th className="px-6 py-2.5 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {scripts.map((script) => (
                       <tr key={script.scriptId} className="hover:bg-gray-50/50 transition-colors">
-                        <td className="px-6 py-5">
+                        <td className="px-6 py-2.5">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-bold text-sm shrink-0">
+                            <div className="w-10 h-10 bg-teal-50 text-teal-700 rounded-xl flex items-center justify-center font-bold text-sm shrink-0">
                               {script.paperCode.substring(0, 2)}
                             </div>
                             <div>
@@ -174,33 +174,33 @@ export default function StudentPortal() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-5 text-center">
+                        <td className="px-6 py-2.5 text-center">
                           <span className="font-bold text-gray-800 text-sm">{script.totalMarks}</span>
                         </td>
-                        <td className="px-6 py-5 text-center">
+                        <td className="px-6 py-2.5 text-center">
                           <span className="font-semibold text-gray-700 text-sm">{script.percentage.toFixed(1)}%</span>
                         </td>
-                        <td className="px-6 py-5 text-center">
+                        <td className="px-6 py-2.5 text-center">
                           {script.isReEvaluationRequested ? (
-                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">
                               <AlertCircle className="w-3.5 h-3.5" />
                               Re-evaluation Pending
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-green-50 text-green-700 border border-green-100">
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-xs font-bold bg-green-50 text-green-700 border border-green-100">
                               <CheckCircle2 className="w-3.5 h-3.5" />
                               Verified
                             </span>
                           )}
                         </td>
-                        <td className="px-6 py-5 text-right">
+                        <td className="px-6 py-2.5 text-right">
                           <div className="flex items-center justify-end gap-2.5">
                             {script.evaluatedPdfUrl ? (
                               <a
                                 href={`${import.meta.env.VITE_API_URL.replace("/api", "")}${script.evaluatedPdfUrl}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold text-xs transition-all shadow-sm border border-blue-100 active:scale-95"
+                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-50 text-teal-700 hover:bg-teal-100 font-bold text-xs transition-all shadow-sm border border-teal-100 active:scale-95"
                               >
                                 <ExternalLink className="w-3.5 h-3.5" />
                                 View Evaluated PDF
@@ -234,3 +234,4 @@ export default function StudentPortal() {
     </div>
   );
 }
+

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useConfigHeader } from '../context/ConfigHeaderContext';
 import subjectService from '../services/subjectService';
 import departmentService from '../services/departmentService';
 import { useTable } from '../services/tableService';
@@ -10,7 +11,6 @@ import ColumnFilter from '../components/ColumnFilter';
 import { 
   BookOpen, 
   Plus, 
-  Search, 
   Edit2, 
   XCircle, 
   CheckCircle2, 
@@ -96,8 +96,8 @@ export default function SubjectManagement() {
   };
 
   const getSortIcon = (field) => {
-    if (filters.sortField !== field) return <ArrowUpDown size={12} className="text-slate-300" />;
-    return filters.sortOrder === 'asc' ? <ArrowUp size={12} className="text-blue-500" /> : <ArrowDown size={12} className="text-blue-500" />;
+    if (filters.sortField !== field) return <ArrowUpDown size={12} className="text-gray-300" />;
+    return filters.sortOrder === 'asc' ? <ArrowUp size={12} className="text-teal-600" /> : <ArrowDown size={12} className="text-teal-600" />;
   };
 
   // Load static departments for dropdown selects (pageSize: 0 retrieves all)
@@ -162,100 +162,22 @@ export default function SubjectManagement() {
     
   };
 
+  // Register into the unified header bar
+  const { setConfigHeader } = useConfigHeader();
+  useEffect(() => {
+    setConfigHeader({
+      title: 'Subjects Management',
+      search,
+      setSearch,
+      searchPlaceholder: 'Search subjects…',
+      actionLabel: 'Add Subject',
+      onAction: () => setShowForm(true),
+    });
+    return () => setConfigHeader(null);
+  }, [search, setSearch, setConfigHeader]);
+
   return (
-    <div className="min-h-screen bg-transparent w-full max-w-none">
-      <div className="w-full space-y-3">
-
-        {/* Unified Dashboard Header & Filters Panel */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h1 className="text-xl font-black text-slate-900 tracking-tight leading-none flex items-center gap-1.5">
-                <span>Subjects Management</span>
-              </h1>
-            </div>
-            <div className="flex items-center gap-3 w-full sm:w-auto mt-3 sm:mt-0">
-              {/* Search bar */}
-              <div className="flex-1 sm:w-64 flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-150 transition-all focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500">
-                <Search size={14} className="text-slate-400 shrink-0" />
-                <input
-                  type="text"
-                  placeholder="Search subjects by name or subject code..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full bg-transparent text-slate-800 placeholder-slate-400 font-semibold text-[11px] focus:outline-none"
-                />
-                {search && (
-                  <button
-                    onClick={() => setSearch('')}
-                    className="text-[9px] font-black uppercase text-slate-400 hover:text-slate-655 transition cursor-pointer"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-
-              <button
-                onClick={() => setShowForm(!showForm)}
-                className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm hover:shadow shrink-0 h-[34px]"
-              >
-                <Plus size={14} />
-                <span className="hidden sm:inline">{showForm ? 'Cancel' : 'Add Subject'}</span>
-                <span className="sm:hidden">{showForm ? 'Cancel' : 'Add'}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Filters Row */}
-          <div className="flex flex-col md:flex-row gap-3 pt-2 border-t border-slate-100">
-
-            {/* Filters */}
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Department Filter (Only if departmentId is not forced by URL query) */}
-              {!departmentId && (
-                <select
-                  value={filters.departmentId || ''}
-                  onChange={(e) => setFilter('departmentId', e.target.value)}
-                  className="px-2.5 py-1.5 bg-slate-50 border border-slate-150 rounded-xl font-bold text-[10px] text-slate-700 focus:outline-none cursor-pointer"
-                >
-                  <option value="">All Departments</option>
-                  {departments.map((dept) => (
-                    <option key={dept.departmentId} value={dept.departmentId}>
-                      {dept.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-
-              {/* Status Filter */}
-              <select
-                value={filters.isActive === undefined ? '' : filters.isActive}
-                onChange={(e) => setFilter('isActive', e.target.value)}
-                className="px-2.5 py-1.5 bg-slate-50 border border-slate-150 rounded-xl font-bold text-[10px] text-slate-700 focus:outline-none cursor-pointer"
-              >
-                <option value="">All Statuses</option>
-                <option value="true">Active Only</option>
-                <option value="false">Inactive Only</option>
-              </select>
-
-              {(filters.departmentId || filters.isActive) && (
-                <button
-                  onClick={() => {
-                    setFilter('departmentId', '');
-                    setFilter('isActive', '');
-                  }}
-                  className="text-[9px] font-black uppercase text-rose-500 hover:text-rose-700 transition cursor-pointer"
-                >
-                  Reset
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Notifications */}
-        
-        
+    <div className="w-full space-y-3">
 
         {/* Form Modal */}
         <AddSubjectModal
@@ -269,32 +191,32 @@ export default function SubjectManagement() {
         />
 
         {/* Subjects List */}
-        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           {loading && subjects.length === 0 ? (
-            <div className="p-12 text-center text-slate-400 font-bold text-xs flex flex-col items-center gap-3">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="p-12 text-center text-gray-400 font-bold text-xs flex flex-col items-center gap-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
               <span>Fetching subjects...</span>
             </div>
           ) : subjects.length === 0 ? (
-            <div className="p-16 text-center text-slate-500 max-w-md mx-auto space-y-4">
-              <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 mx-auto">
+            <div className="p-16 text-center text-gray-500 max-w-md mx-auto space-y-4">
+              <div className="w-16 h-16 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 mx-auto">
                 <BookOpen size={32} />
               </div>
               <div className="space-y-1">
-                <h3 className="font-extrabold text-sm text-slate-900 uppercase tracking-wide">No Subjects Found</h3>
-                <p className="text-xs text-slate-400">There are no syllabus subjects configured. Add your first subject to populate the curriculum database.</p>
+                <h3 className="font-extrabold text-sm text-gray-900 uppercase tracking-wide">No Subjects Found</h3>
+                <p className="text-xs text-gray-400">There are no syllabus subjects configured. Add your first subject to populate the curriculum database.</p>
               </div>
               {search ? (
                 <button
                   onClick={() => setSearch('')}
-                  className="px-4 py-2 text-[10px] font-black uppercase tracking-wider text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition cursor-pointer"
+                  className="px-4 py-2 text-[10px] font-black uppercase tracking-wider text-teal-700 bg-teal-50 hover:bg-teal-100 rounded-xl transition cursor-pointer"
                 >
                   Clear Filters
                 </button>
               ) : (
                 <button
                   onClick={() => setShowForm(true)}
-                  className="px-4 py-2 text-[10px] font-black uppercase tracking-wider text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition cursor-pointer"
+                  className="px-4 py-2 text-[10px] font-black uppercase tracking-wider text-teal-700 bg-teal-50 hover:bg-teal-100 rounded-xl transition cursor-pointer"
                 >
                   Create First Subject
                 </button>
@@ -304,9 +226,9 @@ export default function SubjectManagement() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-450 uppercase tracking-widest select-none">
+                  <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
                     <th 
-                      className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors group"
+                      className="px-6 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group"
                       onClick={() => handleSort('subName')}
                     >
                       <div className="flex items-center gap-1.5">
@@ -315,7 +237,7 @@ export default function SubjectManagement() {
                       </div>
                     </th>
                     <th 
-                      className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors group"
+                      className="px-6 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group"
                       onClick={() => handleSort('subCode')}
                     >
                       <div className="flex items-center gap-1.5">
@@ -323,54 +245,81 @@ export default function SubjectManagement() {
                         <ColumnFilter columnKey="subCode" currentFilter={filters.subCode} setFilter={setFilter} placeholder="Filter subject code..." />
                       </div>
                     </th>
-                    <th className="px-6 py-4">Departments</th>
-                    <th className="px-6 py-4">Courses</th>
+                    <th className="px-6 py-2.5">
+                      <div className="flex items-center gap-1.5">
+                        Departments
+                        {!departmentId && (
+                          <ColumnFilter 
+                            columnKey="departmentId" 
+                            currentFilter={filters.departmentId} 
+                            setFilter={setFilter}
+                            options={[
+                              { label: 'All Departments', value: '' },
+                              ...departments.map(dept => ({
+                                label: dept.name,
+                                value: String(dept.departmentId)
+                              }))
+                            ]}
+                          />
+                        )}
+                      </div>
+                    </th>
+                    <th className="px-6 py-2.5">Courses</th>
                     <th 
-                      className="px-6 py-4 text-center cursor-pointer hover:bg-slate-100 transition-colors group"
+                      className="px-6 py-2.5 text-center cursor-pointer hover:bg-gray-100 transition-colors group"
                       onClick={() => handleSort('status')}
                     >
                       <div className="flex items-center justify-center gap-1.5">
                         Status {getSortIcon('status')}
+                        <ColumnFilter 
+                          columnKey="isActive" 
+                          currentFilter={filters.isActive} 
+                          setFilter={setFilter}
+                          options={[
+                            { label: 'Active', value: 'true' },
+                            { label: 'Inactive', value: 'false' }
+                          ]}
+                        />
                       </div>
                     </th>
-                    <th className="px-6 py-4 text-right">Actions</th>
+                    <th className="px-6 py-2.5 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
+                <tbody className="divide-y divide-gray-100 text-xs">
                   {subjects.map((subject) => (
-                    <tr key={subject.subjectId} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-5">
+                    <tr key={subject.subjectId} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-2.5">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 bg-slate-50 rounded-xl flex items-center justify-center text-slate-600 font-extrabold shadow-sm">
+                          <div className="w-9 h-9 bg-gray-50 rounded-xl flex items-center justify-center text-gray-600 font-extrabold shadow-sm">
                             <BookOpen size={18} />
                           </div>
                           <div>
-                            <span className="font-extrabold text-slate-900 tracking-tight block">{subject.subName}</span>
+                            <span className="font-extrabold text-gray-900 tracking-tight block">{subject.subName}</span>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-5">
-                        <span className="px-2.5 py-1 bg-slate-100 border border-slate-200 text-slate-700 rounded-md font-bold text-[10px] tracking-wide">
+                      <td className="px-6 py-2.5">
+                        <span className="px-2.5 py-1 bg-gray-100 border border-gray-200 text-gray-700 rounded-md font-bold text-[10px] tracking-wide">
                           {subject.subCode || 'N/A'}
                         </span>
                       </td>
-                      <td className="px-6 py-5 max-w-xs">
+                      <td className="px-6 py-2.5 max-w-xs">
                         {subject.departmentSubjects && subject.departmentSubjects.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {subject.departmentSubjects.map((ds) => ds.department?.name).filter(Boolean).map((name, idx) => (
                               <span 
                                 key={idx}
-                                className="px-2 py-1 bg-blue-50 border border-blue-100 text-blue-750 rounded-md font-bold text-[9px] uppercase tracking-wider"
+                                className="px-2 py-1 bg-teal-50 border border-teal-100 text-teal-700 rounded-md font-bold text-[9px] uppercase tracking-wider"
                               >
                                 {name}
                               </span>
                             ))}
                           </div>
                         ) : (
-                          <span className="text-slate-400 font-medium text-[10px]">No departments assigned</span>
+                          <span className="text-gray-400 font-medium text-[10px]">No departments assigned</span>
                         )}
                       </td>
-                      <td className="px-6 py-5 max-w-xs">
+                      <td className="px-6 py-2.5 max-w-xs">
                         {subject.courseSubjects && subject.courseSubjects.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {subject.courseSubjects.map((cs) => cs.course?.name).filter(Boolean).map((name, idx) => (
@@ -383,10 +332,10 @@ export default function SubjectManagement() {
                             ))}
                           </div>
                         ) : (
-                          <span className="text-slate-400 font-medium text-[10px]">No courses mapped</span>
+                          <span className="text-gray-400 font-medium text-[10px]">No courses mapped</span>
                         )}
                       </td>
-                      <td className="px-6 py-5 text-center">
+                      <td className="px-6 py-2.5 text-center">
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${
                           subject.status 
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
@@ -396,11 +345,11 @@ export default function SubjectManagement() {
                           {subject.status ? 'Active' : 'Inactive'}
                         </span>
                       </td>
-                      <td className="px-6 py-5 text-right whitespace-nowrap">
+                      <td className="px-6 py-2.5 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleEdit(subject)}
-                            className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl border border-slate-200 transition cursor-pointer"
+                            className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl border border-gray-200 transition cursor-pointer"
                             title="Edit Subject"
                           >
                             <Edit2 size={13} />
@@ -424,7 +373,7 @@ export default function SubjectManagement() {
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 }
+

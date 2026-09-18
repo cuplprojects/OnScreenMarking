@@ -127,171 +127,152 @@ export default function AddSubjectModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-slate-900/40  transition-opacity" 
-        onClick={onClose}
-      />
-
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative w-full max-w-lg transform overflow-visible rounded-2xl bg-white p-6 shadow-xl border border-slate-100 transition-all">
-          
-          {/* Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 select-none">
+      <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-hidden border border-gray-100 shadow-2xl flex flex-col animate-scale-up">
+        
+        {/* Header */}
+        <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+          <div>
+            <h3 className="text-lg font-black text-gray-900 tracking-tight leading-none">
               {editingId ? 'Edit Subject' : 'Add New Subject'}
             </h3>
-            <button 
-              onClick={onClose} 
-              className="text-slate-400 hover:text-slate-600 rounded-lg p-1 hover:bg-slate-50 transition-colors"
-            >
-              <X size={16} />
-            </button>
+          </div>
+          <button 
+            onClick={onClose} 
+            className="p-1.5 bg-white hover:bg-gray-100 border border-gray-200 text-gray-500 rounded-md transition cursor-pointer"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Form */}
+        <form id="subject-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+          {error && (
+            <div className="p-3 text-xs bg-red-50 text-red-600 rounded-xl border border-red-100 font-semibold">
+              {error}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Subject Name *</label>
+              <input
+                type="text"
+                required
+                value={subName}
+                onChange={(e) => setSubName(e.target.value)}
+                placeholder="e.g. Data Structures"
+                className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 px-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Subject Code</label>
+              <input
+                type="text"
+                value={subCode}
+                onChange={(e) => setSubCode(e.target.value)}
+                placeholder="e.g. CS-201"
+                className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 px-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
+              />
+            </div>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="p-3 text-xs bg-red-50 text-red-600 rounded-xl border border-red-100 font-semibold">
-                {error}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
-                  Subject Name
-                </label>
+          {/* Courses Multi-Select */}
+          <div className="relative">
+            <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Map to Courses ({selectedCourses.length} selected)</label>
+            <div
+              className="w-full bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-medium flex flex-wrap gap-1 p-1.5 focus-within:ring-2 focus-within:ring-teal-500/20 focus-within:border-teal-600 transition min-h-[42px] cursor-text"
+              onClick={() => setIsDropdownOpen(true)}
+            >
+              {selectedCourses.map(id => {
+                const course = courses.find(c => c.id === id);
+                return course ? (
+                  <span key={id} className="flex items-center gap-1 bg-teal-100 text-teal-700 px-2 py-1 rounded-md text-xs font-bold border border-teal-200/50 shadow-sm animate-fade-in-up">
+                    {course.name}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleCourse(id);
+                      }}
+                      className="hover:bg-teal-200 p-0.5 rounded-full transition-colors cursor-pointer"
+                    >
+                      <X size={12} className="text-teal-600" />
+                    </button>
+                  </span>
+                ) : null;
+              })}
+              <div className="flex-1 min-w-[120px] flex items-center">
                 <input
                   type="text"
-                  value={subName}
-                  onChange={(e) => setSubName(e.target.value)}
-                  className="w-full text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                  placeholder="e.g. Data Structures"
-                  required
+                  value={courseSearch}
+                  onChange={(e) => {
+                    setCourseSearch(e.target.value);
+                    setIsDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsDropdownOpen(true)}
+                  placeholder={selectedCourses.length === 0 ? "Search and map courses..." : ""}
+                  className="w-full bg-transparent border-none focus:outline-none text-gray-900 text-xs font-medium min-w-[120px]"
                 />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
-                  Subject Code
-                </label>
-                <input
-                  type="text"
-                  value={subCode}
-                  onChange={(e) => setSubCode(e.target.value)}
-                  className="w-full text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                  placeholder="e.g. CS-201"
-                />
+                <ChevronDown size={14} className={`text-gray-400 mr-2 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
               </div>
             </div>
 
-            {/* Courses Multi-Select */}
-            <div className="space-y-1.5 relative">
-              <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 ml-1">Map to Courses ({selectedCourses.length} selected)</label>
-              <div
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold flex flex-wrap gap-1 p-1.5 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all min-h-[42px] cursor-text"
-                onClick={() => setIsDropdownOpen(true)}
-              >
-                {selectedCourses.map(id => {
-                  const course = courses.find(c => c.id === id);
-                  return course ? (
-                    <span key={id} className="flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded-lg text-xs font-bold border border-blue-200/50 shadow-sm animate-fade-in-up">
-                      {course.name}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleCourse(id);
-                        }}
-                        className="hover:bg-blue-200 p-0.5 rounded-full transition-colors"
-                      >
-                        <X size={12} className="text-blue-500" />
-                      </button>
-                    </span>
-                  ) : null;
-                })}
-                <div className="flex-1 min-w-[120px] flex items-center">
-                  <input
-                    type="text"
-                    value={courseSearch}
-                    onChange={(e) => {
-                      setCourseSearch(e.target.value);
-                      setIsDropdownOpen(true);
-                    }}
-                    onFocus={() => setIsDropdownOpen(true)}
-                    placeholder={selectedCourses.length === 0 ? "Search and map courses..." : ""}
-                    className="w-full bg-transparent border-none focus:outline-none text-slate-700 text-xs font-semibold placeholder:text-slate-400 placeholder:font-medium min-w-[120px]"
-                  />
-                  <ChevronDown size={14} className={`text-slate-400 mr-2 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
-                </div>
-              </div>
-
-              {isDropdownOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)} />
-                  <div className="absolute z-50 w-full mt-1 bg-white border border-slate-100 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="max-h-60 overflow-y-auto p-1.5 scrollbar-thin scrollbar-thumb-slate-200">
-                      {filteredCourses.length === 0 ? (
-                        <div className="p-3 text-center text-xs font-semibold text-slate-400 flex flex-col items-center gap-1">
-                          <Search size={16} className="opacity-50" />
-                          No courses found
-                        </div>
-                      ) : (
-                        filteredCourses.map(course => {
-                          const isSelected = selectedCourses.includes(course.id);
-                          return (
-                            <div
-                              key={course.id}
-                              onClick={() => {
-                                toggleCourse(course.id);
-                                setCourseSearch('');
-                              }}
-                              className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all duration-150 ${
-                                isSelected 
-                                  ? 'bg-blue-50/80 text-blue-700 hover:bg-blue-100/80' 
-                                  : 'hover:bg-slate-50 text-slate-700'
-                              }`}
-                            >
-                              <div className="flex flex-col">
-                                <span className="text-xs font-bold">{course.name}</span>
-                              </div>
-                              <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-colors ${
-                                isSelected 
-                                  ? 'bg-blue-600 border-blue-600' 
-                                  : 'border-slate-300'
-                              }`}>
-                                {isSelected && <Check size={12} className="text-white" />}
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
+            {isDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)} />
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto top-full custom-scrollbar py-1">
+                  {filteredCourses.length === 0 ? (
+                    <div className="p-3 text-center text-xs font-semibold text-gray-400 flex flex-col items-center gap-1">
+                      <Search size={16} className="opacity-50" />
+                      No courses found
                     </div>
-                  </div>
-                </>
-              )}
-            </div>
+                  ) : (
+                    filteredCourses.map(course => {
+                      const isSelected = selectedCourses.includes(course.id);
+                      return (
+                        <div
+                          key={course.id}
+                          onClick={() => {
+                            toggleCourse(course.id);
+                            setCourseSearch('');
+                          }}
+                          className={`flex items-center justify-between px-4 py-2.5 cursor-pointer text-xs font-semibold hover:bg-gray-50 transition-colors ${
+                            isSelected ? 'bg-teal-50/50 text-teal-700' : 'text-gray-700'
+                          }`}
+                        >
+                          <div className="flex flex-col">
+                            <span>{course.name}</span>
+                          </div>
+                          {isSelected && <Check size={14} className="text-teal-700" />}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </form>
 
-            {/* Actions */}
-            <div className="flex gap-2.5 pt-3 border-t border-slate-100 mt-5">
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex-1 bg-gradient-to-r from-blue-600 to-blue-600 hover:shadow-lg text-white font-extrabold text-[10px] uppercase tracking-wider py-2.5 rounded-xl transition-all disabled:opacity-50"
-              >
-                {loading ? 'Saving...' : editingId ? 'Update Subject' : 'Create Subject'}
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-[10px] uppercase tracking-wider py-2.5 rounded-xl transition-all"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+        {/* Footer */}
+        <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-3 bg-gray-50">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-md font-bold text-xs cursor-pointer transition"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="subject-form"
+            disabled={loading}
+            className="px-5 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md font-bold text-xs cursor-pointer shadow transition disabled:opacity-50"
+          >
+            {loading ? 'Saving...' : editingId ? 'Update Subject' : 'Create Subject'}
+          </button>
         </div>
       </div>
     </div>

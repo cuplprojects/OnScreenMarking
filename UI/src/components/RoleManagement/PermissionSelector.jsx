@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Check } from 'lucide-react';
 
 export default function PermissionSelector({ permissions, selectedPermissions, onChange }) {
@@ -114,13 +114,13 @@ export default function PermissionSelector({ permissions, selectedPermissions, o
         return (
           <div key={category} className="space-y-1">
             {/* Category Row */}
-            <div className="flex items-center gap-1.5 py-0.5 hover:bg-blue-50/50 rounded px-1 group cursor-pointer">
+            <div className="flex items-center gap-1.5 py-0.5 hover:bg-teal-50/50 rounded px-1 group cursor-pointer">
               
               {/* Expand / Collapse Caret */}
               <button
                 type="button"
                 onClick={(e) => toggleCategoryExpand(category, e)}
-                className="w-4 h-4 flex items-center justify-center text-blue-600 hover:text-blue-800"
+                className="w-4 h-4 flex items-center justify-center text-teal-700 hover:text-teal-800"
               >
                 {categoryPerms.length > 1 ? (
                   isExpanded ? (
@@ -139,10 +139,10 @@ export default function PermissionSelector({ permissions, selectedPermissions, o
                 onClick={(e) => toggleCategoryAll(category, e)}
                 className={`w-4 h-4 rounded-[3px] flex items-center justify-center transition-colors border ${
                   allSelected
-                    ? 'bg-blue-600 border-blue-600 text-white'
+                    ? 'bg-teal-700 border-teal-600 text-white'
                     : someSelected
-                    ? 'bg-blue-600/80 border-blue-600 text-white'
-                    : 'bg-white border-gray-300 hover:border-blue-400 text-transparent'
+                    ? 'bg-teal-700/80 border-teal-600 text-white'
+                    : 'bg-white border-gray-300 hover:border-teal-400 text-transparent'
                 }`}
               >
                 {allSelected && <Check size={12} strokeWidth={3.5} />}
@@ -152,7 +152,7 @@ export default function PermissionSelector({ permissions, selectedPermissions, o
               {/* Category Label */}
               <span
                 onClick={(e) => toggleCategoryAll(category, e)}
-                className="font-normal text-gray-800 text-[13.5px] cursor-pointer hover:text-blue-900"
+                className="font-normal text-gray-800 text-[13.5px] cursor-pointer hover:text-teal-900"
               >
                 {getCategoryLabel(category)}
               </span>
@@ -160,14 +160,14 @@ export default function PermissionSelector({ permissions, selectedPermissions, o
 
             {/* Sub-Permissions (when expanded) */}
             {isExpanded && (
-              <div className="pl-8 space-y-1 py-0.5 border-l border-blue-100 ml-3">
+              <div className="pl-8 space-y-1 py-0.5 border-l border-teal-100 ml-3">
                 {categoryPerms.map(permission => {
                   const isChecked = selectedPermissions.includes(permission);
                   return (
                     <div
                       key={permission}
                       onClick={(e) => togglePermission(permission, e)}
-                      className="flex items-center gap-2 py-0.5 hover:bg-blue-50/40 rounded px-1 cursor-pointer"
+                      className="flex items-center gap-2 py-0.5 hover:bg-teal-50/40 rounded px-1 cursor-pointer"
                     >
                       {/* Checkbox */}
                       <button
@@ -175,15 +175,15 @@ export default function PermissionSelector({ permissions, selectedPermissions, o
                         onClick={(e) => togglePermission(permission, e)}
                         className={`w-3.5 h-3.5 rounded-[3px] flex items-center justify-center transition-colors border ${
                           isChecked
-                            ? 'bg-blue-600 border-blue-600 text-white'
-                            : 'bg-white border-gray-300 hover:border-blue-400 text-transparent'
+                            ? 'bg-teal-700 border-teal-600 text-white'
+                            : 'bg-white border-gray-300 hover:border-teal-400 text-transparent'
                         }`}
                       >
                         {isChecked && <Check size={10} strokeWidth={3.5} />}
                       </button>
 
                       {/* Sub-item Label */}
-                      <span className="text-gray-700 text-xs hover:text-blue-900">
+                      <span className="text-gray-700 text-xs hover:text-teal-900">
                         {getPermissionLabel(permission)}
                       </span>
                     </div>

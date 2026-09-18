@@ -1,144 +1,113 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
+import { Plus, Edit2, Trash2, Search, ArrowUp, ArrowDown, ArrowUpDown, X, Upload, Download } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import collegeService from '../services/collegeService';
-import { 
-  Building2, 
-  Upload, 
-  Download, 
-  Plus, 
-  Edit2, 
-  Trash2, 
-  CheckCircle2, 
-  XCircle, 
-  X,
-  FileText,
-  AlertCircle,
-  HelpCircle,
-  Activity
-} from 'lucide-react';
 import message from '../services/messageService';
+import { useTable } from '../services/tableService';
+import TablePagination from '../components/TablePagination';
+import ColumnFilter from '../components/ColumnFilter';
 
 export default function CollegeManagement() {
-  const [colleges, setColleges] = useState([]);
-  const [loading, setLoading] = useState(false);
-  
-  
-
-  // Form Modals
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
     collegeName: '',
     collegeCode: '',
-    collegeType: 'Engineering',
-    address: '',
-    district: '',
     isActive: true
   });
-
-  // Bulk Import Panel
-  const [showImportPanel, setShowImportPanel] = useState(false);
+  const [saving, setSaving] = useState(false);
+  
+  // CSV Import state
+  const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importResults, setImportResults] = useState(null);
   const fileInputRef = useRef(null);
 
-  useEffect(() => {
-    fetchColleges();
+  // Define fetch function for useTable to load colleges with pagination
+  const fetchFn = useCallback(async (params) => {
+    return await collegeService.getAllColleges(params);
   }, []);
 
-  const fetchColleges = async () => {
-    try {
-      setLoading(true);
-      
-      const data = await collegeService.getAllColleges();
-      setColleges(data);
-    } catch (err) {
-      console.error(err);
-      message.error('Failed to fetch colleges.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const {
+    items: colleges,
+    totalCount,
+    totalPages,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    search,
+    setSearch,
+    loading,
+    filters,
+    setFilter,
+    sortField,
+    sortOrder,
+    handleSort,
+    refresh: refreshColleges
+  } = useTable({
+    fetchFn,
+    initialParams: { pageSize: 10 }
+  });
 
-  const handleOpenAddModal = () => {
-    setEditingId(null);
-    setFormData({
-      collegeName: '',
-      collegeCode: '',
-      collegeType: 'Engineering',
-      address: '',
-      district: '',
-      isActive: true
-    });
-    setShowFormModal(true);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setSaving(true);
+      if (editingId) {
+        await collegeService.updateCollege(editingId, formData);
+        message.success('College updated successfully');
+      } else {
+        await collegeService.createCollege(formData);
+        message.success('College created successfully');
+      }
+      setFormData({ collegeName: '', collegeCode: '', isActive: true });
+      setEditingId(null);
+      setShowFormModal(false);
+      refreshColleges();
+    } catch (err) {
+      message.error(err.message || 'Error saving college');
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleEdit = (college) => {
     setFormData({
       collegeName: college.collegeName,
       collegeCode: college.collegeCode,
-      collegeType: college.collegeType || 'Engineering',
-      address: college.address || '',
-      district: college.district || '',
       isActive: college.isActive
     });
     setEditingId(college.id);
     setShowFormModal(true);
   };
 
-  const handleFormSubmit = async (e) => {
-    e.preventDefault();
-    if (!formData.collegeName.trim()) {
-      message.error('College name is required.');
-      return;
-    }
-    if (!formData.collegeCode.trim()) {
-      message.error('College code is required.');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      
-      if (editingId) {
-        await collegeService.updateCollege(editingId, formData);
-        message.success('College updated successfully!');
-      } else {
-        await collegeService.createCollege(formData);
-        message.success('College created successfully!');
+  const handleDelete = async (college) => {
+    if (window.confirm('Are you sure you want to mark this college as inactive?')) {
+      try {
+        await collegeService.updateCollege(college.id, {
+          collegeName: college.collegeName,
+          collegeCode: college.collegeCode,
+          isActive: false
+        });
+        message.success('College marked as inactive');
+        refreshColleges();
+      } catch (err) {
+        message.error('Failed to update college status');
+        console.error(err);
       }
-      setShowFormModal(false);
-      fetchColleges();
-      
-    } catch (err) {
-      console.error(err);
-      message.error(err.message || 'Failed to save college.');
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this college?')) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-      
-      await collegeService.deleteCollege(id);
-      message.success('College deleted successfully!');
-      fetchColleges();
-      
-    } catch (err) {
-      console.error(err);
-      message.error('Failed to delete college.');
-    } finally {
-      setLoading(false);
-    }
+  const handleCancel = () => {
+    setFormData({ collegeName: '', collegeCode: '', isActive: true });
+    setEditingId(null);
+    setShowFormModal(false);
   };
 
-  // Import operations
+  // CSV Import handlers
   const handleDownloadTemplate = () => {
     const url = collegeService.getTemplateUrl();
     window.open(url, '_blank');
@@ -160,17 +129,15 @@ export default function CollegeManagement() {
 
     try {
       setImportLoading(true);
-      
       setImportResults(null);
       
       const result = await collegeService.importColleges(importFile);
       setImportResults(result);
       if (result.success) {
         message.success(`Successfully imported ${result.importedCount} colleges!`);
-        fetchColleges();
+        refreshColleges();
         setImportFile(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
-        
       }
     } catch (err) {
       console.error(err);
@@ -180,238 +147,159 @@ export default function CollegeManagement() {
     }
   };
 
+  const handleCloseImportModal = () => {
+    setShowImportModal(false);
+    setImportFile(null);
+    setImportResults(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50/50 p-6 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4">
+      <div className="w-full space-y-4">
         
-        {/* Page Header Banner */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-          <div>
-            <div className="flex items-center gap-2 text-blue-600 font-extrabold text-xs uppercase tracking-widest mb-1.5">
-              <Building2 size={14} />
-           
-            <h1 className="text-xl md:text-xl font-black text-slate-900 tracking-tight">Colleges Registry</h1> </div>
-            <p className="text-slate-500 text-xs mt-1">Manage exam centers, affiliated academies, and handle bulk imports</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 self-start md:self-center">
-            <button
-              onClick={() => {
-                setShowImportPanel(!showImportPanel);
-                setImportResults(null);
-                setImportFile(null);
-              }}
-              className="flex items-center gap-2 px-4 py-3 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-2xl font-bold text-xs uppercase tracking-wider transition cursor-pointer shadow-sm"
-            >
-              <Upload size={14} />
-              <span>{showImportPanel ? 'Hide Import Panel' : 'Bulk Import Excel/CSV'}</span>
-            </button>
-            <button
-              onClick={handleOpenAddModal}
-              className="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-xs uppercase tracking-wider transition shadow-md hover:shadow-lg cursor-pointer"
-            >
-              <Plus size={16} />
-              <span>Add College</span>
-            </button>
+        {/* Header & Controls */}
+        <div className="bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">
+                Colleges
+              </h1>
+              <p className="text-xs text-gray-500 mt-1">Manage all colleges in the system</p>
+            </div>
+            
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Search Input */}
+              <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border border-gray-100 focus-within:ring-2 focus-within:ring-teal-500/20 focus-within:border-teal-500 transition-all w-52">
+                <Search size={13} className="text-gray-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search colleges..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-transparent text-gray-800 placeholder-gray-400 font-semibold text-[11px] focus:outline-none"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="text-gray-300 hover:text-gray-500 transition"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm hover:shadow bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200"
+              >
+                <Upload size={16} />
+                <span>Upload CSV</span>
+              </button>
+
+              <button
+                onClick={() => setShowFormModal(true)}
+                className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm hover:shadow bg-teal-700 hover:bg-teal-800 text-white"
+              >
+                <Plus size={16} />
+                <span>Add College</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Bulk Import Panel */}
-        {showImportPanel && (
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-6 animate-slide-down">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-indigo-600 font-extrabold text-xs uppercase tracking-widest">
-                <Upload size={14} />
-                <span>Bulk College Upload Center</span>
-              </div>
-              <button 
-                onClick={handleDownloadTemplate}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold text-[10px] uppercase tracking-wider transition cursor-pointer shadow-sm"
-              >
-                <Download size={12} />
-                <span>Download CSV Template</span>
-              </button>
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Upload Form */}
-              <form onSubmit={handleImportSubmit} className="space-y-4">
-                <div className="p-6 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center text-center space-y-3 bg-slate-50/50 hover:bg-slate-50 transition">
-                  <div className="w-12 h-12 bg-white rounded-2xl border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm">
-                    <FileText size={22} />
-                  </div>
-                  <div>
-                    <span className="font-extrabold text-xs text-slate-800 block">Select College Import File</span>
-                    <span className="text-[10px] text-slate-400 font-bold block mt-0.5">Please upload CSV template format</span>
-                  </div>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept=".csv"
-                    onChange={handleFileChange}
-                    className="hidden"
-                    id="csv-file-upload"
-                  />
-                  <label
-                    htmlFor="csv-file-upload"
-                    className="px-4 py-2 bg-white border border-slate-250 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-[10px] uppercase tracking-wider cursor-pointer shadow-sm"
-                  >
-                    Browse Files
-                  </label>
-                  {importFile && (
-                    <div className="px-3 py-1.5 bg-blue-50 border border-blue-100 rounded-lg text-blue-700 font-bold text-[10px] uppercase mt-2">
-                      Selected: {importFile.name}
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={importLoading || !importFile}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-xs uppercase tracking-wider transition shadow-md hover:shadow-lg disabled:opacity-50 cursor-pointer"
-                >
-                  {importLoading ? 'Uploading and Processing...' : 'Upload & Import Data'}
-                </button>
-              </form>
-
-              {/* Guide / Logs Panel */}
-              <div className="bg-slate-50 rounded-3xl p-5 border border-slate-100 space-y-3">
-                <h3 className="font-black text-slate-800 text-[10px] uppercase tracking-widest flex items-center gap-1.5 select-none">
-                  <HelpCircle size={14} className="text-slate-400" />
-                  <span>Import Instructions & Rules</span>
-                </h3>
-                <ul className="space-y-2 text-[11px] text-slate-500 font-medium list-disc pl-4 leading-relaxed">
-                  <li>Download the CSV template and open it in <strong>Microsoft Excel</strong>.</li>
-                  <li>Fill in college details. <strong>CollegeName</strong> and <strong>CollegeCode</strong> are mandatory fields.</li>
-                  <li>Ensure each <strong>CollegeCode</strong> is unique; duplicate codes will trigger a skip.</li>
-                  <li>When saving in Excel, choose <strong>Save As &rarr; CSV (Comma Delimited) (*.csv)</strong> format.</li>
-                  <li>Upload the resulting CSV file to complete bulk registration.</li>
-                </ul>
-
-                {/* Import Results Box */}
-                {importResults && (
-                  <div className="mt-4 p-4 rounded-2xl bg-white border border-slate-200 space-y-3 animate-fade-in">
-                    <h4 className="font-extrabold text-xs text-slate-900 uppercase tracking-wide">Import Finished Summary</h4>
-                    <div className="grid grid-cols-2 gap-2 text-[10px] font-black uppercase text-center">
-                      <div className="p-2.5 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl">
-                        <span className="block text-lg">{importResults.importedCount}</span>
-                        <span>Successfully Imported</span>
-                      </div>
-                      <div className="p-2.5 bg-rose-50 border border-rose-100 text-rose-700 rounded-xl">
-                        <span className="block text-lg">{importResults.failedCount}</span>
-                        <span>Failed / Skipped Rows</span>
-                      </div>
-                    </div>
-
-                    {importResults.errors && importResults.errors.length > 0 && (
-                      <div className="space-y-1.5">
-                        <span className="text-[9px] font-black text-slate-450 uppercase tracking-widest flex items-center gap-1">
-                          <AlertCircle size={10} className="text-rose-500" />
-                          <span>Detailed Validation Log</span>
-                        </span>
-                        <div className="max-h-[100px] overflow-y-auto border border-rose-100 rounded-xl bg-rose-50/20 p-2 text-[10px] font-bold text-rose-700 divide-y divide-rose-100/50 space-y-1">
-                          {importResults.errors.map((err, i) => (
-                            <div key={i} className="pt-1 first:pt-0 leading-normal">{err}</div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Feedback Messages */}
-        
-        
-
-        {/* Colleges Registry Table */}
-        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden animate-fade-in">
+        {/* Colleges Data Table */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden animate-fade-in">
           {loading && colleges.length === 0 ? (
-            <div className="p-12 text-center text-slate-450 font-bold text-xs flex flex-col items-center gap-3">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span>Fetching colleges...</span>
+            <div className="p-12 text-center text-gray-400 font-bold text-xs flex flex-col items-center gap-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
+              <span>Loading colleges...</span>
             </div>
           ) : colleges.length === 0 ? (
-            <div className="p-16 text-center text-slate-550 max-w-md mx-auto space-y-4">
-              <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 mx-auto">
-                <Building2 size={32} />
+            <div className="p-16 text-center text-gray-500 font-medium leading-relaxed max-w-sm mx-auto space-y-3">
+              <div>
+                <h3 className="font-extrabold text-gray-900 text-xs uppercase tracking-wider">No Records Found</h3>
+                <p className="text-[10px] text-gray-400 mt-1">There are no colleges matching your filters or search terms.</p>
               </div>
-              <div className="space-y-1">
-                <h3 className="font-extrabold text-sm text-slate-900 uppercase tracking-wide">Registry is Empty</h3>
-                <p className="text-xs text-slate-400">Add colleges manually or upload the excel import sheet to fill the registry.</p>
-              </div>
-              <button
-                onClick={handleOpenAddModal}
-                className="px-4 py-2 text-[10px] font-black uppercase tracking-wider text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition cursor-pointer"
-              >
-                Register Your First College
-              </button>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-450 uppercase tracking-widest select-none">
-                    <th className="px-6 py-4">College Info</th>
-                    <th className="px-6 py-4">Type</th>
-                    <th className="px-6 py-4">District / Region</th>
-                    <th className="px-6 py-4">Postal Address</th>
-                    <th className="px-6 py-4 text-center">Registry Status</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
+                  <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
+                    <th className="px-6 py-2.5 cursor-pointer hover:text-gray-700 transition-colors group" onClick={() => handleSort('collegeName')}>
+                      <div className="flex items-center gap-1">
+                        College Name 
+                        {sortField === 'collegeName' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
+                      </div>
+                    </th>
+                    <th className="px-6 py-2.5 cursor-pointer hover:text-gray-700 transition-colors group" onClick={() => handleSort('collegeCode')}>
+                      <div className="flex items-center gap-1">
+                        College Code 
+                        {sortField === 'collegeCode' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
+                      </div>
+                    </th>
+                    <th className="px-6 py-2.5 cursor-pointer hover:text-gray-700 transition-colors group" onClick={() => handleSort('createdAt')}>
+                      <div className="flex items-center gap-1">
+                        Created On 
+                        {sortField === 'createdAt' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
+                      </div>
+                    </th>
+                    <th className="px-6 py-2.5 text-center cursor-pointer hover:text-gray-700 transition-colors" onClick={() => handleSort('isActive')}>
+                      <div className="flex items-center justify-center gap-1">
+                        Status 
+                        {sortField === 'isActive' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
+                        <ColumnFilter 
+                          columnKey="isActive" 
+                          currentFilter={filters.isActive} 
+                          setFilter={setFilter}
+                          options={[
+                            { label: 'Active', value: 'true' },
+                            { label: 'Inactive', value: 'false' }
+                          ]}
+                        />
+                      </div>
+                    </th>
+                    <th className="px-6 py-2.5 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
+                <tbody className="divide-y divide-gray-100 text-sm">
                   {colleges.map((college) => (
-                    <tr key={college.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4.5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-extrabold shadow-sm border border-blue-100">
-                            <Building2 size={16} />
-                          </div>
-                          <div>
-                            <span className="font-extrabold text-slate-900 tracking-tight block">{college.collegeName}</span>
-                            <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Code: {college.collegeCode}</span>
-                          </div>
-                        </div>
+                    <tr key={college.id} className="hover:bg-gray-50/50 transition-colors group">
+                      <td className="px-6 py-2.5 font-extrabold text-gray-900">
+                        {college.collegeName}
                       </td>
-                      <td className="px-6 py-4.5">
-                        <span className="px-2.5 py-1 bg-slate-100 border border-slate-200 text-slate-650 rounded-lg font-bold text-[9px] uppercase tracking-wide">
-                          {college.collegeType || 'General'}
-                        </span>
+                      <td className="px-6 py-2.5 text-gray-600 font-medium text-xs">
+                        {college.collegeCode}
                       </td>
-                      <td className="px-6 py-4.5">
-                        <span className="font-bold text-slate-700">{college.district || 'Unassigned'}</span>
+                      <td className="px-6 py-2.5 text-gray-500 font-medium text-xs">
+                        {college.createdAt ? new Date(college.createdAt).toLocaleDateString() : 'N/A'}
                       </td>
-                      <td className="px-6 py-4.5 max-w-xs truncate">
-                        <span className="text-slate-400 font-semibold">{college.address || 'No address registered'}</span>
-                      </td>
-                      <td className="px-6 py-4.5 text-center">
+                      <td className="px-6 py-2.5 text-center">
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${
-                          college.isActive 
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
-                            : 'bg-rose-50 text-rose-700 border-rose-100'
+                          college.isActive
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                            : "bg-rose-50 text-rose-700 border-rose-100"
                         }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${college.isActive ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-                          {college.isActive ? 'Active' : 'Inactive'}
+                          <span className={`w-1.5 h-1.5 rounded-full ${college.isActive ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`}></span>
+                          {college.isActive ? "Active" : "Inactive"}
                         </span>
                       </td>
-                      <td className="px-6 py-4.5 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-2">
+                      <td className="px-6 py-2.5 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-2 transition-opacity">
                           <button
                             onClick={() => handleEdit(college)}
-                            className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl border border-slate-200 transition cursor-pointer"
+                            className="p-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg transition-colors"
                             title="Edit"
                           >
-                            <Edit2 size={13} />
+                            <Edit2 size={16} />
                           </button>
                           <button
-                            onClick={() => handleDelete(college.id)}
-                            className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-100 transition cursor-pointer"
-                            title="Delete"
+                            onClick={() => handleDelete(college)}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors"
+                            title="Mark Inactive"
                           >
-                            <Trash2 size={13} />
+                            <Trash2 size={16} />
                           </button>
                         </div>
                       </td>
@@ -419,123 +307,239 @@ export default function CollegeManagement() {
                   ))}
                 </tbody>
               </table>
+
+              <TablePagination
+                page={page}
+                totalPages={totalPages}
+                totalCount={totalCount}
+                pageSize={pageSize}
+                setPage={setPage}
+                setPageSize={setPageSize}
+              />
             </div>
           )}
         </div>
       </div>
 
-      {/* College Modal Form */}
+      {/* Add/Edit College Modal */}
       {showFormModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-xl max-w-md w-full overflow-hidden animate-zoom-in">
-            <div className="flex items-center justify-between px-6 py-5 bg-slate-50 border-b border-slate-100">
-              <h2 className="text-base font-black text-slate-950 uppercase tracking-wider leading-none">
-                {editingId ? 'Edit College Details' : 'Register New College'}
-              </h2>
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 select-none">
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-hidden border border-gray-100 shadow-2xl flex flex-col animate-scale-up">
+            
+            {/* Modal Header */}
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <div>
+                <h3 className="text-lg font-black text-gray-900 tracking-tight leading-none">
+                  {editingId ? 'Edit College' : 'Add New College'}
+                </h3>
+              </div>
               <button 
-                onClick={() => setShowFormModal(false)}
-                className="w-8 h-8 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-slate-950 hover:border-slate-300 transition flex items-center justify-center cursor-pointer shadow-sm"
+                onClick={handleCancel}
+                className="p-1.5 bg-white hover:bg-gray-100 border border-gray-200 text-gray-500 rounded-md transition cursor-pointer"
               >
-                <X size={16} />
+                <X size={18} />
               </button>
             </div>
             
-            <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">College Name</label>
+            {/* Modal Form */}
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+              <div>
+                <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">College Name *</label>
                 <input
                   type="text"
-                  placeholder="e.g. Albert Einstein College of Engineering"
+                  required
                   value={formData.collegeName}
-                  onChange={(e) => setFormData(prev => ({ ...prev, collegeName: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                  onChange={(e) => setFormData({ ...formData, collegeName: e.target.value })}
+                  placeholder="e.g. Science Faculty"
+                  className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 px-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Unique College Code</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. AECE001"
-                    value={formData.collegeCode}
-                    onChange={(e) => setFormData(prev => ({ ...prev, collegeCode: e.target.value }))}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Institution Category</label>
-                  <select
-                    value={formData.collegeType}
-                    onChange={(e) => setFormData(prev => ({ ...prev, collegeType: e.target.value }))}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition cursor-pointer"
-                  >
-                    <option value="Engineering">Engineering</option>
-                    <option value="Medical">Medical / Healthcare</option>
-                    <option value="Arts & Science">Arts & Science</option>
-                    <option value="Commerce">Commerce & Business</option>
-                    <option value="Law">Law Academy</option>
-                    <option value="Polytechnic">Polytechnic</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">District / Region</label>
+              <div>
+                <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">College Code *</label>
                 <input
                   type="text"
-                  placeholder="e.g. Metropolis"
-                  value={formData.district}
-                  onChange={(e) => setFormData(prev => ({ ...prev, district: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                  required
+                  value={formData.collegeCode}
+                  onChange={(e) => setFormData({ ...formData, collegeCode: e.target.value })}
+                  placeholder="e.g. SCI-01"
+                  className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 px-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Physical Address</label>
-                <textarea
-                  placeholder="Street address, city, state"
-                  rows={2}
-                  value={formData.address}
-                  onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition resize-none"
-                />
-              </div>
-
-              <div className="flex items-center gap-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-150 select-none">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  checked={formData.isActive}
-                  onChange={(e) => setFormData(prev => ({ ...prev, isActive: e.target.checked }))}
-                  className="w-4 h-4 text-blue-600 border-slate-200 rounded focus:ring-blue-500 focus:outline-none cursor-pointer"
-                />
-                <label htmlFor="isActive" className="text-xs font-bold text-slate-700 cursor-pointer">
-                  Mark this college as Active exam center
-                </label>
-              </div>
-
-              <div className="flex items-center gap-2 pt-2 justify-end">
-                <button
-                  type="button"
-                  onClick={() => setShowFormModal(false)}
-                  className="px-4 py-3 bg-slate-50 hover:bg-slate-100 text-slate-650 border border-slate-200 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer shadow-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer shadow-md hover:shadow-lg disabled:opacity-50"
-                >
-                  {loading ? 'Saving...' : 'Save College'}
-                </button>
+              <div>
+                <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Status *</label>
+                <div className="flex items-center gap-6 text-xs text-gray-700 bg-gray-50/50 border border-gray-200 px-4 py-2 rounded-xl">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="radio"
+                      checked={formData.isActive === true}
+                      onChange={() => setFormData({ ...formData, isActive: true })}
+                      className="w-3.5 h-3.5 text-teal-700 focus:ring-teal-500 accent-teal-600"
+                    />
+                    <span className="font-semibold">Active</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="radio"
+                      checked={formData.isActive === false}
+                      onChange={() => setFormData({ ...formData, isActive: false })}
+                      className="w-3.5 h-3.5 text-teal-700 focus:ring-teal-500 accent-teal-600"
+                    />
+                    <span className="font-semibold">Inactive</span>
+                  </label>
+                </div>
               </div>
             </form>
+
+            {/* Footer Buttons */}
+            <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-3 bg-gray-50">
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-md font-bold text-xs cursor-pointer transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={saving}
+                className="px-5 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md font-bold text-xs cursor-pointer shadow transition disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : editingId ? 'Update' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Import Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 select-none">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden border border-gray-100 shadow-2xl flex flex-col animate-scale-up">
+            
+            {/* Modal Header */}
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <div>
+                <h3 className="text-lg font-black text-gray-900 tracking-tight leading-none">
+                  Bulk College Import
+                </h3>
+              </div>
+              <button 
+                onClick={handleCloseImportModal}
+                className="p-1.5 bg-white hover:bg-gray-100 border border-gray-200 text-gray-500 rounded-md transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Download Template Section */}
+              <div className="flex items-center justify-between p-4 bg-teal-50 border border-teal-100 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-teal-100 rounded-xl flex items-center justify-center">
+                    <Download size={18} className="text-teal-700" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm text-gray-900">Download CSV Template</p>
+                    <p className="text-xs text-gray-500">Use this template to format your data</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleDownloadTemplate}
+                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md font-bold text-xs uppercase tracking-wider transition shadow-sm cursor-pointer"
+                >
+                  Download
+                </button>
+              </div>
+
+              {/* Upload Form */}
+              <form id="import-form" onSubmit={handleImportSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-gray-500 mb-2">
+                    Select CSV File
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept=".csv"
+                      onChange={handleFileChange}
+                      className="w-full px-4 py-3 bg-gray-50/50 border-2 border-dashed border-gray-200 rounded-xl text-sm font-semibold text-gray-800 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 file:cursor-pointer cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all"
+                    />
+                  </div>
+                  {importFile && (
+                    <p className="mt-2 text-xs text-gray-600 font-semibold flex items-center gap-2">
+                      <span className="w-2 h-2 bg-teal-500 rounded-full"></span>
+                      Selected: {importFile.name}
+                    </p>
+                  )}
+                </div>
+
+                {/* Import Results */}
+                {importResults && (
+                  <div className="p-4 rounded-xl bg-gray-50/50 border border-gray-200 space-y-3">
+                    <h4 className="font-extrabold text-[10px] text-gray-500 uppercase tracking-wide">Import Results</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl text-center">
+                         <div className="text-2xl font-black">{importResults.importedCount}</div>
+                         <div className="text-[10px] font-bold uppercase tracking-wider">Imported</div>
+                      </div>
+                      <div className="p-3 bg-rose-50 border border-rose-100 text-rose-700 rounded-xl text-center">
+                         <div className="text-2xl font-black">{importResults.failedCount}</div>
+                         <div className="text-[10px] font-bold uppercase tracking-wider">Failed</div>
+                      </div>
+                    </div>
+                    
+                    {importResults.errors && importResults.errors.length > 0 && (
+                      <div className="space-y-2 mt-4">
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Error Details:</p>
+                        <div className="max-h-32 overflow-y-auto border border-rose-200 rounded-xl bg-rose-50/50 p-3 space-y-1">
+                          {importResults.errors.map((err, i) => (
+                            <div key={i} className="text-[11px] text-rose-700 font-medium">• {err}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </form>
+
+              {/* Instructions */}
+              <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl">
+                <p className="text-[10px] font-bold text-blue-900 mb-2 uppercase tracking-wide">Import Instructions:</p>
+                <ul className="space-y-1 text-xs text-blue-800 font-medium list-disc list-inside">
+                  <li>Download the CSV template first</li>
+                  <li>Fill in the college details (Name and Code are required)</li>
+                  <li>Ensure College Codes are unique</li>
+                  <li>Save as CSV format and upload</li>
+                </ul>
+              </div>
+            </div>
+            
+            {/* Footer Buttons */}
+            <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-3 bg-gray-50">
+              <button
+                type="button"
+                onClick={handleCloseImportModal}
+                className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-md font-bold text-xs cursor-pointer transition"
+              >
+                Close
+              </button>
+              <button
+                type="submit"
+                form="import-form"
+                disabled={importLoading || !importFile}
+                className="px-5 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md font-bold text-xs cursor-pointer shadow transition disabled:opacity-50"
+              >
+                {importLoading ? 'Importing...' : 'Import'}
+              </button>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 }
+

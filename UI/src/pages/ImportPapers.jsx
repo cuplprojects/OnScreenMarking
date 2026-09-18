@@ -233,11 +233,11 @@ export default function ImportPapers() {
   const SortHeader = ({ label, field, isCenter = false, hasFilter = false }) => {
     const isSorted = sortField === field;
     return (
-      <th onClick={() => handleSort(field)} className={`px-5 py-4 cursor-pointer hover:bg-slate-100 transition-colors select-none ${isCenter ? 'text-center' : ''}`}>
+      <th onClick={() => handleSort(field)} className={`px-5 py-4 cursor-pointer hover:bg-gray-100 transition-colors select-none ${isCenter ? 'text-center' : ''}`}>
         <div className={`flex flex-col gap-1`}>
           <div className={`flex items-center gap-1 ${isCenter ? 'justify-center' : ''}`}>
             <span>{label}</span>
-            <span className="text-[9px] text-slate-400">{isSorted ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}</span>
+            <span className="text-[9px] text-gray-400">{isSorted ? (sortOrder === 'asc' ? ' ?' : ' ?') : ' ?'}</span>
           </div>
           {hasFilter && (
             <div onClick={(e) => e.stopPropagation()} className="mt-1">
@@ -250,17 +250,17 @@ export default function ImportPapers() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 pb-12 w-full">
-      <div className="bg-white border-b border-slate-200 px-6 lg:px-10 py-6 mb-6 shadow-sm sticky top-0 z-20">
+    <div className="min-h-screen bg-gray-50/50 pb-12 w-full">
+      <div className="bg-white border-b border-gray-200 px-6 lg:px-10 py-6 mb-6 shadow-sm sticky top-0 z-20">
         <ProjectConfigHeader />
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2">
           <div className="flex items-center gap-4">
-            <button onClick={handleCancel} className="p-2.5 hover:bg-slate-100 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 transition">
+            <button onClick={handleCancel} className="p-2.5 hover:bg-gray-100 rounded-md border border-gray-200 bg-gray-50 text-gray-600 transition">
               <ChevronLeft size={16} />
             </button>
             <div>
-              <h1 className="text-lg font-black text-slate-900 mt-1 flex items-center gap-2 leading-tight">
-                <Folder className="text-blue-600" size={18} /> Import Papers
+              <h1 className="text-lg font-black text-gray-900 mt-1 flex items-center gap-2 leading-tight">
+                <Folder className="text-teal-700" size={18} /> Import Papers
               </h1>
             </div>
           </div>
@@ -268,18 +268,18 @@ export default function ImportPapers() {
       </div>
 
       <div className="px-6 lg:px-10 max-w-[1600px] mx-auto">
-        <div className="bg-white rounded-[32px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] flex flex-col xl:flex-row min-h-[70vh] border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded-[32px] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] flex flex-col xl:flex-row min-h-[70vh] border border-gray-200 overflow-hidden">
           
           {/* LEFT SIDEBAR - Configuration & Filters */}
-          <div className="w-full xl:w-[420px] bg-slate-50/80 border-b xl:border-b-0 xl:border-r border-slate-200 flex flex-col shrink-0 relative">
+          <div className="w-full xl:w-[420px] bg-gray-50/80 border-b xl:border-b-0 xl:border-r border-gray-200 flex flex-col shrink-0 relative">
             <div className="p-8 pb-6">
-              <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center text-white mb-6 shadow-lg shadow-blue-600/20">
+              <div className="w-14 h-14 bg-gradient-to-br from-teal-600 to-indigo-600 rounded-xl flex items-center justify-center text-white mb-6 shadow-lg shadow-teal-600/20">
                 <Folder size={28} strokeWidth={2.5} />
               </div>
-              <h2 className="text-3xl font-black text-slate-900 tracking-tight leading-tight">
+              <h2 className="text-3xl font-black text-gray-900 tracking-tight leading-tight">
                 Import<br/>Papers.
               </h2>
-              <p className="text-sm text-slate-500 font-medium mt-3 leading-relaxed">
+              <p className="text-sm text-gray-500 font-medium mt-3 leading-relaxed">
                 Clone paper structures seamlessly from existing academic setups or other projects.
               </p>
             </div>
@@ -287,16 +287,16 @@ export default function ImportPapers() {
             <div className="px-8 flex-1 overflow-y-auto custom-scrollbar pb-8 space-y-8">
               {/* Source Project */}
               <div className="space-y-3">
-                <label className="flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest">
-                  <span className="w-4 h-0.5 bg-slate-300 rounded-full"></span> Source Project
+                <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest">
+                  <span className="w-4 h-0.5 bg-gray-300 rounded-full"></span> Source Project
                 </label>
                 {loadingProjects ? (
-                  <div className="flex items-center gap-3 text-slate-500 text-sm p-4 bg-white border border-slate-200 rounded-2xl shadow-sm">
-                    <Loader size={18} className="animate-spin text-blue-600" />
+                  <div className="flex items-center gap-3 text-gray-500 text-sm p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
+                    <Loader size={18} className="animate-spin text-teal-700" />
                     <span className="font-semibold">Loading projects...</span>
                   </div>
                 ) : projects.length === 0 ? (
-                  <div className="p-4 bg-amber-50 text-amber-700 rounded-2xl border border-amber-200 text-sm font-semibold">
+                  <div className="p-4 bg-amber-50 text-amber-700 rounded-xl border border-amber-200 text-sm font-semibold">
                     No other projects found.
                   </div>
                 ) : (
@@ -304,7 +304,7 @@ export default function ImportPapers() {
                     <select
                       value={selectedSourceProject}
                       onChange={(e) => setSelectedSourceProject(e.target.value)}
-                      className="w-full p-4 pl-5 pr-10 bg-white border border-slate-200 hover:border-slate-300 focus:border-blue-500 rounded-2xl text-sm font-bold text-slate-800 shadow-sm transition-all outline-none appearance-none cursor-pointer"
+                      className="w-full p-4 pl-5 pr-10 bg-white border border-gray-200 hover:border-gray-300 focus:border-teal-500 rounded-xl text-sm font-bold text-gray-800 shadow-sm transition-all outline-none appearance-none cursor-pointer"
                     >
                       <option value="" disabled>-- Select a project --</option>
                       {projects.map((proj) => (
@@ -313,7 +313,7 @@ export default function ImportPapers() {
                         </option>
                       ))}
                     </select>
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-slate-600 transition-colors">
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 group-hover:text-gray-600 transition-colors">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     </div>
                   </div>
@@ -324,17 +324,17 @@ export default function ImportPapers() {
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
                   {/* Search */}
                   <div className="space-y-3">
-                    <label className="flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest">
-                      <span className="w-4 h-0.5 bg-slate-300 rounded-full"></span> Search Papers
+                    <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest">
+                      <span className="w-4 h-0.5 bg-gray-300 rounded-full"></span> Search Papers
                     </label>
                     <div className="relative group">
-                      <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                      <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-teal-600 transition-colors" />
                       <input
                         type="text"
                         placeholder="Type name, code or catch no..."
                         value={tableSearch}
                         onChange={(e) => setTableSearch(e.target.value)}
-                        className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-semibold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none shadow-sm transition-all"
+                        className="w-full pl-12 pr-4 py-4 bg-white border border-gray-200 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none shadow-sm transition-all"
                       />
                     </div>
                   </div>
@@ -356,15 +356,15 @@ export default function ImportPapers() {
                     };
 
                     return (
-                      <div className="space-y-4 pt-4 border-t border-slate-200">
+                      <div className="space-y-4 pt-4 border-t border-gray-200">
                         <div className="flex items-center justify-between">
-                          <label className="flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-widest">
-                            <span className="w-4 h-0.5 bg-slate-300 rounded-full"></span> Filter Subjects
+                          <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest">
+                            <span className="w-4 h-0.5 bg-gray-300 rounded-full"></span> Filter Subjects
                           </label>
                           {selectedSubjects.length > 0 && (
                             <button 
                               onClick={() => setFilter('subjectNames', null)}
-                              className="text-[10px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-wider"
+                              className="text-[10px] font-bold text-teal-700 hover:text-teal-800 uppercase tracking-wider"
                             >
                               Clear all
                             </button>
@@ -375,8 +375,8 @@ export default function ImportPapers() {
                             onClick={() => setFilter('subjectNames', null)}
                             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
                               selectedSubjects.length === 0
-                                ? 'bg-slate-800 text-white shadow-md shadow-slate-800/20'
-                                : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-800 hover:shadow-sm'
+                                ? 'bg-gray-800 text-white shadow-md shadow-gray-800/20'
+                                : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-800 hover:shadow-sm'
                             }`}
                           >
                             All
@@ -387,8 +387,8 @@ export default function ImportPapers() {
                               onClick={() => toggleSubject(sub)}
                               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
                                 selectedSubjects.includes(sub)
-                                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                                  : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-800 hover:shadow-sm'
+                                  ? 'bg-teal-700 text-white shadow-md shadow-teal-600/20'
+                                  : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-800 hover:shadow-sm'
                               }`}
                             >
                               {sub}
@@ -406,26 +406,26 @@ export default function ImportPapers() {
           {/* RIGHT MAIN CONTENT - Papers Selection */}
           <div className="flex-1 flex flex-col bg-white relative">
             {!selectedSourceProject ? (
-              <div className="flex-1 flex flex-col items-center justify-center p-12 text-slate-400 min-h-[400px]">
-                <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6">
-                  <FileText size={40} className="text-slate-300" strokeWidth={1.5} />
+              <div className="flex-1 flex flex-col items-center justify-center p-12 text-gray-400 min-h-[400px]">
+                <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-6">
+                  <FileText size={40} className="text-gray-300" strokeWidth={1.5} />
                 </div>
-                <h3 className="text-xl font-bold text-slate-700 mb-2">No Project Selected</h3>
+                <h3 className="text-xl font-bold text-gray-700 mb-2">No Project Selected</h3>
                 <p className="text-sm text-center max-w-sm font-medium leading-relaxed">
                   Choose a source project from the left panel to view and import its papers.
                 </p>
               </div>
             ) : tableLoading && allProjectPapers.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center p-12 text-slate-400 min-h-[400px]">
-                <Loader size={40} className="animate-spin text-blue-500 mb-4" strokeWidth={2} />
+              <div className="flex-1 flex flex-col items-center justify-center p-12 text-gray-400 min-h-[400px]">
+                <Loader size={40} className="animate-spin text-teal-600 mb-4" strokeWidth={2} />
                 <p className="text-sm font-bold uppercase tracking-wider">Loading papers...</p>
               </div>
             ) : allProjectPapers.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center p-12 text-slate-400 min-h-[400px]">
-                <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6">
-                  <FileText size={40} className="text-slate-300" strokeWidth={1.5} />
+              <div className="flex-1 flex flex-col items-center justify-center p-12 text-gray-400 min-h-[400px]">
+                <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-6">
+                  <FileText size={40} className="text-gray-300" strokeWidth={1.5} />
                 </div>
-                <h3 className="text-xl font-bold text-slate-700 mb-2">Project is Empty</h3>
+                <h3 className="text-xl font-bold text-gray-700 mb-2">Project is Empty</h3>
                 <p className="text-sm text-center max-w-sm font-medium leading-relaxed">
                   This project doesn't have any configured papers yet.
                 </p>
@@ -433,11 +433,11 @@ export default function ImportPapers() {
             ) : (
               <div className="flex flex-col h-[70vh] xl:h-auto xl:flex-1">
                 {/* Top Action Bar */}
-                <div className="px-6 sm:px-10 pt-10 pb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-100">
+                <div className="px-6 sm:px-10 pt-10 pb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-gray-100">
                   <div>
-                    <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
+                    <h3 className="text-xl font-black text-gray-900 flex items-center gap-3">
                       Available Papers
-                      <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">
+                      <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-md text-xs font-bold">
                         {totalCount} Total
                       </span>
                     </h3>
@@ -445,15 +445,15 @@ export default function ImportPapers() {
                   
                   <button 
                     onClick={handleSelectAll}
-                    className="group flex items-center justify-center gap-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors bg-white border border-slate-200 hover:border-blue-200 px-5 py-2.5 rounded-xl shadow-sm"
+                    className="group flex items-center justify-center gap-2 text-sm font-bold text-gray-600 hover:text-teal-700 transition-colors bg-white border border-gray-200 hover:border-teal-200 px-5 py-2.5 rounded-md shadow-sm"
                   >
                     <div className="relative w-5 h-5 flex items-center justify-center">
                       {selectedPaperIds.length === allProjectPapers.length && allProjectPapers.length > 0 ? (
-                        <CheckSquare size={18} className="text-blue-600 absolute transition-all scale-100 opacity-100" />
+                        <CheckSquare size={18} className="text-teal-700 absolute transition-all scale-100 opacity-100" />
                       ) : (
                         <>
-                          <Square size={18} className="text-slate-300 absolute transition-all scale-100 opacity-100 group-hover:opacity-0" />
-                          <CheckSquare size={18} className="text-blue-400 absolute transition-all scale-50 opacity-0 group-hover:scale-100 group-hover:opacity-100" />
+                          <Square size={18} className="text-gray-300 absolute transition-all scale-100 opacity-100 group-hover:opacity-0" />
+                          <CheckSquare size={18} className="text-teal-500 absolute transition-all scale-50 opacity-0 group-hover:scale-100 group-hover:opacity-100" />
                         </>
                       )}
                     </div>
@@ -462,27 +462,27 @@ export default function ImportPapers() {
                 </div>
 
                 {error && (
-                  <div className="mx-6 sm:mx-10 mt-6 p-4 bg-red-50 text-red-700 border border-red-200 rounded-2xl flex items-center gap-3 animate-in fade-in">
+                  <div className="mx-6 sm:mx-10 mt-6 p-4 bg-red-50 text-red-700 border border-red-200 rounded-xl flex items-center gap-3 animate-in fade-in">
                     <AlertCircle size={20} className="shrink-0" />
                     <p className="text-sm font-bold">{error}</p>
                   </div>
                 )}
                 
                 {/* Papers Grid Area */}
-                <div className="flex-1 overflow-y-auto p-6 sm:p-10 pt-6 custom-scrollbar bg-slate-50/30 min-h-[300px] relative">
+                <div className="flex-1 overflow-y-auto p-6 sm:p-10 pt-6 custom-scrollbar bg-gray-50/30 min-h-[300px] relative">
                   {tableLoading && (
                     <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-10 flex items-center justify-center">
-                      <Loader size={32} className="animate-spin text-blue-600" />
+                      <Loader size={32} className="animate-spin text-teal-700" />
                     </div>
                   )}
                   {papers.length === 0 ? (
-                    <div className="p-12 text-center text-sm font-bold text-slate-400 bg-white rounded-2xl border border-slate-200 border-dashed">
+                    <div className="p-12 text-center text-sm font-bold text-gray-400 bg-white rounded-xl border border-gray-200 border-dashed">
                       No papers match your current search and filters.
                     </div>
                   ) : (
-                    <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto shadow-sm pb-1">
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto shadow-sm pb-1">
                       <table className="w-full text-left text-sm whitespace-nowrap min-w-[700px]">
-                        <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] font-black tracking-wider align-top">
+                        <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase text-[10px] font-black tracking-wider align-top">
                           <tr>
                             <th className="px-5 py-4 w-12 text-center"></th>
                             <SortHeader label="Paper Details" field="paperName" hasFilter={true} />
@@ -492,7 +492,7 @@ export default function ImportPapers() {
                             <th className="px-5 py-4 text-right">Sections</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-gray-100">
                           {papers.map(paper => {
                             const isSelected = selectedPaperIds.includes(paper.paperId);
                             return (
@@ -500,33 +500,33 @@ export default function ImportPapers() {
                                 key={paper.paperId}
                                 onClick={() => handleTogglePaper(paper.paperId)}
                                 className={`cursor-pointer transition-colors group ${
-                                  isSelected ? 'bg-blue-50/50 hover:bg-blue-50' : 'hover:bg-slate-50/80'
+                                  isSelected ? 'bg-teal-50/50 hover:bg-teal-50' : 'hover:bg-gray-50/80'
                                 }`}
                               >
-                                <td className="px-5 py-3 w-12 text-center">
-                                  <div className={`w-5 h-5 rounded-md flex items-center justify-center mx-auto transition-colors ${isSelected ? 'bg-blue-500 text-white shadow-sm' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200 border border-slate-200'}`}>
+                                <td className="px-5 py-2.5 w-12 text-center">
+                                  <div className={`w-5 h-5 rounded-md flex items-center justify-center mx-auto transition-colors ${isSelected ? 'bg-teal-600 text-white shadow-sm' : 'bg-gray-100 text-gray-400 group-hover:bg-gray-200 border border-gray-200'}`}>
                                     {isSelected ? <CheckSquare size={14} strokeWidth={3} /> : <Square size={14} />}
                                   </div>
                                 </td>
-                                <td className="px-5 py-3">
-                                  <div className={`font-bold transition-colors ${isSelected ? 'text-blue-900' : 'text-slate-900'}`}>
+                                <td className="px-5 py-2.5">
+                                  <div className={`font-bold transition-colors ${isSelected ? 'text-teal-900' : 'text-gray-900'}`}>
                                     {paper.paperName}
                                   </div>
                                 </td>
-                                <td className="px-5 py-3">
-                                  <span className="font-mono bg-slate-100 text-slate-600 font-bold px-2 py-1 rounded-md text-[11px] uppercase tracking-wider">
+                                <td className="px-5 py-2.5">
+                                  <span className="font-mono bg-gray-100 text-gray-600 font-bold px-2 py-1 rounded-md text-[11px] uppercase tracking-wider">
                                     {paper.paperCode}
                                   </span>
                                 </td>
-                                <td className="px-5 py-3">
-                                  <span className="text-slate-600 font-bold text-xs">
-                                    {paper.subjectNames?.join(', ') || '—'}
+                                <td className="px-5 py-2.5">
+                                  <span className="text-gray-600 font-bold text-xs">
+                                    {paper.subjectNames?.join(', ') || '�'}
                                   </span>
                                 </td>
-                                <td className="px-5 py-3 text-right font-bold text-slate-700">
+                                <td className="px-5 py-2.5 text-right font-bold text-gray-700">
                                   {paper.maxMarks}
                                 </td>
-                                <td className="px-5 py-3 text-right font-bold text-slate-700">
+                                <td className="px-5 py-2.5 text-right font-bold text-gray-700">
                                   {paper.sections?.length || 0}
                                 </td>
                               </tr>
@@ -552,18 +552,18 @@ export default function ImportPapers() {
                 </div>
 
                 {/* Action Footer */}
-                <div className="p-6 px-6 sm:px-10 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white">
+                <div className="p-6 px-6 sm:px-10 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white">
                   <div className="flex items-center justify-center sm:justify-start gap-3">
-                    <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-50 text-blue-600 font-black text-lg">
+                    <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-teal-50 text-teal-700 font-black text-lg">
                       {selectedPaperIds.length}
                     </span>
-                    <span className="text-sm font-bold text-slate-600">papers selected</span>
+                    <span className="text-sm font-bold text-gray-600">papers selected</span>
                   </div>
                   
                   <div className="flex items-center justify-center sm:justify-end gap-3 w-full sm:w-auto">
                     <button
                       onClick={handleCancel}
-                      className="flex-1 sm:flex-none px-6 py-4 text-sm font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-2xl transition-colors text-center"
+                      className="flex-1 sm:flex-none px-6 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors text-center"
                       disabled={importing}
                     >
                       Cancel
@@ -571,10 +571,10 @@ export default function ImportPapers() {
                     <button
                       onClick={handleImport}
                       disabled={importing || selectedPaperIds.length === 0}
-                      className={`flex-1 sm:flex-none relative overflow-hidden flex items-center justify-center gap-2 px-8 py-4 text-sm font-black text-white rounded-2xl transition-all shadow-lg ${
+                      className={`flex-1 sm:flex-none relative overflow-hidden flex items-center justify-center gap-2 px-8 py-4 text-sm font-black text-white rounded-xl transition-all shadow-lg ${
                         importing || selectedPaperIds.length === 0
-                          ? 'bg-slate-300 cursor-not-allowed shadow-none text-slate-500'
-                          : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 hover:shadow-blue-600/30 hover:-translate-y-0.5 active:translate-y-0'
+                          ? 'bg-gray-300 cursor-not-allowed shadow-none text-gray-500'
+                          : 'bg-gradient-to-r from-teal-600 to-indigo-600 hover:from-teal-500 hover:to-indigo-500 hover:shadow-teal-600/30 hover:-translate-y-0.5 active:translate-y-0'
                       }`}
                     >
                       {importing ? (
@@ -594,3 +594,4 @@ export default function ImportPapers() {
     </div>
   );
 }
+

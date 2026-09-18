@@ -6,9 +6,9 @@ const Reports = () => {
   const [dateRange, setDateRange] = useState('week');
 
   const summaryStats = [
-    { label: 'Total Scripts Evaluated', value: '320', change: '+12%', icon: FileText, color: 'bg-blue-500' },
+    { label: 'Total Scripts Evaluated', value: '320', change: '+12%', icon: FileText, color: 'bg-teal-600' },
     { label: 'Average Score', value: '78.5%', change: '+2.3%', icon: TrendingUp, color: 'bg-green-500' },
-    { label: 'Examiners Active', value: '24', change: '+3', icon: Users, color: 'bg-blue-500' },
+    { label: 'Examiners Active', value: '24', change: '+3', icon: Users, color: 'bg-teal-600' },
     { label: 'Completion Rate', value: '71%', change: '+5%', icon: BarChart3, color: 'bg-orange-500' },
   ];
 
@@ -44,7 +44,7 @@ const Reports = () => {
               onClick={() => setReportType(type)}
               className={`px-6 py-2 rounded-lg font-medium transition-all ${
                 reportType === type
-                  ? 'bg-blue-600 text-white shadow-lg'
+                  ? 'bg-teal-700 text-white shadow-lg'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
@@ -61,14 +61,14 @@ const Reports = () => {
           <select
             value={dateRange}
             onChange={(e) => setDateRange(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
           >
             <option value="today">Today</option>
             <option value="week">This Week</option>
             <option value="month">This Month</option>
             <option value="all">All Time</option>
           </select>
-          <button className="ml-auto flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition-colors">
+          <button className="ml-auto flex items-center gap-2 bg-teal-700 hover:bg-teal-800 text-white font-medium px-4 py-2 rounded-md transition-colors">
             <Download size={18} />
             Export Report
           </button>
@@ -114,7 +114,7 @@ const Reports = () => {
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
-                      className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full"
+                      className="bg-gradient-to-r from-teal-500 to-teal-600 h-2 rounded-full"
                       style={{ width: `${item.percentage}%` }}
                     ></div>
                   </div>
@@ -143,15 +143,15 @@ const Reports = () => {
               <tbody className="divide-y divide-gray-200">
                 {subjectStats.map((subject, index) => (
                   <tr key={index} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{subject.subject}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{subject.total}</td>
-                    <td className="px-6 py-4 text-sm font-medium text-green-600">{subject.evaluated}</td>
-                    <td className="px-6 py-4 text-sm font-medium text-red-600">{subject.pending}</td>
-                    <td className="px-6 py-4 text-sm font-bold text-gray-900">{subject.avgScore}%</td>
-                    <td className="px-6 py-4 text-sm">
+                    <td className="px-6 py-2.5 text-sm font-medium text-gray-900">{subject.subject}</td>
+                    <td className="px-6 py-2.5 text-sm text-gray-600">{subject.total}</td>
+                    <td className="px-6 py-2.5 text-sm font-medium text-green-600">{subject.evaluated}</td>
+                    <td className="px-6 py-2.5 text-sm font-medium text-red-600">{subject.pending}</td>
+                    <td className="px-6 py-2.5 text-sm font-bold text-gray-900">{subject.avgScore}%</td>
+                    <td className="px-6 py-2.5 text-sm">
                       <div className="w-24 bg-gray-200 rounded-full h-2">
                         <div
-                          className="bg-blue-600 h-2 rounded-full"
+                          className="bg-teal-700 h-2 rounded-full"
                           style={{ width: `${(subject.evaluated / subject.total) * 100}%` }}
                         ></div>
                       </div>
@@ -181,12 +181,12 @@ const Reports = () => {
               <tbody className="divide-y divide-gray-200">
                 {examinerPerformance.map((examiner, index) => (
                   <tr key={index} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{examiner.name}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{examiner.evaluated}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{examiner.avgTime}</td>
-                    <td className="px-6 py-4 text-sm font-medium text-green-600">{examiner.accuracy}</td>
-                    <td className="px-6 py-4 text-sm">
-                      <span className="text-yellow-500">★★★★★</span>
+                    <td className="px-6 py-2.5 text-sm font-medium text-gray-900">{examiner.name}</td>
+                    <td className="px-6 py-2.5 text-sm text-gray-600">{examiner.evaluated}</td>
+                    <td className="px-6 py-2.5 text-sm text-gray-600">{examiner.avgTime}</td>
+                    <td className="px-6 py-2.5 text-sm font-medium text-green-600">{examiner.accuracy}</td>
+                    <td className="px-6 py-2.5 text-sm">
+                      <span className="text-yellow-500">?????</span>
                     </td>
                   </tr>
                 ))}
@@ -200,3 +200,4 @@ const Reports = () => {
 };
 
 export default Reports;
+

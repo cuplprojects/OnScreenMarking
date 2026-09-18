@@ -98,8 +98,8 @@ export default function ProjectManagement() {
   };
 
   const getSortIcon = (field) => {
-    if (filters.sortField !== field) return <ArrowUpDown size={12} className="text-slate-300" />;
-    return filters.sortOrder === 'asc' ? <ArrowUp size={12} className="text-blue-500" /> : <ArrowDown size={12} className="text-blue-500" />;
+    if (filters.sortField !== field) return <ArrowUpDown size={12} className="text-gray-300" />;
+    return filters.sortOrder === 'asc' ? <ArrowUp size={12} className="text-teal-600" /> : <ArrowDown size={12} className="text-teal-600" />;
   };
 
   const [showForm, setShowForm] = useState(false);
@@ -142,57 +142,45 @@ export default function ProjectManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-transparent w-full max-w-none">
-      <div className="w-full space-y-3">
-        {/* Unified Dashboard Header & Filters Panel */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="min-h-screen bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4">
+      <div className="w-full space-y-4">
+        <div className="bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-xl font-black text-slate-900 tracking-tight leading-none flex items-center gap-1.5">
-                <span>Project Management</span>
+              <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">
+                Project Management
               </h1>
+              <p className="text-xs text-gray-500 mt-1">Manage all evaluation projects in the system</p>
             </div>
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer self-start sm:self-center shrink-0"
-            >
-              <Plus size={14} />
-              <span>{showForm ? 'Cancel' : 'Add Project'}</span>
-            </button>
-          </div>
-
-          {/* Filters Row */}
-          <div className="flex flex-col md:flex-row gap-3 pt-2 border-t border-slate-100">
-            {/* Search bar */}
-            <div className="flex-1 flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-150">
-              <Search size={14} className="text-slate-400 shrink-0" />
-              <input
-                type="text"
-                placeholder="Search projects by name..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-transparent text-slate-800 placeholder-slate-400 font-semibold text-[11px] focus:outline-none"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="text-[9px] font-black uppercase text-slate-400 hover:text-slate-600 transition cursor-pointer"
-                >
-                  Clear
-                </button>
-              )}
+            
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border border-gray-100 focus-within:ring-2 focus-within:ring-teal-500/20 focus-within:border-teal-500 transition-all w-64">
+                <Search size={13} className="text-gray-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search projects..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-transparent text-gray-800 placeholder-gray-400 font-semibold text-[11px] focus:outline-none"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="text-[10px] font-black uppercase text-gray-400 hover:text-gray-600 transition cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              
+              <button
+                onClick={() => setShowForm(!showForm)}
+                className="flex items-center justify-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl font-bold text-[11px] uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm shadow-teal-700/20"
+              >
+                <Plus size={14} />
+                <span>{showForm ? 'Cancel' : 'Add Project'}</span>
+              </button>
             </div>
-
-            {/* Filter Dropdown */}
-            <select
-              value={filters.isActive !== undefined ? filters.isActive : ''}
-              onChange={(e) => setFilter('isActive', e.target.value === '' ? undefined : e.target.value === 'true')}
-              className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-[10px] text-slate-700 focus:outline-none cursor-pointer"
-            >
-              <option value="">All Statuses</option>
-              <option value="true">Active Projects</option>
-              <option value="false">Inactive Projects</option>
-            </select>
           </div>
         </div>
 
@@ -206,27 +194,27 @@ export default function ProjectManagement() {
         />
 
         {/* Main List Grid */}
-        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           {loading && projects.length === 0 ? (
-            <div className="p-12 text-center text-slate-450 font-bold text-xs flex flex-col items-center gap-3">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-650"></div>
+            <div className="p-12 text-center text-gray-450 font-bold text-xs flex flex-col items-center gap-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
               <span>Loading projects...</span>
             </div>
           ) : projects.length === 0 ? (
-            <div className="p-16 text-center text-slate-555 leading-relaxed max-w-sm mx-auto space-y-3">
-              <ClipboardList className="mx-auto text-slate-400" size={32} />
+            <div className="p-16 text-center text-gray-555 leading-relaxed max-w-sm mx-auto space-y-3">
+              <ClipboardList className="mx-auto text-gray-400" size={32} />
               <div>
-                <h3 className="font-extrabold text-slate-900 text-xs uppercase tracking-wider">No Projects Configured</h3>
-                <p className="text-[10px] text-slate-400 mt-1">Create an evaluation project to map papers.</p>
+                <h3 className="font-extrabold text-gray-900 text-xs uppercase tracking-wider">No Projects Configured</h3>
+                <p className="text-[10px] text-gray-400 mt-1">Create an evaluation project to map papers.</p>
               </div>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-450 uppercase tracking-widest select-none">
+                  <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
                     <th
-                      className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors group"
+                      className="px-6 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group"
                       onClick={() => handleSort('projectName')}
                     >
                       <div className="flex items-center gap-1.5">
@@ -235,7 +223,7 @@ export default function ProjectManagement() {
                       </div>
                     </th>
                     <th
-                      className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors group"
+                      className="px-6 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group"
                       onClick={() => handleSort('sessionName')}
                     >
                       <div className="flex items-center gap-1.5">
@@ -244,49 +232,50 @@ export default function ProjectManagement() {
                       </div>
                     </th>
                     <th
-                      className="px-6 py-4 text-center cursor-pointer hover:bg-slate-100 transition-colors group"
+                      className="px-6 py-2.5 text-center cursor-pointer hover:bg-gray-100 transition-colors group"
                       onClick={() => handleSort('isActive')}
                     >
                       <div className="flex items-center justify-center gap-1.5">
                         Status {getSortIcon('isActive')}
+                        <ColumnFilter 
+                          columnKey="isActive" 
+                          currentFilter={filters.isActive} 
+                          setFilter={setFilter}
+                          options={[
+                            { label: 'Active', value: 'true' },
+                            { label: 'Inactive', value: 'false' }
+                          ]}
+                        />
                       </div>
                     </th>
-                    <th className="px-6 py-4 text-right">Actions</th>
+                    <th className="px-6 py-2.5 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
+                <tbody className="divide-y divide-gray-100 text-xs">
                   {projects.map((project) => (
-                    <tr key={project.projectId} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-600 font-extrabold shadow-sm shrink-0 border border-slate-100">
-                            <ClipboardList size={18} />
-                          </div>
-                          <div>
-                            <span className="font-extrabold text-slate-900 tracking-tight block text-sm">{project.projectName}</span>
-                            
-                          </div>
-                        </div>
+                    <tr key={project.projectId} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-2.5">
+                        <span className="font-extrabold text-gray-900 tracking-tight block text-sm">{project.projectName}</span>
                       </td>
-                      <td className="px-6 py-5">
-                        <span className="font-extrabold text-slate-900 tracking-tight block text-sm">
+                      <td className="px-6 py-2.5">
+                        <span className="font-extrabold text-gray-900 tracking-tight block text-sm">
                           Session: {project.session?.sessionName || 'Unknown Session'}
                         </span>
                       </td>
-                      <td className="px-6 py-5 text-center">
+                      <td className="px-6 py-2.5 text-center">
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${project.isActive
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-100 shadow-sm'
-                            : 'bg-slate-50 text-slate-500 border-slate-200'
+                            : 'bg-gray-50 text-gray-500 border-gray-200'
                           }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${project.isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                          <span className={`w-1.5 h-1.5 rounded-full ${project.isActive ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`}></span>
                           {project.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </td>
-                      <td className="px-6 py-5 text-right whitespace-nowrap">
+                      <td className="px-6 py-2.5 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleEdit(project)}
-                            className="p-2 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 text-slate-600 rounded-xl border border-slate-200 hover:border-blue-200 transition-all cursor-pointer shadow-sm group"
+                            className="p-2 bg-gray-50 hover:bg-teal-50 hover:text-teal-700 text-gray-600 rounded-xl border border-gray-200 hover:border-teal-200 transition-all cursor-pointer shadow-sm group"
                             title="Edit Project"
                           >
                             <Edit2 size={14} className="group-hover:scale-110 transition-transform" />
@@ -295,7 +284,7 @@ export default function ProjectManagement() {
                             to={userType === 'admin'
                               ? `/admin/papers?projectId=${encryptId(project.projectId)}`
                               : `/papers?projectId=${encryptId(project.projectId)}`}
-                            className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl font-bold text-[10px] uppercase tracking-wider border border-blue-150 transition cursor-pointer"
+                            className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-xl font-bold text-[10px] uppercase tracking-wider border border-teal-100 transition cursor-pointer"
                           >
                             Configure Paper
                           </Link>
@@ -321,3 +310,4 @@ export default function ProjectManagement() {
     </div>
   );
 }
+
