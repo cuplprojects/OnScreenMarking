@@ -260,7 +260,7 @@ namespace API.Controllers
 
                 var mappings = new List<DepartmentCourse>();
                 int courseIndex = 0;
-                foreach (var dept in departments)
+                foreach (var dept in allDepartments)
                 {
                     for (int i = 0; i < 2; i++)
                     {
