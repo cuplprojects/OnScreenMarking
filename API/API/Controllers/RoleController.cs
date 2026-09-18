@@ -38,7 +38,13 @@ namespace API.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult> GetAllRoles()
+        public async Task<ActionResult> GetAllRoles(
+            [FromQuery] int page = 0,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? search = null,
+            [FromQuery] string? sortField = null,
+            [FromQuery] string? sortOrder = null,
+            [FromQuery] bool? isActive = null)
         {
             if (!await HasPermissionAsync("READ_ROLE"))
             {
@@ -47,9 +53,43 @@ namespace API.Controllers
 
             try
             {
-                var roles = await _context.Roles
-                    .OrderBy(r => r.HierarchyLevel)
-                    .ToListAsync();
+                var query = _context.Roles.AsQueryable();
+
+                if (isActive.HasValue)
+                {
+                    query = query.Where(r => r.IsActive == isActive.Value);
+                }
+
+                if (!string.IsNullOrEmpty(search))
+                {
+                    var s = search.ToLower();
+                    query = query.Where(r => r.RoleName.ToLower().Contains(s) || (r.Description != null && r.Description.ToLower().Contains(s)));
+                }
+
+                var totalCount = await query.CountAsync();
+
+                bool isDesc = sortOrder?.Equals("desc", StringComparison.OrdinalIgnoreCase) ?? false;
+
+                if (!string.IsNullOrEmpty(sortField))
+                {
+                    if (sortField.Equals("roleName", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(r => r.RoleName) : query.OrderBy(r => r.RoleName);
+                    else if (sortField.Equals("isActive", StringComparison.OrdinalIgnoreCase))
+                        query = isDesc ? query.OrderByDescending(r => r.IsActive) : query.OrderBy(r => r.IsActive);
+                    else
+                        query = query.OrderBy(r => r.HierarchyLevel);
+                }
+                else
+                {
+                    query = query.OrderBy(r => r.HierarchyLevel);
+                }
+
+                if (page > 0 && pageSize > 0)
+                {
+                    query = query.Skip((page - 1) * pageSize).Take(pageSize);
+                }
+
+                var roles = await query.ToListAsync();
 
                 var roleDtos = roles.Select(r => new RoleDto
                 {
@@ -63,7 +103,19 @@ namespace API.Controllers
                     UpdatedAt = r.UpdatedAt
                 }).ToList();
 
-                return Ok(new { success = true, data = roleDtos });
+                if (page == 0) // Meaning old behavior is expected or explicitly asking for all
+                {
+                    return Ok(new { success = true, data = roleDtos });
+                }
+
+                var totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 1;
+
+                return Ok(new
+                {
+                    items = roleDtos,
+                    totalCount = totalCount,
+                    totalPages = totalPages
+                });
             }
             catch (Exception ex)
             {

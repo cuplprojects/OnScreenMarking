@@ -56,8 +56,8 @@ function AppRoutes() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-teal-600 border-t-transparent mx-auto mb-4"></div>
+          <p className="text-gray-500 text-sm font-medium">Loading...</p>
         </div>
       </div>
     );
@@ -66,8 +66,8 @@ function AppRoutes() {
   return (
     <Routes>
       {/* Public Routes */}
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+      <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} />
+      <Route path="/register" element={isAuthenticated ? <Navigate to="/" replace /> : <Register />} />
       <Route path="/accept-invitation" element={<AcceptInvitation />} />
       <Route path="/student-portal" element={<StudentPortal />} />
 
@@ -168,14 +168,17 @@ function AppRoutes() {
             element={userType === 'coordinator' ? <ProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
 
-          <Route 
-            path="/admin/papers" 
-            element={userType === 'admin' ? <PapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-          />
-          <Route 
-            path="/papers" 
-            element={userType === 'coordinator' ? <PapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-          />
+          {/* Papers Management within ConfigLayout */}
+          <Route element={<ConfigLayout />}>
+            <Route 
+              path="/admin/papers" 
+              element={userType === 'admin' ? <PapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+            <Route 
+              path="/papers" 
+              element={userType === 'coordinator' ? <PapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+          </Route>
           <Route 
             path="/admin/import-papers" 
             element={userType === 'admin' ? <ImportPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 

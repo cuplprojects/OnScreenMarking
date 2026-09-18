@@ -1,4 +1,4 @@
-import { Save, Bell, Lock, User, Shield, Eye, Zap } from 'lucide-react';
+﻿import { Save, Bell, Lock, User, Shield, Eye, Zap } from 'lucide-react';
 import { useState } from 'react';
 import message from '../services/messageService';
 
@@ -45,7 +45,7 @@ export default function Settings() {
                 type="checkbox"
                 checked={settings.notifications}
                 onChange={(e) => handleChange('notifications', e.target.checked)}
-                className="w-4 h-4 text-blue-500 rounded"
+                className="w-4 h-4 text-teal-600 rounded"
               />
               <span className="text-gray-700">Enable email notifications</span>
             </label>
@@ -53,7 +53,7 @@ export default function Settings() {
               <input
                 type="checkbox"
                 defaultChecked
-                className="w-4 h-4 text-blue-500 rounded"
+                className="w-4 h-4 text-teal-600 rounded"
               />
               <span className="text-gray-700">Notify when new scripts are assigned</span>
             </label>
@@ -61,7 +61,7 @@ export default function Settings() {
               <input
                 type="checkbox"
                 defaultChecked
-                className="w-4 h-4 text-blue-500 rounded"
+                className="w-4 h-4 text-teal-600 rounded"
               />
               <span className="text-gray-700">Daily evaluation summary</span>
             </label>
@@ -80,7 +80,7 @@ export default function Settings() {
               <select
                 value={settings.markingSpeed}
                 onChange={(e) => handleChange('markingSpeed', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               >
                 <option value="slow">Slow (More time per script)</option>
                 <option value="normal">Normal</option>
@@ -93,7 +93,7 @@ export default function Settings() {
                 type="number"
                 value={settings.scriptTimeout}
                 onChange={(e) => handleChange('scriptTimeout', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               />
             </div>
             <label className="flex items-center gap-3">
@@ -101,7 +101,7 @@ export default function Settings() {
                 type="checkbox"
                 checked={settings.autoSave}
                 onChange={(e) => handleChange('autoSave', e.target.checked)}
-                className="w-4 h-4 text-blue-500 rounded"
+                className="w-4 h-4 text-teal-600 rounded"
               />
               <span className="text-gray-700">Auto-save marking progress</span>
             </label>
@@ -110,7 +110,7 @@ export default function Settings() {
                 type="checkbox"
                 checked={settings.enableAnnotations}
                 onChange={(e) => handleChange('enableAnnotations', e.target.checked)}
-                className="w-4 h-4 text-blue-500 rounded"
+                className="w-4 h-4 text-teal-600 rounded"
               />
               <span className="text-gray-700">Enable annotation tools (tick, circle, underline)</span>
             </label>
@@ -129,11 +129,11 @@ export default function Settings() {
                 type="checkbox"
                 checked={settings.twoFactor}
                 onChange={(e) => handleChange('twoFactor', e.target.checked)}
-                className="w-4 h-4 text-blue-500 rounded"
+                className="w-4 h-4 text-teal-600 rounded"
               />
               <span className="text-gray-700">Enable two-factor authentication</span>
             </label>
-            <button className="text-blue-600 hover:text-blue-700 font-medium text-sm">
+            <button className="text-teal-700 hover:text-teal-700 font-medium text-sm">
               Change Password
             </button>
           </div>
@@ -142,7 +142,7 @@ export default function Settings() {
         {/* Privacy & Access Control */}
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
-            <Shield className="text-blue-500" size={24} />
+            <Shield className="text-teal-600" size={24} />
             <h2 className="text-xl font-bold text-gray-900">Privacy & Access</h2>
           </div>
           <div className="space-y-3">
@@ -150,7 +150,7 @@ export default function Settings() {
               <input
                 type="checkbox"
                 defaultChecked
-                className="w-4 h-4 text-blue-500 rounded"
+                className="w-4 h-4 text-teal-600 rounded"
               />
               <span className="text-gray-700">Allow coordinator to view my evaluation progress</span>
             </label>
@@ -158,7 +158,7 @@ export default function Settings() {
               <input
                 type="checkbox"
                 defaultChecked
-                className="w-4 h-4 text-blue-500 rounded"
+                className="w-4 h-4 text-teal-600 rounded"
               />
               <span className="text-gray-700">Allow audit logs for compliance</span>
             </label>
@@ -168,7 +168,7 @@ export default function Settings() {
         {/* Display Settings */}
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
-            <Eye className="text-blue-500" size={24} />
+            <Eye className="text-teal-600" size={24} />
             <h2 className="text-xl font-bold text-gray-900">Display Settings</h2>
           </div>
           <div className="space-y-4">
@@ -177,7 +177,7 @@ export default function Settings() {
               <select
                 value={settings.theme}
                 onChange={(e) => handleChange('theme', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               >
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
@@ -190,7 +190,7 @@ export default function Settings() {
 
       <button
         onClick={handleSave}
-        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors shadow-lg"
+        className="flex items-center gap-2 bg-teal-700 hover:bg-teal-800 text-white font-medium py-2 px-6 rounded-md transition-colors shadow-lg"
       >
         <Save size={20} />
         Save Changes

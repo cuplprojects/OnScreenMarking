@@ -48,8 +48,8 @@ export default function ColumnFilter({ columnKey, currentFilter, setFilter, plac
         onClick={toggleOpen}
         className={`p-1 rounded transition-colors ${
           currentFilter
-            ? 'bg-blue-100 text-blue-600'
-            : 'text-slate-300 hover:text-slate-500 hover:bg-slate-100'
+            ? 'bg-teal-100 text-teal-700'
+            : 'text-gray-300 hover:text-gray-500 hover:bg-gray-100'
         }`}
         title={`Filter by ${columnKey}`}
       >
@@ -57,7 +57,10 @@ export default function ColumnFilter({ columnKey, currentFilter, setFilter, plac
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden font-sans">
+        <div 
+          className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden font-sans"
+          onClick={(e) => e.stopPropagation()}
+        >
           <form onSubmit={handleApply} className="p-3">
             <div className="mb-2">
               {options ? (
@@ -66,7 +69,7 @@ export default function ColumnFilter({ columnKey, currentFilter, setFilter, plac
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
                   onClick={(e) => e.stopPropagation()}
-                  className="w-full text-xs font-semibold px-2.5 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full text-xs font-semibold px-2.5 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
                 >
                   <option value="">All</option>
                   {options.map((opt, i) => (
@@ -83,7 +86,7 @@ export default function ColumnFilter({ columnKey, currentFilter, setFilter, plac
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
                   onClick={(e) => e.stopPropagation()}
-                  className="w-full text-xs font-semibold px-2.5 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full text-xs font-semibold px-2.5 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               )}
             </div>
@@ -91,13 +94,13 @@ export default function ColumnFilter({ columnKey, currentFilter, setFilter, plac
               <button
                 type="button"
                 onClick={handleClear}
-                className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold text-slate-500 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-md transition-colors cursor-pointer"
               >
                 <X size={10} /> Clear
               </button>
               <button
                 type="submit"
-                className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors cursor-pointer"
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-md transition-colors cursor-pointer"
               >
                 <Check size={10} /> Apply
               </button>

@@ -765,7 +765,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       <div className="bg-white rounded-lg shadow-sm p-3 space-y-2 border border-gray-200">
         <div className="flex gap-2 items-center border-b border-gray-200 pb-2">
           <span className="text-xs font-medium text-gray-600 uppercase tracking-wider">Evaluation Mode: </span>
-          <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100 uppercase">Q{currentQuestionId || "â€”"}</span>
+          <span className="text-xs font-bold text-teal-700 bg-teal-50 px-2 py-1 rounded border border-teal-100 uppercase">Q{currentQuestionId || "â€”"}</span>
           <div className="h-4 w-px bg-gray-300 mx-2" />
           <span className="text-xs font-medium text-gray-500 italic">
             {readOnly ? "Read-Only Mode (Submitted Script)" : "Right-click anywhere on the script to mark"}
@@ -778,7 +778,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
             <button
               onClick={() => setTool('move')}
               disabled={isToolDisabled}
-              className={`p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${tool === 'move' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              className={`p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${tool === 'move' ? 'bg-teal-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
               title="Move & Select Annotations"
             >
               <Move size={16} />
@@ -786,7 +786,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
             <button
               onClick={() => setTool('text')}
               disabled={isToolDisabled}
-              className={`p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${tool === 'text' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              className={`p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${tool === 'text' ? 'bg-teal-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
               title="Text"
             >
               <Type size={16} />
@@ -794,7 +794,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
             <button
               onClick={() => setTool('tick')}
               disabled={isToolDisabled}
-              className={`p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${tool === 'tick' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              className={`p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${tool === 'tick' ? 'bg-teal-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
               title="Tick"
             >
               <Check size={16} />
@@ -802,7 +802,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
             <button
               onClick={() => setTool('cross')}
               disabled={isToolDisabled}
-              className={`p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${tool === 'cross' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              className={`p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${tool === 'cross' ? 'bg-teal-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
               title="Cross"
             >
               <X size={16} />
@@ -814,7 +814,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
             <button
               onClick={handleUndo}
               disabled={annotations.length === 0 || readOnly}
-              className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed text-gray-600"
+              className="p-2 rounded-md bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed text-gray-600"
               title="Undo"
             >
               <Undo size={16} />
@@ -830,7 +830,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
 
           {/* Actions */}
           <div className="flex gap-2 items-center">
-            <button onClick={handleCopy} disabled={!selectedText} className="p-2 rounded-lg bg-green-100 text-green-600 hover:bg-green-200 disabled:opacity-50" title="Copy Text"><Copy size={16} /></button>
+            <button onClick={handleCopy} disabled={!selectedText} className="p-2 rounded-md bg-green-100 text-green-600 hover:bg-green-200 disabled:opacity-50" title="Copy Text"><Copy size={16} /></button>
             
             {/* Blank Page Toggle Button */}
             <button
@@ -863,7 +863,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
               <FileText size={16} /> Blank Page
             </button>
 
-            <button onClick={clearCanvas} disabled={readOnly} className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-40 disabled:cursor-not-allowed" title="Clear Page"><RotateCcw size={16} /></button>
+            <button onClick={clearCanvas} disabled={readOnly} className="p-2 rounded-md bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-40 disabled:cursor-not-allowed" title="Clear Page"><RotateCcw size={16} /></button>
           </div>
 
           {/* Delete Selected Annotation Button */}
@@ -898,12 +898,12 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
               placeholder="Enter text..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-4 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-4 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
               autoFocus
               onKeyDown={(e) => e.key === 'Enter' && addTextAnnotation()}
             />
             <div className="flex gap-2">
-              <button onClick={addTextAnnotation} className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors">Add</button>
+              <button onClick={addTextAnnotation} className="flex-1 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md font-semibold transition-colors">Add</button>
               <button onClick={() => setShowTextInput(false)} className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-semibold transition-colors">Cancel</button>
             </div>
           </div>
@@ -919,7 +919,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
               <select 
                 value={stepName}
                 onChange={(e) => setStepName(e.target.value)}
-                className="w-full text-sm font-semibold p-2 border border-gray-300 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="w-full text-sm font-semibold p-2 border border-gray-300 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
               >
                 {sections.length > 0
                   ? sections.map((sec) => (
@@ -969,7 +969,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
                         setShowMarkPopup(false);
                         if (onNextQuestion) onNextQuestion();
                       }}
-                      className="text-center py-2 hover:bg-blue-600 hover:text-white text-sm font-semibold border border-gray-200 rounded transition-colors"
+                      className="text-center py-2 hover:bg-teal-700 hover:text-white text-sm font-semibold border border-gray-200 rounded transition-colors"
                     >
                       {m}
                     </button>
@@ -1010,11 +1010,11 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
                     value={markInput}
                     onChange={(e) => setMarkInput(e.target.value)}
                     placeholder="Custom"
-                    className="flex-1 text-sm p-2 border border-gray-300 rounded-lg outline-none focus:border-blue-500"
+                    className="flex-1 text-sm p-2 border border-gray-300 rounded-lg outline-none focus:border-teal-500"
                     autoFocus
                     onKeyDown={(e) => e.key === 'Enter' && submitMark()}
                   />
-                  <button onClick={submitMark} className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-semibold transition-colors">
+                  <button onClick={submitMark} className="text-sm bg-teal-700 hover:bg-teal-800 text-white px-3 py-2 rounded-md font-semibold transition-colors">
                     Submit
                   </button>
                 </>

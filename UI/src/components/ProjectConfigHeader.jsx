@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Calendar,
@@ -12,7 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { decryptId, encryptId } from '../utils/encryption';
 import apiCall from '../services/api';
 
-export default function ProjectConfigHeader() {
+export default function ProjectConfigHeader({ completePercentage = 0 }) {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -54,14 +54,7 @@ export default function ProjectConfigHeader() {
     }
   };
 
-  const handleExitProject = () => {
-    sessionStorage.removeItem('selectedProjectId');
-    if (userType === 'admin') {
-      navigate('/admin/dashboard');
-    } else {
-      navigate('/coordinator/dashboard');
-    }
-  };
+
 
   if (!projectId) return null;
 
@@ -100,30 +93,32 @@ export default function ProjectConfigHeader() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 select-none mb-4 z-10 relative border-b border-slate-100 pb-4">
+    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 select-none z-10 relative">
       {/* Brand & Identity */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm">
-          <Briefcase size={16} />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="w-10 h-10 bg-teal-700 rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm">
+          <Briefcase size={18} />
         </div>
-        <div>
-          <h2 className="text-xs font-black text-slate-900 tracking-tight leading-tight flex items-center gap-1.5">
+        <div className="flex flex-col justify-center">
+          <h2 className="text-sm font-black text-gray-900 tracking-tight leading-tight flex items-center gap-1.5">
             {projectName}
           </h2>
+          {completePercentage !== undefined && (
+            <div className="flex items-center gap-2 mt-1">
+              <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-teal-600 rounded-full"
+                  style={{ width: `${completePercentage}%` }}
+                ></div>
+              </div>
+              <span className="text-[10px] font-bold text-gray-500">{completePercentage}% Complete</span>
+            </div>
+          )}
         </div>
-        
-        <button
-          onClick={handleExitProject}
-          className="flex items-center gap-0.5 px-2 py-0.5 bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 rounded-lg font-bold text-[9px] uppercase tracking-wider transition-all cursor-pointer shadow-sm shrink-0 ml-2"
-          title="Close Project & Return to Home"
-        >
-          <LogOut size={10} className="mr-0.5" />
-          Exit Context
-        </button>
       </div>
 
       {/* Modern Compact Tabs */}
-      <div className="flex flex-wrap bg-slate-50 p-1 rounded-xl border border-slate-100 gap-0.5 select-none self-start lg:self-center">
+      <div className="flex flex-wrap bg-gray-50 p-1 rounded-xl border border-gray-100 gap-0.5 select-none self-start lg:self-center">
         {tabs.map((tab) => {
           const isActive = isCurrentTab(tab.path);
           const targetUrl = `${tab.path}?projectId=${encId}`;
@@ -133,8 +128,8 @@ export default function ProjectConfigHeader() {
               key={tab.id}
               to={targetUrl}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-150 cursor-pointer ${isActive
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-500 hover:text-slate-950 hover:bg-slate-100'
+                  ? 'bg-teal-700 text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-950 hover:bg-gray-100'
                 }`}
             >
               {tab.icon}

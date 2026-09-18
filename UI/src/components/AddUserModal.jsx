@@ -167,15 +167,15 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60  flex items-center justify-center p-4 select-none">
-      <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden border border-slate-100 shadow-2xl flex flex-col animate-scale-up">
+      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden border border-gray-100 shadow-2xl flex flex-col animate-scale-up">
         {/* Header */}
-        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+        <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
             <div>
-            <h3 className="text-lg font-black text-slate-900 tracking-tight leading-none">Add New User</h3>
+            <h3 className="text-lg font-black text-gray-900 tracking-tight leading-none">Add New User</h3>
           </div>
           <button 
             onClick={onClose} 
-            className="p-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-500 rounded-xl transition cursor-pointer"
+            className="p-1.5 bg-white hover:bg-gray-100 border border-gray-200 text-gray-500 rounded-md transition cursor-pointer"
           >
             <X size={18} />
           </button>
@@ -193,31 +193,31 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
           {/* Identity Fields Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider mb-1.5">Full Name *</label>
+              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Full Name *</label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                 <input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g. Dr. Jane Smith"
-                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-blue-600 font-medium transition"
+                  className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider mb-1.5">Email Address *</label>
+              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Email Address *</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                 <input
                   type="email"
                   required
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="jane.smith@university.edu"
-                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-blue-600 font-medium transition"
+                  className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
                 />
               </div>
             </div>
@@ -225,30 +225,30 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider mb-1.5">Password *</label>
+              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Password *</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                 <input
                   type="password"
                   required
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   placeholder="At least 8 chars + uppercase + symbol"
-                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-blue-600 font-medium transition"
+                  className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider mb-1.5">Mobile Phone</label>
+              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Mobile Phone</label>
               <div className="relative">
-                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                 <input
                   type="text"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   placeholder="10-digit mobile number"
-                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-blue-600 font-medium transition"
+                  className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
                 />
               </div>
             </div>
@@ -257,13 +257,13 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
           {/* Department & Role Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider mb-1.5">System Role *</label>
+              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">System Role *</label>
               <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                 <select
                   value={formData.userType}
                   onChange={(e) => setFormData({ ...formData, userType: e.target.value, subjectId1: '' })}
-                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-blue-600 font-medium transition cursor-pointer appearance-none"
+                  className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition cursor-pointer appearance-none"
                 >
                   {roles.filter(r => r.isActive).map((role) => {
                     if (role.roleName.toLowerCase() === 'admin' && userType !== 'admin') {
@@ -287,13 +287,13 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
             </div>
 
             <div>
-              <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider mb-1.5">Department Mapped</label>
+              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Department Mapped</label>
               <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                 <select
                   value={formData.departmentId}
                   onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
-                  className="w-full bg-slate-50/50 border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-blue-600 font-medium transition cursor-pointer appearance-none"
+                  className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition cursor-pointer appearance-none"
                 >
                   <option value="">Select Department (Optional)</option>
                   {departments.map((dept) => (
@@ -308,15 +308,15 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
 
           {/* Examiner Specifics */}
           {formData.userType === 'examiner' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50/60 p-4 rounded-2xl border border-slate-100">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50/60 p-4 rounded-xl border border-gray-100">
               <div>
-                <label className="block text-[10px] font-black uppercase text-blue-600 tracking-wider mb-1.5">Primary Subject Area *</label>
+                <label className="block text-[10px] font-black uppercase text-teal-700 tracking-wider mb-1.5">Primary Subject Area *</label>
                 <div className="relative">
-                  <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                   <select
                     value={formData.subjectId1}
                     onChange={(e) => setFormData({ ...formData, subjectId1: e.target.value })}
-                    className="w-full bg-white border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-blue-600 font-medium transition cursor-pointer appearance-none"
+                    className="w-full bg-white border border-gray-200 text-gray-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition cursor-pointer appearance-none"
                   >
                     <option value="">Select Subject</option>
                     {subjects.map((sub) => (
@@ -329,15 +329,15 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
               </div>
 
               <div>
-                <label className="block text-[10px] font-black uppercase text-blue-600 tracking-wider mb-1.5">Evaluation Experience</label>
+                <label className="block text-[10px] font-black uppercase text-teal-700 tracking-wider mb-1.5">Evaluation Experience</label>
                 <div className="relative">
-                  <Award className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <Award className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                   <input
                     type="text"
                     value={formData.experience}
                     onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
                     placeholder="e.g. 5 Years in University Grading"
-                    className="w-full bg-white border border-slate-200 text-slate-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-blue-600 font-medium transition"
+                    className="w-full bg-white border border-gray-200 text-gray-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
                   />
                 </div>
               </div>
@@ -346,10 +346,10 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
 
           {/* Image Upload Area */}
           <div>
-            <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider mb-1.5">Profile Picture *</label>
+            <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Profile Picture *</label>
             <div className="flex items-center gap-4">
               {formData.profileImage ? (
-                <div className="relative w-20 h-20 rounded-2xl overflow-hidden border border-slate-200 shrink-0">
+                <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 shrink-0">
                   <img src={formData.profileImage} alt="Preview" className="w-full h-full object-cover" />
                   <button
                     type="button"
@@ -360,7 +360,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
                   </button>
                 </div>
               ) : (
-                <label className="w-20 h-20 bg-slate-50 border border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:bg-slate-100/70 hover:border-slate-400 transition shrink-0">
+                <label className="w-20 h-20 bg-gray-50 border border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 cursor-pointer hover:bg-gray-100/70 hover:border-gray-400 transition shrink-0">
                   <UploadCloud size={20} />
                   <span className="text-[8px] font-bold mt-1">Upload</span>
                   <input
@@ -372,8 +372,8 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
                 </label>
               )}
 
-              <div className="text-slate-400 text-[10px] leading-relaxed">
-                <p className="font-extrabold text-slate-600">Select official onboarding face picture</p>
+              <div className="text-gray-400 text-[10px] leading-relaxed">
+                <p className="font-extrabold text-gray-600">Select official onboarding face picture</p>
                 <p>Format supported: JPG, PNG. Recommended square proportions. Max size 2MB.</p>
               </div>
             </div>
@@ -381,18 +381,18 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
         </form>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50">
+        <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-3 bg-gray-50">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl font-bold text-xs cursor-pointer transition"
+            className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-md font-bold text-xs cursor-pointer transition"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={loading}
-            className="px-5 py-2 bg-gradient-to-r from-blue-600 to-blue-650 hover:from-blue-700 hover:to-blue-700 text-white rounded-xl font-bold text-xs cursor-pointer shadow transition disabled:opacity-50"
+            className="px-5 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md font-bold text-xs cursor-pointer shadow transition disabled:opacity-50"
           >
             {loading ? 'Creating Account...' : 'Register User'}
           </button>

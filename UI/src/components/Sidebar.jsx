@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+﻿import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Home, FileText, BarChart3, Settings, Users, BookOpen, PenTool, Layers, School, Building2, Calendar, ClipboardList, Shield, UserCheck, GraduationCap, Zap } from 'lucide-react';
 import { encryptId } from '../utils/encryption';
@@ -41,7 +41,7 @@ const Sidebar = () => {
         items.push({ icon: <Shield size={20} />, label: 'Roles & Permissions', path: '/admin/role-management' });
       }
       if (hasPermission("VIEW_LOGS")) {
-
+        items.push({ icon: <UserCheck size={20} />, label: 'Attendance Audit', path: '/admin/audit' });
       }
       items.push({ icon: <Settings size={20} />, label: 'Settings', path: '/settings' });
     } else if (userType === 'coordinator') {
@@ -63,7 +63,7 @@ const Sidebar = () => {
         items.push({ icon: <Shield size={20} />, label: 'Roles & Permissions', path: '/admin/role-management' });
       }
       if (hasPermission("VIEW_LOGS")) {
-
+        items.push({ icon: <UserCheck size={20} />, label: 'Attendance Audit', path: '/admin/audit' });
       }
       items.push({ icon: <Settings size={20} />, label: 'Settings', path: '/settings' });
     } else if (userType === 'examiner') {
@@ -101,7 +101,7 @@ const Sidebar = () => {
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
                 isActive
-                  ? 'bg-blue-50 text-blue-600 font-medium'
+                  ? 'bg-teal-50 text-teal-700 font-medium'
                   : 'text-gray-600 hover:bg-gray-50'
               }`
             }
