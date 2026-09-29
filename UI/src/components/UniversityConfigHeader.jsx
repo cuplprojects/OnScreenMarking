@@ -10,7 +10,8 @@ import {
   GraduationCap,
   Shield,
   Activity,
-  FileText
+  FileText,
+  Layers
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import apiCall from '../services/api';
@@ -93,6 +94,12 @@ export default function UniversityConfigHeader() {
       label: 'Papers',
       icon: <FileText size={12} />,
       path: userType === 'admin' ? '/admin/master-papers' : '/master-papers'
+    },
+    {
+      id: 'question-types',
+      label: 'Question Types',
+      icon: <Layers size={12} />,
+      path: userType === 'admin' ? '/admin/question-types' : '/question-types'
     }
   ];
 

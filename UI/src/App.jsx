@@ -158,6 +158,14 @@ function AppRoutes() {
               path="/sessions" 
               element={userType === 'coordinator' ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
+            <Route 
+              path="/admin/question-types" 
+              element={userType === 'admin' ? <QuestionTypeMaster /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+            <Route 
+              path="/question-types" 
+              element={userType === 'coordinator' ? <QuestionTypeMaster /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
           </Route>
           <Route 
             path="/admin/projects" 
@@ -191,10 +199,6 @@ function AppRoutes() {
           <Route 
             path="/section-config" 
             element={userType === 'examiner' || userType === 'coordinator' ? <SectionConfig /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-          />
-          <Route 
-            path="/admin/question-types" 
-            element={userType === 'admin' || userType === 'coordinator' ? <QuestionTypeMaster /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
 
           {/* Dynamic Permissions Controlled Routes */}
