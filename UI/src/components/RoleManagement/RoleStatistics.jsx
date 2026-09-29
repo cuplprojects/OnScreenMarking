@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Users, Shield, Lock, Zap } from 'lucide-react';
 import roleService from '../../services/roleService';
 
@@ -69,14 +69,14 @@ export default function RoleStatistics() {
       label: 'Total Roles',
       value: stats.totalRoles,
       color: 'blue',
-      bgColor: 'bg-blue-50'
+      bgColor: 'bg-teal-50'
     },
     {
       icon: Lock,
       label: 'Total Permissions',
       value: stats.totalPermissions,
       color: 'purple',
-      bgColor: 'bg-blue-50'
+      bgColor: 'bg-teal-50'
     },
     {
       icon: Zap,
@@ -95,8 +95,8 @@ export default function RoleStatistics() {
   ];
 
   const colorClasses = {
-    blue: 'text-blue-600',
-    purple: 'text-blue-600',
+    blue: 'text-teal-700',
+    purple: 'text-teal-700',
     green: 'text-green-600',
     orange: 'text-orange-600'
   };

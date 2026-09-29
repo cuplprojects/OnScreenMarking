@@ -1,21 +1,21 @@
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import Navbar from './Navbar';
-import Breadcrumb from './Breadcrumb';
 
+/**
+ * Main app shell:
+ *   [White top header — Navbar (has hamburger that opens NavDrawer + breadcrumb)]
+ *   [Page content — Outlet]
+ */
 const Layout = () => {
-  const location = useLocation();
-  const path = location.pathname;
-
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div
+      className="min-h-screen flex flex-col"
+      style={{ fontFamily: 'var(--font-sans)', backgroundColor: 'var(--color-surface)' }}
+    >
       <Navbar />
-      <div className="flex flex-1">
-        {/* Main Workspace Area */}
-        <main className="flex-1 overflow-x-hidden w-full max-w-[100vw] flex flex-col">
-          <Breadcrumb />
-          <Outlet />
-        </main>
-      </div>
+      <main className="flex-1 overflow-x-hidden w-full max-w-[100vw]">
+        <Outlet />
+      </main>
     </div>
   );
 };

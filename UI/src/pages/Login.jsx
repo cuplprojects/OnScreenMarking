@@ -21,12 +21,12 @@ const Login = () => {
 
       // Route based on userType
       if (data.user.userType === 'admin') {
-        navigate('/admin/dashboard');
+        navigate('/admin/dashboard', { replace: true });
       } else if (data.user.userType === 'coordinator') {
-        navigate('/');
+        navigate('/', { replace: true });
       } else {
         // examiner or other types
-        navigate('/');
+        navigate('/', { replace: true });
       }
     } catch (err) {
       setError(err.message || 'Connection error. Please check if the API is running.');
@@ -37,10 +37,10 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-2xl p-8">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center mx-auto mb-4 shadow-lg">     
+          <div className="w-16 h-16 bg-gradient-to-br from-teal-600 to-teal-800 rounded-lg flex items-center justify-center mx-auto mb-4 shadow-lg">     
             <BookOpen className="text-white" size={32} />
           </div>
           <h1 className="text-3xl font-bold text-gray-900">OSM Portal</h1>
@@ -62,7 +62,7 @@ const Login = () => {
               <input
                 type="email"
                 required
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all"
                 placeholder="examiner@cbse.gov.in"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -78,8 +78,8 @@ const Login = () => {
               <input
                 type="password"
                 required
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                placeholder="••••••••"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all"
+                placeholder="ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
@@ -90,7 +90,7 @@ const Login = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-2 rounded-lg transition-all duration-200 shadow-lg flex items-center justify-center gap-2"
+            className="w-full bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-2 rounded-md transition-all duration-200 shadow-lg flex items-center justify-center gap-2"
           >
             {loading ? (
               <>
@@ -108,7 +108,7 @@ const Login = () => {
             Are you a Student?{' '}
             <span
               onClick={() => navigate('/student-portal')}
-              className="text-blue-600 hover:text-blue-800 font-semibold cursor-pointer transition-all hover:underline"
+              className="text-teal-700 hover:text-teal-800 font-semibold cursor-pointer transition-all hover:underline"
             >
               Access Student Portal
             </span>
@@ -117,7 +117,7 @@ const Login = () => {
             Are you an Examiner?{' '}
             <span
               onClick={() => navigate('/register')}
-              className="text-blue-600 hover:text-blue-800 font-semibold cursor-pointer transition-all hover:underline"
+              className="text-teal-700 hover:text-teal-800 font-semibold cursor-pointer transition-all hover:underline"
             >
               Register Here
             </span>

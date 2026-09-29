@@ -339,10 +339,10 @@ export default function PapersManagement() {
   const SortHeader = ({ label, field, isCenter = false, hasFilter = false }) => {
     const isSorted = sortField === field;
     return (
-      <th onClick={() => handleSort(field)} className={`px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors select-none ${isCenter ? 'text-center' : ''}`}>
+      <th onClick={() => handleSort(field)} className={`px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors select-none ${isCenter ? 'text-center' : ''}`}>
         <div className={`flex items-center gap-1 ${isCenter ? 'justify-center' : ''}`}>
           <span>{label}</span>
-          <span className="text-[9px] text-slate-400">{isSorted ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}</span>
+          <span className="text-[9px] text-gray-400">{isSorted ? (sortOrder === 'asc' ? ' ?' : ' ?') : ' ?'}</span>
           {hasFilter && (
             <ColumnFilter columnKey={field} currentFilter={filters[field]} setFilter={setFilter} placeholder={`Filter ${label.toLowerCase()}...`} />
           )}
@@ -352,17 +352,17 @@ export default function PapersManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 pb-12 w-full">
-      <div className="bg-white border-b border-slate-200 px-6 lg:px-10 py-6 mb-6 shadow-sm sticky top-0 z-20">
+    <div className="min-h-screen bg-gray-50/50 pb-12 w-full">
+      <div className="bg-white border-b border-gray-200 px-6 lg:px-10 py-6 mb-6 shadow-sm sticky top-0 z-20">
         <ProjectConfigHeader />
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2">
           <div className="flex items-center gap-4">
-            <Link to="/admin/dashboard" className="p-2.5 hover:bg-slate-100 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 transition">
+            <Link to="/admin/dashboard" className="p-2.5 hover:bg-gray-100 rounded-xl border border-gray-200 bg-gray-50 text-gray-600 transition">
               <ChevronLeft size={16} />
             </Link>
             <div>
-              <h1 className="text-lg font-black text-slate-900 mt-1 flex items-center gap-2 leading-tight">
-                <FileText className="text-blue-600" size={18} /> Papers Management
+              <h1 className="text-lg font-black text-gray-900 mt-1 flex items-center gap-2 leading-tight">
+                <FileText className="text-teal-700" size={18} /> Papers Management
               </h1>
             </div>
           </div>
@@ -382,7 +382,7 @@ export default function PapersManagement() {
             <button
               onClick={() => setShowForm(!showForm)}
               className={`font-extrabold text-[10px] uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm border ${
-                showForm ? "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200" : "bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
+                showForm ? "bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200" : "bg-teal-700 hover:bg-teal-800 text-white border-teal-600"
               }`}
             >
               {showForm ? <X size={13} /> : <Plus size={13} />} {showForm ? "Cancel" : "Add Paper"}
@@ -394,9 +394,9 @@ export default function PapersManagement() {
       <div className="px-6 lg:px-10 space-y-6">
         
         {showForm && (
-            <div className="bg-white rounded-2xl p-8 shadow-md border border-gray-100 mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="bg-white rounded-xl p-8 shadow-md border border-gray-100 mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
                 <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-                <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-teal-100 text-teal-700 rounded-lg flex items-center justify-center">
                     {editingId ? <Edit2 size={16} /> : <Plus size={16} />}
                 </div>
                 {editingId ? "Edit Paper Configuration" : "Create New Paper"}
@@ -406,15 +406,15 @@ export default function PapersManagement() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">Paper Code *</label>
-                    <input type="text" value={formData.paperCode} onChange={(e) => setFormData({ ...formData, paperCode: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-gray-900 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none" required />
+                    <input type="text" value={formData.paperCode} onChange={(e) => setFormData({ ...formData, paperCode: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-gray-900 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all outline-none" required />
                     </div>
                     <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">Paper Name *</label>
-                    <input type="text" value={formData.paperName} onChange={(e) => setFormData({ ...formData, paperName: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-gray-900 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-blue-500 transition-all outline-none" required />
+                    <input type="text" value={formData.paperName} onChange={(e) => setFormData({ ...formData, paperName: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-gray-900 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-teal-500 transition-all outline-none" required />
                     </div>
                     <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">Catch Number</label>
-                    <input type="text" value={formData.catchNo} onChange={(e) => setFormData({ ...formData, catchNo: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-gray-900 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-blue-500 transition-all outline-none" />
+                    <input type="text" value={formData.catchNo} onChange={(e) => setFormData({ ...formData, catchNo: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-gray-900 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-teal-500 transition-all outline-none" />
                     </div>
                 </div>
 
@@ -432,7 +432,7 @@ export default function PapersManagement() {
                     </div>
                     <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">Project *</label>
-                    <select value={formData.projectId} onChange={(e) => handleProjectChange(e.target.value)} className="w-full bg-gray-50 border border-gray-200 text-gray-900 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" required>
+                    <select value={formData.projectId} onChange={(e) => handleProjectChange(e.target.value)} className="w-full bg-gray-50 border border-gray-200 text-gray-900 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none" required>
                         <option value="">Select Project</option>
                         {projects.map((p) => (
                         <option key={p.projectId} value={p.projectId}>{p.projectName}</option>
@@ -488,14 +488,14 @@ export default function PapersManagement() {
                                         setUploading(false);
                                     }
                                 }}
-                                className="w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                className="w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100"
                                 disabled={uploading}
                             />
-                            {uploading && <p className="text-xs text-blue-600 animate-pulse">Uploading PDF...</p>}
+                            {uploading && <p className="text-xs text-teal-700 animate-pulse">Uploading PDF...</p>}
                             {formData.questionPaperPdfUrl && (
                                 <p className="text-xs text-green-600 flex items-center gap-1">
                                 <CheckCircle2 size={12} />
-                                Attached: <a href={`${import.meta.env.VITE_API_URL.replace('/api', '')}${formData.questionPaperPdfUrl}`} target="_blank" rel="noopener noreferrer" className="underline font-bold text-blue-600">View PDF</a>
+                                Attached: <a href={`${import.meta.env.VITE_API_URL.replace('/api', '')}${formData.questionPaperPdfUrl}`} target="_blank" rel="noopener noreferrer" className="underline font-bold text-teal-700">View PDF</a>
                                 </p>
                             )}
                         </div>
@@ -503,10 +503,10 @@ export default function PapersManagement() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-blue-200 transition-all">
+                    <button type="submit" className="bg-teal-700 hover:bg-teal-800 text-white px-8 py-3 rounded-md font-bold shadow-lg shadow-teal-200 transition-all">
                     {editingId ? "Update Configuration" : "Save Paper"}
                     </button>
-                    <button type="button" onClick={handleCancel} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-8 py-3 rounded-xl font-bold transition-all">
+                    <button type="button" onClick={handleCancel} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-8 py-3 rounded-md font-bold transition-all">
                     Cancel
                     </button>
                 </div>
@@ -515,46 +515,46 @@ export default function PapersManagement() {
         )}
 
         {/* Papers Main Table Area */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-50/40">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-gray-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gray-50/40">
             <div className="flex items-center gap-3">
               <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Search papers by name/code..."
                   value={tableSearch}
                   onChange={(e) => setTableSearch(e.target.value)}
-                  className="pl-9 pr-4 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64 shadow-sm"
+                  className="pl-9 pr-4 py-2 text-xs font-semibold bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 w-full sm:w-64 shadow-sm"
                 />
               </div>
               
               <div className="relative flex items-center gap-2">
-                <Filter size={14} className="text-slate-400" />
+                <Filter size={14} className="text-gray-400" />
                 <select
                   value={subjectFilter}
                   onChange={(e) => {
                     setSubjectFilter(e.target.value);
                     setPage(1); // Reset to page 1 on filter change
                   }}
-                  className="pl-2 pr-8 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm appearance-none outline-none"
+                  className="pl-2 pr-8 py-2 text-xs font-semibold bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-sm appearance-none outline-none"
                 >
                   <option value="">All Subjects</option>
                   {subjects.map(s => (
                     <option key={s.subjectId} value={s.subjectId}>{s.subjectName}</option>
                   ))}
                 </select>
-                <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
             </div>
             
             {/* Bulk Actions */}
             {selectedPaperIds.length > 0 && (
               <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
-                <span className="text-xs font-bold text-slate-500 mr-2">{selectedPaperIds.length} Selected</span>
+                <span className="text-xs font-bold text-gray-500 mr-2">{selectedPaperIds.length} Selected</span>
                 <button
                   onClick={() => setShowBulkConfigModal(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[10px] uppercase tracking-wider px-4 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                  className="bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-[10px] uppercase tracking-wider px-4 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5"
                 >
                   <Layers size={13} /> Bulk Configure Sections
                 </button>
@@ -570,67 +570,67 @@ export default function PapersManagement() {
 
           {tableLoading && papers.length === 0 ? (
             <div className="p-16 text-center">
-              <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Loading Papers...</p>
+              <div className="animate-spin w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Loading Papers...</p>
             </div>
           ) : papers.length === 0 ? (
             <div className="p-16 text-center">
-              <FileText size={32} className="mx-auto text-slate-200 mb-2" />
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">No Papers Found</p>
+              <FileText size={32} className="mx-auto text-gray-200 mb-2" />
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-400">No Papers Found</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left">
-                <thead className="bg-slate-50 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
                   <tr>
-                    <th className="px-5 py-3.5 w-12 text-center border-b border-slate-100">
+                    <th className="px-5 py-3.5 w-12 text-center border-b border-gray-100">
                       <input 
                         type="checkbox" 
                         checked={selectedPaperIds.length === papers.length && papers.length > 0} 
                         onChange={toggleSelectAll} 
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4"
+                        className="rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer w-4 h-4"
                       />
                     </th>
                     <SortHeader label="Code & Name" field="paperCode" hasFilter={true} />
                     <SortHeader label="Subject & Max" field="subjectName" hasFilter={true} />
-                    <th className="px-5 py-3.5 text-center border-b border-slate-100">Configuration Status</th>
-                    <th className="px-5 py-3.5 text-right border-b border-slate-100">Actions</th>
+                    <th className="px-5 py-3.5 text-center border-b border-gray-100">Configuration Status</th>
+                    <th className="px-5 py-3.5 text-right border-b border-gray-100">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
+                <tbody className="divide-y divide-gray-100 text-xs font-bold text-gray-700">
                   {papers.map((paper) => {
                     const isSelected = selectedPaperIds.includes(paper.paperId);
                     // Determine warning state
                     const missingQp = paper.isSectionsConfigured && !paper.questionPaperPdfUrl;
 
                     return (
-                      <tr key={paper.paperId} className={`hover:bg-slate-50/50 transition-colors ${isSelected ? 'bg-blue-50/30' : ''}`}>
-                        <td className="px-5 py-4 text-center">
+                      <tr key={paper.paperId} className={`hover:bg-gray-50/50 transition-colors ${isSelected ? 'bg-teal-50/30' : ''}`}>
+                        <td className="px-5 py-2.5 text-center">
                           <input 
                             type="checkbox" 
                             checked={isSelected}
                             onChange={() => toggleSelectPaper(paper.paperId)}
-                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4"
+                            className="rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer w-4 h-4"
                           />
                         </td>
-                        <td className="px-5 py-4">
+                        <td className="px-5 py-2.5">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-black shrink-0">
+                            <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center font-black shrink-0">
                               {paper.paperCode.substring(0, 2)}
                             </div>
                             <div>
-                              <span className="text-slate-900 font-extrabold text-sm block">{paper.paperCode}</span>
-                              <span className="text-[10px] text-slate-500 block">{paper.paperName}</span>
+                              <span className="text-gray-900 font-extrabold text-sm block">{paper.paperCode}</span>
+                              <span className="text-[10px] text-gray-500 block">{paper.paperName}</span>
                             </div>
                           </div>
                         </td>
-                        <td className="px-5 py-4">
-                          <span className="text-slate-700 block truncate max-w-[150px]">{paper.subjectName}</span>
-                          <div className="text-[9px] text-slate-400 uppercase tracking-wider mt-0.5">
+                        <td className="px-5 py-2.5">
+                          <span className="text-gray-700 block truncate max-w-[150px]">{paper.subjectName}</span>
+                          <div className="text-[9px] text-gray-400 uppercase tracking-wider mt-0.5">
                             Max: {paper.maxMarks} | Qs: {paper.totalQuestions} | Catch: {paper.catchNo}
                           </div>
                         </td>
-                        <td className="px-5 py-4 text-center">
+                        <td className="px-5 py-2.5 text-center">
                           {paper.isSectionsConfigured ? (
                             <div className="flex flex-col items-center gap-1.5">
                               <span className="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100">
@@ -643,12 +643,12 @@ export default function PapersManagement() {
                               )}
                             </div>
                           ) : (
-                            <span className="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 border border-slate-200">
+                            <span className="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">
                               Unconfigured
                             </span>
                           )}
                         </td>
-                        <td className="px-5 py-4 text-right">
+                        <td className="px-5 py-2.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <Link
                               to={userType === 'admin' 
@@ -667,7 +667,7 @@ export default function PapersManagement() {
                             </button>
                             <button
                               onClick={() => handleEdit(paper)}
-                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                              className="p-1.5 text-gray-400 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-all"
                             >
                               <Edit2 size={14} />
                             </button>
@@ -696,51 +696,51 @@ export default function PapersManagement() {
         {/* Bulk Configuration Modal */}
         {/* ------------------------------------------------------------------ */}
         {showBulkConfigModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-            <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
-              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4">
+            <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
+              <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
                 <div>
-                  <h3 className="text-lg font-black text-slate-900">Bulk Configure Sections</h3>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Applying to {selectedPaperIds.length} papers</p>
+                  <h3 className="text-lg font-black text-gray-900">Bulk Configure Sections</h3>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Applying to {selectedPaperIds.length} papers</p>
                 </div>
-                <button onClick={() => setShowBulkConfigModal(false)} className="p-1.5 hover:bg-slate-200 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
+                <button onClick={() => setShowBulkConfigModal(false)} className="p-1.5 hover:bg-gray-200 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
                   <X size={18} />
                 </button>
               </div>
               <form onSubmit={handleBulkConfigSubmit} className="p-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Section Name</label>
-                    <input type="text" value={bulkConfigData.name} onChange={e => setBulkConfigData({...bulkConfigData, name: e.target.value})} className="w-full text-sm font-semibold border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none" required />
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Section Name</label>
+                    <input type="text" value={bulkConfigData.name} onChange={e => setBulkConfigData({...bulkConfigData, name: e.target.value})} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none" required />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Total Questions</label>
-                    <input type="number" value={bulkConfigData.totalQuestions} onChange={e => setBulkConfigData({...bulkConfigData, totalQuestions: parseInt(e.target.value)})} className="w-full text-sm font-semibold border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none" required min="1" />
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Total Questions</label>
+                    <input type="number" value={bulkConfigData.totalQuestions} onChange={e => setBulkConfigData({...bulkConfigData, totalQuestions: parseInt(e.target.value)})} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none" required min="1" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Start Question No.</label>
-                    <input type="number" value={bulkConfigData.startQuestion} onChange={e => setBulkConfigData({...bulkConfigData, startQuestion: parseInt(e.target.value)})} className="w-full text-sm font-semibold border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none" required min="1" />
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Start Question No.</label>
+                    <input type="number" value={bulkConfigData.startQuestion} onChange={e => setBulkConfigData({...bulkConfigData, startQuestion: parseInt(e.target.value)})} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none" required min="1" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">End Question No.</label>
-                    <input type="number" value={bulkConfigData.endQuestion} onChange={e => setBulkConfigData({...bulkConfigData, endQuestion: parseInt(e.target.value)})} className="w-full text-sm font-semibold border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none" required min="1" />
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">End Question No.</label>
+                    <input type="number" value={bulkConfigData.endQuestion} onChange={e => setBulkConfigData({...bulkConfigData, endQuestion: parseInt(e.target.value)})} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none" required min="1" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Total Marks</label>
-                    <input type="number" value={bulkConfigData.totalMarks} onChange={e => setBulkConfigData({...bulkConfigData, totalMarks: parseInt(e.target.value)})} className="w-full text-sm font-semibold border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none" required min="1" />
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Total Marks</label>
+                    <input type="number" value={bulkConfigData.totalMarks} onChange={e => setBulkConfigData({...bulkConfigData, totalMarks: parseInt(e.target.value)})} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none" required min="1" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Questions to Attempt</label>
-                    <input type="number" value={bulkConfigData.maxQuestionsToAttempt} onChange={e => setBulkConfigData({...bulkConfigData, maxQuestionsToAttempt: parseInt(e.target.value)})} className="w-full text-sm font-semibold border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none" required min="1" />
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Questions to Attempt</label>
+                    <input type="number" value={bulkConfigData.maxQuestionsToAttempt} onChange={e => setBulkConfigData({...bulkConfigData, maxQuestionsToAttempt: parseInt(e.target.value)})} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none" required min="1" />
                   </div>
                 </div>
                 <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Description (Optional)</label>
-                    <textarea value={bulkConfigData.description} onChange={e => setBulkConfigData({...bulkConfigData, description: e.target.value})} className="w-full text-sm font-semibold border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none" rows="2" />
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Description (Optional)</label>
+                    <textarea value={bulkConfigData.description} onChange={e => setBulkConfigData({...bulkConfigData, description: e.target.value})} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none" rows="2" />
                 </div>
-                <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
-                  <button type="button" onClick={() => setShowBulkConfigModal(false)} className="px-5 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">Cancel</button>
-                  <button type="submit" className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md transition-colors">Apply to {selectedPaperIds.length} Papers</button>
+                <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
+                  <button type="button" onClick={() => setShowBulkConfigModal(false)} className="px-5 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors">Cancel</button>
+                  <button type="submit" className="px-5 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-md shadow-md transition-colors">Apply to {selectedPaperIds.length} Papers</button>
                 </div>
               </form>
             </div>
@@ -751,14 +751,14 @@ export default function PapersManagement() {
         {/* Import Sections Modal */}
         {/* ------------------------------------------------------------------ */}
         {showImportSectionsModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-            <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
-              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4">
+            <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
+              <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
                 <div>
-                  <h3 className="text-lg font-black text-slate-900">Import Sections</h3>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">To {selectedPaperIds.length} selected papers</p>
+                  <h3 className="text-lg font-black text-gray-900">Import Sections</h3>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">To {selectedPaperIds.length} selected papers</p>
                 </div>
-                <button onClick={() => setShowImportSectionsModal(false)} className="p-1.5 hover:bg-slate-200 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
+                <button onClick={() => setShowImportSectionsModal(false)} className="p-1.5 hover:bg-gray-200 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
                   <X size={18} />
                 </button>
               </div>
@@ -770,11 +770,11 @@ export default function PapersManagement() {
                    </p>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Select Source Paper</label>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Select Source Paper</label>
                   <select 
                     value={sourcePaperId} 
                     onChange={e => setSourcePaperId(e.target.value)} 
-                    className="w-full text-sm font-semibold border border-slate-200 rounded-xl px-3 py-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none" 
+                    className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none" 
                     required
                   >
                     <option value="">-- Select a configured paper --</option>
@@ -784,9 +784,9 @@ export default function PapersManagement() {
                   </select>
                 </div>
                 
-                <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
-                  <button type="button" onClick={() => setShowImportSectionsModal(false)} className="px-5 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">Cancel</button>
-                  <button type="submit" disabled={importingSections} className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition-colors disabled:opacity-50 flex items-center gap-2">
+                <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
+                  <button type="button" onClick={() => setShowImportSectionsModal(false)} className="px-5 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors">Cancel</button>
+                  <button type="submit" disabled={importingSections} className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md shadow-md transition-colors disabled:opacity-50 flex items-center gap-2">
                     {importingSections ? 'Importing...' : 'Confirm Import'}
                   </button>
                 </div>
@@ -799,15 +799,15 @@ export default function PapersManagement() {
         {/* Examiner Allocation Modal */}
         {/* ------------------------------------------------------------------ */}
         {showExaminerModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-            <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-                <div className="p-6 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4">
+            <div className="bg-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+                <div className="p-6 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between">
                 <div>
-                    <h3 className="text-xl font-black text-slate-900">Assign Examiners</h3>
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Allocation for {selectedPaper?.paperCode}: {selectedPaper?.paperName}</p>
+                    <h3 className="text-xl font-black text-gray-900">Assign Examiners</h3>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Allocation for {selectedPaper?.paperCode}: {selectedPaper?.paperName}</p>
                 </div>
-                <button onClick={() => setShowExaminerModal(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
-                    <X size={20} className="text-slate-400 hover:text-slate-600" />
+                <button onClick={() => setShowExaminerModal(false)} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+                    <X size={20} className="text-gray-400 hover:text-gray-600" />
                 </button>
                 </div>
 
@@ -816,25 +816,25 @@ export default function PapersManagement() {
                     {/* Available Examiners */}
                     <div>
                     <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Available Evaluators</h4>
-                        <span className="bg-blue-50 text-blue-700 text-[9px] font-black px-2 py-0.5 rounded-full border border-blue-100">{availableExaminers.length} Found</span>
+                        <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Available Evaluators</h4>
+                        <span className="bg-teal-50 text-teal-700 text-[9px] font-black px-2 py-0.5 rounded-md border border-teal-100">{availableExaminers.length} Found</span>
                     </div>
                     
                     <div className="relative mb-4">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                        <input type="text" placeholder="Search by name..." className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-9 pr-4 text-xs font-semibold focus:ring-2 focus:ring-blue-500 outline-none" value={examinerSearchQuery} onChange={(e) => setExaminerSearchQuery(e.target.value)} />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                        <input type="text" placeholder="Search by name..." className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 pl-9 pr-4 text-xs font-semibold focus:ring-2 focus:ring-teal-500 outline-none" value={examinerSearchQuery} onChange={(e) => setExaminerSearchQuery(e.target.value)} />
                     </div>
 
                     <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                         {allocationLoading ? (
-                        <div className="text-center py-10 opacity-50 text-xs font-bold text-slate-500">Loading examiners...</div>
+                        <div className="text-center py-10 opacity-50 text-xs font-bold text-gray-500">Loading examiners...</div>
                         ) : availableExaminers.filter(ex => ex.name.toLowerCase().includes(examinerSearchQuery.toLowerCase()) && !assignedExaminers.some(a => a.examinerId === ex.id)).map(examiner => (
-                        <div key={examiner.id} className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl hover:bg-blue-50 border border-slate-100 group transition-all">
+                        <div key={examiner.id} className="flex items-center justify-between p-3 bg-gray-50/50 rounded-xl hover:bg-teal-50 border border-gray-100 group transition-all">
                             <div className="flex items-center gap-3">
-                            <img src={examiner.profileImage || "https://ui-avatars.com/api/?name=" + examiner.name} alt="" className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white shadow-sm" />
-                            <div><p className="text-xs font-bold text-slate-800">{examiner.name}</p></div>
+                            <img src={examiner.profileImage || "https://ui-avatars.com/api/?name=" + examiner.name} alt="" className="w-8 h-8 rounded-full bg-gray-200 border-2 border-white shadow-sm" />
+                            <div><p className="text-xs font-bold text-gray-800">{examiner.name}</p></div>
                             </div>
-                            <button onClick={() => handleAssign(examiner.id)} className="p-1.5 bg-white text-blue-600 rounded-lg shadow-sm border border-slate-100 opacity-0 group-hover:opacity-100 transition-all hover:scale-110">
+                            <button onClick={() => handleAssign(examiner.id)} className="p-1.5 bg-white text-teal-700 rounded-lg shadow-sm border border-gray-100 opacity-0 group-hover:opacity-100 transition-all hover:scale-110">
                             <UserPlus size={14} />
                             </button>
                         </div>
@@ -844,27 +844,27 @@ export default function PapersManagement() {
 
                     {/* Assigned Examiners */}
                     <div>
-                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-4">Assigned to Paper</h4>
+                    <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-4">Assigned to Paper</h4>
                     <div className="space-y-2 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
                         {assignedExaminers.length === 0 ? (
-                        <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/30">
-                            <Users size={24} className="mx-auto text-slate-300 mb-2" />
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">No examiners assigned</p>
+                        <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/30">
+                            <Users size={24} className="mx-auto text-gray-300 mb-2" />
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">No examiners assigned</p>
                         </div>
                         ) : (
                         assignedExaminers.map(assignment => (
-                            <div key={assignment.id} className="flex items-center justify-between p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                            <div key={assignment.id} className="flex items-center justify-between p-3 bg-teal-50 border border-teal-100 rounded-xl">
                             <div className="flex items-center gap-3">
                                 <div className="relative">
                                 <img src={assignment.examiner?.profileImage || "https://ui-avatars.com/api/?name=" + assignment.examiner?.name} alt="" className="w-8 h-8 rounded-full border-2 border-white shadow-sm" />
                                 <div className="absolute -top-1 -right-1 bg-emerald-500 border-2 border-white w-3 h-3 rounded-full"></div>
                                 </div>
                                 <div>
-                                <p className="text-xs font-bold text-blue-900">{assignment.examiner?.name}</p>
-                                <p className="text-[9px] font-bold text-blue-600/70">Assigned: {new Date(assignment.assignedAt).toLocaleDateString()}</p>
+                                <p className="text-xs font-bold text-teal-900">{assignment.examiner?.name}</p>
+                                <p className="text-[9px] font-bold text-teal-700/70">Assigned: {new Date(assignment.assignedAt).toLocaleDateString()}</p>
                                 </div>
                             </div>
-                            <button onClick={() => handleRemoveAssignment(assignment.id)} className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-white rounded-lg transition-all">
+                            <button onClick={() => handleRemoveAssignment(assignment.id)} className="p-1.5 text-gray-400 hover:text-rose-500 hover:bg-white rounded-lg transition-all">
                                 <Trash2 size={14} />
                             </button>
                             </div>
@@ -874,8 +874,8 @@ export default function PapersManagement() {
                     </div>
                 </div>
                 </div>
-                <div className="p-6 bg-slate-50/50 border-t border-slate-100 flex justify-end">
-                <button onClick={() => setShowExaminerModal(false)} className="bg-blue-600 text-white px-8 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all">
+                <div className="p-6 bg-gray-50/50 border-t border-gray-100 flex justify-end">
+                <button onClick={() => setShowExaminerModal(false)} className="bg-teal-700 text-white px-8 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-teal-200 hover:bg-teal-800 transition-all">
                     Done
                 </button>
                 </div>

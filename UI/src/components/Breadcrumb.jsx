@@ -1,60 +1,53 @@
-import { ChevronRight, Home, LayoutDashboard, Building2, Briefcase, BookOpen, Calendar, FileText, Layers, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { Home, ChevronRight } from 'lucide-react';
 import { useBreadcrumb } from '../context/BreadcrumbContext';
 
-const iconMap = {
-  LayoutDashboard,
-  Building2,
-  Briefcase,
-  BookOpen,
-  Calendar,
-  FileText,
-  Layers,
-  Users,
-  Home,
-};
-
 /**
- * Breadcrumb component for navigation
- * Displays the path from Dashboard to current page
+ * Breadcrumb — pill-style, clean design
+ * Ancestors are plain text links; current page is a subtle pill badge.
+ * No per-item icons; a single home icon only on the first item.
  */
 export default function Breadcrumb() {
   const { breadcrumbs } = useBreadcrumb();
 
-  if (!breadcrumbs || breadcrumbs.length === 0) {
-    return null;
-  }
+  // Only show when there's more than just the dashboard
+  if (!breadcrumbs || breadcrumbs.length <= 1) return null;
 
   return (
-    <nav className="flex items-center gap-2 text-[11px] px-6 lg:px-10 py-2.5 bg-white/60 backdrop-blur-md border-b border-gray-200 w-full" aria-label="Breadcrumb">
+    <nav
+      aria-label="Breadcrumb"
+      className="flex items-center gap-1 px-5 py-0 bg-zinc-50 border-b border-zinc-200"
+      style={{ height: 'var(--breadcrumb-height)' }}
+    >
       {breadcrumbs.map((item, index) => {
-        const IconComponent = iconMap[item.icon] || Home;
+        const isFirst = index === 0;
         const isLast = index === breadcrumbs.length - 1;
-        
-        // Build the path with query params if they exist
+
+        // Build full path with query params
         let fullPath = item.path;
         if (item.queryParams && Object.keys(item.queryParams).length > 0) {
-          const params = new URLSearchParams(item.queryParams).toString();
-          fullPath = `${item.path}?${params}`;
+          fullPath = `${item.path}?${new URLSearchParams(item.queryParams).toString()}`;
         }
 
         return (
-          <div key={index} className="flex items-center gap-2">
+          <div key={index} className="flex items-center gap-1">
+            {/* Separator */}
             {index > 0 && (
-              <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+              <ChevronRight size={12} className="text-zinc-300 shrink-0" strokeWidth={2.5} />
             )}
-            
+
             {isLast ? (
-              <span className="flex items-center gap-2 text-gray-900 font-semibold whitespace-nowrap">
-                <IconComponent className="w-4 h-4 text-blue-600" />
+              /* Current page — subtle filled pill */
+              <span className="flex items-center gap-1.5 text-[11.5px] font-semibold text-zinc-800 bg-zinc-200/70 px-2.5 py-0.5 rounded-md whitespace-nowrap">
                 {item.label}
               </span>
             ) : (
+              /* Ancestor — plain link */
               <Link
                 to={fullPath}
-                className="flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:underline transition-colors whitespace-nowrap"
+                className="flex items-center gap-1.5 text-[11.5px] font-medium text-zinc-500 hover:text-amber-600 transition-colors whitespace-nowrap"
               >
-                <IconComponent className="w-4 h-4" />
+                {isFirst && <Home size={11} strokeWidth={2.5} />}
                 {item.label}
               </Link>
             )}

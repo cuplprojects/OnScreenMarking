@@ -28,13 +28,23 @@ namespace API.Controllers
             [FromQuery] bool? isActive = null,
             [FromQuery] string sortField = "",
             [FromQuery] string sortOrder = "",
-            [FromQuery] string statusFilter = "")
+            [FromQuery] string statusFilter = "",
+            [FromQuery] int? subjectId = null)
         {
             try
             {
+                // Ensure pageSize is within reasonable bounds
+                if (pageSize <= 0) pageSize = 10;
+                if (pageSize > 100) pageSize = 100;
+                if (page <= 0) page = 1;
                 var query = _context.Papers
                     .Where(p => p.ProjectPapers.Any(pp => pp.ProjectId == projectId))
                     .AsQueryable();
+
+                if (subjectId.HasValue)
+                {
+                    query = query.Where(p => p.SubjectPapers.Any(sp => sp.SubjectId == subjectId.Value));
+                }
 
                 if (isActive.HasValue)
                 {
@@ -118,29 +128,32 @@ namespace API.Controllers
 
                 var totalCount = await query.CountAsync();
 
-                var items = await query
+                // Get paginated papers first, then do the complex selections
+                var paginatedPapers = await query
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize)
-                    .Select(p => new
-                    {
-                        paperId = p.PaperId,
-                        paperCode = p.PaperCode,
-                        paperName = p.PaperName,
-                        catchNo = p.ProjectPapers.FirstOrDefault().CatchNo,
-                        maxMarks = p.MaxMarks,
-                        totalQuestions = p.TotalQuestions,
-                        isActive = p.IsActive,
-                        subjectName = p.SubjectPapers.Select(sp => sp.Subject.SubName).FirstOrDefault() ?? "N/A",
-                        subjectId = p.SubjectPapers.Select(sp => sp.SubjectId).FirstOrDefault(),
-                        totalScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId),
-                        completedScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.Status == "completed"),
-                        allocatedScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (s.Status == "allocated" || s.Status == "marking")),
-                        pendingScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any()))),
-                        isSectionsConfigured = p.Sections.Any(),
-                        configuredMarks = p.Sections.Sum(s => (int?)s.TotalMarks) ?? 0,
-                        expertsCount = _context.PaperExaminers.Count(pe => pe.PaperId == p.PaperId)
-                    })
                     .ToListAsync();
+
+                // Now do the expensive selections on the paginated data
+                var items = paginatedPapers.Select(p => new
+                {
+                    paperId = p.PaperId,
+                    paperCode = p.PaperCode,
+                    paperName = p.PaperName,
+                    catchNo = p.ProjectPapers.FirstOrDefault()?.CatchNo ?? "",
+                    maxMarks = p.MaxMarks,
+                    totalQuestions = p.TotalQuestions,
+                    isActive = p.IsActive,
+                    subjectName = p.SubjectPapers.Select(sp => sp.Subject.SubName).FirstOrDefault() ?? "N/A",
+                    subjectId = p.SubjectPapers.Select(sp => sp.SubjectId).FirstOrDefault(),
+                    totalScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId),
+                    completedScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.Status == "completed"),
+                    allocatedScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (s.Status == "allocated" || s.Status == "marking")),
+                    pendingScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any()))),
+                    isSectionsConfigured = p.Sections.Any(),
+                    configuredMarks = p.Sections.Sum(s => (int?)s.TotalMarks) ?? 0,
+                    expertsCount = _context.PaperExaminers.Count(pe => pe.PaperId == p.PaperId)
+                }).ToList();
 
                 var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
@@ -160,51 +173,121 @@ namespace API.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<PaperDto>>> GetPapers([FromQuery] int? subjectId = null, [FromQuery] int? projectId = null, [FromQuery] int? universityId = null)
+        public async Task<ActionResult> GetPapers(
+            [FromQuery] int? subjectId = null, 
+            [FromQuery] int? projectId = null, 
+            [FromQuery] int? universityId = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string sortField = "",
+            [FromQuery] string sortOrder = "asc",
+            [FromQuery] bool isMaster = false,
+            [FromQuery] string search = "")
         {
             try
             {
+                // Validate pagination parameters
+                if (pageSize <= 0) pageSize = 10;
+                if (pageSize > 100) pageSize = 100;
+                if (page <= 0) page = 1;
+
                 var query = _context.Papers
-            
-            .Include(p => p.SubjectPapers)
-                .ThenInclude(sp => sp.Subject)
-            .AsQueryable();
+                    .Include(p => p.SubjectPapers)
+                    .ThenInclude(sp => sp.Subject)
+                    .AsQueryable();
 
                 if (subjectId.HasValue)
                 {
                     query = query.Where(p =>
                         p.SubjectPapers.Any(sp => sp.SubjectId == subjectId.Value));
                 }
+                
                 if (projectId.HasValue)
                     query = query.Where(p => p.ProjectPapers.Any(pp => pp.ProjectId == projectId.Value));
 
-                if (universityId.HasValue)
-                    query = query.Where(p => p.ProjectPapers.Any(pp => pp.Project.UniversityId == universityId.Value));
+                // Filter by isMaster status vs university/project papers
+                if (isMaster)
+                {
+                    // Master papers belong directly to a university (not through projects)
+                    query = query.Where(p => p.UniversityId.HasValue);
+                    
+                    if (universityId.HasValue)
+                    {
+                        query = query.Where(p => p.UniversityId == universityId.Value);
+                    }
+                }
+                else if (universityId.HasValue)
+                {
+                    // Session papers belong to projects in the specified university
+                    query = query.Where(p => p.ProjectPapers.Any(pp => pp.Project.UniversityId == universityId.Value) && !p.UniversityId.HasValue);
+                }
 
-                var papers = await query
-                    .OrderBy(p => p.PaperNumber)
+                // Search filter
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    query = query.Where(p => p.PaperName.Contains(search) || p.PaperCode.Contains(search));
+                }
+
+                // Apply sorting
+                if (!string.IsNullOrWhiteSpace(sortField))
+                {
+                    bool isDesc = sortOrder?.ToLower() == "desc";
+                    switch (sortField.ToLower())
+                    {
+                        case "papercode":
+                            query = isDesc ? query.OrderByDescending(p => p.PaperCode) : query.OrderBy(p => p.PaperCode);
+                            break;
+                        case "papername":
+                            query = isDesc ? query.OrderByDescending(p => p.PaperName) : query.OrderBy(p => p.PaperName);
+                            break;
+                        default:
+                            query = isDesc ? query.OrderByDescending(p => p.PaperNumber) : query.OrderBy(p => p.PaperNumber);
+                            break;
+                    }
+                }
+                else
+                {
+                    query = query.OrderBy(p => p.PaperNumber);
+                }
+
+                // Get total count before pagination
+                var totalCount = await query.CountAsync();
+
+                // Apply pagination
+                var paginatedPapers = await query
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
                     .ToListAsync();
 
-                var paperDtos = papers.Select(p => new PaperDto
+                // Map to DTOs
+                var paperDtos = paginatedPapers.Select(p => new PaperDto
                 {
                     PaperId = p.PaperId,
-                                        PaperCode = p.PaperCode,
+                    PaperCode = p.PaperCode,
                     PaperName = p.PaperName,
                     PaperNumber = p.PaperNumber,
                     MaxMarks = p.MaxMarks,
                     TotalQuestions = p.TotalQuestions,
                     Description = p.Description,
-                                                            IsActive = p.IsActive,
+                    IsActive = p.IsActive,
                     SubjectIds = p.SubjectPapers
-                .Select(sp => sp.SubjectId)
-                .ToList(),
-
+                        .Select(sp => sp.SubjectId)
+                        .ToList(),
                     SubjectNames = p.SubjectPapers
-                .Select(sp => sp.Subject.SubName)
-                .ToList()
+                        .Select(sp => sp.Subject.SubName)
+                        .ToList()
                 }).ToList();
 
-                return Ok(paperDtos);
+                var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+
+                return Ok(new
+                {
+                    items = paperDtos,
+                    totalCount = totalCount,
+                    page = page,
+                    pageSize = pageSize,
+                    totalPages = totalPages
+                });
             }
             catch (Exception ex)
             {

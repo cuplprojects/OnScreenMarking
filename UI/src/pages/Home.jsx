@@ -47,9 +47,9 @@ const Home = () => {
 
   const getGreeting = () => {
     const hour = currentTime.getHours();
-    if (hour < 12) return { text: "Good Morning", icon: "🌅" };
-    if (hour < 17) return { text: "Good Afternoon", icon: "☀️" };
-    return { text: "Good Evening", icon: "🌙" };
+    if (hour < 12) return { text: "Good Morning", icon: "??" };
+    if (hour < 17) return { text: "Good Afternoon", icon: "??" };
+    return { text: "Good Evening", icon: "??" };
   };
 
   const handleStartMarking = (script) => {
@@ -221,12 +221,12 @@ const Home = () => {
     return (
       <th 
         onClick={() => handleSort(field)}
-        className={`px-5 py-3 cursor-pointer hover:bg-slate-100/80 transition-colors select-none group/header ${isCenter ? 'text-center' : ''}`}
+        className={`px-5 py-3 cursor-pointer hover:bg-gray-100/80 transition-colors select-none group/header ${isCenter ? 'text-center' : ''}`}
       >
         <div className={`flex items-center gap-1 ${isCenter ? 'justify-center' : ''}`}>
           <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{label}</span>
-          <span className="text-[9px] text-slate-400 group-hover/header:text-slate-655 transition-colors">
-            {isSorted ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}
+          <span className="text-[9px] text-gray-400 group-hover/header:text-gray-655 transition-colors">
+            {isSorted ? (sortOrder === 'asc' ? ' ?' : ' ?') : ' ?'}
           </span>
           {hasFilter && (
             <ColumnFilter columnKey={field} currentFilter={filters[field]} setFilter={setFilter} placeholder={`Filter ${label.toLowerCase()}...`} />
@@ -255,31 +255,31 @@ const Home = () => {
     <div className="space-y-6 pb-12 transition-all duration-300">
       
       {/* Dynamic Greetings & Info Card */}
-      <div className="bg-gradient-to-r from-blue-700 via-blue-700 to-violet-850 p-6 rounded-3xl text-white shadow-xl relative overflow-hidden">
+      <div className="bg-gradient-to-r from-teal-700 via-teal-700 to-violet-850 p-6 rounded-2xl text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-full sm:w-64 h-64 bg-white rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
-        <div className="absolute bottom-0 left-1/3 w-40 h-40 bg-blue-500/10 rounded-full blur-2xl pointer-events-none"></div>
+        <div className="absolute bottom-0 left-1/3 w-40 h-40 bg-teal-600/10 rounded-full blur-2xl pointer-events-none"></div>
         
         <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-6 relative z-10">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white  border border-white/20 text-xs font-bold tracking-wide">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-white  border border-white/20 text-xs font-bold tracking-wide">
               <Sparkles size={13} className="text-amber-300 animate-pulse" />
               <span>{greeting.icon} {greeting.text}</span>
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight">
               Welcome Back, <span className="text-amber-300 font-black">{user?.name || "Examiner"}</span>
             </h1>
-            <p className="text-blue-100 text-xs max-w-xl leading-relaxed">
+            <p className="text-teal-100 text-xs max-w-xl leading-relaxed">
               Your active session is fully authenticated. Let's make marking swift, accurate, and fair today!
             </p>
           </div>
 
-          <div className="flex flex-row sm:flex-row items-center gap-4 bg-white  border border-white/10 p-4 rounded-2xl self-start lg:self-center shrink-0">
+          <div className="flex flex-row sm:flex-row items-center gap-4 bg-white  border border-white/10 p-4 rounded-xl self-start lg:self-center shrink-0">
             <div className="p-2 bg-white rounded-xl text-center shrink-0">
               <Calendar size={18} className="mx-auto text-amber-300 mb-0.5" />
-              <span className="block text-[8px] font-black uppercase text-blue-200">Date</span>
+              <span className="block text-[8px] font-black uppercase text-teal-200">Date</span>
             </div>
             <div className="text-left">
-              <p className="text-xs font-black tracking-wide text-blue-100">{formattedDate}</p>
+              <p className="text-xs font-black tracking-wide text-teal-100">{formattedDate}</p>
               <p className="text-lg font-black tracking-tight text-white font-mono">{formattedTime}</p>
             </div>
           </div>
@@ -291,22 +291,22 @@ const Home = () => {
         <div 
           onClick={() => handleCardClick('all')}
           className={`cursor-pointer transition-all duration-205 ${
-            filters.statusFilter === 'all' ? 'ring-2 ring-blue-500 rounded-2xl shadow-md' : ''
+            filters.statusFilter === 'all' ? 'ring-2 ring-teal-500 rounded-xl shadow-md' : ''
           }`}
         >
           <StatCard
             title="Total Assigned"
             value={stats.totalScripts}
-            icon={<FileText className="text-blue-600" />}
-            bgColor="bg-blue-50"
-            borderClass="border-l-4 border-blue-600 shadow-blue-50"
+            icon={<FileText className="text-teal-700" />}
+            bgColor="bg-teal-50"
+            borderClass="border-l-4 border-teal-600 shadow-teal-50"
             subtitle="allocated sheets"
           />
         </div>
         <div 
           onClick={() => handleCardClick('pending')}
           className={`cursor-pointer transition-all duration-205 ${
-            filters.statusFilter === 'pending' ? 'ring-2 ring-rose-500 rounded-2xl shadow-md' : ''
+            filters.statusFilter === 'pending' ? 'ring-2 ring-rose-500 rounded-xl shadow-md' : ''
           }`}
         >
           <StatCard
@@ -321,7 +321,7 @@ const Home = () => {
         <div 
           onClick={() => handleCardClick('marking')}
           className={`cursor-pointer transition-all duration-205 ${
-            filters.statusFilter === 'marking' ? 'ring-2 ring-amber-500 rounded-2xl shadow-md' : ''
+            filters.statusFilter === 'marking' ? 'ring-2 ring-amber-500 rounded-xl shadow-md' : ''
           }`}
         >
           <StatCard
@@ -336,7 +336,7 @@ const Home = () => {
         <div 
           onClick={() => handleCardClick('completed')}
           className={`cursor-pointer transition-all duration-205 ${
-            filters.statusFilter === 'completed' ? 'ring-2 ring-emerald-500 rounded-2xl shadow-md' : ''
+            filters.statusFilter === 'completed' ? 'ring-2 ring-emerald-500 rounded-xl shadow-md' : ''
           }`}
         >
           <StatCard
@@ -351,16 +351,16 @@ const Home = () => {
       </div>
 
       {/* Progress Visualizer */}
-      <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-100">
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
         <div className="flex justify-between items-center mb-3">
           <div>
             <h2 className="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-1.5">
-              <Award size={14} className="text-blue-600 animate-bounce" />
+              <Award size={14} className="text-teal-700 animate-bounce" />
               Marking Progress Velocity
             </h2>
-            <p className="text-[10px] text-gray-500 mt-0.5">Real-time percentage overview of your workload (Average Evaluated Score: <span className="text-blue-700 font-extrabold">{stats.averageScore} marks</span>)</p>
+            <p className="text-[10px] text-gray-500 mt-0.5">Real-time percentage overview of your workload (Average Evaluated Score: <span className="text-teal-700 font-extrabold">{stats.averageScore} marks</span>)</p>
           </div>
-          <span className="text-[11px] font-black text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-full">
+          <span className="text-[11px] font-black text-teal-700 bg-teal-50 border border-teal-100 px-2.5 py-1 rounded-md">
             {stats.totalScripts > 0 ? Math.round((stats.evaluated / stats.totalScripts) * 100) : 0}% Done
           </span>
         </div>
@@ -368,7 +368,7 @@ const Home = () => {
         <div className="space-y-2">
           <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden border border-gray-100 flex p-0.5">
             <div
-              className="bg-gradient-to-r from-blue-600 to-blue-600 h-full rounded-full transition-all duration-700"
+              className="bg-gradient-to-r from-teal-600 to-teal-600 h-full rounded-full transition-all duration-700"
               style={{ width: `${stats.totalScripts > 0 ? (stats.evaluated / stats.totalScripts) * 100 : 0}%` }}
             ></div>
           </div>
@@ -381,9 +381,9 @@ const Home = () => {
       </div>
 
       {/* Subject Expertise & Workload Section */}
-      <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-100">
-        <h2 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-3 flex items-center gap-1.5">
-          <Award size={13} className="text-blue-650" />
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <h2 className="text-xs font-black uppercase tracking-wider text-gray-800 mb-3 flex items-center gap-1.5">
+          <Award size={13} className="text-teal-600" />
           <span>Subject Expertise & Script Allocation</span>
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -391,48 +391,48 @@ const Home = () => {
             <div 
               key={sw.subjectId} 
               onClick={() => handleSubjectClick(sw.subjectId)}
-              className={`bg-slate-50 border p-3 rounded-xl flex flex-col justify-between hover:border-blue-400 transition-all duration-300 shadow-sm cursor-pointer ${
-                filters.subjectFilter === sw.subjectId.toString() ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-200/50'
+              className={`bg-gray-50 border p-3 rounded-xl flex flex-col justify-between hover:border-teal-400 transition-all duration-300 shadow-sm cursor-pointer ${
+                filters.subjectFilter === sw.subjectId.toString() ? 'ring-2 ring-teal-500 border-teal-500' : 'border-gray-200/50'
               }`}
             >
               <div className="space-y-2.5">
                 <div>
-                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Expertise Subject</span>
-                  <h4 className="font-extrabold text-xs text-slate-900 mt-0.5 leading-tight">{sw.subjectName}</h4>
+                  <span className="text-[8px] font-black uppercase text-gray-400 tracking-wider">Expertise Subject</span>
+                  <h4 className="font-extrabold text-xs text-gray-900 mt-0.5 leading-tight">{sw.subjectName}</h4>
                 </div>
                 
                 <div className="space-y-1.5">
-                  <span className="text-[8px] font-black uppercase text-slate-400 tracking-wider block">Allocated Papers</span>
+                  <span className="text-[8px] font-black uppercase text-gray-400 tracking-wider block">Allocated Papers</span>
                   {sw.papers.length > 0 ? (
                     <div className="space-y-1">
                       {sw.papers.map(p => (
-                        <div key={p.paperId} className="flex justify-between items-center bg-white px-2.5 py-1 rounded-lg border border-slate-150 shadow-sm">
+                        <div key={p.paperId} className="flex justify-between items-center bg-white px-2.5 py-1 rounded-lg border border-gray-150 shadow-sm">
                           <div className="max-w-[70%]">
-                            <span className="text-[9px] font-extrabold text-slate-800 block truncate leading-tight">{p.paperName}</span>
-                            {p.paperCode && <span className="text-[8px] text-slate-400 font-mono block truncate">{p.paperCode}</span>}
+                            <span className="text-[9px] font-extrabold text-gray-800 block truncate leading-tight">{p.paperName}</span>
+                            {p.paperCode && <span className="text-[8px] text-gray-400 font-mono block truncate">{p.paperCode}</span>}
                           </div>
-                          <span className="bg-blue-50 border border-blue-100 text-blue-700 text-[8px] font-black px-1.5 py-0.5 rounded uppercase shrink-0">
+                          <span className="bg-teal-50 border border-teal-100 text-teal-700 text-[8px] font-black px-1.5 py-0.5 rounded uppercase shrink-0">
                             {p.count} scr
                           </span>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <span className="text-[9px] text-slate-400 italic block">No scripts allocated for this subject</span>
+                    <span className="text-[9px] text-gray-400 italic block">No scripts allocated for this subject</span>
                   )}
                 </div>
               </div>
               
-              <div className="mt-3 pt-2.5 border-t border-slate-205 flex justify-between items-center">
-                <span className="text-[8px] text-slate-500 font-bold uppercase">Total Workload</span>
-                <span className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm">
+              <div className="mt-3 pt-2.5 border-t border-gray-205 flex justify-between items-center">
+                <span className="text-[8px] text-gray-500 font-bold uppercase">Total Workload</span>
+                <span className="bg-teal-700 text-white text-[9px] font-black px-2 py-0.5 rounded-md shadow-sm">
                   {sw.totalCount} scripts
                 </span>
               </div>
             </div>
           ))}
           {subjectWorkloads.length === 0 && (
-            <div className="col-span-3 text-center py-4 text-slate-400 text-[10px] font-bold uppercase tracking-wider border border-dashed border-slate-200 rounded-xl">
+            <div className="col-span-3 text-center py-4 text-gray-400 text-[10px] font-bold uppercase tracking-wider border border-dashed border-gray-200 rounded-xl">
               No Expertise Subjects configured for your profile
             </div>
           )}
@@ -440,7 +440,7 @@ const Home = () => {
       </div>
 
       {/* Interactive Script Control Cockpit */}
-      <div ref={tableRef} className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden scroll-mt-6">
+      <div ref={tableRef} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden scroll-mt-6">
         <div className="p-5 border-b border-gray-100 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -451,11 +451,11 @@ const Home = () => {
               <button 
                 onClick={refreshTable}
                 title="Refresh Registry"
-                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-slate-50 border border-gray-200 rounded-xl transition-all cursor-pointer shrink-0"
+                className="p-2 text-gray-500 hover:text-teal-700 hover:bg-gray-50 border border-gray-200 rounded-md transition-all cursor-pointer shrink-0"
               >
                 <RefreshCw size={14} />
               </button>
-              <Link to="/scripts" className="text-[10px] font-black text-blue-650 bg-blue-50 border border-blue-100 hover:bg-blue-100/70 px-3.5 py-2 rounded-xl transition-all shrink-0">
+              <Link to="/scripts" className="text-[10px] font-black text-teal-600 bg-teal-50 border border-teal-100 hover:bg-teal-100/70 px-3.5 py-2 rounded-xl transition-all shrink-0">
                 Open Script Manager
               </Link>
             </div>
@@ -471,7 +471,7 @@ const Home = () => {
                 placeholder="Search by Barcode, Paper or Subject name..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-xs border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-550 focus:border-transparent bg-slate-50/50 hover:bg-white transition-all text-gray-800 font-medium"
+                className="w-full pl-9 pr-4 py-2 text-xs border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-550 focus:border-transparent bg-gray-50/50 hover:bg-white transition-all text-gray-800 font-medium"
               />
               {search && (
                 <button
@@ -484,7 +484,7 @@ const Home = () => {
             </div>
 
             {/* Status Tabs */}
-            <div className="flex bg-slate-100/80 p-1 rounded-xl self-start border border-slate-200/50 shrink-0">
+            <div className="flex bg-gray-100/80 p-1 rounded-xl self-start border border-gray-200/50 shrink-0">
               {[
                 { key: 'all', label: 'All Statuses' },
                 { key: 'pending', label: 'Pending' },
@@ -496,7 +496,7 @@ const Home = () => {
                   onClick={() => setFilter('statusFilter', tab.key)}
                   className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
                     filters.statusFilter === tab.key
-                      ? 'bg-white text-blue-600 shadow-sm border border-slate-200/40'
+                      ? 'bg-white text-teal-700 shadow-sm border border-gray-200/40'
                       : 'text-gray-555 hover:text-gray-900'
                   }`}
                 >
@@ -508,15 +508,15 @@ const Home = () => {
 
           {/* Active Filter Badges */}
           {(filters.statusFilter !== 'all' || filters.subjectFilter) && (
-            <div className="flex flex-wrap gap-2 pt-1.5 border-t border-slate-100">
+            <div className="flex flex-wrap gap-2 pt-1.5 border-t border-gray-100">
               {filters.statusFilter !== 'all' && (
-                <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-[9px] font-black px-2.5 py-1 rounded-lg border border-blue-150">
+                <span className="inline-flex items-center gap-1 bg-teal-50 text-teal-700 text-[9px] font-black px-2.5 py-1 rounded-md border border-teal-100">
                   Status: {filters.statusFilter}
                   <X size={10} className="cursor-pointer" onClick={() => setFilter('statusFilter', 'all')} />
                 </span>
               )}
               {filters.subjectFilter && (
-                <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-[9px] font-black px-2.5 py-1 rounded-lg border border-blue-150">
+                <span className="inline-flex items-center gap-1 bg-teal-50 text-teal-700 text-[9px] font-black px-2.5 py-1 rounded-md border border-teal-100">
                   Subject: {subjectWorkloads.find(sw => sw.subjectId.toString() === filters.subjectFilter)?.subjectName || 'Selected Subject'}
                   <X size={10} className="cursor-pointer" onClick={() => setFilter('subjectFilter', '')} />
                 </span>
@@ -526,20 +526,20 @@ const Home = () => {
           {/* Assigned Papers for Requesting Scripts */}
           {assignedPapers.length > 0 && (
             <div className="mt-8">
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <FileText size={16} className="text-blue-500" />
+              <h3 className="text-sm font-black text-gray-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <FileText size={16} className="text-teal-600" />
                 <span>Assigned Papers (Request Scripts)</span>
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {assignedPapers.map((paper, idx) => (
-                  <div key={idx} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm hover:border-blue-300 transition-colors flex flex-col justify-between">
+                  <div key={idx} className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm hover:border-teal-300 transition-colors flex flex-col justify-between">
                     <div>
-                      <div className="text-xs font-bold text-slate-400 uppercase">{paper.paperCode}</div>
-                      <div className="text-sm font-bold text-slate-800 mt-1">{paper.paperName}</div>
+                      <div className="text-xs font-bold text-gray-400 uppercase">{paper.paperCode}</div>
+                      <div className="text-sm font-bold text-gray-800 mt-1">{paper.paperName}</div>
                     </div>
                     <button 
                       onClick={() => setRequestModalPaper(paper)}
-                      className="mt-4 w-full py-2 bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                      className="mt-4 w-full py-2 bg-teal-50 hover:bg-teal-700 text-teal-700 hover:text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
                     >
                       <Zap size={14} /> Request Scripts
                     </button>
@@ -551,8 +551,8 @@ const Home = () => {
         </div>
         
         {tableLoading && scripts.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 font-bold text-xs flex flex-col items-center gap-3">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-650 animate-pulse"></div>
+          <div className="p-12 text-center text-gray-400 font-bold text-xs flex flex-col items-center gap-3">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 animate-pulse"></div>
             <span>Fetching allocated scripts...</span>
           </div>
         ) : scripts.length === 0 ? (
@@ -564,7 +564,7 @@ const Home = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left min-w-[900px]">
-              <thead className="bg-slate-50/70 border-b border-gray-100">
+              <thead className="bg-gray-50/70 border-b border-gray-100">
                 <tr>
                   <SortHeader label="Barcode / Script ID" field="barcode" hasFilter={true} />
                   <SortHeader label="Subject" field="subjectName" hasFilter={true} />
@@ -577,17 +577,17 @@ const Home = () => {
               </thead>
               <tbody className="divide-y divide-gray-100/70">
                 {scripts.map((script) => (
-                  <tr key={script.id} className="hover:bg-slate-50/60 transition-colors group">
-                    <td className="px-5 py-3 font-bold text-xs text-gray-950">
+                  <tr key={script.id} className="hover:bg-gray-50/60 transition-colors group">
+                    <td className="px-5 py-2.5 font-bold text-xs text-gray-950">
                       {script.generatedBarcode || `SCR-${script.id}`}
                     </td>
-                    <td className="px-5 py-3 text-xs text-gray-650 font-medium">
+                    <td className="px-5 py-2.5 text-xs text-gray-650 font-medium">
                       {script.subjectName || 'General Subject'}
                     </td>
-                    <td className="px-5 py-3 text-xs text-gray-700 font-semibold">
+                    <td className="px-5 py-2.5 text-xs text-gray-700 font-semibold">
                       {script.paperName}
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="px-5 py-2.5">
                       <span
                         className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${
                           script.status === 'completed'
@@ -603,23 +603,23 @@ const Home = () => {
                         {script.status === 'completed' ? 'Completed' : script.status === 'marking' ? 'In Progress' : 'Pending'}
                       </span>
                     </td>
-                    <td className="px-5 py-3 font-black text-xs text-gray-900">
+                    <td className="px-5 py-2.5 font-black text-xs text-gray-900">
                       {script.totalMarks !== null ? (
-                        <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100">
+                        <span className="px-2 py-0.5 bg-teal-50 text-teal-700 rounded-md border border-teal-100">
                           {script.totalMarks} marks
                         </span>
                       ) : (
                         <span className="text-gray-400 italic">Not evaluated</span>
                       )}
                     </td>
-                    <td className="px-5 py-3 text-[10px] text-gray-505 font-medium">
+                    <td className="px-5 py-2.5 text-[10px] text-gray-505 font-medium">
                       {new Date(script.submittedAt || script.createdAt).toLocaleDateString()} at {new Date(script.submittedAt || script.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td className="px-5 py-3 text-right">
+                    <td className="px-5 py-2.5 text-right">
                       {script.status === 'completed' ? (
                         <button
                           onClick={() => handleStartMarking(script)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-[9px] uppercase tracking-wider transition-all cursor-pointer group-hover:scale-105"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-[9px] uppercase tracking-wider transition-all cursor-pointer group-hover:scale-105"
                         >
                           <Eye size={10} />
                           Review Marks
@@ -627,7 +627,7 @@ const Home = () => {
                       ) : (
                         <button
                           onClick={() => handleStartMarking(script)}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-blue-650 hover:from-blue-700 hover:to-blue-700 text-white rounded-xl font-extrabold text-[9px] uppercase tracking-wider transition-all shadow-md cursor-pointer animate-pulse hover:scale-105"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-teal-600 to-teal-650 hover:from-teal-700 hover:to-teal-700 text-white rounded-xl font-extrabold text-[9px] uppercase tracking-wider transition-all shadow-md cursor-pointer animate-pulse hover:scale-105"
                         >
                           <Zap size={10} className="fill-white" />
                           Evaluate Script
@@ -669,7 +669,7 @@ const Home = () => {
 
 const StatCard = ({ title, value, icon, bgColor, borderClass, subtitle }) => {
   return (
-    <div className={`bg-white rounded-2xl p-3 shadow-sm border border-gray-100 ${borderClass} hover:shadow-md hover:translate-y-[-2px] transition-all duration-300 flex flex-col justify-between group h-full`}>
+    <div className={`bg-white rounded-xl p-3 shadow-sm border border-gray-100 ${borderClass} hover:shadow-md hover:translate-y-[-2px] transition-all duration-300 flex flex-col justify-between group h-full`}>
       <div className="flex justify-between items-center mb-2">
         <span className="text-[8px] uppercase font-black text-gray-405 tracking-wider">{title}</span>
         <div className={`p-1.5 ${bgColor} rounded-lg group-hover:scale-110 transition-transform`}>

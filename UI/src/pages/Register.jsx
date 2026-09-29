@@ -725,7 +725,7 @@ const Register = () => {
 
   if (registered) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-xl shadow-2xl p-8 text-center animate-fade-in">
           <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-green-500 shadow-md">
             <CheckCircle className="text-green-600" size={48} />
@@ -736,7 +736,7 @@ const Register = () => {
           <p className="text-gray-700 text-lg font-medium mb-4">
             Awaiting Approval
           </p>
-          <div className="bg-blue-50 border border-blue-100 rounded-lg p-5 mb-8 text-left text-sm text-blue-800 leading-relaxed">
+          <div className="bg-teal-50 border border-teal-100 rounded-lg p-5 mb-8 text-left text-sm text-teal-800 leading-relaxed">
             <p className="font-semibold mb-2">Next Steps:</p>
             <ul className="list-disc list-inside space-y-1">
               <li>
@@ -752,7 +752,7 @@ const Register = () => {
           </div>
           <button
             onClick={() => navigate("/login")}
-            className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-3 rounded-lg transition-all duration-200 shadow-md"
+            className="w-full bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white font-semibold py-3 rounded-lg transition-all duration-200 shadow-md"
           >
             Return to Login
           </button>
@@ -762,10 +762,10 @@ const Register = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-2xl p-8 sm:p-10">
+    <div className="min-h-screen bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-2xl w-full bg-white rounded-xl shadow-2xl p-8 sm:p-10">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+          <div className="w-16 h-16 bg-gradient-to-br from-teal-600 to-teal-800 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg">
             <BookOpen className="text-white" size={32} />
           </div>
           <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
@@ -796,7 +796,7 @@ const Register = () => {
               />
               <select
                 required
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 outline-none transition-all appearance-none"
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none"
                 value={formData.universityId}
                 onChange={(e) =>
                   setFormData({
@@ -832,7 +832,7 @@ const Register = () => {
                 />
                 <input
                   type="number"
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 outline-none transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
                   placeholder="12345"
                   value={formData.empId}
                   onChange={(e) =>
@@ -855,7 +855,7 @@ const Register = () => {
                 />
                 <input
                   type="number"
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 outline-none transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
                   placeholder="67890"
                   value={formData.collegeId}
                   onChange={(e) =>
@@ -881,7 +881,7 @@ const Register = () => {
                 <input
                   type="text"
                   maxLength={12}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 outline-none transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
                   placeholder="123456789012"
                   value={formData.aadharNo}
                   onChange={(e) => {
@@ -906,7 +906,7 @@ const Register = () => {
                 <input
                   type="text"
                   maxLength={10}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 outline-none transition-all uppercase"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all uppercase"
                   placeholder="ABCDE1234F"
                   value={formData.panNo}
                   onChange={(e) =>
@@ -931,7 +931,7 @@ const Register = () => {
                 />
                 <input
                   type="text"
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 outline-none transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
                   placeholder="e.g. 5 Years"
                   value={formData.experience}
                   onChange={(e) =>
@@ -954,7 +954,7 @@ const Register = () => {
                 />
                 <select
                   required
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 outline-none transition-all appearance-none disabled:bg-gray-50 disabled:cursor-not-allowed"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none disabled:bg-gray-50 disabled:cursor-not-allowed"
                   value={formData.subjectId1}
                   onChange={(e) =>
                     setFormData({ ...formData, subjectId1: e.target.value })
@@ -984,7 +984,7 @@ const Register = () => {
                   size={18}
                 />
                 <select
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 outline-none transition-all appearance-none disabled:bg-gray-50 disabled:cursor-not-allowed"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none disabled:bg-gray-50 disabled:cursor-not-allowed"
                   value={formData.subjectId2}
                   onChange={(e) =>
                     setFormData({ ...formData, subjectId2: e.target.value })
@@ -1014,7 +1014,7 @@ const Register = () => {
                   size={18}
                 />
                 <select
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 outline-none transition-all appearance-none disabled:bg-gray-50 disabled:cursor-not-allowed"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none disabled:bg-gray-50 disabled:cursor-not-allowed"
                   value={formData.subjectId3}
                   onChange={(e) =>
                     setFormData({ ...formData, subjectId3: e.target.value })
@@ -1052,7 +1052,7 @@ const Register = () => {
                 <input
                   type="text"
                   required
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 outline-none transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
                   placeholder="Prof. John Doe"
                   value={formData.name}
                   onChange={(e) =>
@@ -1076,7 +1076,7 @@ const Register = () => {
                 <input
                   type="email"
                   required
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 outline-none transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
                   placeholder="john.doe@university.edu"
                   value={formData.email}
                   onChange={(e) =>
@@ -1102,8 +1102,8 @@ const Register = () => {
                 <input
                   type="password"
                   required
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 outline-none transition-all"
-                  placeholder="••••••••"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
+                  placeholder="��������"
                   value={formData.password}
                   onChange={(e) =>
                     setFormData({ ...formData, password: e.target.value })
@@ -1126,7 +1126,7 @@ const Register = () => {
                 <input
                   type="tel"
                   maxLength={10}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 outline-none transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
                   placeholder="9876543210"
                   value={formData.phone}
                   onChange={(e) => {
@@ -1150,7 +1150,7 @@ const Register = () => {
               />
               <textarea
                 rows={2}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 outline-none transition-all"
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
                 placeholder="Department of CS, Building 3, CBC Campus"
                 value={formData.address}
                 onChange={(e) =>
@@ -1162,7 +1162,7 @@ const Register = () => {
           </div>
 
           {/* Profile Picture Camera Module */}
-          <div className="bg-gray-50 rounded-2xl p-5 border border-gray-200">
+          <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
             <label className="block text-gray-800 font-bold mb-3">
               Profile Verification Photo *
             </label>
@@ -1183,7 +1183,7 @@ const Register = () => {
                     <canvas ref={canvasRef} style={{ display: 'none' }} width="640" height="480" />
                     
                     {/* Smart Auto-Capture Status Overlay */}
-                    <div className="absolute top-3 left-3 right-3 bg-slate-900/90  text-white py-2 px-3 rounded-lg flex items-center justify-between text-xs border border-white/10 shadow-lg select-none z-10">
+                    <div className="absolute top-3 left-3 right-3 bg-gray-900/90  text-white py-2 px-3 rounded-lg flex items-center justify-between text-xs border border-white/10 shadow-lg select-none z-10">
                       <div className="flex items-center gap-2">
                         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
                           isLandmarkerLoaded 
@@ -1208,7 +1208,7 @@ const Register = () => {
                             ? "bg-amber-500/20 text-amber-300 border-amber-500/30 animate-ping" 
                             : lastActionText.startsWith("Blink") 
                             ? "bg-green-500/20 text-green-300 border-green-500/30" 
-                            : "bg-blue-500/20 text-blue-300 border-blue-500/30"
+                            : "bg-teal-600/20 text-teal-400 border-teal-500/30"
                         }`}>
                           {hasMultipleFaces ? "Warning" : lastActionText}
                         </span>
@@ -1218,7 +1218,7 @@ const Register = () => {
                     {/* Multi-Face Block Overlay */}
                     {hasMultipleFaces && (
                       <div className="absolute inset-0 bg-red-950/85  flex flex-col items-center justify-center p-4 text-center select-none animate-fade-in z-20">
-                        <span className="text-3xl mb-2">⚠️</span>
+                        <span className="text-3xl mb-2">??</span>
                         <h4 className="font-extrabold text-red-200 text-sm">Multiple People Detected!</h4>
                         <p className="text-xs text-red-300 mt-1 max-w-[200px]">
                           Please ensure only one person is in the camera frame to proceed.
@@ -1231,7 +1231,7 @@ const Register = () => {
                   <div className="md:col-span-2 bg-white border border-gray-200 rounded-xl p-4 flex flex-col justify-between shadow-sm">
                     <div>
                       <h5 className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-3 flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 bg-blue-600 rounded-full" />
+                        <span className="w-1.5 h-1.5 bg-teal-700 rounded-full" />
                         Quality Checklist
                       </h5>
                       
@@ -1310,7 +1310,7 @@ const Register = () => {
                     </div>
 
                     <div className="text-[10px] text-gray-400 leading-tight mt-3 bg-gray-50 p-2 rounded">
-                      💡 Ensure you are in a well-lit room, facing forward, and hold still for auto-capture.
+                      ?? Ensure you are in a well-lit room, facing forward, and hold still for auto-capture.
                     </div>
                   </div>
                 </div>
@@ -1319,7 +1319,7 @@ const Register = () => {
                   <button
                     type="button"
                     onClick={() => capturePhoto(true)}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl font-semibold shadow-md transition flex items-center justify-center gap-2"
+                    className="flex-1 bg-teal-700 hover:bg-teal-800 text-white py-2.5 rounded-xl font-semibold shadow-md transition flex items-center justify-center gap-2"
                   >
                     <Camera size={18} />
                     Take Snapshot
@@ -1327,7 +1327,7 @@ const Register = () => {
                   <button
                     type="button"
                     onClick={stopCamera}
-                    className="px-6 bg-gray-200 hover:bg-gray-300 text-gray-800 py-2.5 rounded-xl font-semibold transition flex items-center justify-center gap-2"
+                    className="px-6 bg-gray-200 hover:bg-gray-300 text-gray-800 py-2.5 rounded-md font-semibold transition flex items-center justify-center gap-2"
                   >
                     Cancel
                   </button>
@@ -1356,7 +1356,7 @@ const Register = () => {
                   <button
                     type="button"
                     onClick={startCamera}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl font-semibold transition flex items-center justify-center gap-2"
+                    className="flex-1 bg-teal-700 hover:bg-teal-800 text-white py-2 rounded-md font-semibold transition flex items-center justify-center gap-2"
                   >
                     <Camera size={18} />
                     Retake photo
@@ -1377,7 +1377,7 @@ const Register = () => {
                   <button
                     type="button"
                     onClick={startCamera}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-all shadow-md flex items-center gap-2"
+                    className="bg-teal-700 hover:bg-teal-800 text-white px-5 py-2 rounded-md text-sm font-semibold transition-all shadow-md flex items-center gap-2"
                   >
                     <Camera size={16} />
                     Use Webcam
@@ -1400,7 +1400,7 @@ const Register = () => {
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-400 disabled:to-gray-500 text-white font-bold py-3 rounded-xl transition-all duration-200 shadow-lg flex items-center justify-center gap-2"
+              className="flex-1 bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 disabled:from-gray-400 disabled:to-gray-500 text-white font-bold py-3 rounded-md transition-all duration-200 shadow-lg flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>

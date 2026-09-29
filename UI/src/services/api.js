@@ -1,10 +1,17 @@
-﻿// Centralized API configuration
+// Centralized API configuration
 const API_URL = import.meta.env.VITE_API_URL;
 import message from './messageService';
 
 const getToken = () => sessionStorage.getItem('token');
 
 const handleResponse = async (response, options = {}) => {
+  if (response.status === 401) {
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
+    window.location.href = '/login';
+    throw new Error('Session expired');
+  }
+
   if (!response.ok) {
     let errorMessage = `HTTP error! status: ${response.status}`;
     try {

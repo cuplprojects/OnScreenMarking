@@ -9,12 +9,17 @@ const routeLabels = {
   // Admin paths
   '/admin/dashboard': { label: 'Dashboard', icon: 'LayoutDashboard' },
   '/admin/universities': { label: 'Universities', icon: 'Building2' },
+  '/admin/colleges': { label: 'Colleges', icon: 'Building' },
   '/admin/departments': { label: 'Departments', icon: 'Briefcase' },
+  '/admin/courses': { label: 'Courses', icon: 'Book' },
   '/admin/subjects': { label: 'Subjects', icon: 'BookOpen' },
   '/admin/sessions': { label: 'Session Management', icon: 'Calendar' },
   '/admin/projects': { label: 'Project Management', icon: 'ClipboardList' },
   '/admin/papers': { label: 'Paper Management', icon: 'FileText' },
+  '/admin/master-papers': { label: 'Master Papers', icon: 'FileText' },
+  '/admin/import-papers': { label: 'Import Papers', icon: 'UploadCloud' },
   '/admin/section-config': { label: 'Section Configuration', icon: 'Layers' },
+  '/admin/question-types': { label: 'Question Types', icon: 'HelpCircle' },
   '/admin/users': { label: 'Users', icon: 'Users' },
   '/admin/role-management': { label: 'Roles & Permissions', icon: 'Shield' },
   '/admin/attendance': { label: 'Attendance', icon: 'Users' },
@@ -23,23 +28,28 @@ const routeLabels = {
   // Coordinator paths
   '/coordinator/dashboard': { label: 'Dashboard', icon: 'LayoutDashboard' },
   '/departments': { label: 'Departments', icon: 'Briefcase' },
+  '/courses': { label: 'Courses', icon: 'Book' },
   '/subjects': { label: 'Subjects', icon: 'BookOpen' },
   '/sessions': { label: 'Session Management', icon: 'Calendar' },
   '/projects': { label: 'Project Management', icon: 'ClipboardList' },
   '/papers': { label: 'Paper Management', icon: 'FileText' },
+  '/master-papers': { label: 'Master Papers', icon: 'FileText' },
+  '/import-papers': { label: 'Import Papers', icon: 'UploadCloud' },
   '/allocate-scripts': { label: 'Script Allocation', icon: 'Layers' },
   '/section-config': { label: 'Section Configuration', icon: 'Layers' },
+  '/attendance': { label: 'Attendance', icon: 'Users' },
 
   // Examiner paths
   '/': { label: 'Dashboard', icon: 'LayoutDashboard' },
   '/scripts': { label: 'My Allocated Scripts', icon: 'FileText' },
   '/marking': { label: 'Script Marking', icon: 'Layers' },
   '/reports': { label: 'Reports', icon: 'Briefcase' },
-  '/settings': { label: 'Settings', icon: 'Briefcase' }
+  '/settings': { label: 'Settings', icon: 'Settings' },
+  '/profile': { label: 'My Profile Workspace', icon: 'User' }
 };
 
 export function BreadcrumbProvider({ children }) {
-  const { userType } = useAuth();
+  const { userType, universityId: userUniversityId } = useAuth();
   const location = useLocation();
 
   const getDashboardPath = useCallback(() => {
@@ -77,13 +87,13 @@ export function BreadcrumbProvider({ children }) {
       return p === '/admin/sessions' || p === '/admin/projects' || p === '/sessions' || p === '/projects';
     };
     
-    const hasVisitedSession = navigationHistory.some(isProjectOrSessionPath);
     const isCurrentlySession = isProjectOrSessionPath(path);
     const isConfig = path.includes('section-config');
     const isMainPage = path.includes('papers') || path.includes('allocate-scripts') || path.includes('users') || path.includes('project-dashboard');
     const isDashboardPath = path === '/admin/dashboard' || path === '/coordinator/dashboard' || path === '/';
 
-    if ((hasVisitedSession || isConfig) && !isCurrentlySession && !isMainPage && !isDashboardPath) {
+    // Only inject Sessions & Projects as a parent if explicitly on a child page like section-config
+    if (isConfig && !isCurrentlySession && !isMainPage && !isDashboardPath) {
       newBreadcrumbs.push({
         label: 'Sessions & Projects',
         path: sessionPath,
@@ -91,16 +101,38 @@ export function BreadcrumbProvider({ children }) {
       });
     }
 
+    const isUniversityConfigPath = (p) => {
+      return p === '/admin/departments' || p === '/departments' ||
+             p === '/admin/courses' || p === '/courses' ||
+             p === '/admin/subjects' || p === '/subjects' ||
+             p === '/admin/sessions' || p === '/sessions' ||
+             p === '/admin/master-papers' || p === '/master-papers';
+    };
+
+    if (isUniversityConfigPath(path)) {
+      newBreadcrumbs.push({
+        label: 'University Config',
+        path: userType === 'admin' ? '/admin/departments' : '/departments',
+        icon: 'Settings2'
+      });
+    }
+
     // Add current route if it's not dashboard
     if (path !== '/admin/dashboard' && path !== '/coordinator/dashboard' && path !== '/') {
       const routeInfo = routeLabels[path];
       if (routeInfo) {
-        newBreadcrumbs.push({
-          label: routeInfo.label,
-          path: path,
-          icon: routeInfo.icon,
-          queryParams: Object.fromEntries(queryParams)
-        });
+        const isConfigPath = isUniversityConfigPath(path);
+        const hasUniversitySelected = userType === 'coordinator' ? !!userUniversityId : queryParams.has('universityId');
+        
+        // Only push the actual tab name if we have a university selected (or if it's not a config path)
+        if (!isConfigPath || hasUniversitySelected) {
+          newBreadcrumbs.push({
+            label: routeInfo.label,
+            path: path,
+            icon: routeInfo.icon,
+            queryParams: Object.fromEntries(queryParams)
+          });
+        }
       }
     }
 
@@ -123,7 +155,8 @@ export function BreadcrumbProvider({ children }) {
   const setBreadcrumb = useCallback((items) => {
     const activeDashboard = getDashboardPath();
     const dashboardItem = { label: 'Dashboard', path: activeDashboard, icon: 'LayoutDashboard' };
-    setBreadcrumbs([dashboardItem, ...items]);
+    const filteredItems = items.filter(item => item.label !== 'Dashboard');
+    setBreadcrumbs([dashboardItem, ...filteredItems]);
   }, [getDashboardPath]);
 
   const addBreadcrumb = useCallback((item) => {

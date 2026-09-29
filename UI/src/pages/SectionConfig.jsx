@@ -409,7 +409,7 @@ export default function SectionConfig() {
 
   const getQuestionTypeColor = (type) => {
     const colors = {
-      MCQ: 'bg-blue-100 text-blue-800 border-blue-300',
+      MCQ: 'bg-teal-100 text-teal-800 border-teal-300',
       SA: 'bg-green-100 text-green-800 border-green-300',
       LA: 'bg-purple-100 text-purple-800 border-purple-300',
       CS: 'bg-orange-100 text-orange-800 border-orange-300',
@@ -444,7 +444,7 @@ export default function SectionConfig() {
 
   // Helper component for Stat Cards
   const StatCard = ({ label, value, icon: Icon, colorClass }) => (
-    <div className="bg-white border border-gray-200 rounded-2xl p-5 flex items-center gap-4 shadow-sm hover:shadow-md transition-all hover:border-blue-300">
+    <div className="bg-white border border-gray-200 rounded-xl p-5 flex items-center gap-4 shadow-sm hover:shadow-md transition-all hover:border-teal-300">
       <div className={`p-3 rounded-xl ${colorClass}`}>
         <Icon className="w-6 h-6" />
       </div>
@@ -457,14 +457,14 @@ export default function SectionConfig() {
 
   // Helper component for Step Indicator
   const StepIndicator = ({ step, label, active, completed }) => (
-    <div className={`flex items-center gap-2 ${active || completed ? 'text-blue-600' : 'text-gray-400'}`}>
-      <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all duration-300 text-xs ${completed ? 'bg-blue-600 border-blue-600 text-white' :
-          active ? 'border-blue-500 bg-blue-50 text-blue-600 shadow-sm' :
+    <div className={`flex items-center gap-2 ${active || completed ? 'text-teal-700' : 'text-gray-400'}`}>
+      <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all duration-300 text-xs ${completed ? 'bg-teal-700 border-teal-600 text-white' :
+          active ? 'border-teal-500 bg-teal-50 text-teal-700 shadow-sm' :
             'border-gray-200 bg-gray-50'
         }`}>
         {completed ? <CheckCircle2 className="w-3.5 h-3.5" /> : <span className="font-bold">{step}</span>}
       </div>
-      <span className={`text-[9px] font-extrabold uppercase tracking-wider ${active ? 'text-blue-600' : ''}`}>{label}</span>
+      <span className={`text-[9px] font-extrabold uppercase tracking-wider ${active ? 'text-teal-700' : ''}`}>{label}</span>
     </div>
   );
 
@@ -472,16 +472,16 @@ export default function SectionConfig() {
     <div className="min-h-screen bg-gray-50 p-4 lg:p-6">
       <div className="max-w-[1800px] mx-auto">
         {/* Slim Header Section */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-2xl shadow-md px-5 py-3 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="bg-gradient-to-r from-teal-600 to-teal-700 text-white rounded-xl shadow-md px-5 py-3 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-1.5 bg-white/10 rounded-xl">
-              <Layers className="w-5 h-5 text-blue-100" />
+              <Layers className="w-5 h-5 text-teal-100" />
             </div>
             <div>
               <h1 className="text-sm font-bold tracking-tight">
                 Subject Configuration
               </h1>
-              <p className="text-blue-100/80 text-[10px] font-medium leading-none mt-0.5">
+              <p className="text-teal-100/80 text-[10px] font-medium leading-none mt-0.5">
                 Structure and manage examination sections
               </p>
             </div>
@@ -492,12 +492,12 @@ export default function SectionConfig() {
         {/* Step 3: Manage Sections */}
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
           {/* Header & Stats in a single row */}
-          <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
             <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
               <div className="flex items-center gap-4">
                 <button
                   onClick={handleBackFromSections}
-                  className="p-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-600 transition-all active:scale-95"
+                  className="p-2 bg-gray-100 hover:bg-gray-200 rounded-md text-gray-600 transition-all active:scale-95"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
@@ -509,21 +509,21 @@ export default function SectionConfig() {
 
               <div className="flex items-center gap-4 flex-grow max-w-2xl">
                 <div className="flex-grow grid grid-cols-3 gap-3">
-                  <div className="bg-blue-50 p-3 rounded-2xl border border-blue-100 flex items-center gap-3">
-                    <Award className="w-5 h-5 text-blue-500" />
+                  <div className="bg-teal-50 p-3 rounded-xl border border-teal-100 flex items-center gap-3">
+                    <Award className="w-5 h-5 text-teal-600" />
                     <div>
-                      <p className="text-[10px] text-blue-600 uppercase font-bold tracking-tight">Max</p>
+                      <p className="text-[10px] text-teal-700 uppercase font-bold tracking-tight">Max</p>
                       <p className="text-sm font-bold text-gray-900">{selectedPaper?.maxMarks}</p>
                     </div>
                   </div>
-                  <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-100 flex items-center gap-3">
+                  <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 flex items-center gap-3">
                     <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                     <div>
                       <p className="text-[10px] text-emerald-600 uppercase font-bold tracking-tight">Allocated</p>
                       <p className="text-sm font-bold text-gray-900">{calculateTotalSectionMarks()}</p>
                     </div>
                   </div>
-                  <div className="bg-red-50 p-3 rounded-2xl border border-red-100 flex items-center gap-3">
+                  <div className="bg-red-50 p-3 rounded-xl border border-red-100 flex items-center gap-3">
                     <Clock className="w-5 h-5 text-red-500" />
                     <div>
                       <p className="text-[10px] text-red-600 uppercase font-bold tracking-tight">Left</p>
@@ -541,7 +541,7 @@ export default function SectionConfig() {
                     disabled={isAddSectionDisabled()}
                     className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold transition-all shrink-0 ${isAddSectionDisabled()
                         ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md active:scale-95'
+                        : 'bg-teal-700 hover:bg-teal-800 text-white shadow-md active:scale-95'
                       }`}
                   >
                     <Plus className="w-5 h-5" />
@@ -554,11 +554,11 @@ export default function SectionConfig() {
 
           {/* Section Creation Form - Side by Side */}
           {showSectionForm && (
-            <div className="bg-white border border-blue-200 rounded-3xl p-6 shadow-xl animate-in zoom-in-95 duration-300">
+            <div className="bg-white border border-teal-200 rounded-2xl p-6 shadow-xl animate-in zoom-in-95 duration-300">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-4">
-                  <div className="p-2 bg-blue-100 rounded-xl">
-                    <Layers className="w-6 h-6 text-blue-600" />
+                  <div className="p-2 bg-teal-100 rounded-xl">
+                    <Layers className="w-6 h-6 text-teal-700" />
                   </div>
                   <h3 className="text-xl font-bold text-gray-900">
                     {editingSectionId ? 'Edit Section' : 'Create Section'}
@@ -568,7 +568,7 @@ export default function SectionConfig() {
                   <button
                     onClick={handleSaveSection}
                     disabled={loading}
-                    className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md transition-all disabled:opacity-50 text-sm"
+                    className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-bold shadow-md transition-all disabled:opacity-50 text-sm"
                   >
                     {loading ? 'Saving...' : 'Save Changes'}
                   </button>
@@ -588,7 +588,7 @@ export default function SectionConfig() {
               <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
                 {/* Left Column: Basic Info */}
                 <div className="xl:col-span-3 space-y-4">
-                  <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
                     <label className="block text-gray-700 text-xs font-bold mb-2 uppercase tracking-tight">Section Details</label>
                     <div className="space-y-3">
                       <input
@@ -597,7 +597,7 @@ export default function SectionConfig() {
                         list="sectionMastersList"
                         value={sectionForm.name}
                         onChange={handleSectionFormChange}
-                        className="w-full bg-white text-gray-900 px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                        className="w-full bg-white text-gray-900 px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-teal-500 outline-none text-sm"
                         placeholder="Section Name"
                         autoComplete="off"
                       />
@@ -610,13 +610,13 @@ export default function SectionConfig() {
                         name="description"
                         value={sectionForm.description}
                         onChange={handleSectionFormChange}
-                        className="w-full bg-white text-gray-900 px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none h-24 text-sm"
+                        className="w-full bg-white text-gray-900 px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-teal-500 outline-none h-24 text-sm"
                         placeholder="Description"
                       />
                     </div>
                   </div>
 
-                  <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
                     <label className="block text-gray-700 text-xs font-bold mb-2 uppercase tracking-tight">Structure</label>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
@@ -662,17 +662,17 @@ export default function SectionConfig() {
                     </div>
                     <button
                       onClick={generateQuestions}
-                      className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-sm font-bold transition-all"
+                      className="w-full mt-4 bg-teal-700 hover:bg-teal-800 text-white py-2 rounded-md text-sm font-bold transition-all"
                     >
                       {showQuestionPreview ? "Regenerate Questions" : "Generate Questions"}
                     </button>
                   </div>
 
                   {showQuestionPreview && (
-                    <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 animate-in slide-in-from-top-2 duration-300">
-                      <label className="block text-blue-800 text-xs font-bold mb-2 uppercase tracking-tight">Bulk Options</label>
+                    <div className="bg-teal-50 p-4 rounded-xl border border-teal-100 animate-in slide-in-from-top-2 duration-300">
+                      <label className="block text-teal-800 text-xs font-bold mb-2 uppercase tracking-tight">Bulk Options</label>
                       <div className="space-y-1">
-                        <p className="text-[10px] text-blue-600 font-semibold mb-1">Set Type for All Questions:</p>
+                        <p className="text-[10px] text-teal-700 font-semibold mb-1">Set Type for All Questions:</p>
                         <select
                           value={
                             questions.length > 0 && questions.every(q => q.type && q.type === questions[0].type)
@@ -685,7 +685,7 @@ export default function SectionConfig() {
                               setQuestions(prev => prev.map(q => ({ ...q, type: selectedType })));
                             }
                           }}
-                          className="w-full bg-white px-3 py-2 rounded-lg border border-blue-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-gray-700 shadow-sm transition-all"
+                          className="w-full bg-white px-3 py-2 rounded-lg border border-teal-200 text-sm focus:ring-2 focus:ring-teal-500 outline-none font-bold text-gray-700 shadow-sm transition-all"
                         >
                           <option value="">Choose Type...</option>
                           {dbQuestionTypes.map(type => (
@@ -699,7 +699,7 @@ export default function SectionConfig() {
                               type="text"
                               value={newTypeName}
                               onChange={(e) => setNewTypeName(e.target.value)}
-                              className="flex-grow bg-white px-2 py-1.5 rounded-lg border border-blue-200 text-xs font-semibold text-gray-700 focus:ring-1 focus:ring-blue-500 outline-none"
+                              className="flex-grow bg-white px-2 py-1.5 rounded-lg border border-teal-200 text-xs font-semibold text-gray-700 focus:ring-1 focus:ring-teal-500 outline-none"
                               placeholder="Type name (e.g. MCQ)"
                               disabled={isSavingNewType}
                             />
@@ -723,7 +723,7 @@ export default function SectionConfig() {
                                   setIsSavingNewType(false);
                                 }
                               }}
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-xs font-bold"
+                              className="bg-teal-700 hover:bg-teal-800 text-white px-3 py-1 rounded-lg text-xs font-bold"
                               disabled={isSavingNewType}
                             >
                               Save
@@ -741,7 +741,7 @@ export default function SectionConfig() {
                           <button
                             type="button"
                             onClick={() => setShowNewTypeInput(true)}
-                            className="text-[10px] text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 mt-1.5"
+                            className="text-[10px] text-teal-700 hover:text-teal-800 font-bold flex items-center gap-1 mt-1.5"
                           >
                             <Plus className="w-3.5 h-3.5" /> Add New Type
                           </button>
@@ -754,7 +754,7 @@ export default function SectionConfig() {
                 {/* Right Column: Questions Grid */}
                 <div className="xl:col-span-9">
                   {showQuestionPreview ? (
-                    <div className="bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden flex flex-col h-[600px]">
+                    <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden flex flex-col h-[600px]">
                       <div className="bg-gray-100 px-6 py-3 border-b border-gray-200 flex justify-between items-center">
                         <div className="flex items-center gap-3">
                           <h4 className="text-sm font-bold text-gray-700 uppercase tracking-tight">Question Configuration</h4>
@@ -763,7 +763,7 @@ export default function SectionConfig() {
                         <button
                           type="button"
                           onClick={handleAddQuestion}
-                          className="flex items-center gap-1.5 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95 animate-in fade-in"
+                          className="flex items-center gap-1.5 px-3 py-1 bg-teal-700 hover:bg-teal-800 text-white rounded-md text-xs font-bold transition-all shadow-sm active:scale-95 animate-in fade-in"
                         >
                           <Plus className="w-3.5 h-3.5" />
                           Add Question
@@ -783,7 +783,7 @@ export default function SectionConfig() {
                           </thead>
                           <tbody className="divide-y divide-gray-100 bg-white">
                             {questions.map((q, idx) => (
-                              <tr key={idx} className="hover:bg-blue-50/50 transition-colors">
+                              <tr key={idx} className="hover:bg-teal-50/50 transition-colors">
                                 <td className="px-4 py-2 text-gray-900 font-bold text-sm">
                                   <div className="flex items-center gap-1">
                                     <span className="text-gray-400">#</span>
@@ -791,7 +791,7 @@ export default function SectionConfig() {
                                       type="text"
                                       value={q.questionNo}
                                       onChange={(e) => handleQuestionChange(idx, 'questionNo', e.target.value)}
-                                      className="w-20 bg-gray-50 px-2 py-1 rounded-lg border border-gray-200 text-sm font-bold text-gray-900 focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none"
+                                      className="w-20 bg-gray-50 px-2 py-1 rounded-lg border border-gray-200 text-sm font-bold text-gray-900 focus:bg-white focus:ring-1 focus:ring-teal-500 outline-none"
                                       placeholder="No."
                                     />
                                   </div>
@@ -801,7 +801,7 @@ export default function SectionConfig() {
                                     type="number"
                                     value={q.marks}
                                     onChange={(e) => handleQuestionChange(idx, 'marks', e.target.value)}
-                                    className="w-20 bg-gray-50 px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:ring-1 focus:ring-blue-500 outline-none"
+                                    className="w-20 bg-gray-50 px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:ring-1 focus:ring-teal-500 outline-none"
                                     step="0.5"
                                   />
                                 </td>
@@ -809,7 +809,7 @@ export default function SectionConfig() {
                                   <select
                                     value={q.type}
                                     onChange={(e) => handleQuestionChange(idx, 'type', e.target.value)}
-                                    className={`w-full bg-gray-50 px-2 py-1.5 rounded-lg border text-sm outline-none ${!q.type ? 'border-red-200' : 'border-gray-200 focus:ring-1 focus:ring-blue-500'
+                                    className={`w-full bg-gray-50 px-2 py-1.5 rounded-lg border text-sm outline-none ${!q.type ? 'border-red-200' : 'border-gray-200 focus:ring-1 focus:ring-teal-500'
                                       }`}
                                   >
                                     <option value="">Type</option>
@@ -823,7 +823,7 @@ export default function SectionConfig() {
                                     type="checkbox"
                                     checked={q.isOptional}
                                     onChange={(e) => handleQuestionChange(idx, 'isOptional', e.target.checked)}
-                                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                                    className="w-4 h-4 rounded text-teal-700 focus:ring-teal-500"
                                   />
                                 </td>
                                 <td className="px-4 py-2">
@@ -853,10 +853,10 @@ export default function SectionConfig() {
                       </div>
                     </div>
                   ) : (
-                    <div className="h-full flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-3xl min-h-[400px]">
+                    <div className="h-full flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl min-h-[400px]">
                       <ListTodo className="w-12 h-12 text-gray-300 mb-4" />
                       <p className="text-gray-500 font-medium text-center px-10">
-                        Complete the section details and click <span className="font-bold text-blue-600">Generate Questions</span> to configure individual marks and types.
+                        Complete the section details and click <span className="font-bold text-teal-700">Generate Questions</span> to configure individual marks and types.
                       </p>
                     </div>
                   )}
@@ -869,28 +869,28 @@ export default function SectionConfig() {
           {sections.length > 0 && !showSectionForm && (
             <div className="space-y-4">
               <div className="flex items-center gap-3 mb-4 px-2">
-                <Layers className="w-6 h-6 text-blue-600" />
+                <Layers className="w-6 h-6 text-teal-700" />
                 <h3 className="text-xl font-bold text-gray-900">Configured Sections</h3>
               </div>
-              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead className="bg-gray-50/50 border-b border-gray-100">
                       <tr>
-                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Section</th>
-                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Questions</th>
-                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Total Marks</th>
-                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Attempt</th>
-                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Avg Marks</th>
-                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                        <th className="px-6 py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider">Section</th>
+                        <th className="px-6 py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider">Questions</th>
+                        <th className="px-6 py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider">Total Marks</th>
+                        <th className="px-6 py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider">Attempt</th>
+                        <th className="px-6 py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider">Avg Marks</th>
+                        <th className="px-6 py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {sections.map((section) => (
-                        <tr key={section.id} className="hover:bg-blue-50/30 transition-colors group">
-                          <td className="px-6 py-4">
+                        <tr key={section.id} className="hover:bg-teal-50/30 transition-colors group">
+                          <td className="px-6 py-2.5">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">
+                              <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-sm">
                                 {section.name}
                               </div>
                               <div className="flex flex-col">
@@ -901,22 +901,22 @@ export default function SectionConfig() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-6 py-2.5">
                             <div className="flex flex-col">
                               <span className="font-bold text-gray-900 text-sm">Q{section.startQuestion} - Q{section.endQuestion}</span>
                               <span className="text-xs text-gray-500">{section.questions?.length || 0} questions</span>
                             </div>
                           </td>
-                          <td className="px-6 py-4 font-bold text-gray-900 text-sm">{section.totalMarks}</td>
-                          <td className="px-6 py-4 font-bold text-gray-900 text-sm">{section.maxQuestionsToAttempt}</td>
-                          <td className="px-6 py-4 font-bold text-gray-900 text-sm">
+                          <td className="px-6 py-2.5 font-bold text-gray-900 text-sm">{section.totalMarks}</td>
+                          <td className="px-6 py-2.5 font-bold text-gray-900 text-sm">{section.maxQuestionsToAttempt}</td>
+                          <td className="px-6 py-2.5 font-bold text-gray-900 text-sm">
                             {(section.totalMarks / (section.endQuestion - section.startQuestion + 1)).toFixed(1)}
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-6 py-2.5">
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 onClick={() => handleEditSection(section)}
-                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                className="p-2 text-teal-700 hover:bg-teal-50 rounded-lg transition-colors"
                                 title="Edit Section"
                               >
                                 <Edit className="w-4 h-4" />
@@ -945,7 +945,7 @@ export default function SectionConfig() {
             <p className="text-gray-500 mb-6 font-medium">Start by adding a new section to define the paper structure</p>
             <button
               onClick={() => setShowSectionForm(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-bold shadow-lg shadow-blue-500/20 transition-all hover:scale-105"
+              className="bg-teal-700 hover:bg-teal-800 text-white px-8 py-4 rounded-xl font-bold shadow-lg shadow-teal-500/20 transition-all hover:scale-105"
             >
               Create First Section
             </button>
@@ -954,27 +954,27 @@ export default function SectionConfig() {
 
       {/* Delete Confirmation Modal */}
       {sectionToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6 text-center">
               <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
                 <Trash2 className="w-6 h-6 text-red-600" />
               </div>
-              <h3 className="text-lg font-black text-slate-900 mb-2">Delete Section?</h3>
-              <p className="text-sm text-slate-500 mb-6">
+              <h3 className="text-lg font-black text-gray-900 mb-2">Delete Section?</h3>
+              <p className="text-sm text-gray-500 mb-6">
                 Are you sure you want to delete this section? This action cannot be undone and will remove all questions configured within it.
               </p>
               <div className="flex gap-3">
                 <button
                   onClick={() => setSectionToDelete(null)}
-                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition-colors"
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition-colors"
                   disabled={loading}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={executeDeleteSection}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl transition-colors flex justify-center items-center"
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-md transition-colors flex justify-center items-center"
                   disabled={loading}
                 >
                   {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Yes, Delete'}

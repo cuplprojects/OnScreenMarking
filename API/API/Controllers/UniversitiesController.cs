@@ -244,5 +244,60 @@ namespace API.Controllers
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
+
+        [HttpGet("search")]
+        [AllowAnonymous]
+        public async Task<IActionResult> SearchUniversities(
+            [FromQuery] string? query = null,
+            [FromQuery] int skip = 0,
+            [FromQuery] int take = 10)
+        {
+            try
+            {
+                // Start with active universities only
+                var baseQuery = _context.Universities
+                    .Where(u => u.IsActive)
+                    .AsQueryable();
+
+                // Apply fuzzy search if query provided
+                if (!string.IsNullOrEmpty(query))
+                {
+                    var searchLower = query.ToLower();
+                    baseQuery = baseQuery.Where(u => u.UniversityName.ToLower().Contains(searchLower));
+                }
+
+                var totalCount = await baseQuery.CountAsync();
+
+                // Order by name and apply pagination
+                var results = await baseQuery
+                    .OrderBy(u => u.UniversityName)
+                    .Skip(skip)
+                    .Take(take)
+                    .Select(u => new
+                    {
+                        u.UniversityId,
+                        u.UniversityName,
+                        u.IsActive,
+                        u.CreatedAt,
+                        u.UpdatedAt,
+                        Departments = u.Departments.Select(d => new { d.DepartmentId }).ToList(),
+                        Projects = u.Projects.Select(p => new { p.ProjectId }).ToList()
+                    })
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    items = results,
+                    totalCount = totalCount,
+                    skip = skip,
+                    take = take,
+                    hasMore = (skip + take) < totalCount
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
     }
 }

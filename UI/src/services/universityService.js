@@ -48,6 +48,19 @@ const universityService = {
     return apiCall(`/universities/${universityId}`, {
       method: 'DELETE'
     });
+  },
+
+  // Fuzzy search active universities
+  searchUniversities: async (query = null, skip = 0, take = 10) => {
+    let url = '/universities/search?';
+    const params = [];
+    if (query) {
+      params.push(`query=${encodeURIComponent(query)}`);
+    }
+    params.push(`skip=${skip}`);
+    params.push(`take=${take}`);
+    url += params.join('&');
+    return apiCall(url);
   }
 };
 

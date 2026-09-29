@@ -86,11 +86,11 @@ export default function ScriptAllocation() {
     return (
       <th 
         onClick={() => handleSort(field)}
-        className={`px-3 py-3 cursor-pointer hover:bg-slate-100/80 transition-colors select-none group/header ${isCenter ? 'text-center' : ''}`}
+        className={`px-3 py-3 cursor-pointer hover:bg-gray-100/80 transition-colors select-none group/header ${isCenter ? 'text-center' : ''}`}
       >
         <div className={`flex items-center gap-1 ${isCenter ? 'justify-center' : ''}`}>
-          <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">{label}</span>
-          <span className="text-[9px] text-slate-400 group-hover/header:text-slate-600 transition-colors">
+          <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">{label}</span>
+          <span className="text-[9px] text-gray-400 group-hover/header:text-gray-600 transition-colors">
             {isSorted ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}
           </span>
           {hasFilter && (
@@ -275,38 +275,38 @@ export default function ScriptAllocation() {
 
 
   return (
-    <div className="min-h-screen bg-white pb-12 w-full">
-      {/* Unified Full-Width Header */}
-      <div className="bg-white border-b border-slate-200 px-6 lg:px-10 py-6 mb-8 shadow-sm sticky top-0 z-20">
-        <ProjectConfigHeader />
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2">
-          <div className="flex items-center gap-4">
-            <Link to="/admin/dashboard" className="p-2.5 hover:bg-slate-100 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 transition" title="Return to Dashboard">
-              <ChevronLeft size={16} />
-            </Link>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="bg-blue-50 text-blue-700 border border-blue-100 text-[8px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider">
-                  Allocation
-                </span>
+    <div className="min-h-screen bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4">
+      <ProjectConfigHeader />
+      
+      <div className="w-full space-y-4 mt-4">
+        
+        {/* Main Header Card */}
+        <div className="bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm sticky top-0 z-20">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="bg-teal-50 text-teal-700 border border-teal-100 text-[8px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider">
+                    Allocation
+                  </span>
+                </div>
+                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none flex items-center gap-2">
+                  <FileText className="text-teal-700" size={20} />
+                  Script Allocation
+                </h1>
+                <p className="text-xs text-gray-500 mt-1">Allocate answer scripts to examiners</p>
               </div>
-              <h1 className="text-lg font-black text-slate-900 mt-1 flex items-center gap-2 leading-tight">
-                <FileText className="text-blue-600" size={18} />
-                Script Allocation
-              </h1>
-              <p className="text-[10px] text-slate-500 mt-0.5">Allocate answer scripts to examiners</p>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="px-6 lg:px-10 w-full flex flex-col xl:flex-row gap-8 items-start">
+        <div className="w-full flex flex-col xl:flex-row gap-4 items-start">
 
         {/* Left Column: Master List */}
         <div className={`w-full ${activePaper ? 'xl:w-[50%]' : 'xl:w-full'} flex flex-col transition-all duration-300`}>
           <div className="mb-4">
-            <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-              <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-md flex items-center justify-center font-bold text-xs">
+            <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
+              <div className="w-6 h-6 bg-teal-100 text-teal-700 rounded-md flex items-center justify-center font-bold text-xs">
                 1
               </div>
               Select Paper
@@ -314,70 +314,85 @@ export default function ScriptAllocation() {
           </div>
 
           {tableLoading && papers.length === 0 ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader className="animate-spin text-blue-600" size={24} />
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-12 text-center flex flex-col items-center gap-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
+              <span className="text-xs font-bold text-gray-400">Loading papers...</span>
             </div>
           ) : papers.length === 0 ? (
-            <div className="text-center py-12">
-              <FileText className="mx-auto text-gray-300 mb-4" size={48} />
-              <p className="text-gray-600 font-medium">No papers found for this project</p>
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-16 text-center text-gray-500 font-medium leading-relaxed max-w-sm mx-auto space-y-3">
+              <FileText className="mx-auto text-gray-450 mb-2" size={32} />
+              <div>
+                <h3 className="font-extrabold text-gray-900 text-xs uppercase tracking-wider">No Papers Found</h3>
+                <p className="text-[10px] text-gray-400 mt-1">There are no papers found for this project.</p>
+              </div>
             </div>
           ) : (
-            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm flex flex-col">
-              <div className="p-3 border-b border-slate-200 bg-slate-50 flex items-center gap-3">
-                <Search size={16} className="text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="Search papers by code or name..." 
-                  className="bg-transparent border-none outline-none text-sm w-full text-slate-700"
-                  value={paperSearchQuery}
-                  onChange={(e) => setPaperSearchQuery(e.target.value)}
-                />
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col animate-fade-in">
+              <div className="p-4 border-b border-gray-100 bg-white flex items-center gap-3">
+                <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border border-gray-100 focus-within:ring-2 focus-within:ring-teal-500/20 focus-within:border-teal-500 transition-all w-full max-w-md">
+                  <Search size={13} className="text-gray-400 shrink-0" />
+                  <input 
+                    type="text" 
+                    placeholder="Search papers by code or name..." 
+                    className="w-full bg-transparent text-gray-800 placeholder-gray-400 font-semibold text-[11px] focus:outline-none"
+                    value={paperSearchQuery}
+                    onChange={(e) => setPaperSearchQuery(e.target.value)}
+                  />
+                  {paperSearchQuery && (
+                    <button onClick={() => setPaperSearchQuery('')} className="text-gray-300 hover:text-gray-500 transition">
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse whitespace-nowrap">
                   <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/50">
+                    <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
                       <SortHeader label="Code" field="paperCode" hasFilter={true} />
                       <SortHeader label="Paper Name" field="paperName" hasFilter={true} />
-                      <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-wider text-center">Pending</th>
-                      <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-wider text-center">Allocated</th>
-                      <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-wider text-center">Experts</th>
-                      <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-wider text-center">Action</th>
+                      <th className="px-6 py-2.5 text-center">Pending</th>
+                      <th className="px-6 py-2.5 text-center">Allocated</th>
+                      <th className="px-6 py-2.5 text-center">Experts</th>
+                      <th className="px-6 py-2.5 text-center">Action</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-gray-100 text-xs">
                     {papers.map(paper => (
                       <tr 
                         key={paper.paperId} 
-                        className={`border-b border-slate-50 hover:bg-blue-50/50 transition ${activePaper?.paperId === paper.paperId ? 'bg-blue-50' : ''}`}
+                        className={`hover:bg-gray-50/50 transition-colors ${activePaper?.paperId === paper.paperId ? 'bg-teal-50/30' : ''}`}
                       >
-                        <td className="p-3 text-sm font-bold text-slate-700">{paper.paperCode}</td>
-                        <td className="p-3 text-sm font-semibold text-slate-900">{paper.paperName}</td>
-                        <td className="p-3 text-center">
-                          <span className="inline-flex items-center gap-1.5 bg-yellow-50 text-yellow-700 px-2.5 py-0.5 rounded-md text-xs font-bold border border-yellow-100">
+                        <td className="px-6 py-2.5 font-extrabold text-gray-900">{paper.paperCode}</td>
+                        <td className="px-6 py-2.5 text-gray-600 font-medium">{paper.paperName}</td>
+                        <td className="px-6 py-2.5 text-center">
+                          <span className="inline-flex items-center gap-1.5 bg-yellow-50 text-yellow-700 px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-wider border border-yellow-100">
                             <Clock size={12} />
                             {paper.pendingScripts}
                           </span>
                         </td>
-                        <td className="p-3 text-center">
-                          <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 px-2.5 py-0.5 rounded-md text-xs font-bold border border-green-100">
+                        <td className="px-6 py-2.5 text-center">
+                          <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-wider border border-emerald-100">
                             <CheckCircle2 size={12} />
                             {paper.allocatedScripts}
                           </span>
                         </td>
-                        <td className="p-3 text-center">
-                          <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-md text-xs font-bold border border-blue-100">
+                        <td className="px-6 py-2.5 text-center">
+                          <span className="inline-flex items-center gap-1.5 bg-teal-50 text-teal-700 px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-wider border border-teal-100">
                             <Users size={12} />
                             {paper.expertsCount || 0}
                           </span>
                         </td>
-                        <td className="p-3 text-center">
+                        <td className="px-6 py-2.5 text-center">
                           <button
                             onClick={() => openAllocationPane(paper)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm inline-flex items-center justify-center gap-1.5 ${activePaper?.paperId === paper.paperId ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'}`}
+                            className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm inline-flex items-center justify-center gap-1.5 ${
+                              activePaper?.paperId === paper.paperId 
+                                ? 'bg-teal-700 text-white hover:bg-teal-800' 
+                                : 'bg-white border border-gray-200 text-gray-600 hover:border-teal-300 hover:text-teal-700'
+                            }`}
                           >
-                            <Zap size={14} />
+                            <Zap size={12} />
                             {activePaper?.paperId === paper.paperId ? 'Close' : 'Bulk Allocate'}
                           </button>
                         </td>
@@ -401,41 +416,41 @@ export default function ScriptAllocation() {
         {/* Right Column: Detail View */}
         {activePaper && (
         <div className="w-full xl:w-[50%] flex flex-col animate-in slide-in-from-right-4 duration-300">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex-1 flex flex-col overflow-hidden">
-            <div className="p-6 bg-slate-50 border-b border-slate-100">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm flex-1 flex flex-col overflow-hidden">
+            <div className="p-6 bg-gray-50 border-b border-gray-100">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-3 mb-1">
-                    <div className="w-7 h-7 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center font-bold text-sm">
+                    <div className="w-7 h-7 bg-teal-100 text-teal-700 rounded-lg flex items-center justify-center font-bold text-sm">
                       2
                     </div>
-                    <h2 className="text-lg font-black text-slate-900 tracking-tight">
+                    <h2 className="text-lg font-black text-gray-900 tracking-tight">
                       Bulk Allocate Scripts
                     </h2>
                   </div>
                   <div className="flex items-center gap-2 ml-10">
-                    <p className="text-sm font-semibold text-slate-600">
+                    <p className="text-sm font-semibold text-gray-600">
                       {activePaper.paperName}
                     </p>
-                    <span className="text-xs font-bold text-slate-400 bg-slate-200/50 px-2 py-0.5 rounded-md">
+                    <span className="text-xs font-bold text-gray-400 bg-gray-200/50 px-2 py-0.5 rounded-md">
                       {activePaper.paperCode}
                     </span>
                   </div>
                 </div>
                 <button 
                   onClick={() => openAllocationPane(activePaper)}
-                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-full transition-all"
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 rounded-full transition-all"
                 >
                   <X size={20} />
                 </button>
               </div>
-              <div className="mt-4 flex gap-4 border-b border-slate-200">
+              <div className="mt-4 flex gap-4 border-b border-gray-200">
                 <button
                   onClick={() => setActiveTab('allocate')}
                   className={`pb-2 text-sm font-bold transition-all border-b-2 ${
                     activeTab === 'allocate' 
-                      ? 'border-blue-600 text-blue-600' 
-                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                      ? 'border-teal-600 text-teal-700' 
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >
                   Allocate Scripts
@@ -444,8 +459,8 @@ export default function ScriptAllocation() {
                   onClick={() => setActiveTab('manage')}
                   className={`pb-2 text-sm font-bold transition-all border-b-2 ${
                     activeTab === 'manage' 
-                      ? 'border-blue-600 text-blue-600' 
-                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                      ? 'border-teal-600 text-teal-700' 
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >
                   Manage Allocations
@@ -456,12 +471,12 @@ export default function ScriptAllocation() {
             <div className="p-6 overflow-y-auto max-h-[800px]">
               {loading ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader className="animate-spin text-blue-600" size={32} />
+                  <Loader className="animate-spin text-teal-700" size={32} />
                 </div>
               ) : scripts.length === 0 ? (
-                <div className="bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-12 text-center">
-                  <FileText className="mx-auto text-slate-300 mb-4" size={48} />
-                  <p className="text-slate-500 font-bold">No scripts available for allocation</p>
+                <div className="bg-gray-50 rounded-xl border border-dashed border-gray-200 p-12 text-center">
+                  <FileText className="mx-auto text-gray-300 mb-4" size={48} />
+                  <p className="text-gray-500 font-bold">No scripts available for allocation</p>
                 </div>
               ) : (
                 <>
@@ -469,14 +484,14 @@ export default function ScriptAllocation() {
                     <>
                       {/* Mode Selection */}
                   <div className="mb-6">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Allocation Strategy</p>
-                    <div className="flex gap-2 p-1.5 bg-slate-100 rounded-xl border border-slate-200/60">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Allocation Strategy</p>
+                    <div className="flex gap-2 p-1.5 bg-gray-100 rounded-xl border border-gray-200/60">
                       <button
                         onClick={() => setBulkMode('even')}
                         className={`flex-1 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
                           bulkMode === 'even'
-                            ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50'
-                            : 'text-slate-500 hover:text-slate-700'
+                            ? 'bg-white text-teal-700 shadow-sm border border-gray-200/50'
+                            : 'text-gray-500 hover:text-gray-700'
                         }`}
                       >
                         Even Distribution
@@ -485,8 +500,8 @@ export default function ScriptAllocation() {
                         onClick={() => setBulkMode('custom')}
                         className={`flex-1 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
                           bulkMode === 'custom'
-                            ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50'
-                            : 'text-slate-500 hover:text-slate-700'
+                            ? 'bg-white text-teal-700 shadow-sm border border-gray-200/50'
+                            : 'text-gray-500 hover:text-gray-700'
                         }`}
                       >
                         Custom Distribution
@@ -496,22 +511,22 @@ export default function ScriptAllocation() {
 
                   {/* Even Distribution */}
                   {bulkMode === 'even' && (
-                    <div className="mb-8 p-6 bg-gradient-to-br from-blue-50 to-indigo-50/30 rounded-2xl border border-blue-100/60 shadow-sm relative overflow-hidden group">
+                    <div className="mb-8 p-6 bg-gradient-to-br from-teal-50 to-indigo-50/30 rounded-xl border border-teal-100/60 shadow-sm relative overflow-hidden group">
                       <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity duration-500 pointer-events-none">
                         <Zap size={120} />
                       </div>
                       <div className="flex items-start gap-4 relative z-10">
-                        <div className="p-3 bg-white rounded-xl shadow-sm text-blue-600 ring-1 ring-black/5">
-                          <Zap size={22} className="fill-blue-600/20" />
+                        <div className="p-3 bg-white rounded-xl shadow-sm text-teal-700 ring-1 ring-black/5">
+                          <Zap size={22} className="fill-teal-600/20" />
                         </div>
                         <div className="flex-1">
-                          <p className="text-base font-black text-slate-900 mb-1 tracking-tight">Automatic Distribution</p>
-                          <p className="text-sm text-slate-600 mb-5 leading-relaxed">
-                            Distribute <span className="font-bold text-slate-900 px-1">{scripts.filter(s => !allocationData[s.id]).length}</span> pending scripts evenly among <span className="font-bold text-slate-900 px-1">{examiners.length}</span> available examiners.
+                          <p className="text-base font-black text-gray-900 mb-1 tracking-tight">Automatic Distribution</p>
+                          <p className="text-sm text-gray-600 mb-5 leading-relaxed">
+                            Distribute <span className="font-bold text-gray-900 px-1">{scripts.filter(s => !allocationData[s.id]).length}</span> pending scripts evenly among <span className="font-bold text-gray-900 px-1">{examiners.length}</span> available examiners.
                           </p>
                           <button
                             onClick={calculateEvenDistribution}
-                            className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 hover:shadow-md hover:-translate-y-0.5 transition-all active:translate-y-0"
+                            className="px-5 py-2.5 bg-teal-700 text-white rounded-md text-sm font-bold hover:bg-teal-800 hover:shadow-md hover:-translate-y-0.5 transition-all active:translate-y-0"
                           >
                             Calculate Distribution
                           </button>
@@ -523,39 +538,39 @@ export default function ScriptAllocation() {
                   {/* Examiner List */}
                   <div className="mb-8">
                     <div className="flex items-center justify-between mb-5">
-                      <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Examiners Pool</p>
-                      <span className="text-[10px] font-black text-blue-700 bg-blue-100/50 px-2.5 py-1 rounded-full border border-blue-200/50 uppercase tracking-wide shadow-sm">
+                      <p className="text-xs font-black text-gray-500 uppercase tracking-widest">Examiners Pool</p>
+                      <span className="text-[10px] font-black text-teal-700 bg-teal-100/50 px-2.5 py-1 rounded-md border border-teal-200/50 uppercase tracking-wide shadow-sm">
                         {examiners.length} Available
                       </span>
                     </div>
                     
                     {examiners.length === 0 ? (
-                      <div className="p-10 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                        <Users className="mx-auto text-slate-300 mb-3" size={32} />
-                        <p className="text-sm font-bold text-slate-500">No subject experts assigned</p>
+                      <div className="p-10 text-center bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
+                        <Users className="mx-auto text-gray-300 mb-3" size={32} />
+                        <p className="text-sm font-bold text-gray-500">No subject experts assigned</p>
                       </div>
                     ) : (
                       <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
                         {examiners.map(examiner => (
-                          <div key={examiner.examinerId} className="flex items-center justify-between p-4 bg-white border border-slate-200/75 rounded-2xl hover:border-blue-300 hover:shadow-md hover:bg-blue-50/20 transition-all duration-300 group">
+                          <div key={examiner.examinerId} className="flex items-center justify-between p-4 bg-white border border-gray-200/75 rounded-xl hover:border-teal-300 hover:shadow-md hover:bg-teal-50/20 transition-all duration-300 group">
                             <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-indigo-50 text-blue-700 flex items-center justify-center font-black text-sm uppercase shadow-sm border border-blue-100/50 group-hover:scale-110 transition-transform duration-300">
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-100 to-indigo-50 text-teal-700 flex items-center justify-center font-black text-sm uppercase shadow-sm border border-teal-100/50 group-hover:scale-110 transition-transform duration-300">
                                 {(examiner.examinerName || 'E').charAt(0)}
                               </div>
                               <div>
-                                <p className="text-sm font-black text-slate-900 tracking-tight group-hover:text-blue-700 transition-colors">{examiner.examinerName || 'Unknown Examiner'}</p>
-                                <p className="text-[10px] font-bold text-slate-400 mt-0.5 tracking-wider uppercase">ID: {examiner.examinerId}</p>
+                                <p className="text-sm font-black text-gray-900 tracking-tight group-hover:text-teal-700 transition-colors">{examiner.examinerName || 'Unknown Examiner'}</p>
+                                <p className="text-[10px] font-bold text-gray-400 mt-0.5 tracking-wider uppercase">ID: {examiner.examinerId}</p>
                               </div>
                             </div>
                             <div className="flex items-center gap-3">
-                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider group-hover:text-blue-500 transition-colors">Allocate</span>
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider group-hover:text-teal-600 transition-colors">Allocate</span>
                               <input
                                 type="number"
                                 min="0"
                                 max={scripts.length}
                                 value={examinerCounts[examiner.examinerId] || 0}
                                 onChange={(e) => updateExaminerCount(examiner.examinerId, parseInt(e.target.value) || 0)}
-                                className="w-24 px-3 py-2 text-center text-sm font-black border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm group-hover:border-blue-200 bg-slate-50 focus:bg-white"
+                                className="w-24 px-3 py-2 text-center text-sm font-black border border-gray-200 rounded-xl focus:ring-4 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all shadow-sm group-hover:border-teal-200 bg-gray-50 focus:bg-white"
                               />
                             </div>
                           </div>
@@ -564,17 +579,17 @@ export default function ScriptAllocation() {
                     )}
                   </div>
 
-                  <div className="flex justify-end gap-4 pt-6 mt-4 border-t border-slate-100 sticky bottom-0 bg-white/95 backdrop-blur-sm pb-2">
+                  <div className="flex justify-end gap-4 pt-6 mt-4 border-t border-gray-100 sticky bottom-0 bg-white/95 backdrop-blur-sm pb-2">
                     <button
                       onClick={() => openAllocationPane(activePaper)}
-                      className="px-6 py-2.5 text-sm font-black text-slate-500 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all duration-300"
+                      className="px-6 py-2.5 text-sm font-black text-gray-500 hover:text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-all duration-300"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleBulkAllocate}
                       disabled={bulkLoading || examiners.length === 0}
-                      className="px-8 py-2.5 text-sm font-black text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 hover:-translate-y-0.5 active:translate-y-0"
+                      className="px-8 py-2.5 text-sm font-black text-white bg-gradient-to-r from-teal-600 to-indigo-600 rounded-md hover:from-teal-700 hover:to-indigo-700 shadow-lg shadow-teal-500/30 hover:shadow-teal-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 hover:-translate-y-0.5 active:translate-y-0"
                     >
                       {bulkLoading ? <Loader className="animate-spin" size={18} /> : <Zap size={18} />}
                       {bulkLoading ? 'Allocating...' : 'Confirm Allocation'}
@@ -583,7 +598,7 @@ export default function ScriptAllocation() {
                 </>
               ) : (
                 <div className="space-y-6">
-                  <div className="bg-amber-50 p-6 rounded-2xl border border-amber-200/60 shadow-sm">
+                  <div className="bg-amber-50 p-6 rounded-xl border border-amber-200/60 shadow-sm">
                     <h3 className="text-sm font-black text-amber-900 mb-2 flex items-center gap-2">
                       <AlertCircle size={16} /> Danger Zone
                     </h3>
@@ -607,7 +622,9 @@ export default function ScriptAllocation() {
           </div>
         </div>
         )}
+        </div>
       </div>
     </div>
   );
 }
+

@@ -355,83 +355,76 @@ export default function Attendance() {
     : parsedData;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 lg:p-8">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4">
+      <div className="w-full space-y-4">
         
-        <ProjectConfigHeader />
-
-        {/* Header Title */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-extrabold text-blue-700 mb-2">
-              Examiner Attendance
-            </h1>
-            <p className="text-gray-600 font-medium">
-              Upload attendance sheets, perform live schema mapping, and log active sessions.
-            </p>
+        {/* Header */}
+        <div className="bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">
+                Examiner Attendance
+              </h1>
+              <p className="text-xs text-gray-500 mt-1">Upload attendance sheets, perform schema mapping, and log active sessions</p>
+            </div>
+            <button
+              onClick={downloadTemplate}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-md font-bold text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm hover:shadow bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200"
+            >
+              <Download size={16} />
+              Download Template
+            </button>
           </div>
-          <button
-            onClick={downloadTemplate}
-            className="flex items-center gap-2 bg-white hover:bg-gray-50 border border-gray-300 shadow-sm text-gray-700 px-4 py-2.5 rounded-lg font-semibold transition"
-          >
-            <Download size={18} />
-            Download Excel Template
-          </button>
         </div>
-
-        {/* Alerts */}
-        
-        
 
         {/* Stats Dashboard */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-blue-100 text-blue-700 rounded-xl">
-              <Calendar size={24} />
+          <div className="bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
+            <div className="w-10 h-10 bg-teal-50 text-teal-700 rounded-xl flex items-center justify-center shrink-0">
+              <Calendar size={20} />
             </div>
             <div>
-              <p className="text-sm text-gray-500 font-semibold">Total Logs</p>
-              <h3 className="text-2xl font-bold text-gray-900">{stats.total}</h3>
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Total Logs</p>
+              <h3 className="text-xl font-black text-gray-900">{stats.total}</h3>
             </div>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-green-100 text-green-700 rounded-xl">
-              <UserCheck size={24} />
+          <div className="bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
+            <div className="w-10 h-10 bg-emerald-50 text-emerald-700 rounded-xl flex items-center justify-center shrink-0">
+              <UserCheck size={20} />
             </div>
             <div>
-              <p className="text-sm text-gray-500 font-semibold">Present Today</p>
-              <h3 className="text-2xl font-bold text-gray-900">{stats.present}</h3>
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Present Today</p>
+              <h3 className="text-xl font-black text-gray-900">{stats.present}</h3>
             </div>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-red-100 text-red-700 rounded-xl">
-              <UserX size={24} />
+          <div className="bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
+            <div className="w-10 h-10 bg-rose-50 text-rose-700 rounded-xl flex items-center justify-center shrink-0">
+              <UserX size={20} />
             </div>
             <div>
-              <p className="text-sm text-gray-500 font-semibold">Absent Today</p>
-              <h3 className="text-2xl font-bold text-gray-900">{stats.absent}</h3>
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Absent Today</p>
+              <h3 className="text-xl font-black text-gray-900">{stats.absent}</h3>
             </div>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-amber-100 text-amber-700 rounded-xl">
-              <Clock size={24} />
+          <div className="bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-50 text-amber-700 rounded-xl flex items-center justify-center shrink-0">
+              <Clock size={20} />
             </div>
             <div>
-              <p className="text-sm text-gray-500 font-semibold">Half-Day Today</p>
-              <h3 className="text-2xl font-bold text-gray-900">{stats.halfDay}</h3>
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Half-Day Today</p>
+              <h3 className="text-xl font-black text-gray-900">{stats.halfDay}</h3>
             </div>
           </div>
         </div>
 
-        {/* Upload Zone & Interactive Parsing */}
+        {/* Upload Zone */}
         {!showPreview && (
           <div 
             onDragOver={handleDragOver}
             onDrop={handleDrop}
-            className="bg-white rounded-3xl border-2 border-dashed border-gray-300 hover:border-blue-500 p-8 lg:p-12 text-center transition-all shadow-sm cursor-pointer relative overflow-hidden group"
+            className="bg-white rounded-2xl border-2 border-dashed border-gray-200 hover:border-teal-500 p-12 text-center transition-all shadow-sm cursor-pointer group"
             onClick={() => fileInputRef.current?.click()}
           >
-            <div className="absolute inset-0 bg-blue-50/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             <input 
               type="file" 
               ref={fileInputRef} 
@@ -439,20 +432,20 @@ export default function Attendance() {
               accept=".xlsx,.xls,.csv" 
               className="hidden" 
             />
-            <div className="flex flex-col items-center gap-4 relative z-10">
-              <div className="w-16 h-16 bg-blue-50 group-hover:bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center transition-all transform group-hover:scale-110 shadow-inner">
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-16 h-16 bg-teal-50 group-hover:bg-teal-100 text-teal-700 rounded-xl flex items-center justify-center transition-all">
                 <Upload size={32} />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-gray-800 mb-1 group-hover:text-blue-600 transition-colors">
+                <h3 className="text-lg font-bold text-gray-900 mb-1">
                   Upload Excel Attendance File
                 </h3>
-                <p className="text-gray-500 text-sm max-w-md mx-auto">
-                  Drag and drop your spreadsheet here, or <span className="text-blue-600 font-semibold underline">browse local files</span>. 
+                <p className="text-sm text-gray-500">
+                  Drag and drop your spreadsheet here, or browse local files
                 </p>
               </div>
               <div className="bg-gray-50 rounded-xl px-4 py-2 text-xs text-gray-500 border border-gray-100 font-medium">
-                Required headers: <span className="font-bold text-gray-700">Email</span>, <span className="font-bold text-gray-700">Date</span>, <span className="font-bold text-gray-700">Status</span> (Present/Absent/Half-Day)
+                Required: <span className="font-bold text-gray-700">Email</span>, <span className="font-bold text-gray-700">Date</span>, <span className="font-bold text-gray-700">Status</span>
               </div>
             </div>
           </div>
@@ -460,13 +453,13 @@ export default function Attendance() {
 
         {/* Live Validation & Import Preview */}
         {showPreview && (
-          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden animate-fadeIn">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-fadeIn">
             
             {/* Preview Banner */}
-            <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="p-6 bg-gradient-to-r from-teal-50 to-indigo-50 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
                 <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                  <FileSpreadsheet className="text-blue-600" />
+                  <FileSpreadsheet className="text-teal-700" />
                   Excel Import Preview
                 </h3>
                 <p className="text-sm text-gray-600 mt-0.5">
@@ -478,7 +471,7 @@ export default function Attendance() {
                 <button
                   onClick={handleImport}
                   disabled={importing || parsedData.filter(row => row.isValid).length === 0}
-                  className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2.5 rounded-xl shadow-sm transition disabled:opacity-50"
+                  className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-teal-700 hover:bg-teal-800 text-white font-semibold px-5 py-2.5 rounded-xl shadow-sm transition disabled:opacity-50"
                 >
                   {importing ? (
                     <RefreshCw className="animate-spin" size={18} />
@@ -518,7 +511,7 @@ export default function Attendance() {
                   type="checkbox"
                   checked={onlyShowErrors}
                   onChange={(e) => setOnlyShowErrors(e.target.checked)}
-                  className="w-4.5 h-4.5 rounded text-blue-600 border-gray-300 focus:ring-blue-500"
+                  className="w-4.5 h-4.5 rounded text-teal-700 border-gray-300 focus:ring-teal-500"
                 />
                 Show errors only
               </label>
@@ -553,19 +546,19 @@ export default function Attendance() {
                           !row.isValid ? 'bg-red-50/10' : ''
                         }`}
                       >
-                        <td className="py-4 px-6 text-center text-gray-400 font-semibold">
+                        <td className="py-2.5 px-6 text-center text-gray-400 font-semibold">
                           {row.rowNum}
                         </td>
-                        <td className="py-4 px-6 font-semibold text-gray-900">
+                        <td className="py-2.5 px-6 font-semibold text-gray-900">
                           {row.email}
                         </td>
-                        <td className="py-4 px-6 text-gray-600">
+                        <td className="py-2.5 px-6 text-gray-600">
                           {row.name}
                         </td>
-                        <td className="py-4 px-6 text-gray-600">
+                        <td className="py-2.5 px-6 text-gray-600">
                           {row.date}
                         </td>
-                        <td className="py-4 px-6">
+                        <td className="py-2.5 px-6">
                           <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${
                             row.status.toLowerCase() === 'present'
                               ? 'bg-green-100 text-green-700'
@@ -576,17 +569,17 @@ export default function Attendance() {
                             {row.status}
                           </span>
                         </td>
-                        <td className="py-4 px-6 text-gray-500 max-w-xs truncate">
+                        <td className="py-2.5 px-6 text-gray-500 max-w-xs truncate">
                           {row.remarks || '-'}
                         </td>
-                        <td className="py-4 px-6 text-right">
+                        <td className="py-2.5 px-6 text-right">
                           {row.isValid ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 bg-green-100/50 border border-green-200 px-2.5 py-1 rounded-lg">
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 bg-green-100/50 border border-green-200 px-2.5 py-1 rounded-md">
                               <CheckCircle2 size={14} />
                               Ready to Import
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-xs font-bold text-red-700 bg-red-100/50 border border-red-200 px-2.5 py-1 rounded-lg">
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-red-700 bg-red-100/50 border border-red-200 px-2.5 py-1 rounded-md">
                               <AlertTriangle size={14} />
                               {row.errorMsg}
                             </span>
@@ -601,23 +594,18 @@ export default function Attendance() {
           </div>
         )}
 
-        {/* Filter Toolbar for History Logs */}
-        <div className="bg-white rounded-3xl border border-gray-200 p-5 shadow-sm space-y-4">
-          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <Filter className="text-gray-500" size={18} />
-            Search & Filters
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            
+        {/* Filter Toolbar */}
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex flex-col sm:flex-row items-center gap-3">
             {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3.5 top-3 text-gray-400" size={18} />
+            <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border border-gray-100 focus-within:ring-2 focus-within:ring-teal-500/20 focus-within:border-teal-500 transition-all flex-1 w-full">
+              <Search size={13} className="text-gray-400 shrink-0" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search examiner email or name..."
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm text-gray-900"
+                placeholder="Search examiner..."
+                className="w-full bg-transparent text-gray-800 placeholder-gray-400 font-semibold text-[11px] focus:outline-none"
               />
             </div>
 
@@ -625,7 +613,7 @@ export default function Attendance() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="py-2.5 px-4 bg-gray-50 hover:bg-gray-100/50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm text-gray-800 font-semibold"
+              className="px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl font-bold text-xs text-gray-700 focus:outline-none cursor-pointer"
             >
               <option value="">All Statuses</option>
               <option value="Present">Present</option>
@@ -638,38 +626,36 @@ export default function Attendance() {
               type="date"
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
-              className="py-2.5 px-4 bg-gray-50 hover:bg-gray-100/50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm text-gray-800"
+              className="px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl text-xs text-gray-800 focus:outline-none"
             />
 
-            {/* Action Buttons */}
-            <div className="flex gap-2">
-              <button
-                onClick={handleApplyFilter}
-                className="flex-1 bg-gray-900 hover:bg-gray-800 text-white font-semibold px-4 py-2.5 rounded-xl transition text-sm shadow-sm flex items-center justify-center gap-2"
-              >
-                Apply Filters
-              </button>
-              <button
-                onClick={handleResetFilter}
-                className="border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-semibold px-4 py-2.5 rounded-xl transition text-sm shadow-sm flex items-center justify-center"
-              >
-                Reset
-              </button>
-            </div>
+            {/* Buttons */}
+            <button
+              onClick={handleApplyFilter}
+              className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs uppercase tracking-wider rounded-md transition shadow-sm cursor-pointer"
+            >
+              Apply
+            </button>
+            <button
+              onClick={handleResetFilter}
+              className="px-4 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-bold text-xs uppercase tracking-wider rounded-md transition cursor-pointer"
+            >
+              Reset
+            </button>
           </div>
         </div>
 
-        {/* History logs Table */}
-        <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+        {/* History Table */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-6 py-2.5 border-b border-gray-100 flex justify-between items-center">
             <div>
-              <h3 className="font-bold text-gray-900 text-lg">Attendance Log Registry</h3>
-              <p className="text-xs text-gray-500 mt-0.5">Showing compiled system attendance records.</p>
+              <h3 className="font-bold text-gray-900 text-base">Attendance Log Registry</h3>
+              <p className="text-xs text-gray-500 mt-0.5">Showing compiled attendance records</p>
             </div>
             <button 
               onClick={fetchInitialData}
-              className="p-2 text-gray-500 hover:text-blue-600 rounded-xl hover:bg-blue-50 transition"
-              title="Reload attendance data"
+              className="p-2 text-gray-500 hover:text-teal-700 rounded-md hover:bg-teal-50 transition"
+              title="Reload"
             >
               <RefreshCw size={18} className={loading && attendanceLogs.length > 0 ? "animate-spin" : ""} />
             </button>
@@ -678,7 +664,7 @@ export default function Attendance() {
           <div className="overflow-x-auto">
             {loading && attendanceLogs.length === 0 ? (
               <div className="py-20 text-center">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-4" />
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-teal-600 mx-auto mb-4" />
                 <p className="text-gray-500 font-semibold">Loading attendance logs...</p>
               </div>
             ) : filteredLogs.length === 0 ? (
@@ -702,20 +688,20 @@ export default function Attendance() {
                 <tbody className="divide-y divide-gray-100 text-sm">
                   {filteredLogs.map((log) => (
                     <tr key={log.attendanceId} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="py-4 px-6 font-semibold text-gray-900">
+                      <td className="py-2.5 px-6 font-semibold text-gray-900">
                         {log?.date ? new Date(log.date).toLocaleDateString(undefined, {
                           year: 'numeric',
                           month: 'short',
                           day: 'numeric'
                         }) : '-'}
                       </td>
-                      <td className="py-4 px-6 font-medium text-gray-800">
+                      <td className="py-2.5 px-6 font-medium text-gray-800">
                         {log?.examinerName || 'Unknown'}
                       </td>
-                      <td className="py-4 px-6 text-gray-600">
+                      <td className="py-2.5 px-6 text-gray-600">
                         {log?.examinerEmail || '-'}
                       </td>
-                      <td className="py-4 px-6">
+                      <td className="py-2.5 px-6">
                         <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
                           (log?.status || '').toLowerCase() === 'present'
                             ? 'bg-green-100 text-green-700 border border-green-200'
@@ -726,10 +712,10 @@ export default function Attendance() {
                           {log?.status || 'Unknown'}
                         </span>
                       </td>
-                      <td className="py-4 px-6 text-gray-500 max-w-xs truncate">
+                      <td className="py-2.5 px-6 text-gray-500 max-w-xs truncate">
                         {log.remarks || '-'}
                       </td>
-                      <td className="py-4 px-6 text-right">
+                      <td className="py-2.5 px-6 text-right">
                         <button
                           onClick={() => handleDelete(log.attendanceId)}
                           className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
@@ -749,3 +735,4 @@ export default function Attendance() {
     </div>
   );
 }
+

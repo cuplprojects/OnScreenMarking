@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import roleService from '../../services/roleService';
 
@@ -55,7 +55,7 @@ export default function AssignRoleModal({ user, onClose, onSubmit }) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
         <div className="bg-white rounded-lg p-6">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500"></div>
         </div>
       </div>
     );
@@ -98,7 +98,7 @@ export default function AssignRoleModal({ user, onClose, onSubmit }) {
             <select
               value={selectedRoleId || ''}
               onChange={(e) => setSelectedRoleId(e.target.value ? parseInt(e.target.value) : null)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
             >
               <option value="">-- No Role --</option>
               {roles.map(role => (
@@ -111,21 +111,21 @@ export default function AssignRoleModal({ user, onClose, onSubmit }) {
 
           {/* Role Details */}
           {selectedRoleId && (
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="p-4 bg-teal-50 rounded-lg border border-teal-200">
               {(() => {
                 const selectedRole = roles.find(r => r.roleId === selectedRoleId);
                 return selectedRole ? (
                   <div>
-                    <p className="text-sm font-semibold text-blue-900 mb-2">{selectedRole.roleName}</p>
-                    <p className="text-sm text-blue-800 mb-3">{selectedRole.description || 'No description'}</p>
+                    <p className="text-sm font-semibold text-teal-900 mb-2">{selectedRole.roleName}</p>
+                    <p className="text-sm text-teal-800 mb-3">{selectedRole.description || 'No description'}</p>
                     <div className="flex flex-wrap gap-1">
                       {selectedRole.permissionsList?.slice(0, 5).map(perm => (
-                        <span key={perm} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
+                        <span key={perm} className="px-2 py-1 bg-teal-100 text-teal-700 text-xs rounded">
                           {perm.replace(/_/g, ' ')}
                         </span>
                       ))}
                       {selectedRole.permissionsList?.length > 5 && (
-                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
+                        <span className="px-2 py-1 bg-teal-100 text-teal-700 text-xs rounded">
                           +{selectedRole.permissionsList.length - 5} more
                         </span>
                       )}
@@ -141,14 +141,14 @@ export default function AssignRoleModal({ user, onClose, onSubmit }) {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+              className="px-4 py-2 bg-teal-700 text-white rounded-md hover:bg-teal-800 transition disabled:opacity-50"
             >
               {submitting ? 'Assigning...' : 'Assign Role'}
             </button>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import PermissionSelector from './PermissionSelector';
 
@@ -85,7 +85,7 @@ export default function CreateRoleModal({ permissions, onClose, onSubmit }) {
               value={formData.roleName}
               onChange={handleInputChange}
               placeholder="e.g., Admin, Coordinator, Examiner"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
@@ -100,7 +100,7 @@ export default function CreateRoleModal({ permissions, onClose, onSubmit }) {
               onChange={handleInputChange}
               placeholder="Describe the purpose of this role"
               rows="3"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
@@ -121,14 +121,14 @@ export default function CreateRoleModal({ permissions, onClose, onSubmit }) {
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+              className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+              className="px-6 py-2 bg-teal-700 text-white rounded-md hover:bg-teal-800 transition disabled:opacity-50"
             >
               {loading ? 'Creating...' : 'Create Role'}
             </button>

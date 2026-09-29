@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { CheckCircle, AlertCircle, Info, AlertTriangle, X } from 'lucide-react';
 import message from '../services/messageService';
 
@@ -31,7 +31,7 @@ export default function MessageContainer() {
       case 'warning':
         return <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />;
       default:
-        return <Info className="w-4 h-4 text-blue-500 shrink-0" />;
+        return <Info className="w-4 h-4 text-teal-600 shrink-0" />;
     }
   };
 
@@ -44,7 +44,7 @@ export default function MessageContainer() {
       case 'warning':
         return 'border-amber-100 bg-amber-50 text-amber-955';
       default:
-        return 'border-blue-100 bg-blue-50 text-blue-950';
+        return 'border-teal-100 bg-teal-50 text-gray-900';
     }
   };
 

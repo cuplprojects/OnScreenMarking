@@ -178,11 +178,11 @@ export default function ProjectDashboard() {
     return (
       <th 
         onClick={() => handleSort(field)}
-        className={`px-3 py-3 cursor-pointer hover:bg-slate-100/80 transition-colors select-none group/header ${isCenter ? 'text-center' : ''} ${className}`}
+        className={`px-3 py-3 cursor-pointer hover:bg-gray-100/80 transition-colors select-none group/header ${isCenter ? 'text-center' : ''} ${className}`}
       >
         <div className={`flex items-center gap-1 ${isCenter ? 'justify-center' : ''}`}>
           <span className="whitespace-nowrap">{label}</span>
-          <span className="text-[9px] text-slate-400 group-hover/header:text-slate-600 transition-colors">
+          <span className="text-[9px] text-gray-400 group-hover/header:text-gray-600 transition-colors">
             {isSorted ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}
           </span>
           {hasFilter && (
@@ -244,7 +244,8 @@ export default function ProjectDashboard() {
       });
 
       // 3. Fetch papers to get project paper IDs for workloads
-      const papersData = await apiCall(`/papers?projectId=${projectId}`);
+      const papersResponse = await apiCall(`/papers?projectId=${projectId}&pageSize=100`);
+      const papersData = papersResponse?.items || papersResponse || [];
       const projPaperIds = (papersData || []).map(p => p.paperId);
 
       // Manual examiner logic removed, using useTable hook below
@@ -258,23 +259,23 @@ export default function ProjectDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
-        <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-650 border-t-transparent"></div>
-        <p className="text-slate-500 font-bold text-xs uppercase tracking-wider animate-pulse">Aggregating Project Analytics...</p>
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-3">
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-teal-600 border-t-transparent"></div>
+        <p className="text-gray-500 font-bold text-xs uppercase tracking-wider animate-pulse">Aggregating Project Analytics...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="bg-white rounded-2xl p-8 shadow-xl max-w-md w-full border border-red-150 text-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-6 py-4">
+        <div className="bg-white rounded-xl p-8 shadow-xl max-w-md w-full border border-red-150 text-center">
           <AlertCircle size={40} className="mx-auto text-red-500 mb-4 animate-bounce" />
-          <h2 className="text-lg font-bold text-slate-900 mb-2">Error Loading Dashboard</h2>
-          <p className="text-slate-500 text-sm mb-6">{error}</p>
+          <h2 className="text-lg font-bold text-gray-900 mb-2">Error Loading Dashboard</h2>
+          <p className="text-gray-500 text-sm mb-6">{error}</p>
           <Link 
             to="/coordinator/dashboard"
-            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs uppercase tracking-wider px-6 py-3 rounded-xl transition"
+            className="inline-flex items-center gap-2 bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-xs uppercase tracking-wider px-6 py-3 rounded-xl transition"
           >
             <ArrowLeft size={14} /> Back to Dashboard
           </Link>
@@ -294,30 +295,30 @@ export default function ProjectDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 pb-12 w-full flex flex-col">
-      
-      {/* Unified Full-Width Header */}
-      <div className="bg-white border-b border-slate-200 px-6 lg:px-10 py-6 mb-6 shadow-sm">
-        <ProjectConfigHeader />
-      </div>
+    <div className="min-h-screen bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4">
+      <div className="w-full space-y-4">
+        
+        {/* Unified Card Header */}
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <ProjectConfigHeader completePercentage={stats.completePercentage} />
+        </div>
 
-      <div className="px-6 lg:px-10 flex-1">
-      {/* Stats Banner */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm mb-6 flex flex-col lg:flex-row overflow-hidden divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
+        {/* Stats Banner */}
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 w-full">
         
         {/* Total Papers */}
         <div 
           onClick={() => handleCardClick('')}
-          className={`flex-1 p-5 transition-all duration-200 cursor-pointer hover:bg-slate-50 flex flex-col justify-between gap-3 ${
-            !filters.statusFilter ? 'bg-blue-50/50 shadow-[inset_0_-2px_0_0_#3b82f6]' : ''
+          className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 transition-all duration-200 cursor-pointer hover:bg-gray-50 flex flex-col justify-between gap-2 ${
+            !filters.statusFilter ? 'bg-teal-50/50 shadow-[inset_0_-2px_0_0_#3b82f6]' : ''
           }`}
         >
           <div className="flex items-start justify-between w-full">
             <div>
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1"> Papers</span>
-              <h3 className="text-2xl font-black text-slate-900">{stats.papersCount}</h3>
+              <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-0.5"> Papers</span>
+              <h3 className="text-xl font-black text-gray-900">{stats.papersCount}</h3>
             </div>
-            <div className="p-2.5 bg-blue-50 rounded-xl text-blue-600"><FileText size={16} /></div>
+            <div className="p-1.5 bg-teal-50 rounded-xl text-teal-700"><FileText size={14} /></div>
           </div>
           
           <Link 
@@ -325,7 +326,7 @@ export default function ProjectDashboard() {
               ? `/admin/papers?projectId=${encryptedProjectId}` 
               : `/papers?projectId=${encryptedProjectId}`}
             onClick={(e) => e.stopPropagation()}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 mt-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors"
+            className="w-full flex items-center justify-center gap-1.5 px-2 py-1 mt-1 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors"
           >
             <Layers size={12} />
             Configure Subject & Papers
@@ -335,30 +336,30 @@ export default function ProjectDashboard() {
         {/* Total Scripts */}
         <div 
           onClick={() => handleCardClick('')}
-          className={`flex-1 p-5 transition-all duration-200 cursor-pointer hover:bg-slate-50 flex items-center justify-between gap-3 ${
-            !filters.statusFilter ? 'bg-blue-50/50 shadow-[inset_0_-2px_0_0_#3b82f6]' : ''
+          className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 transition-all duration-200 cursor-pointer hover:bg-gray-50 flex items-center justify-between gap-2 ${
+            !filters.statusFilter ? 'bg-teal-50/50 shadow-[inset_0_-2px_0_0_#3b82f6]' : ''
           }`}
         >
           <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Total Scripts</span>
-            <h3 className="text-2xl font-black text-slate-900">{stats.totalScripts}</h3>
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Total Scripts</span>
+            <h3 className="text-xl font-black text-gray-900">{stats.totalScripts}</h3>
           </div>
-          <div className="p-2.5 bg-slate-100 rounded-xl text-slate-600"><BookOpen size={16} /></div>
+          <div className="p-1.5 bg-gray-100 rounded-xl text-gray-600"><BookOpen size={14} /></div>
         </div>
 
         {/* Pending Allocation */}
         <div 
           onClick={() => handleCardClick('pending')}
-          className={`flex-1 p-5 transition-all duration-200 cursor-pointer hover:bg-amber-50/30 flex flex-col justify-between gap-3 ${
+          className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 transition-all duration-200 cursor-pointer hover:bg-amber-50/30 flex flex-col justify-between gap-2 ${
             filters.statusFilter === 'pending' ? 'bg-amber-50 shadow-[inset_0_-2px_0_0_#f59e0b]' : ''
           }`}
         >
           <div className="flex items-start justify-between w-full">
             <div>
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Pending Assign</span>
-              <h3 className="text-2xl font-black text-amber-600">{stats.pendingScripts}</h3>
+              <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Pending Assign</span>
+              <h3 className="text-xl font-black text-amber-600">{stats.pendingScripts}</h3>
             </div>
-            <div className="p-2.5 bg-amber-50 rounded-xl text-amber-600"><AlertCircle size={16} /></div>
+            <div className="p-1.5 bg-amber-50 rounded-xl text-amber-600"><AlertCircle size={14} /></div>
           </div>
           
           <Link 
@@ -366,7 +367,7 @@ export default function ProjectDashboard() {
               ? `/admin/allocate-scripts?projectId=${encryptedProjectId}` 
               : `/allocate-scripts?projectId=${encryptedProjectId}`}
             onClick={(e) => e.stopPropagation()}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 mt-2 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors"
+            className="w-full flex items-center justify-center gap-1.5 px-2 py-1 mt-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors"
           >
             <Zap size={12} />
             Allocate Scripts
@@ -376,91 +377,74 @@ export default function ProjectDashboard() {
         {/* In Progress */}
         <div 
           onClick={() => handleCardClick('marking')}
-          className={`flex-1 p-5 transition-all duration-200 cursor-pointer hover:bg-blue-50/30 flex items-center justify-between gap-3 ${
-            filters.statusFilter === 'marking' ? 'bg-blue-50 shadow-[inset_0_-2px_0_0_#3b82f6]' : ''
+          className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 transition-all duration-200 cursor-pointer hover:bg-teal-50/30 flex items-center justify-between gap-2 ${
+            filters.statusFilter === 'marking' ? 'bg-teal-50 shadow-[inset_0_-2px_0_0_#3b82f6]' : ''
           }`}
         >
           <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">In Marking</span>
-            <h3 className="text-2xl font-black text-blue-600">{stats.allocatedScripts}</h3>
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">In Marking</span>
+            <h3 className="text-xl font-black text-teal-700">{stats.allocatedScripts}</h3>
           </div>
-          <div className="p-2.5 bg-blue-50 rounded-xl text-blue-600"><Clock size={16} /></div>
+          <div className="p-1.5 bg-teal-50 rounded-xl text-teal-700"><Clock size={14} /></div>
         </div>
 
         {/* Completed */}
         <div 
           onClick={() => handleCardClick('completed')}
-          className={`flex-1 p-5 transition-all duration-200 cursor-pointer hover:bg-emerald-50/30 flex items-center justify-between gap-3 ${
+          className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 transition-all duration-200 cursor-pointer hover:bg-emerald-50/30 flex items-center justify-between gap-2 ${
             filters.statusFilter === 'completed' ? 'bg-emerald-50 shadow-[inset_0_-2px_0_0_#10b981]' : ''
           }`}
         >
           <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Fully </span>
-            <h3 className="text-2xl font-black text-emerald-600">{stats.completedScripts}</h3>
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Fully </span>
+            <h3 className="text-xl font-black text-emerald-600">{stats.completedScripts}</h3>
           </div>
-          <div className="p-2.5 bg-emerald-50 rounded-xl text-emerald-600"><CheckCircle size={16} /></div>
+          <div className="p-1.5 bg-emerald-50 rounded-xl text-emerald-600"><CheckCircle size={14} /></div>
         </div>
 
         {/* Unconfigured Sections */}
         <div 
           onClick={() => handleCardClick('unconfigured')}
-          className={`flex-1 p-5 transition-all duration-200 cursor-pointer hover:bg-rose-50/30 flex items-center justify-between gap-3 ${
+          className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 transition-all duration-200 cursor-pointer hover:bg-rose-50/30 flex items-center justify-between gap-2 ${
             filters.statusFilter === 'unconfigured' ? 'bg-rose-50 shadow-[inset_0_-2px_0_0_#f43f5e]' : ''
           }`}
         >
           <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">Unconfigured</span>
-            <h3 className="text-2xl font-black text-rose-600">{stats.unconfiguredPapersCount}</h3>
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Unconfigured</span>
+            <h3 className="text-xl font-black text-rose-600">{stats.unconfiguredPapersCount}</h3>
           </div>
-          <div className="p-2.5 bg-rose-50 rounded-xl text-rose-600"><Layers size={16} /></div>
+          <div className="p-1.5 bg-rose-50 rounded-xl text-rose-600"><Layers size={14} /></div>
         </div>
 
       </div>
 
-      {/* Progress Ratio Bar Card */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-          <div>
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wide">Project Completion Status</h3>
-            <p className="text-[10px] text-slate-500">Overall ratio of completed script evaluations against total system scripts</p>
-          </div>
-          <span className="text-xs font-black text-blue-700 bg-blue-50 px-3 py-1 rounded-lg">
-            {stats.completePercentage}% Complete
-          </span>
-        </div>
-        <div className="w-full bg-slate-100 rounded-full h-3.5 p-0.5 border border-slate-200 overflow-hidden">
-          <div 
-            className="h-full rounded-full bg-gradient-to-r from-blue-500 via-blue-500 to-emerald-500 transition-all duration-700 ease-out"
-            style={{ width: `${stats.completePercentage}%` }}
-          />
-        </div>
-      </div>
+
 
       {/* Analytics Tabs and Mappings */}
       <div className="grid grid-cols-12 gap-6">
         
         {/* LEFT COMPONENT - Papers & Mapped Details */}
         <div className="col-span-12 lg:col-span-8 space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-slate-50/40">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-gray-100 flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-gray-50/40">
               <div>
-                <h3 className="text-xs font-black uppercase text-slate-900 tracking-wider flex items-center gap-1.5">
-                  <FileText size={15} className="text-blue-600" />
+                <h3 className="text-xs font-black uppercase text-gray-900 tracking-wider flex items-center gap-1.5">
+                  <FileText size={15} className="text-teal-700" />
                   <span> Subject Papers</span>
                   {filters.statusFilter && (
-                    <span className="ml-2 bg-blue-50 px-2.5 py-0.5 rounded-full text-[9px] font-black text-blue-700 uppercase tracking-wide border border-blue-200">
+                    <span className="ml-2 bg-teal-50 px-2.5 py-0.5 rounded-md text-[9px] font-black text-teal-700 uppercase tracking-wide border border-teal-200">
                       Filtered: {filters.statusFilter}
                     </span>
                   )}
                 </h3>
-                <p className="text-[10px] text-slate-500">Subject configurations, paper code, max marks, and map progress</p>
+                <p className="text-[10px] text-gray-500">Subject configurations, paper code, max marks, and map progress</p>
               </div>
 
               <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
                 {selectedPaperIds.length > 0 && (
                   <button 
                     onClick={() => setIsBulkAssignModalOpen(true)}
-                    className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl shadow-sm transition-all whitespace-nowrap"
+                    className="px-3 py-2 bg-teal-700 hover:bg-teal-800 text-white text-[10px] font-bold uppercase tracking-wider rounded-md shadow-sm transition-all whitespace-nowrap"
                   >
                     Bulk Assign ({selectedPaperIds.length})
                   </button>
@@ -469,24 +453,24 @@ export default function ProjectDashboard() {
                 <button
                   onClick={handleAutoAllocateProject}
                   disabled={isBulkAutoAllocating}
-                  className="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  className="px-3 py-2 bg-teal-700 hover:bg-teal-800 text-white text-[10px] font-bold uppercase tracking-wider rounded-md shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   <Zap size={12} className={isBulkAutoAllocating ? "animate-pulse" : ""} />
                   {isBulkAutoAllocating ? "Allocating..." : "Auto-Allocate All"}
                 </button>
 
                 {/* Search input */}
-                <div className="relative flex items-center bg-white px-3 py-2 rounded-xl border border-slate-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 shadow-sm w-full sm:w-64 min-w-[200px] transition-all">
-                  <Search size={14} className="text-slate-400 shrink-0 mr-2" />
+                <div className="relative flex items-center bg-white px-3 py-2 rounded-xl border border-gray-200 focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-100 shadow-sm w-full sm:w-64 min-w-[200px] transition-all">
+                  <Search size={14} className="text-gray-400 shrink-0 mr-2" />
                   <input
                     type="text"
                     placeholder="Search papers by name/code..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full bg-transparent text-slate-800 placeholder-slate-400 font-medium text-xs focus:outline-none"
+                    className="w-full bg-transparent text-gray-800 placeholder-gray-400 font-medium text-xs focus:outline-none"
                   />
                   {search && (
-                    <button onClick={() => setSearch('')} className="text-slate-400 hover:text-slate-600 ml-1">
+                    <button onClick={() => setSearch('')} className="text-gray-400 hover:text-gray-600 ml-1">
                       <X size={13} />
                     </button>
                   )}
@@ -495,13 +479,13 @@ export default function ProjectDashboard() {
             </div>
 
             {tableLoading && papers.length === 0 ? (
-              <div className="p-12 text-center text-slate-400 font-bold text-xs flex flex-col items-center gap-3">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <div className="p-12 text-center text-gray-400 font-bold text-xs flex flex-col items-center gap-3">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
                 <span>Fetching papers list...</span>
               </div>
             ) : papers.length === 0 ? (
-              <div className="p-16 text-center text-slate-405">
-                <FileText size={36} className="mx-auto text-slate-200 mb-2" />
+              <div className="p-16 text-center text-gray-405">
+                <FileText size={36} className="mx-auto text-gray-200 mb-2" />
                 <p className="text-xs font-bold uppercase tracking-wider">No Papers </p>
                 <p className="text-[10px] mt-0.5">Please add and configure papers for this project.</p>
               </div>
@@ -509,12 +493,12 @@ export default function ProjectDashboard() {
               <>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
-                    <thead className="bg-slate-50 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                    <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
                       <tr>
                         <th className="px-3 py-3 w-8 text-center">
                           <input 
                             type="checkbox" 
-                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            className="rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer"
                             checked={papers.length > 0 && selectedPaperIds.length === papers.length}
                             onChange={handleSelectAll}
                           />
@@ -527,10 +511,10 @@ export default function ProjectDashboard() {
                         <SortHeader label="Allocated" field="allocatedScripts" isCenter={true} className="min-w-[55px]" />
                         <SortHeader label="Completed" field="completedScripts" isCenter={true} className="min-w-[55px]" />
                         <th className="px-2.5 py-3 text-center min-w-[90px]">Stage</th>
-                        <th className="sticky right-0 z-20 bg-slate-50 px-3 py-3 text-center min-w-[210px] shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] border-l border-slate-200/80">Actions</th>
+                        <th className="sticky right-0 z-20 bg-gray-50 px-3 py-3 text-center min-w-[210px] shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] border-l border-gray-200/80">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
+                    <tbody className="divide-y divide-gray-100 text-xs font-bold text-gray-700">
                       {papers.map((paper) => {
                         // Determine current pipeline stage
                         let currentStage = 1;
@@ -548,7 +532,7 @@ export default function ProjectDashboard() {
                           } else if (paper.pendingScripts > 0) {
                             currentStage = 3;
                             stageText = "3. Allocate Scripts";
-                            stageColor = "bg-blue-50 text-blue-700 border-blue-200";
+                            stageColor = "bg-teal-50 text-teal-700 border-teal-200";
                           } else if (paper.totalScripts > 0) {
                             currentStage = 4;
                             stageText = "4. In Progress/Done";
@@ -556,7 +540,7 @@ export default function ProjectDashboard() {
                           } else {
                             currentStage = 3;
                             stageText = "Awaiting Scripts";
-                            stageColor = "bg-slate-50 text-slate-600 border-slate-200";
+                            stageColor = "bg-gray-50 text-gray-600 border-gray-200";
                           }
                         }
 
@@ -564,33 +548,33 @@ export default function ProjectDashboard() {
                         const isAssignDisabled = currentStage < 2;
 
                         return (
-                          <tr key={paper.paperId} className={`group transition ${selectedPaperIds.includes(paper.paperId) ? 'bg-blue-50/40' : 'hover:bg-slate-50/60'}`}>
-                            <td className="px-3 py-3 text-center">
+                          <tr key={paper.paperId} className={`group transition ${selectedPaperIds.includes(paper.paperId) ? 'bg-teal-50/40' : 'hover:bg-gray-50/60'}`}>
+                            <td className="px-3 py-2.5 text-center">
                               <input 
                                 type="checkbox" 
-                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                className="rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer"
                                 checked={selectedPaperIds.includes(paper.paperId)}
                                 onChange={() => handleSelectPaper(paper.paperId)}
                               />
                             </td>
-                            <td className="px-3 py-3">
-                              <span className="text-slate-900 font-extrabold">{paper.paperCode}</span>
-                              <span className="text-[10px] text-slate-500 block font-medium mt-0.5 line-clamp-1">{paper.paperName}</span>
+                            <td className="px-3 py-2.5">
+                              <span className="text-gray-900 font-extrabold">{paper.paperCode}</span>
+                              <span className="text-[10px] text-gray-500 block font-medium mt-0.5 line-clamp-1">{paper.paperName}</span>
                             </td>
-                            <td className="px-3 py-3 text-slate-600 font-medium">
+                            <td className="px-3 py-2.5 text-gray-600 font-medium">
                               <span className="line-clamp-1">{paper.subjectName}</span>
                             </td>
-                            <td className="px-2 py-3 text-center text-slate-600 font-mono text-[11px]">{paper.catchNo || 'N/A'}</td>
-                            <td className="px-2 py-3 text-center text-slate-900">{paper.totalScripts}</td>
-                            <td className="px-2 py-3 text-center text-amber-600">{paper.pendingScripts}</td>
-                            <td className="px-2 py-3 text-center text-blue-600">{paper.allocatedScripts}</td>
-                            <td className="px-2 py-3 text-center text-emerald-600">{paper.completedScripts}</td>
-                            <td className="px-2 py-3 text-center">
+                            <td className="px-2 py-2.5 text-center text-gray-600 font-mono text-[11px]">{paper.catchNo || 'N/A'}</td>
+                            <td className="px-2 py-2.5 text-center text-gray-900">{paper.totalScripts}</td>
+                            <td className="px-2 py-2.5 text-center text-amber-600">{paper.pendingScripts}</td>
+                            <td className="px-2 py-2.5 text-center text-teal-700">{paper.allocatedScripts}</td>
+                            <td className="px-2 py-2.5 text-center text-emerald-600">{paper.completedScripts}</td>
+                            <td className="px-2 py-2.5 text-center">
                               <span className={`inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-bold border whitespace-nowrap ${stageColor}`}>
                                 {stageText}
                               </span>
                             </td>
-                            <td className={`sticky right-0 z-10 px-3 py-2.5 text-center whitespace-nowrap shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] border-l border-slate-100 ${selectedPaperIds.includes(paper.paperId) ? 'bg-[#f4f8fc]' : 'bg-white group-hover:bg-slate-50'}`}>
+                            <td className={`sticky right-0 z-10 px-3 py-2.5 text-center whitespace-nowrap shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] border-l border-gray-100 ${selectedPaperIds.includes(paper.paperId) ? 'bg-[#f4f8fc]' : 'bg-white group-hover:bg-gray-50'}`}>
                               <div className="flex items-center justify-center gap-1.5">
                                 {/* Allocate Button */}
                                 {!isAllocateDisabled ? (
@@ -599,7 +583,7 @@ export default function ProjectDashboard() {
                                       ? `/admin/allocate-scripts?projectId=${encryptedProjectId}&paperId=${paper.paperId}`
                                       : `/allocate-scripts?projectId=${encryptedProjectId}&paperId=${paper.paperId}`}
                                     title="Allocate Scripts"
-                                    className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[9px] uppercase tracking-wider px-2 py-1.5 rounded-lg shadow-sm transition-all"
+                                    className="inline-flex items-center gap-1 bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-[9px] uppercase tracking-wider px-2 py-1.5 rounded-md shadow-sm transition-all"
                                   >
                                     <Zap size={11} />
                                     <span>Allocate</span>
@@ -607,7 +591,7 @@ export default function ProjectDashboard() {
                                 ) : (
                                   <button
                                     disabled
-                                    className="inline-flex items-center gap-1 bg-slate-100 text-slate-400 font-extrabold text-[9px] uppercase tracking-wider px-2 py-1.5 rounded-lg cursor-not-allowed border border-slate-200"
+                                    className="inline-flex items-center gap-1 bg-gray-100 text-gray-400 font-extrabold text-[9px] uppercase tracking-wider px-2 py-1.5 rounded-md cursor-not-allowed border border-gray-200"
                                     title={currentStage < 3 ? "Complete previous stages first" : "No scripts pending"}
                                   >
                                     <Zap size={11} />
@@ -621,10 +605,10 @@ export default function ProjectDashboard() {
                                     ? `/admin/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`
                                     : `/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`}
                                   title={!isConfigured ? 'Configure Sections' : 'Edit Sections'}
-                                  className={`inline-flex items-center gap-1 font-extrabold text-[9px] uppercase tracking-wider px-2 py-1.5 rounded-lg transition-all duration-200 shadow-sm ${
+                                  className={`inline-flex items-center gap-1 font-extrabold text-[9px] uppercase tracking-wider px-2 py-1.5 rounded-md transition-all duration-200 shadow-sm ${
                                     !isConfigured
-                                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                      ? 'bg-teal-700 hover:bg-teal-800 text-white'
+                                      : 'bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100'
                                   }`}
                                 >
                                   <Layers size={11} />
@@ -641,7 +625,7 @@ export default function ProjectDashboard() {
                                         : `/papers?projectId=${encryptedProjectId}&action=assign&paperId=${paper.paperId}`;
                                     }}
                                     title="Assign Examiners"
-                                    className="inline-flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-extrabold text-[9px] uppercase tracking-wider px-2 py-1.5 rounded-lg transition-all duration-200 shadow-sm"
+                                    className="inline-flex items-center gap-1 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 font-extrabold text-[9px] uppercase tracking-wider px-2 py-1.5 rounded-md transition-all duration-200 shadow-sm"
                                   >
                                     <Users size={11} />
                                     <span>Assign</span>
@@ -649,7 +633,7 @@ export default function ProjectDashboard() {
                                 ) : (
                                   <button
                                     disabled
-                                    className="inline-flex items-center gap-1 bg-slate-100 text-slate-400 font-extrabold text-[9px] uppercase tracking-wider px-2 py-1.5 rounded-lg cursor-not-allowed border border-slate-200"
+                                    className="inline-flex items-center gap-1 bg-gray-100 text-gray-400 font-extrabold text-[9px] uppercase tracking-wider px-2 py-1.5 rounded-md cursor-not-allowed border border-gray-200"
                                     title="Configure sections first"
                                   >
                                     <Users size={11} />
@@ -681,14 +665,14 @@ export default function ProjectDashboard() {
 
         {/* RIGHT COMPONENT - Assigned Examiners */}
         <div className="col-span-12 lg:col-span-4 space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
               <div>
-                <h3 className="text-xs font-black uppercase text-slate-900 tracking-wider flex items-center gap-1.5">
-                  <Users size={15} className="text-blue-650" />
+                <h3 className="text-xs font-black uppercase text-gray-900 tracking-wider flex items-center gap-1.5">
+                  <Users size={15} className="text-teal-600" />
                   <span>Assigned Examiners Stats</span>
                 </h3>
-                <p className="text-[10px] text-slate-500">Active evaluators allocated to scripts within this project</p>
+                <p className="text-[10px] text-gray-500">Active evaluators allocated to scripts within this project</p>
               </div>
               {/* Examiner Filters */}
               <div className="flex items-center gap-2">
@@ -698,14 +682,14 @@ export default function ProjectDashboard() {
                     setExaminerStatusFilter(e.target.value);
                     setExaminerPage(1);
                   }}
-                  className="bg-slate-50 border border-slate-200 text-slate-700 text-[10px] font-bold px-2 py-1.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                  className="bg-gray-50 border border-gray-200 text-gray-700 text-[10px] font-bold px-2 py-1.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
                 >
                   <option value="All">All Status</option>
                   <option value="Free">Free</option>
                   <option value="Busy">Busy</option>
                 </select>
-                <div className="max-w-[150px] flex items-center gap-2 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 w-full shrink-0">
-                  <Search size={10} className="text-slate-400" />
+                <div className="max-w-[150px] flex items-center gap-2 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200 w-full shrink-0">
+                  <Search size={10} className="text-gray-400" />
                   <input
                     type="text"
                     placeholder="Search examiners..."
@@ -714,7 +698,7 @@ export default function ProjectDashboard() {
                       setExaminerSearch(e.target.value);
                       setExaminerPage(1);
                     }}
-                    className="w-full bg-transparent text-slate-800 placeholder-slate-400 font-semibold text-[9px] focus:outline-none"
+                    className="w-full bg-transparent text-gray-800 placeholder-gray-400 font-semibold text-[9px] focus:outline-none"
                   />
                 </div>
               </div>
@@ -722,23 +706,23 @@ export default function ProjectDashboard() {
 
             {examinersLoading ? (
               <div className="p-12 text-center flex flex-col items-center gap-3">
-                <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-650 border-t-transparent"></div>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Loading Examiners...</p>
+                <div className="animate-spin rounded-full h-8 w-8 border-4 border-teal-600 border-t-transparent"></div>
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Loading Examiners...</p>
               </div>
             ) : paginatedExaminersList.length === 0 ? (
-              <div className="p-12 text-center text-slate-400 border border-dashed border-slate-150 rounded-xl">
-                <Users size={28} className="mx-auto text-slate-200 mb-1.5" />
+              <div className="p-12 text-center text-gray-400 border border-dashed border-gray-150 rounded-xl">
+                <Users size={28} className="mx-auto text-gray-200 mb-1.5" />
                 <p className="text-[9px] font-bold uppercase tracking-wider">No Evaluators Mapping</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {paginatedExaminersList.map((ex) => (
-                  <div key={ex.id} className="bg-slate-50/50 border border-slate-100 p-3.5 rounded-xl flex items-center justify-between">
+                  <div key={ex.id} className="bg-gray-50/50 border border-gray-100 p-3.5 rounded-xl flex items-center justify-between">
                     <div>
-                      <span className="font-extrabold text-slate-900 tracking-tight text-xs block">{ex.name}</span>
-                      <span className="text-[9px] text-slate-400 font-bold block">{ex.email}</span>
+                      <span className="font-extrabold text-gray-900 tracking-tight text-xs block">{ex.name}</span>
+                      <span className="text-[9px] text-gray-400 font-bold block">{ex.email}</span>
                       {ex.subjectExpertise && (
-                        <span className="text-[9px] text-blue-600 font-bold block mt-1">
+                        <span className="text-[9px] text-teal-700 font-bold block mt-1">
                           <BookOpen size={10} className="inline mr-1" />
                           {ex.subjectExpertise}
                         </span>
@@ -751,30 +735,30 @@ export default function ProjectDashboard() {
                       }`}>
                         {ex.workload}
                       </span>
-                      <span className="text-[9px] text-slate-400 block font-bold">
-                         <span className="text-slate-900 font-extrabold">{ex.projectAllocatedCount}</span> scripts
+                      <span className="text-[9px] text-gray-400 block font-bold">
+                         <span className="text-gray-900 font-extrabold">{ex.projectAllocatedCount}</span> scripts
                       </span>
                     </div>
                   </div>
                 ))}
 
                 {/* Examiner Pagination Controls */}
-                <div className="flex items-center justify-between border-t border-slate-100 pt-3 select-none">
-                  <span className="text-[9px] font-bold text-slate-400">
+                <div className="flex items-center justify-between border-t border-gray-100 pt-3 select-none">
+                  <span className="text-[9px] font-bold text-gray-400">
                     Page {examinerPage} of {totalExaminerPages}
                   </span>
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => setExaminerPage(p => Math.max(1, p - 1))}
                       disabled={examinerPage === 1}
-                      className="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-[9px] font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-2 py-1 bg-gray-50 border border-gray-200 rounded text-[9px] font-bold text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Prev
                     </button>
                     <button
                       onClick={() => setExaminerPage(p => Math.min(totalExaminerPages, p + 1))}
                       disabled={examinerPage >= totalExaminerPages}
-                      className="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-[9px] font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-2 py-1 bg-gray-50 border border-gray-200 rounded text-[9px] font-bold text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Next
                     </button>
@@ -790,24 +774,24 @@ export default function ProjectDashboard() {
       
       {/* Bulk Assign Modal */}
       {isBulkAssignModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-              <h2 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
-                <Users size={20} className="text-blue-600" />
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-2.5 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+              <h2 className="text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
+                <Users size={20} className="text-teal-700" />
                 Bulk Assign Examiners
               </h2>
               <button 
                 onClick={() => setIsBulkAssignModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:bg-slate-200 rounded-lg transition"
+                className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-lg transition"
               >
                 <X size={16} />
               </button>
             </div>
             
             <div className="p-6 overflow-y-auto flex-1">
-              <p className="text-sm text-slate-600 font-medium mb-4">
-                Select examiners to assign to the <span className="font-bold text-slate-900">{selectedPaperIds.length}</span> selected papers.
+              <p className="text-sm text-gray-600 font-medium mb-4">
+                Select examiners to assign to the <span className="font-bold text-gray-900">{selectedPaperIds.length}</span> selected papers.
               </p>
               
               <div className="mb-4">
@@ -816,16 +800,16 @@ export default function ProjectDashboard() {
                   placeholder="Search examiners..."
                   value={examinerSearch}
                   onChange={(e) => setExaminerSearch(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition-all"
                 />
               </div>
 
-              <div className="space-y-2 border border-slate-200 rounded-xl max-h-[300px] overflow-y-auto p-2">
+              <div className="space-y-2 border border-gray-200 rounded-xl max-h-[300px] overflow-y-auto p-2">
                 {paginatedExaminersList.map(examiner => (
-                  <label key={examiner.examinerId} className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer select-none ${selectedExaminerIds.includes(examiner.examinerId) ? 'bg-blue-50 border-blue-200' : 'bg-white border-transparent hover:bg-slate-50'}`}>
+                  <label key={examiner.examinerId} className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer select-none ${selectedExaminerIds.includes(examiner.examinerId) ? 'bg-teal-50 border-teal-200' : 'bg-white border-transparent hover:bg-gray-50'}`}>
                     <input 
                       type="checkbox"
-                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      className="rounded border-gray-300 text-teal-700 focus:ring-teal-500"
                       checked={selectedExaminerIds.includes(examiner.examinerId)}
                       onChange={(e) => {
                         if (e.target.checked) {
@@ -836,29 +820,29 @@ export default function ProjectDashboard() {
                       }}
                     />
                     <div>
-                      <p className="text-sm font-bold text-slate-900">{examiner.examinerName || `Examiner ${examiner.examinerId}`}</p>
-                      <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">ID: {examiner.examinerId}</p>
+                      <p className="text-sm font-bold text-gray-900">{examiner.examinerName || `Examiner ${examiner.examinerId}`}</p>
+                      <p className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">ID: {examiner.examinerId}</p>
                     </div>
                   </label>
                 ))}
                 
                 {paginatedExaminersList.length === 0 && (
-                  <p className="p-4 text-center text-sm font-medium text-slate-500">No examiners found.</p>
+                  <p className="p-4 text-center text-sm font-medium text-gray-500">No examiners found.</p>
                 )}
               </div>
             </div>
             
-            <div className="p-5 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
+            <div className="p-5 border-t border-gray-100 flex justify-end gap-3 bg-gray-50">
               <button 
                 onClick={() => setIsBulkAssignModalOpen(false)}
-                className="px-5 py-2 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors"
+                className="px-5 py-2 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-200 transition-colors"
               >
                 Cancel
               </button>
               <button 
                 onClick={handleBulkAssign}
                 disabled={isSubmittingBulkAssign || selectedExaminerIds.length === 0}
-                className="px-6 py-2 rounded-xl text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all disabled:opacity-50 flex items-center gap-2"
+                className="px-6 py-2 rounded-md text-sm font-bold bg-teal-700 hover:bg-teal-800 text-white shadow-sm transition-all disabled:opacity-50 flex items-center gap-2"
               >
                 {isSubmittingBulkAssign ? 'Assigning...' : `Assign ${selectedExaminerIds.length} Examiners`}
               </button>
@@ -869,3 +853,4 @@ export default function ProjectDashboard() {
     </div>
   );
 }
+
