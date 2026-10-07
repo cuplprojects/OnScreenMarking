@@ -17,7 +17,8 @@ import {
   ChevronLeft,
   Filter,
   Users,
-  Edit
+  Edit,
+  X
 } from 'lucide-react';
 import { subjectService, sectionService, paperService, questionTypeService } from '../services';
 import { useEffect, useState } from 'react';
@@ -57,6 +58,10 @@ export default function SectionConfig() {
   const [expandedSections, setExpandedSections] = useState({});
   const [sectionToDelete, setSectionToDelete] = useState(null);
   const [sectionMasters, setSectionMasters] = useState([]);
+  const [showImportMasterModal, setShowImportMasterModal] = useState(false);
+  const [selectedMasterSectionIds, setSelectedMasterSectionIds] = useState([]);
+  const [importingMasters, setImportingMasters] = useState(false);
+  const [overwriteExistingMasters, setOverwriteExistingMasters] = useState(false);
 
   const [sectionForm, setSectionForm] = useState({
     name: '',
@@ -249,6 +254,31 @@ export default function SectionConfig() {
       [field]: field === 'marks' ? parseFloat(value) || 0 : value
     };
     setQuestions(updatedQuestions);
+  };
+
+  const handleImportMasterSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedMasterSectionIds || selectedMasterSectionIds.length === 0) {
+      message.error("Please select at least one master section to import");
+      return;
+    }
+
+    setImportingMasters(true);
+    try {
+      await sectionService.importMasterSections({
+        paperId: urlPaperId,
+        masterSectionIds: selectedMasterSectionIds,
+        overwriteExisting: overwriteExistingMasters
+      });
+      message.success("Master sections imported successfully!");
+      setShowImportMasterModal(false);
+      await fetchSections();
+      await fetchPaperDetails();
+    } catch (err) {
+      message.error("Failed to import master sections: " + (err.response?.data?.message || err.message));
+    } finally {
+      setImportingMasters(false);
+    }
   };
 
   const handleEditSection = (section) => {
@@ -533,20 +563,33 @@ export default function SectionConfig() {
                 </div>
 
                 {!showSectionForm && (
-                  <button
-                    onClick={() => {
-                      setEditingSectionId(null);
-                      setShowSectionForm(true);
-                    }}
-                    disabled={isAddSectionDisabled()}
-                    className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold transition-all shrink-0 ${isAddSectionDisabled()
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
-                        : 'bg-teal-700 hover:bg-teal-800 text-white shadow-md active:scale-95'
-                      }`}
-                  >
-                    <Plus className="w-5 h-5" />
-                    Add Section
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        setSelectedMasterSectionIds(sectionMasters.map(m => m.id));
+                        setShowImportMasterModal(true);
+                      }}
+                      className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl font-bold bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 transition-all text-sm shrink-0 active:scale-95 shadow-sm"
+                      title="Import Predefined Master Sections"
+                    >
+                      <Layers className="w-4 h-4" />
+                      Import Master Sections
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingSectionId(null);
+                        setShowSectionForm(true);
+                      }}
+                      disabled={isAddSectionDisabled()}
+                      className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold transition-all shrink-0 ${isAddSectionDisabled()
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
+                          : 'bg-teal-700 hover:bg-teal-800 text-white shadow-md active:scale-95'
+                        }`}
+                    >
+                      <Plus className="w-5 h-5" />
+                      Add Section
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -942,13 +985,26 @@ export default function SectionConfig() {
           <div className="h-[400px] flex flex-col items-center justify-center bg-white border-2 border-dashed border-gray-200 rounded-[2.5rem] shadow-sm">
             <Layers className="w-16 h-16 text-gray-200 mb-4" />
             <h3 className="text-xl font-bold text-gray-400">No sections configured yet</h3>
-            <p className="text-gray-500 mb-6 font-medium">Start by adding a new section to define the paper structure</p>
-            <button
-              onClick={() => setShowSectionForm(true)}
-              className="bg-teal-700 hover:bg-teal-800 text-white px-8 py-4 rounded-xl font-bold shadow-lg shadow-teal-500/20 transition-all hover:scale-105"
-            >
-              Create First Section
-            </button>
+            <p className="text-gray-500 mb-6 font-medium">Start by adding a new section or importing from master sections</p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  setSelectedMasterSectionIds(sectionMasters.map(m => m.id));
+                  setShowImportMasterModal(true);
+                }}
+                className="bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 px-6 py-3.5 rounded-xl font-bold transition-all hover:scale-105 flex items-center gap-2"
+              >
+                <Layers className="w-4 h-4" />
+                Import Master Sections
+              </button>
+              <button
+                onClick={() => setShowSectionForm(true)}
+                className="bg-teal-700 hover:bg-teal-800 text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-teal-500/20 transition-all hover:scale-105 flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Create First Section
+              </button>
+            </div>
           </div>
         )}
 
@@ -981,6 +1037,127 @@ export default function SectionConfig() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Master Sections Modal */}
+      {showImportMasterModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-teal-100 rounded-xl">
+                  <Layers className="w-5 h-5 text-teal-700" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-gray-900">Import Master Sections</h3>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">
+                    For {selectedPaper?.paperCode}: {selectedPaper?.paperName}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setShowImportMasterModal(false)} className="p-1.5 hover:bg-gray-200 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleImportMasterSubmit} className="p-6 space-y-4">
+              <p className="text-xs text-gray-600">
+                Choose the predefined Master Sections to create in this paper. Questions and marks will be generated automatically based on the master configuration.
+              </p>
+
+              <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                {sectionMasters.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-6">No master sections found.</p>
+                ) : (
+                  sectionMasters.map(master => {
+                    const isChecked = selectedMasterSectionIds.includes(master.id);
+                    return (
+                      <label
+                        key={master.id}
+                        className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer ${
+                          isChecked ? 'bg-teal-50/60 border-teal-300 shadow-sm' : 'bg-white border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedMasterSectionIds(prev => [...prev, master.id]);
+                            } else {
+                              setSelectedMasterSectionIds(prev => prev.filter(id => id !== master.id));
+                            }
+                          }}
+                          className="mt-1 rounded border-gray-300 text-teal-700 focus:ring-teal-500"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-gray-900 text-sm">{master.name}</span>
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md">
+                              {master.totalMarks} Marks
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-gray-500 mt-0.5">
+                            Q{master.startQuestion} - Q{master.endQuestion} ({master.totalQuestions || (master.endQuestion - master.startQuestion + 1)} Questions) &bull; Attempt {master.maxQuestionsToAttempt}
+                          </div>
+                          {master.description && (
+                            <p className="text-[10px] text-gray-400 mt-1">{master.description}</p>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedMasterSectionIds(sectionMasters.map(m => m.id))}
+                  className="text-xs text-teal-700 font-bold hover:underline"
+                >
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMasterSectionIds([])}
+                  className="text-xs text-gray-500 font-bold hover:underline"
+                >
+                  Clear Selection
+                </button>
+              </div>
+
+              {sections.length > 0 && (
+                <label className="flex items-center gap-2 pt-2 border-t border-gray-100 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={overwriteExistingMasters}
+                    onChange={(e) => setOverwriteExistingMasters(e.target.checked)}
+                    className="rounded border-gray-300 text-teal-700 focus:ring-teal-500"
+                  />
+                  <span className="text-xs font-semibold text-gray-700">Overwrite existing sections on this paper</span>
+                </label>
+              )}
+
+              <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowImportMasterModal(false)}
+                  className="px-5 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={importingMasters || selectedMasterSectionIds.length === 0}
+                  className="px-5 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-xl shadow-md transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {importingMasters ? 'Importing...' : 'Import Master Sections'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -35,6 +35,7 @@ const TabBar = () => {
       links.push({ label: 'Subjects',            path: '/admin/subjects',        icon: BookOpen });
       links.push({ label: 'Sessions',            path: '/admin/sessions',        icon: Calendar });
       links.push({ label: 'Papers',              path: papersPath,               icon: FileText });
+      links.push({ label: 'Section Masters',     path: '/admin/section-masters', icon: Layers });
       links.push({ label: 'Question Types',      path: '/admin/question-types',  icon: Layers });
       if (hasPermission('READ_ALLOCATION')) {
         links.push({ label: 'Script Allocation', path: allocationPath,           icon: Zap });
@@ -55,7 +56,8 @@ const TabBar = () => {
       links.push({ label: 'Subjects',            path: '/subjects',              icon: BookOpen });
       links.push({ label: 'Sessions',            path: '/sessions',              icon: Calendar });
       links.push({ label: 'Papers',              path: papersPath,               icon: FileText });
-      links.push({ label: 'Question Types',      path: '/admin/question-types',  icon: Layers });
+      links.push({ label: 'Section Masters',     path: '/section-masters',       icon: Layers });
+      links.push({ label: 'Question Types',      path: '/question-types',        icon: Layers });
       if (hasPermission('READ_ALLOCATION')) {
         links.push({ label: 'Script Allocation', path: allocationPath,           icon: Zap });
       }

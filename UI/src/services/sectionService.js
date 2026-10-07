@@ -6,6 +6,29 @@ const sectionService = {
     return apiCall('/section/Masters');
   },
 
+  // Create section master
+  createSectionMaster: async (data) => {
+    return apiCall('/section/Masters', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Update section master
+  updateSectionMaster: async (id, data) => {
+    return apiCall(`/section/Masters/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Delete section master
+  deleteSectionMaster: async (id) => {
+    return apiCall(`/section/Masters/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
   // Get all sections
   getAllSections: async (paperId = null) => {
     const query = paperId ? `?paperId=${paperId}` : '';
@@ -66,6 +89,27 @@ const sectionService = {
     return apiCall('/section/import', {
       method: 'POST',
       body: JSON.stringify(importData),
+    });
+  },
+
+  // Import master sections to one or multiple papers
+  importMasterSections: async (data) => {
+    return apiCall('/section/import-masters', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Get mapped master sections for a paper
+  getPaperMasterSections: async (paperId) => {
+    return apiCall(`/section/paper-masters/${paperId}`);
+  },
+
+  // Save master section mappings for a paper
+  savePaperMasterSections: async (paperId, masterSectionIds) => {
+    return apiCall('/section/paper-masters', {
+      method: 'POST',
+      body: JSON.stringify({ paperId, masterSectionIds }),
     });
   },
 };

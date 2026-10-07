@@ -94,15 +94,74 @@ const paperService = {
     });
   },
 
-  // Import papers from another project
-  importPapers: async (targetProjectId, sourcePaperIds) => {
+  // Import papers from another project with optional master section allocation
+  importPapers: async (targetProjectId, sourcePaperIds, masterSectionIds = []) => {
     return apiCall('/papers/import', {
       method: 'POST',
       body: JSON.stringify({
         targetProjectId: targetProjectId,
-        sourcePaperIds: sourcePaperIds
+        sourcePaperIds: sourcePaperIds,
+        masterSectionIds: masterSectionIds
       }),
     });
+  },
+
+  // Upload question paper PDF
+  uploadQuestionPaper: async (paperId, projectId, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const token = sessionStorage.getItem('token');
+    const query = projectId ? `?projectId=${projectId}` : '';
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/papers/${paperId}/question-paper${query}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: formData
+    });
+    if (!res.ok) {
+      let errMsg = 'Failed to upload question paper';
+      try {
+        const errObj = await res.json();
+        errMsg = errObj.message || errMsg;
+      } catch (e) {}
+      throw new Error(errMsg);
+    }
+    return res.json();
+  },
+
+  // Remove question paper PDF
+  removeQuestionPaper: async (paperId, projectId) => {
+    const query = projectId ? `?projectId=${projectId}` : '';
+    return apiCall(`/papers/${paperId}/question-paper${query}`, {
+      method: 'DELETE'
+    });
+  },
+
+  // Bulk upload question paper PDFs matched by CatchNo / PaperCode
+  bulkUploadQuestionPapers: async (projectId, files) => {
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+      formData.append('files', files[i]);
+    }
+    const token = sessionStorage.getItem('token');
+    const query = projectId ? `?projectId=${projectId}` : '';
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/papers/bulk-upload-question-papers${query}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: formData
+    });
+    if (!res.ok) {
+      let errMsg = 'Failed to bulk upload question papers';
+      try {
+        const errObj = await res.json();
+        errMsg = errObj.message || errMsg;
+      } catch (e) {}
+      throw new Error(errMsg);
+    }
+    return res.json();
   }
 };
 

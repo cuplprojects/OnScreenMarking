@@ -25,7 +25,168 @@ namespace API.Controllers
             try
             {
                 var masters = await _context.SectionMasters.OrderBy(m => m.Name).ToListAsync();
+                if (!masters.Any())
+                {
+                    var defaultMasters = new List<SectionMaster>
+                    {
+                        new SectionMaster
+                        {
+                            Name = "Section A",
+                            Description = "Multiple Choice Questions",
+                            StartQuestion = 1,
+                            EndQuestion = 10,
+                            TotalQuestions = 10,
+                            TotalMarks = 20,
+                            MaxQuestionsToAttempt = 10,
+                            CreatedAt = DateTime.UtcNow
+                        },
+                        new SectionMaster
+                        {
+                            Name = "Section B",
+                            Description = "Short Answer Questions",
+                            StartQuestion = 11,
+                            EndQuestion = 15,
+                            TotalQuestions = 5,
+                            TotalMarks = 30,
+                            MaxQuestionsToAttempt = 5,
+                            CreatedAt = DateTime.UtcNow
+                        },
+                        new SectionMaster
+                        {
+                            Name = "Section C",
+                            Description = "Long Answer Questions",
+                            StartQuestion = 16,
+                            EndQuestion = 20,
+                            TotalQuestions = 5,
+                            TotalMarks = 50,
+                            MaxQuestionsToAttempt = 3,
+                            CreatedAt = DateTime.UtcNow
+                        }
+                    };
+                    _context.SectionMasters.AddRange(defaultMasters);
+                    await _context.SaveChangesAsync();
+                    masters = defaultMasters;
+                }
                 return Ok(masters);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpGet("Masters/{id}")]
+        public async Task<ActionResult<SectionMaster>> GetSectionMaster(int id)
+        {
+            try
+            {
+                var master = await _context.SectionMasters.FindAsync(id);
+                if (master == null)
+                    return NotFound(new { success = false, message = "Section Master not found" });
+
+                return Ok(master);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("Masters")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<ActionResult<SectionMaster>> CreateSectionMaster([FromBody] SectionMasterDto dto)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(dto.Name))
+                    return BadRequest(new { success = false, message = "Section name is required" });
+
+                var exists = await _context.SectionMasters.AnyAsync(sm => sm.Name.ToLower() == dto.Name.Trim().ToLower());
+                if (exists)
+                    return BadRequest(new { success = false, message = "A section master with this name already exists" });
+
+                int totalQ = dto.TotalQuestions > 0 ? dto.TotalQuestions : (dto.EndQuestion >= dto.StartQuestion ? dto.EndQuestion - dto.StartQuestion + 1 : 1);
+                var master = new SectionMaster
+                {
+                    Name = dto.Name.Trim(),
+                    Description = dto.Description ?? "",
+                    TotalQuestions = totalQ,
+                    TotalMarks = dto.TotalMarks,
+                    StartQuestion = dto.StartQuestion,
+                    EndQuestion = dto.EndQuestion,
+                    MaxQuestionsToAttempt = dto.MaxQuestionsToAttempt > 0 ? dto.MaxQuestionsToAttempt : totalQ,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.SectionMasters.Add(master);
+                await _context.SaveChangesAsync();
+
+                return CreatedAtAction(nameof(GetSectionMaster), new { id = master.Id }, master);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPut("Masters/{id}")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> UpdateSectionMaster(int id, [FromBody] SectionMasterDto dto)
+        {
+            try
+            {
+                var master = await _context.SectionMasters.FindAsync(id);
+                if (master == null)
+                    return NotFound(new { success = false, message = "Section Master not found" });
+
+                if (string.IsNullOrWhiteSpace(dto.Name))
+                    return BadRequest(new { success = false, message = "Section name is required" });
+
+                var duplicate = await _context.SectionMasters.AnyAsync(sm => sm.Id != id && sm.Name.ToLower() == dto.Name.Trim().ToLower());
+                if (duplicate)
+                    return BadRequest(new { success = false, message = "Another section master with this name already exists" });
+
+                int totalQ = dto.TotalQuestions > 0 ? dto.TotalQuestions : (dto.EndQuestion >= dto.StartQuestion ? dto.EndQuestion - dto.StartQuestion + 1 : 1);
+
+                master.Name = dto.Name.Trim();
+                master.Description = dto.Description ?? "";
+                master.TotalQuestions = totalQ;
+                master.TotalMarks = dto.TotalMarks;
+                master.StartQuestion = dto.StartQuestion;
+                master.EndQuestion = dto.EndQuestion;
+                master.MaxQuestionsToAttempt = dto.MaxQuestionsToAttempt > 0 ? dto.MaxQuestionsToAttempt : totalQ;
+
+                _context.SectionMasters.Update(master);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "Section Master updated successfully", master });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpDelete("Masters/{id}")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> DeleteSectionMaster(int id)
+        {
+            try
+            {
+                var master = await _context.SectionMasters.FindAsync(id);
+                if (master == null)
+                    return NotFound(new { success = false, message = "Section Master not found" });
+
+                var referencingSections = await _context.Sections.Where(s => s.SectionMasterId == id).ToListAsync();
+                foreach (var s in referencingSections)
+                {
+                    s.SectionMasterId = null;
+                }
+
+                _context.SectionMasters.Remove(master);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "Section Master deleted successfully" });
             }
             catch (Exception ex)
             {
@@ -561,6 +722,176 @@ namespace API.Controllers
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
+
+        [HttpPost("import-masters")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> ImportMasterSections([FromBody] ImportMasterSectionsRequest request)
+        {
+            try
+            {
+                if (request == null || request.MasterSectionIds == null || !request.MasterSectionIds.Any())
+                    return BadRequest(new { success = false, message = "At least one Master Section must be selected" });
+
+                var targetPaperIds = new List<int>();
+                if (request.TargetPaperIds != null && request.TargetPaperIds.Any())
+                {
+                    targetPaperIds.AddRange(request.TargetPaperIds);
+                }
+                else if (request.PaperId > 0)
+                {
+                    targetPaperIds.Add(request.PaperId);
+                }
+
+                if (!targetPaperIds.Any())
+                    return BadRequest(new { success = false, message = "Target Paper ID is required" });
+
+                var masters = await _context.SectionMasters
+                    .Where(m => request.MasterSectionIds.Contains(m.Id))
+                    .ToListAsync();
+
+                if (!masters.Any())
+                    return BadRequest(new { success = false, message = "No matching master sections found" });
+
+                int importedCount = 0;
+
+                foreach (var paperId in targetPaperIds.Distinct())
+                {
+                    var paper = await _context.Papers.FindAsync(paperId);
+                    if (paper == null) continue;
+
+                    if (request.OverwriteExisting)
+                    {
+                        var existing = await _context.Sections.Where(s => s.PaperId == paperId).ToListAsync();
+                        if (existing.Any())
+                        {
+                            _context.Sections.RemoveRange(existing);
+                            await _context.SaveChangesAsync();
+                        }
+                    }
+
+                    int currentMaxQuestion = 0;
+                    var currentSections = await _context.Sections.Where(s => s.PaperId == paperId).ToListAsync();
+                    if (currentSections.Any())
+                    {
+                        currentMaxQuestion = currentSections.Max(s => s.EndQuestion);
+                    }
+
+                    foreach (var master in masters.OrderBy(m => m.StartQuestion).ThenBy(m => m.Id))
+                    {
+                        int startQ = request.OverwriteExisting ? master.StartQuestion : (currentMaxQuestion > 0 ? currentMaxQuestion + 1 : master.StartQuestion);
+                        int totalQ = master.TotalQuestions > 0 ? master.TotalQuestions : (master.EndQuestion >= master.StartQuestion ? master.EndQuestion - master.StartQuestion + 1 : 1);
+                        int endQ = startQ + totalQ - 1;
+                        if (!request.OverwriteExisting)
+                        {
+                            currentMaxQuestion = endQ;
+                        }
+
+                        var newSection = new Section
+                        {
+                            PaperId = paperId,
+                            SectionMasterId = master.Id,
+                            Name = master.Name,
+                            Description = master.Description ?? "",
+                            TotalQuestions = totalQ,
+                            TotalMarks = master.TotalMarks,
+                            StartQuestion = startQ,
+                            EndQuestion = endQ,
+                            MaxQuestionsToAttempt = master.MaxQuestionsToAttempt > 0 ? master.MaxQuestionsToAttempt : totalQ,
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        _context.Sections.Add(newSection);
+                        await _context.SaveChangesAsync();
+
+                        // Create questions
+                        decimal marksPerQ = totalQ > 0 ? (decimal)master.TotalMarks / totalQ : 1;
+                        var questions = new List<Question>();
+                        for (int qNo = startQ; qNo <= endQ; qNo++)
+                        {
+                            questions.Add(new Question
+                            {
+                                SectionId = newSection.Id,
+                                QuestionNo = qNo.ToString(),
+                                Marks = marksPerQ,
+                                Type = "MCQ",
+                                IsOptional = false,
+                                CreatedAt = DateTime.UtcNow
+                            });
+                        }
+
+                        _context.Questions.AddRange(questions);
+                        await _context.SaveChangesAsync();
+                        importedCount++;
+                    }
+                }
+
+                return Ok(new { success = true, message = $"Successfully imported {importedCount} sections" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpGet("paper-masters/{paperId}")]
+        [Authorize]
+        public async Task<IActionResult> GetPaperMasterSections(int paperId)
+        {
+            try
+            {
+                var mappings = await _context.PaperSectionMasters
+                    .Include(psm => psm.SectionMaster)
+                    .Where(psm => psm.PaperId == paperId)
+                    .Select(psm => psm.SectionMaster)
+                    .ToListAsync();
+
+                return Ok(mappings);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("paper-masters")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> SavePaperMasterSections([FromBody] SavePaperMasterSectionsRequest request)
+        {
+            try
+            {
+                if (request == null || request.PaperId <= 0)
+                    return BadRequest(new { success = false, message = "Valid Paper ID is required" });
+
+                var existing = await _context.PaperSectionMasters.Where(psm => psm.PaperId == request.PaperId).ToListAsync();
+                _context.PaperSectionMasters.RemoveRange(existing);
+
+                if (request.MasterSectionIds != null && request.MasterSectionIds.Any())
+                {
+                    foreach (var mId in request.MasterSectionIds.Distinct())
+                    {
+                        _context.PaperSectionMasters.Add(new PaperSectionMaster
+                        {
+                            PaperId = request.PaperId,
+                            SectionMasterId = mId,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                return Ok(new { success = true, message = "Paper master section mapping saved successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+    }
+
+    public class SavePaperMasterSectionsRequest
+    {
+        public int PaperId { get; set; }
+        public List<int> MasterSectionIds { get; set; } = new List<int>();
     }
 
     public class BulkSectionDto
@@ -573,5 +904,24 @@ namespace API.Controllers
     {
         public int SourcePaperId { get; set; }
         public List<int> TargetPaperIds { get; set; }
+    }
+
+    public class ImportMasterSectionsRequest
+    {
+        public int PaperId { get; set; }
+        public List<int>? TargetPaperIds { get; set; }
+        public List<int> MasterSectionIds { get; set; } = new List<int>();
+        public bool OverwriteExisting { get; set; } = false;
+    }
+
+    public class SectionMasterDto
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public int TotalQuestions { get; set; }
+        public int TotalMarks { get; set; }
+        public int StartQuestion { get; set; }
+        public int EndQuestion { get; set; }
+        public int MaxQuestionsToAttempt { get; set; }
     }
 }

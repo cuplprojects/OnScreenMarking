@@ -44,13 +44,14 @@ export default function AddSubjectModal({
           setSubCode(initialData.subCode || '');
           setStatus(initialData.status !== undefined ? initialData.status : true);
           
-          setSelectedCourses(initialData.courseId ? [initialData.courseId] : []);
-          setInitialCourses(initialData.courseId ? [initialData.courseId] : []);
+          const existingCourses = initialData.courseIds || (initialData.courseId ? [initialData.courseId] : []);
+          setSelectedCourses(existingCourses);
+          setInitialCourses(existingCourses);
         } else {
           setSubName('');
           setSubCode('');
-          setSelectedCourses(initialData?.courseId ? [initialData.courseId] : []);
-          setInitialCourses(initialData?.courseId ? [initialData.courseId] : []);
+          setSelectedCourses(initialData?.courseId ? [initialData.courseId] : (initialData?.courseIds || []));
+          setInitialCourses([]);
           setStatus(true);
         }
       } catch (err) {
@@ -113,6 +114,14 @@ export default function AddSubjectModal({
         for (const courseId of selectedCourses) {
           if (!initialCourses.includes(courseId)) {
             await courseService.addSubjectToCourse(courseId, currentSubjectId);
+          }
+        }
+        // Remove old mappings if editing
+        if (editingId) {
+          for (const courseId of initialCourses) {
+            if (!selectedCourses.includes(courseId)) {
+              await courseService.removeSubjectFromCourse(courseId, currentSubjectId);
+            }
           }
         }
       }

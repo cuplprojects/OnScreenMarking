@@ -121,7 +121,7 @@ namespace API.Controllers
                     .Include(p => p.University)
                     .Include(p => p.ProjectPapers)
                         .ThenInclude(pp => pp.Paper)
-                    .FirstOrDefaultAsync(p => p.ProjectPapers.FirstOrDefault().ProjectId == id);
+                    .FirstOrDefaultAsync(p => p.ProjectId == id);
 
                 if (project == null)
                     return NotFound(new { success = false, message = "Project not found" });

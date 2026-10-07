@@ -46,6 +46,7 @@ function useNavGroups(userType, hasPermission) {
       {
         label: 'Examination',
         items: [
+          { label: 'Section Masters',     path: '/admin/section-masters', icon: Layers },
           { label: 'Question Types',      path: '/admin/question-types',  icon: Layers },
         ],
       },
@@ -82,7 +83,8 @@ function useNavGroups(userType, hasPermission) {
         label: 'Examination',
         items: [
           { label: 'Projects',            path: '/projects', icon: BookMarked },
-          { label: 'Question Types',      path: '/admin/question-types', icon: Layers },
+          { label: 'Section Masters',     path: '/section-masters', icon: Layers },
+          { label: 'Question Types',      path: '/question-types', icon: Layers },
         ],
       },
     ];

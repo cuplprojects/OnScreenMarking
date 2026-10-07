@@ -23,6 +23,7 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
   const [formData, setFormData] = useState({
     paperCode: '',
     paperName: '',
+    catchNo: '',
     paperNumber: 1,
     maxMarks: 100,
     totalQuestions: 10,
@@ -35,11 +36,15 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
 
   useEffect(() => {
     if (initialData) {
-      setFormData(initialData);
+      setFormData({
+        ...initialData,
+        catchNo: initialData.catchNo || ''
+      });
     } else {
       setFormData({
         paperCode: '',
         paperName: '',
+        catchNo: '',
         paperNumber: 1,
         maxMarks: 100,
         totalQuestions: 10,
@@ -92,7 +97,7 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
 
         {/* Modal Form */}
         <form id="master-paper-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Paper Code *</label>
               <input
@@ -100,8 +105,18 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
                 required
                 value={formData.paperCode}
                 onChange={e => setFormData({ ...formData, paperCode: e.target.value })}
-                className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 px-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
+                className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
                 placeholder="e.g. MATH-101"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Catch No.</label>
+              <input
+                type="text"
+                value={formData.catchNo}
+                onChange={e => setFormData({ ...formData, catchNo: e.target.value })}
+                className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
+                placeholder="e.g. C-101"
               />
             </div>
             <div>
@@ -111,7 +126,7 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
                 required
                 value={formData.paperName}
                 onChange={e => setFormData({ ...formData, paperName: e.target.value })}
-                className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 px-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
+                className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
                 placeholder="e.g. Calculus I"
               />
             </div>
@@ -352,6 +367,7 @@ export default function MasterPapersManagement() {
       paperId: paper.paperId,
       paperCode: paper.paperCode,
       paperName: paper.paperName,
+      catchNo: paper.catchNo || '',
       paperNumber: paper.paperNumber,
       maxMarks: paper.maxMarks,
       totalQuestions: paper.totalQuestions,
@@ -421,6 +437,11 @@ export default function MasterPapersManagement() {
                         <React.Suspense fallback={null}><ColumnFilter columnKey="paperCode" currentFilter={filters.paperCode} setFilter={setFilter} placeholder="Filter code..." /></React.Suspense>
                       </div>
                     </th>
+                    <th className="px-6 py-2.5">
+                      <div className="flex items-center gap-1.5">Catch No.
+                        <React.Suspense fallback={null}><ColumnFilter columnKey="catchNo" currentFilter={filters.catchNo} setFilter={setFilter} placeholder="Filter catch..." /></React.Suspense>
+                      </div>
+                    </th>
                     <th
                       className="px-6 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group"
                       onClick={() => handleSort('paperName')}
@@ -450,6 +471,15 @@ export default function MasterPapersManagement() {
                     <tr key={paper.paperId} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-6 py-2.5">
                         <span className="font-extrabold text-gray-900">{paper.paperCode}</span>
+                      </td>
+                      <td className="px-6 py-2.5">
+                        {paper.catchNo ? (
+                          <span className="font-mono bg-gray-100 text-gray-700 font-bold px-2 py-0.5 rounded text-[11px] uppercase tracking-wider">
+                            {paper.catchNo}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 font-medium">-</span>
+                        )}
                       </td>
                       <td className="px-6 py-2.5 font-bold text-gray-700">{paper.paperName}</td>
                       <td className="px-6 py-2.5 text-gray-500 font-medium">

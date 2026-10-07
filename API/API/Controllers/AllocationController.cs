@@ -9,6 +9,7 @@ namespace API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Route("api/allocations")]
     [Authorize]
     public class AllocationController : ControllerBase
     {
@@ -590,6 +591,44 @@ namespace API.Controllers
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
+
+        [HttpPost("reassign")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> ReassignAllocations([FromBody] ReassignAllocationRequest request)
+        {
+            try
+            {
+                if (request?.AllocationIds == null || !request.AllocationIds.Any())
+                    return BadRequest(new { success = false, message = "No allocations selected to reassign" });
+
+                if (request.TargetExaminerId <= 0)
+                    return BadRequest(new { success = false, message = "Target examiner is required" });
+
+                var targetExaminer = await _context.Users.FindAsync(request.TargetExaminerId);
+                if (targetExaminer == null)
+                    return BadRequest(new { success = false, message = "Target examiner not found" });
+
+                var allocations = await _context.Allocations
+                    .Where(a => request.AllocationIds.Contains(a.AllocationId))
+                    .ToListAsync();
+
+                if (!allocations.Any())
+                    return NotFound(new { success = false, message = "No matching allocations found" });
+
+                foreach (var alloc in allocations)
+                {
+                    alloc.ExaminerId = request.TargetExaminerId;
+                    alloc.AllocatedAt = DateTime.UtcNow;
+                }
+
+                await _context.SaveChangesAsync();
+                return Ok(new { success = true, message = $"Successfully reassigned {allocations.Count} allocation(s) to {targetExaminer.Name}." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
         
         [HttpPost("project/{projectId}/auto-allocate")]
         [Authorize(Roles = "admin,coordinator")]
@@ -641,7 +680,8 @@ namespace API.Controllers
                                 ScriptId = script.Id,
                                 ExaminerId = examinerId,
                                 AllocatedAt = DateTime.UtcNow,
-                                Deadline = DateTime.UtcNow.AddDays(7)
+                                Deadline = DateTime.UtcNow.AddDays(7),
+                                Status = "allocated"
                             };
                             
                             _context.Allocations.Add(allocation);
@@ -772,6 +812,12 @@ namespace API.Controllers
     public class RevokeAllocationRequest
     {
         public List<int> AllocationIds { get; set; }
+    }
+
+    public class ReassignAllocationRequest
+    {
+        public List<int> AllocationIds { get; set; }
+        public int TargetExaminerId { get; set; }
     }
 
     public class BulkAllocationRequest
