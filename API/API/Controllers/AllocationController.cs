@@ -121,9 +121,14 @@ namespace API.Controllers
                     return BadRequest(new { success = false, message = "Examiner ID is required" });
 
                 // Verify script exists
-                var script = await _context.Scripts.FindAsync(allocationDto.ScriptId);
+                var script = await _context.Scripts
+                    .Include(s => s.ProjectPaper)
+                    .FirstOrDefaultAsync(s => s.Id == allocationDto.ScriptId);
                 if (script == null)
                     return BadRequest(new { success = false, message = "Script not found" });
+
+                if (string.IsNullOrEmpty(script.ProjectPaper?.QuestionPaperPdfUrl))
+                    return BadRequest(new { success = false, message = "Cannot allocate script because the Question Paper PDF is not uploaded for this paper." });
 
                 // Verify examiner exists
                 var examiner = await _context.Users.FindAsync(allocationDto.ExaminerId);
@@ -436,6 +441,10 @@ namespace API.Controllers
                 if (request.PaperId <= 0)
                     return BadRequest(new { success = false, message = "Valid Paper ID is required" });
 
+                var projectPaper = await _context.ProjectPapers.FirstOrDefaultAsync(pp => pp.PaperId == request.PaperId);
+                if (projectPaper == null || string.IsNullOrEmpty(projectPaper.QuestionPaperPdfUrl))
+                    return BadRequest(new { success = false, message = "Cannot allocate scripts because the Question Paper PDF is not uploaded for this paper." });
+
                 // Get pending scripts for this paper
                 var pendingScripts = await _context.Scripts
                     .Where(s => s.ProjectPaper.PaperId == request.PaperId && 
@@ -639,7 +648,7 @@ namespace API.Controllers
                 var papers = await _context.Papers
                     .Include(p => p.ProjectPapers)
                     .Include(p => p.Sections)
-                    .Where(p => p.ProjectPapers.Any(pp => pp.ProjectId == projectId) && p.Sections.Any())
+                    .Where(p => p.ProjectPapers.Any(pp => pp.ProjectId == projectId && !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl)) && p.Sections.Any())
                     .ToListAsync();
 
                 int totalAllocated = 0;

@@ -79,6 +79,23 @@ namespace API.Controllers
                         case "unconfigured":
                             query = query.Where(p => !_context.Sections.Any(s => s.PaperId == p.PaperId));
                             break;
+                        case "sections_missing":
+                            query = query.Where(p => !_context.Sections.Any(s => s.PaperId == p.PaperId) || _context.Sections.Where(s => s.PaperId == p.PaperId).Sum(s => (int?)s.TotalMarks) != p.MaxMarks);
+                            break;
+                        case "pdf_missing":
+                            query = query.Where(p => !(p.ProjectPapers.Any(pp => pp.ProjectId == projectId && !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl)) || p.ProjectPapers.Any(pp => !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl))));
+                            break;
+                        case "not_assigned":
+                            query = query.Where(p => !_context.PaperExaminers.Any(pe => pe.PaperId == p.PaperId));
+                            break;
+                        case "ready_for_allocation":
+                            query = query.Where(p => 
+                                _context.Sections.Any(s => s.PaperId == p.PaperId) && 
+                                _context.Sections.Where(s => s.PaperId == p.PaperId).Sum(s => (int?)s.TotalMarks) == p.MaxMarks &&
+                                (p.ProjectPapers.Any(pp => pp.ProjectId == projectId && !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl)) || p.ProjectPapers.Any(pp => !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl))) &&
+                                _context.PaperExaminers.Any(pe => pe.PaperId == p.PaperId)
+                            );
+                            break;
                     }
                 }
 

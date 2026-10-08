@@ -84,7 +84,7 @@ export default function ScriptAllocation({ isTab = false }) {
       const pageSizeVal = params.pageSize || 10;
       const sortFieldVal = params.sortField || '';
       const sortOrderVal = params.sortOrder || '';
-      return apiCall(`/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}`);
+      return apiCall(`/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}&statusFilter=ready_for_allocation`);
     }
     return Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 10, totalPages: 1 });
   }, [projectId]);
@@ -165,6 +165,11 @@ export default function ScriptAllocation({ isTab = false }) {
   // Open Single Paper Allocation Pane
   // -------------------------------------------------------------
   const openAllocationPane = async (paper) => {
+    if (!paper.questionPaperPdfUrl) {
+      message.warning(`Paper "${paper.paperName}" does not have a Question Paper PDF uploaded.`);
+      return;
+    }
+
     if (activePaper?.paperId === paper.paperId && !isMultiPaperMode) {
       // Toggle off
       setActivePaper(null);
@@ -234,12 +239,20 @@ export default function ScriptAllocation({ isTab = false }) {
   const openMultiPaperPane = async () => {
     if (selectedPaperIds.length === 0) return message.warning("Please select at least one paper");
 
+    const selectedPapersData = papers.filter(p => selectedPaperIds.includes(p.paperId));
+    const missingQpPapers = selectedPapersData.filter(p => !p.questionPaperPdfUrl);
+    
+    if (missingQpPapers.length > 0) {
+      const names = missingQpPapers.map(p => p.paperName).join(', ');
+      message.warning(`Cannot allocate. The following papers are missing Question Paper PDFs: ${names}`);
+      return;
+    }
+
     setIsMultiPaperMode(true);
     setActivePaper(null);
     setLoading(true);
 
     try {
-      const selectedPapersData = papers.filter(p => selectedPaperIds.includes(p.paperId));
       
       let totalPending = 0;
       let totalAllocated = 0;
@@ -516,50 +529,27 @@ export default function ScriptAllocation({ isTab = false }) {
 
   return (
     <div className="min-h-screen bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4">
-      <ProjectConfigHeader />
-      
-      <div className="w-full space-y-4 mt-4">
-        
-        {/* Main Header Card */}
-        <div className="bg-white px-5 py-3 rounded-2xl border border-gray-100 shadow-sm sticky top-0 z-20">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-teal-100 text-teal-700 rounded-xl flex items-center justify-center font-bold shadow-xs">
-                <Zap size={16} />
-              </div>
-              <div>
-                <h2 className="text-xl font-black text-gray-900 tracking-tight leading-none flex items-center gap-2">
-                  Examiner & Script Allocation System
-                </h2>
-              </div>
-            </div>
-
-            {/* Quick Actions & Navigation Tabs */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleAutoAllocateProject}
-                disabled={autoProjectLoading}
-                className="bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-[11px] uppercase tracking-wider px-4 py-2.5 rounded-xl shadow-md shadow-teal-200 transition-all flex items-center gap-2 disabled:opacity-50"
-              >
-                {autoProjectLoading ? <Loader size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                {autoProjectLoading ? "Auto-Allocating..." : "Auto-Allocate All Papers"}
-              </button>
-
-              <div className="flex p-1 bg-gray-100 rounded-xl border border-gray-200">
-                <button
-                  onClick={() => setActiveMainTab('allocate')}
-                  className={`px-4 py-2 rounded-lg text-xs font-extrabold transition-all ${
-                    activeMainTab === 'allocate' 
-                      ? 'bg-white text-teal-800 shadow-xs' 
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Allocate Papers
-                </button>
+      {!isTab && (
+        <>
+          <ProjectConfigHeader />
+          <div className="bg-white px-5 py-3 rounded-2xl border border-gray-100 shadow-sm sticky top-0 z-20 mt-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-teal-100 text-teal-700 rounded-xl flex items-center justify-center font-bold shadow-xs">
+                  <Zap size={16} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-gray-900 tracking-tight leading-none flex items-center gap-2">
+                    Examiner & Script Allocation System
+                  </h2>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </>
+      )}
+
+      <div className="w-full space-y-4 mt-4">
 
 
       {(!projectId && !isTab) ? (
@@ -587,15 +577,27 @@ export default function ScriptAllocation({ isTab = false }) {
                   </div>
                   Select Papers to Allocate
                 </h2>
-                {selectedPaperIds.length > 0 && (
-                  <button
-                    onClick={openMultiPaperPane}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] uppercase tracking-wider px-3.5 py-1.5 rounded-lg shadow-sm transition-all flex items-center gap-1.5"
-                  >
-                    <Zap size={13} />
-                    Allocate Selected ({selectedPaperIds.length} Papers)
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {selectedPaperIds.length > 0 && (
+                    <button
+                      onClick={openMultiPaperPane}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] uppercase tracking-wider px-3.5 py-1.5 rounded-lg shadow-sm transition-all flex items-center gap-1.5"
+                    >
+                      <Zap size={13} />
+                      Allocate Selected ({selectedPaperIds.length})
+                    </button>
+                  )}
+                  {projectId && (
+                    <button
+                      onClick={handleAutoAllocateProject}
+                      disabled={autoProjectLoading}
+                      className="bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-[11px] uppercase tracking-wider px-3.5 py-1.5 rounded-lg shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {autoProjectLoading ? <Loader size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                      {autoProjectLoading ? "Allocating..." : "Auto-Allocate All"}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {tableLoading && papers.length === 0 ? (
@@ -697,14 +699,14 @@ export default function ScriptAllocation({ isTab = false }) {
                               <td className="px-4 py-2.5 text-center">
                                 <button
                                   onClick={() => openAllocationPane(paper)}
-                                  className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all shadow-xs inline-flex items-center justify-center gap-1.5 ${
+                                  className={`p-1.5 rounded-lg transition-all ${
                                     isActive 
-                                      ? 'bg-teal-700 text-white hover:bg-teal-800' 
-                                      : 'bg-white border border-gray-200 text-gray-600 hover:border-teal-300 hover:text-teal-700'
+                                      ? 'bg-teal-100 text-teal-700' 
+                                      : 'text-gray-400 hover:bg-teal-50 hover:text-teal-700'
                                   }`}
+                                  title="Allocate Scripts"
                                 >
-                                  <Zap size={11} />
-                                  {isActive ? 'Close' : 'Allocate'}
+                                  {isActive ? <X size={14} /> : <Zap size={14} />}
                                 </button>
                               </td>
                             </tr>

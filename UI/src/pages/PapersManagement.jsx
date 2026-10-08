@@ -544,62 +544,24 @@ export default function PapersManagement({ isTab = false }) {
 
   return (
     <div className="min-h-screen bg-gray-50/50 pb-12 w-full">
-      <div className="bg-white border-b border-gray-200 px-6 lg:px-10 py-6 mb-6 shadow-sm sticky top-0 z-20">
-        <ProjectConfigHeader />
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2">
-          <div className="flex items-center gap-4">
-            <Link to="/admin/dashboard" className="p-2.5 hover:bg-gray-100 rounded-xl border border-gray-200 bg-gray-50 text-gray-600 transition">
-              <ChevronLeft size={16} />
-            </Link>
-            <div>
-              <h1 className="text-lg font-black text-gray-900 mt-1 flex items-center gap-2 leading-tight">
-                <FileText className="text-teal-700" size={18} /> Papers Management
-              </h1>
+      {!isTab && (
+        <div className="bg-white border-b border-gray-200 px-6 lg:px-10 py-6 mb-6 shadow-sm sticky top-0 z-20">
+          <ProjectConfigHeader />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2">
+            <div className="flex items-center gap-4">
+              <Link to="/admin/dashboard" className="p-2.5 hover:bg-gray-100 rounded-xl border border-gray-200 bg-gray-50 text-gray-600 transition">
+                <ChevronLeft size={16} />
+              </Link>
+              <div>
+                <h1 className="text-lg font-black text-gray-900 mt-1 flex items-center gap-2 leading-tight">
+                  <FileText className="text-teal-700" size={18} /> Papers Management
+                </h1>
+              </div>
             </div>
-          </div>
-          
-          <div className="flex items-center gap-2.5">
-            {projectId && (
-              <>
-                <button
-                  onClick={() => {
-                    const importPath = userType === 'admin' ? '/admin/import-papers' : '/import-papers';
-                    navigate(`${importPath}?projectId=${encryptedProjectId}&universityId=${activeUniversityId}`);
-                  }}
-                  className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] uppercase tracking-wider px-4 py-2.5 rounded-xl border border-indigo-200 transition-all flex items-center gap-1.5 shadow-sm"
-                >
-                  <Folder size={13} /> Import Papers (From Project)
-                </button>
-                <button
-                  onClick={() => {
-                    const importQpPath = userType === 'admin' ? '/admin/import-question-papers' : '/import-question-papers';
-                    navigate(`${importQpPath}?projectId=${encryptedProjectId}&universityId=${activeUniversityId}`);
-                  }}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] uppercase tracking-wider px-4 py-2.5 rounded-xl border border-emerald-500 transition-all flex items-center gap-1.5 shadow-sm"
-                >
-                  <Upload size={13} /> Bulk Import Q.P. (Catch-wise)
-                </button>
-              </>
-            )}
-            {selectedPaperIds.length > 0 && (
-              <button
-                onClick={() => setShowImportSectionsModal(true)}
-                className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[10px] uppercase tracking-wider px-4 py-2.5 rounded-xl border border-amber-500 transition-all flex items-center gap-1.5 shadow-sm"
-              >
-                <Layers size={13} /> Allocate Sections to Selected ({selectedPaperIds.length})
-              </button>
-            )}
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className={`font-extrabold text-[10px] uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm border ${
-                showForm ? "bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200" : "bg-teal-700 hover:bg-teal-800 text-white border-teal-600"
-              }`}
-            >
-              {showForm ? <X size={13} /> : <Plus size={13} />} {showForm ? "Cancel" : "Add Paper"}
-            </button>
+            
           </div>
         </div>
-      </div>
+      )}
 
       {(!projectId && !isTab) ? (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-16 text-center">
@@ -979,31 +941,41 @@ export default function PapersManagement({ isTab = false }) {
                   </button>
                   <button
                     onClick={() => setShowImportSectionsModal(true)}
-                    className="bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-[10px] uppercase tracking-wider px-3 py-2 rounded-md transition-all shadow-sm flex items-center gap-1.5"
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[10px] uppercase tracking-wider px-3 py-2 rounded-md transition-all shadow-sm flex items-center gap-1.5"
+                    title="Allocate Sections to Selected"
                   >
-                    <Copy size={13} /> <span className="hidden sm:inline">Import</span>
+                    <Copy size={13} /> <span className="hidden sm:inline">Allocate Sections</span>
                   </button>
                 </div>
               )}
 
               {projectId && (
-                <button
-                  onClick={() => setShowBulkConfigModal(true)}
-                  className="font-bold text-[10px] uppercase tracking-wider px-3 py-2.5 rounded-md transition-colors flex items-center gap-1.5 border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm whitespace-nowrap"
-                >
-                  <Settings size={12} /> Add Default Sections
-                </button>
-              )}
-              {projectId && (
-                <button
-                  onClick={() => {
-                    const importPath = userType === 'admin' ? '/admin/import-papers' : '/import-papers';
-                    navigate(`${importPath}?projectId=${encryptedProjectId}&universityId=${activeUniversityId}`);
-                  }}
-                  className="bg-teal-50 hover:bg-teal-100 text-teal-700 font-extrabold text-[10px] uppercase tracking-wider px-3 py-2.5 rounded-md border border-teal-200 transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap"
-                >
-                  <Folder size={13} /> Import Papers <span className="hidden xl:inline">(From Project)</span>
-                </button>
+                <>
+                  <button
+                    onClick={() => setShowBulkConfigModal(true)}
+                    className="font-bold text-[10px] uppercase tracking-wider px-3 py-2.5 rounded-md transition-colors flex items-center gap-1.5 border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm whitespace-nowrap"
+                  >
+                    <Settings size={12} /> Add Default Sections
+                  </button>
+                  <button
+                    onClick={() => {
+                      const importQpPath = userType === 'admin' ? '/admin/import-question-papers' : '/import-question-papers';
+                      navigate(`${importQpPath}?projectId=${encryptedProjectId}&universityId=${activeUniversityId}`);
+                    }}
+                    className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-extrabold text-[10px] uppercase tracking-wider px-3 py-2.5 rounded-md border border-emerald-200 transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                  >
+                    <Upload size={13} /> Bulk Import Q.P. <span className="hidden xl:inline">(Catch-wise)</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const importPath = userType === 'admin' ? '/admin/import-papers' : '/import-papers';
+                      navigate(`${importPath}?projectId=${encryptedProjectId}&universityId=${activeUniversityId}`);
+                    }}
+                    className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] uppercase tracking-wider px-3 py-2.5 rounded-md border border-indigo-200 transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                  >
+                    <Folder size={13} /> Import Papers <span className="hidden xl:inline">(From Project)</span>
+                  </button>
+                </>
               )}
               <button
                 onClick={() => {
@@ -1048,7 +1020,18 @@ export default function PapersManagement({ isTab = false }) {
                     <SortHeader label="Code & Name" field="paperCode" hasFilter={true} />
                     <SortHeader label="Subject & Max" field="subjectName" hasFilter={true} />
                     <th className="px-5 py-3.5 text-center border-b border-gray-100">Question Paper</th>
-                    <th className="px-5 py-3.5 text-center border-b border-gray-100">Configuration Status</th>
+                    <SortHeader 
+                      label="Configuration Status" 
+                      field="statusFilter" 
+                      hasFilter={true} 
+                      filterOptions={[
+                        { value: '', label: 'All Papers' },
+                        { value: 'sections_missing', label: 'Sections/Questions Not Defined' },
+                        { value: 'pdf_missing', label: 'PDF Not Uploaded' },
+                        { value: 'not_assigned', label: 'Not Assigned' },
+                        { value: 'ready_for_allocation', label: 'Ready for Script Allocation' }
+                      ]} 
+                    />
                     <th className="px-5 py-3.5 text-right border-b border-gray-100">Actions</th>
                   </tr>
                 </thead>
@@ -1181,68 +1164,51 @@ export default function PapersManagement({ isTab = false }) {
                             const isFullyReady = missingReasons.length === 0;
 
                             return (
-                              <div className="relative group inline-flex flex-col items-center gap-1 cursor-help" title={tooltipTitle}>
-                                <div className="flex items-center gap-1">
-                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border ${sectionBadgeColor}`}>
-                                    {sectionBadge}
-                                    <Info size={10} className="opacity-70 group-hover:opacity-100 transition-opacity" />
-                                  </span>
-                                </div>
-                                
-                                {paper.expertsCount > 0 ? (
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold text-teal-700 bg-teal-50 border border-teal-100 whitespace-nowrap">
-                                    <Users size={9} /> {paper.expertsCount} Evaluator{paper.expertsCount > 1 ? 's' : ''}
-                                  </span>
+                              <div className="flex flex-col gap-1.5 min-w-[210px] items-start">
+                                {isFullyReady ? (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm">
+                                    <CheckCircle2 size={13} className="text-emerald-600" />
+                                    <span className="text-[9px] font-black uppercase tracking-wider">Ready for Script Allocation</span>
+                                  </div>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold text-gray-400 bg-gray-50 border border-gray-100 whitespace-nowrap">
-                                    No Evaluator
-                                  </span>
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200 shadow-sm">
+                                    <AlertCircle size={13} className="text-amber-600" />
+                                    <span className="text-[9px] font-black uppercase tracking-wider">Action Required</span>
+                                  </div>
                                 )}
 
-                                {missingQp && (
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-100 whitespace-nowrap">
-                                    <AlertCircle size={9} /> Missing Q.P
-                                  </span>
-                                )}
-
-                                {/* Floating Tooltip Breakdown */}
-                                <div className="hidden group-hover:flex flex-col absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900/95 backdrop-blur-sm text-white text-left rounded-xl shadow-2xl z-50 pointer-events-none animate-in fade-in zoom-in-95 duration-150 border border-gray-700">
-                                  <div className="flex items-center justify-between border-b border-gray-800 pb-1.5 mb-2">
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-gray-300 flex items-center gap-1">
-                                      <Info size={12} className="text-teal-400" /> Configuration Breakdown
-                                    </span>
-                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${isFullyReady ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                                      {isFullyReady ? 'Ready' : 'Pending'}
-                                    </span>
-                                  </div>
-
-                                  <div className="space-y-1.5">
-                                    {statusDetails.map((item, idx) => (
-                                      <div key={idx} className="flex items-start gap-1.5 text-[10px]">
-                                        <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0 font-bold text-[8px] mt-0.5 ${item.ok ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
-                                          {item.ok ? '✓' : '✕'}
-                                        </span>
-                                        <div className="leading-tight flex-1">
-                                          <span className="font-bold text-gray-200 block">{item.label}</span>
-                                          <span className={item.ok ? 'text-gray-400 text-[9px]' : 'text-rose-300 text-[9px]'}>{item.text}</span>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-
-                                  {missingReasons.length > 0 && (
-                                    <div className="mt-2 pt-1.5 border-t border-gray-800 text-[9px] text-amber-300/90 leading-tight">
-                                      <span className="font-bold text-amber-300">Why Unconfigured:</span>
-                                      <ul className="list-disc list-inside mt-0.5 space-y-0.5 text-gray-300">
-                                        {missingReasons.map((reason, rIdx) => (
-                                          <li key={rIdx}>{reason}</li>
-                                        ))}
-                                      </ul>
+                                <div className="flex flex-col w-full text-[9px] bg-gray-50/70 p-2 rounded-md border border-gray-100 shadow-sm gap-1 uppercase tracking-wider">
+                                  {statusDetails.map((item, idx) => (
+                                    <div key={idx} className="flex items-center gap-1.5">
+                                      {item.ok ? (
+                                        <CheckCircle2 size={11} className="text-emerald-500 shrink-0" />
+                                      ) : (
+                                        <X size={11} className="text-rose-500 shrink-0" />
+                                      )}
+                                      <span className={item.ok ? 'text-gray-500 font-bold' : 'text-rose-600 font-black'}>
+                                        {item.label}: {item.ok ? (item.label === 'Question Paper' ? 'Uploaded' : (item.label === 'Evaluators' ? 'Assigned' : 'Complete')) : (item.label === 'Question Paper' ? 'Not Uploaded' : (item.label === 'Evaluators' ? 'Not Assigned' : 'Not Added'))}
+                                      </span>
                                     </div>
-                                  )}
-
-                                  <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900/95"></div>
+                                  ))}
                                 </div>
+
+                                {!isFullyReady && (
+                                  <div className="mt-0.5">
+                                    {!hasSections || !marksMatch ? (
+                                      <Link to={userType === 'admin' ? `/admin/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers` : `/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`} className="inline-flex items-center gap-1 text-[10px] font-black text-teal-600 hover:text-teal-700 transition-colors uppercase tracking-wider bg-white px-2 py-1 rounded shadow-sm border border-gray-200">
+                                        Configure Sections <ChevronRight size={12} />
+                                      </Link>
+                                    ) : !hasQp ? (
+                                      <button onClick={() => triggerTableUpload(paper)} className="inline-flex items-center gap-1 text-[10px] font-black text-teal-600 hover:text-teal-700 transition-colors uppercase tracking-wider bg-white px-2 py-1 rounded shadow-sm border border-gray-200">
+                                        Upload PDF <ChevronRight size={12} />
+                                      </button>
+                                    ) : !hasEvaluators ? (
+                                      <button onClick={() => { setActivePaper(paper); setShowExaminerModal(true); }} className="inline-flex items-center gap-1 text-[10px] font-black text-teal-600 hover:text-teal-700 transition-colors uppercase tracking-wider bg-white px-2 py-1 rounded shadow-sm border border-gray-200">
+                                        Assign Examiner <ChevronRight size={12} />
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                )}
                               </div>
                             );
                           })()}
@@ -1253,16 +1219,17 @@ export default function PapersManagement({ isTab = false }) {
                               to={userType === 'admin' 
                                 ? `/admin/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`
                                 : `/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`}
-                              className="px-2.5 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-md text-[9px] font-extrabold uppercase tracking-wider transition-colors flex items-center gap-1 border border-teal-200"
+                              className="p-1.5 text-gray-400 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-all"
                               title="Manual Section Configuration"
                             >
-                              <Layers size={10} /> Sections
+                              <Layers size={14} />
                             </Link>
                             <button
                               onClick={() => openAllocationModal(paper)}
-                              className="px-2.5 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-md text-[9px] font-extrabold uppercase tracking-wider transition-colors flex items-center gap-1 border border-teal-200"
+                              className="p-1.5 text-gray-400 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-all"
+                              title="Assign Evaluators"
                             >
-                              <Users size={10} /> Assign
+                              <Users size={14} />
                             </button>
                             <button
                               onClick={() => handleEdit(paper)}
