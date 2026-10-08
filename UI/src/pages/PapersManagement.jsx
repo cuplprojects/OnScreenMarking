@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { 
   FileText, Plus, Edit2, UserPlus, X, Search, CheckCircle2, Trash2, 
-  ChevronLeft, ChevronRight, ChevronDown, Filter, Users, BookOpen, Layers, Folder, AlertCircle, Copy
+  ChevronLeft, ChevronRight, ChevronDown, Filter, Users, BookOpen, Layers, Folder, AlertCircle, Copy, Settings
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useBreadcrumb } from "../context/BreadcrumbContext";
@@ -18,7 +18,58 @@ import { useTable } from "../services/tableService";
 import TablePagination from "../components/TablePagination";
 import ColumnFilter from "../components/ColumnFilter";
 
-export default function PapersManagement() {
+const SubjectMultiSelect = ({ subjects, selectedSubjects, toggleSubject }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedCount = selectedSubjects.length;
+
+  return (
+    <div className="relative" ref={wrapperRef}>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-teal-500 cursor-pointer outline-none transition-colors"
+      >
+        <span className={selectedCount === 0 ? "text-gray-400" : "text-gray-900"}>
+          {selectedCount === 0 ? "Select Subjects..." : `${selectedCount} subject(s) selected`}
+        </span>
+        <ChevronDown size={14} className="text-gray-500" />
+      </div>
+      
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar py-1">
+          {subjects.length === 0 ? (
+            <div className="px-4 py-3 text-xs text-gray-500 text-center font-semibold">No subjects available</div>
+          ) : (
+            subjects.map(s => (
+              <label key={s.subjectId} className="flex items-center gap-3 cursor-pointer hover:bg-teal-50 px-4 py-2 transition-colors">
+                <input 
+                  type="checkbox" 
+                  checked={selectedSubjects.includes(s.subjectId)} 
+                  onChange={() => toggleSubject(s.subjectId)} 
+                  className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 cursor-pointer" 
+                />
+                <span className="text-gray-700 text-xs font-semibold">{s.subjectName}</span>
+              </label>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default function PapersManagement({ isTab = false }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const encryptedProjectId = searchParams.get("projectId");
   const projectId = encryptedProjectId ? decryptId(encryptedProjectId) : null;
@@ -30,11 +81,13 @@ export default function PapersManagement() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const papersPath = userType === 'admin' ? '/admin/papers' : '/papers';
-    setBreadcrumb([
-      { label: 'Paper Management', path: papersPath, icon: 'FileText' }
-    ]);
-  }, [userType]);
+    if (!isTab) {
+      const papersPath = userType === 'admin' ? '/admin/papers' : '/papers';
+      setBreadcrumb([
+        { label: 'Paper Management', path: papersPath, icon: 'FileText' }
+      ]);
+    }
+  }, [userType, isTab, setBreadcrumb]);
 
   const [subjects, setSubjects] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -53,7 +106,8 @@ export default function PapersManagement() {
       // We will use the dashboard stats endpoint if projectId exists, otherwise we fallback to getAllPapers
       if (projectId) {
          let url = `/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}&statusFilter=${statusFilterVal}`;
-         if (subjectFilter) url += `&subjectId=${subjectFilter}`;
+         const subjectFilterVal = params.subjectName || '';
+      if (subjectFilterVal) url += `&subjectId=${subjectFilterVal}`;
          return apiCall(url);
       }
     }
@@ -336,103 +390,90 @@ export default function PapersManagement() {
     }
   };
 
-  const SortHeader = ({ label, field, isCenter = false, hasFilter = false }) => {
+  const SortHeader = ({ label, field, isCenter = false, hasFilter = false, customFilter = null, filterOptions = null }) => {
     const isSorted = sortField === field;
     return (
       <th onClick={() => handleSort(field)} className={`px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors select-none ${isCenter ? 'text-center' : ''}`}>
         <div className={`flex items-center gap-1 ${isCenter ? 'justify-center' : ''}`}>
           <span>{label}</span>
-          <span className="text-[9px] text-gray-400">{isSorted ? (sortOrder === 'asc' ? ' ?' : ' ?') : ' ?'}</span>
-          {hasFilter && (
-            <ColumnFilter columnKey={field} currentFilter={filters[field]} setFilter={setFilter} placeholder={`Filter ${label.toLowerCase()}...`} />
+          <span className="text-[9px] text-gray-400">{isSorted ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}</span>
+          {hasFilter && !customFilter && (
+            <ColumnFilter columnKey={field} currentFilter={filters[field]} setFilter={setFilter} placeholder={`Filter ${label.toLowerCase()}...`} options={filterOptions} />
+          )}
+          {customFilter && (
+            <div onClick={(e) => e.stopPropagation()} className="ml-1">
+              {customFilter}
+            </div>
           )}
         </div>
       </th>
     );
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50/50 pb-12 w-full">
-      <div className="bg-white border-b border-gray-200 px-6 lg:px-10 py-6 mb-6 shadow-sm sticky top-0 z-20">
-        <ProjectConfigHeader />
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2">
-          <div className="flex items-center gap-4">
-            <Link to="/admin/dashboard" className="p-2.5 hover:bg-gray-100 rounded-xl border border-gray-200 bg-gray-50 text-gray-600 transition">
-              <ChevronLeft size={16} />
-            </Link>
-            <div>
-              <h1 className="text-lg font-black text-gray-900 mt-1 flex items-center gap-2 leading-tight">
-                <FileText className="text-teal-700" size={18} /> Papers Management
-              </h1>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2.5">
-            {projectId && (
-              <button
-                onClick={() => {
-                  const importPath = userType === 'admin' ? '/admin/import-papers' : '/import-papers';
-                  navigate(`${importPath}?projectId=${encryptedProjectId}&universityId=${activeUniversityId}`);
-                }}
-                className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] uppercase tracking-wider px-4 py-2.5 rounded-xl border border-indigo-200 transition-all flex items-center gap-1.5 shadow-sm"
-              >
-                <Folder size={13} /> Import Papers (From Project)
-              </button>
-            )}
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className={`font-extrabold text-[10px] uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm border ${
-                showForm ? "bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200" : "bg-teal-700 hover:bg-teal-800 text-white border-teal-600"
-              }`}
-            >
-              {showForm ? <X size={13} /> : <Plus size={13} />} {showForm ? "Cancel" : "Add Paper"}
-            </button>
-          </div>
+  const content = (
+    <div className="w-full space-y-4">
+      
+      {!isTab && (
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm mb-4">
+          <ProjectConfigHeader title="Papers & Sections Management" titleIcon={<FileText size={18} />} />
         </div>
-      </div>
+      )}
 
-      <div className="px-6 lg:px-10 space-y-6">
+      {(!projectId && !isTab) ? (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-16 text-center">
+          <FileText size={48} className="mx-auto text-gray-200 mb-4" />
+          <h3 className="text-xl font-black text-gray-900 mb-2">Select a Project</h3>
+          <p className="text-sm font-semibold text-gray-500">
+            Please select a project from the dropdown above to view its papers and sections.
+          </p>
+        </div>
+      ) : (
+        <>
+      {/* Heading is now handled by ProjectConfigHeader in ProjectDashboard */}
+
+          <div className="w-full space-y-4">
         
         {showForm && (
-            <div className="bg-white rounded-xl p-8 shadow-md border border-gray-100 mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
-                <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-                <div className="w-8 h-8 bg-teal-100 text-teal-700 rounded-lg flex items-center justify-center">
-                    {editingId ? <Edit2 size={16} /> : <Plus size={16} />}
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 p-4">
+              <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl relative flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200 overflow-hidden">
+                <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0 bg-gray-50/50">
+                    <div>
+                      <h3 className="text-lg font-black text-gray-900 flex items-center gap-2">
+                        {editingId ? <Edit2 size={18} className="text-teal-700" /> : <Plus size={18} className="text-teal-700" />}
+                        {editingId ? "Edit Paper Configuration" : "Create New Paper"}
+                      </h3>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Fill in the paper details below</p>
+                    </div>
+                    <button onClick={handleCancel} className="p-1.5 hover:bg-gray-200 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
+                      <X size={18} />
+                    </button>
                 </div>
-                {editingId ? "Edit Paper Configuration" : "Create New Paper"}
-                </h2>
                 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="p-6 overflow-y-auto">
+                <form id="paperForm" onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Paper Code *</label>
-                    <input type="text" value={formData.paperCode} onChange={(e) => setFormData({ ...formData, paperCode: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-gray-900 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all outline-none" required />
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Paper Code *</label>
+                    <input type="text" value={formData.paperCode} onChange={(e) => setFormData({ ...formData, paperCode: e.target.value })} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none transition-all" required />
                     </div>
                     <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Paper Name *</label>
-                    <input type="text" value={formData.paperName} onChange={(e) => setFormData({ ...formData, paperName: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-gray-900 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-teal-500 transition-all outline-none" required />
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Paper Name *</label>
+                    <input type="text" value={formData.paperName} onChange={(e) => setFormData({ ...formData, paperName: e.target.value })} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none transition-all" required />
                     </div>
                     <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Catch Number</label>
-                    <input type="text" value={formData.catchNo} onChange={(e) => setFormData({ ...formData, catchNo: e.target.value })} className="w-full bg-gray-50 border border-gray-200 text-gray-900 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-teal-500 transition-all outline-none" />
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Catch Number</label>
+                    <input type="text" value={formData.catchNo} onChange={(e) => setFormData({ ...formData, catchNo: e.target.value })} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none transition-all" />
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-3">Subjects ({selectedSubjects.length} selected) *</label>
-                    <div className="grid grid-cols-1 gap-2 bg-gray-50 p-4 rounded-xl border border-gray-200 max-h-[200px] overflow-y-auto">
-                        {subjects.map((s) => (
-                            <label key={s.subjectId} className="flex items-center gap-3 cursor-pointer hover:bg-white p-2 rounded transition">
-                            <input type="checkbox" checked={selectedSubjects.includes(s.subjectId)} onChange={() => toggleSubject(s.subjectId)} className="w-4 h-4 rounded border-gray-300" />
-                            <span className="text-gray-700 text-sm">{s.subjectName}</span>
-                            </label>
-                        ))}
-                    </div>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Subjects ({selectedSubjects.length} selected) *</label>
+                    <SubjectMultiSelect subjects={subjects} selectedSubjects={selectedSubjects} toggleSubject={toggleSubject} />
                     </div>
                     <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Project *</label>
-                    <select value={formData.projectId} onChange={(e) => handleProjectChange(e.target.value)} className="w-full bg-gray-50 border border-gray-200 text-gray-900 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none" required>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Project *</label>
+                    <select value={formData.projectId} onChange={(e) => handleProjectChange(e.target.value)} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none transition-all" required>
                         <option value="">Select Project</option>
                         {projects.map((p) => (
                         <option key={p.projectId} value={p.projectId}>{p.projectName}</option>
@@ -441,28 +482,28 @@ export default function PapersManagement() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Paper Number</label>
-                    <input type="number" value={formData.paperNumber} onChange={(e) => setFormData({ ...formData, paperNumber: e.target.value })} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl outline-none" min="1" />
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Paper Number</label>
+                    <input type="number" value={formData.paperNumber} onChange={(e) => setFormData({ ...formData, paperNumber: e.target.value })} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none transition-all" min="1" />
                     </div>
                     <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Max Marks</label>
-                    <input type="number" value={formData.maxMarks} onChange={(e) => setFormData({ ...formData, maxMarks: e.target.value })} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl outline-none" min="0" />
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Max Marks</label>
+                    <input type="number" value={formData.maxMarks} onChange={(e) => setFormData({ ...formData, maxMarks: e.target.value })} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none transition-all" min="0" />
                     </div>
                     <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Total Questions</label>
-                    <input type="number" value={formData.totalQuestions} onChange={(e) => setFormData({ ...formData, totalQuestions: e.target.value })} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl outline-none" min="0" />
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Total Questions</label>
+                    <input type="number" value={formData.totalQuestions} onChange={(e) => setFormData({ ...formData, totalQuestions: e.target.value })} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none transition-all" min="0" />
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Description</label>
-                        <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full bg-gray-50 border border-gray-200 px-4 py-2.5 rounded-xl outline-none" rows="3" />
+                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Description</label>
+                        <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none transition-all resize-none" rows="3" />
                     </div>
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Question Paper PDF</label>
+                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Question Paper PDF</label>
                         <div className="flex flex-col gap-2">
                             <input
                                 type="file"
@@ -502,15 +543,17 @@ export default function PapersManagement() {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                    <button type="submit" className="bg-teal-700 hover:bg-teal-800 text-white px-8 py-3 rounded-md font-bold shadow-lg shadow-teal-200 transition-all">
-                    {editingId ? "Update Configuration" : "Save Paper"}
-                    </button>
-                    <button type="button" onClick={handleCancel} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-8 py-3 rounded-md font-bold transition-all">
+                </form>
+                </div>
+                <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 shrink-0">
+                    <button type="button" onClick={handleCancel} className="px-4 py-2 rounded-xl text-xs font-extrabold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-sm">
                     Cancel
                     </button>
+                    <button type="submit" form="paperForm" className="px-4 py-2 rounded-xl text-xs font-extrabold bg-teal-700 hover:bg-teal-800 text-white transition-colors shadow-sm flex items-center gap-1.5">
+                    {editingId ? "Update Configuration" : "Save Paper"}
+                    </button>
                 </div>
-                </form>
+              </div>
             </div>
         )}
 
@@ -528,44 +571,62 @@ export default function PapersManagement() {
                   className="pl-9 pr-4 py-2 text-xs font-semibold bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 w-full sm:w-64 shadow-sm"
                 />
               </div>
-              
-              <div className="relative flex items-center gap-2">
-                <Filter size={14} className="text-gray-400" />
-                <select
-                  value={subjectFilter}
-                  onChange={(e) => {
-                    setSubjectFilter(e.target.value);
-                    setPage(1); // Reset to page 1 on filter change
-                  }}
-                  className="pl-2 pr-8 py-2 text-xs font-semibold bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-sm appearance-none outline-none"
-                >
-                  <option value="">All Subjects</option>
-                  {subjects.map(s => (
-                    <option key={s.subjectId} value={s.subjectId}>{s.subjectName}</option>
-                  ))}
-                </select>
-                <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              </div>
             </div>
             
-            {/* Bulk Actions */}
-            {selectedPaperIds.length > 0 && (
-              <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
-                <span className="text-xs font-bold text-gray-500 mr-2">{selectedPaperIds.length} Selected</span>
+            <div className="flex flex-wrap items-center gap-2.5 justify-end">
+              {/* Bulk Actions */}
+              {selectedPaperIds.length > 0 && (
+                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300 mr-2 sm:mr-4 border-r border-gray-200 pr-2 sm:pr-4">
+                  <span className="text-xs font-bold text-gray-500 hidden sm:inline-block mr-2">{selectedPaperIds.length} Selected</span>
+                  <button
+                    onClick={() => setShowBulkConfigModal(true)}
+                    className="bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-[10px] uppercase tracking-wider px-3 py-2 rounded-md transition-all shadow-sm flex items-center gap-1.5"
+                  >
+                    <Layers size={13} /> <span className="hidden sm:inline">Bulk Configure</span>
+                  </button>
+                  <button
+                    onClick={() => setShowImportSectionsModal(true)}
+                    className="bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-[10px] uppercase tracking-wider px-3 py-2 rounded-md transition-all shadow-sm flex items-center gap-1.5"
+                  >
+                    <Copy size={13} /> <span className="hidden sm:inline">Import</span>
+                  </button>
+                </div>
+              )}
+
+              {projectId && (
                 <button
                   onClick={() => setShowBulkConfigModal(true)}
-                  className="bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-[10px] uppercase tracking-wider px-4 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                  className="font-bold text-[10px] uppercase tracking-wider px-3 py-2.5 rounded-md transition-colors flex items-center gap-1.5 border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm whitespace-nowrap"
                 >
-                  <Layers size={13} /> Bulk Configure Sections
+                  <Settings size={12} /> Add Default Sections
                 </button>
+              )}
+              {projectId && (
                 <button
-                  onClick={() => setShowImportSectionsModal(true)}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] uppercase tracking-wider px-4 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                  onClick={() => {
+                    const importPath = userType === 'admin' ? '/admin/import-papers' : '/import-papers';
+                    navigate(`${importPath}?projectId=${encryptedProjectId}&universityId=${activeUniversityId}`);
+                  }}
+                  className="bg-teal-50 hover:bg-teal-100 text-teal-700 font-extrabold text-[10px] uppercase tracking-wider px-3 py-2.5 rounded-md border border-teal-200 transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap"
                 >
-                  <Copy size={13} /> Import Sections
+                  <Folder size={13} /> Import Papers <span className="hidden xl:inline">(From Project)</span>
                 </button>
-              </div>
-            )}
+              )}
+              <button
+                onClick={() => {
+                  setFormData({
+                    paperCode: "", paperName: "", paperNumber: 1, maxMarks: 100, totalQuestions: "", description: "", 
+                    catchNo: "", projectId: projectId || "", isActive: true, questionPaperPdfUrl: "",
+                  });
+                  setSelectedSubjects([]);
+                  setEditingId(null);
+                  setShowForm(true);
+                }}
+                className="font-extrabold text-[10px] uppercase tracking-wider px-4 py-2.5 rounded-md transition-all flex items-center gap-1.5 shadow-sm border whitespace-nowrap bg-teal-700 hover:bg-teal-800 text-white border-teal-600"
+              >
+                <Plus size={13} /> Add Paper
+              </button>
+            </div>
           </div>
 
           {tableLoading && papers.length === 0 ? (
@@ -592,7 +653,12 @@ export default function PapersManagement() {
                       />
                     </th>
                     <SortHeader label="Code & Name" field="paperCode" hasFilter={true} />
-                    <SortHeader label="Subject & Max" field="subjectName" hasFilter={true} />
+                    <SortHeader 
+                      label="Subject & Max" 
+                      field="subjectName" 
+                      hasFilter={true}
+                      filterOptions={subjects.map(s => ({ value: s.subjectId, label: s.subjectName }))}
+                    />
                     <th className="px-5 py-3.5 text-center border-b border-gray-100">Configuration Status</th>
                     <th className="px-5 py-3.5 text-right border-b border-gray-100">Actions</th>
                   </tr>
@@ -654,14 +720,14 @@ export default function PapersManagement() {
                               to={userType === 'admin' 
                                 ? `/admin/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`
                                 : `/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`}
-                              className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[9px] font-extrabold uppercase tracking-wider transition-colors flex items-center gap-1 border border-indigo-100"
+                              className="px-2.5 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-md text-[9px] font-extrabold uppercase tracking-wider transition-colors flex items-center gap-1 border border-teal-200"
                               title="Manual Section Configuration"
                             >
                               <Layers size={10} /> Sections
                             </Link>
                             <button
                               onClick={() => openAllocationModal(paper)}
-                              className="px-2.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-lg text-[9px] font-extrabold uppercase tracking-wider transition-colors flex items-center gap-1 border border-orange-100"
+                              className="px-2.5 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-md text-[9px] font-extrabold uppercase tracking-wider transition-colors flex items-center gap-1 border border-teal-200"
                             >
                               <Users size={10} /> Assign
                             </button>
@@ -882,7 +948,16 @@ export default function PapersManagement() {
             </div>
             </div>
         )}
-      </div>
+          </div>
+          </>
+        )}
+    </div>
+  );
+
+  if (isTab) return content;
+  return (
+    <div className="min-h-screen bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4">
+      {content}
     </div>
   );
 }

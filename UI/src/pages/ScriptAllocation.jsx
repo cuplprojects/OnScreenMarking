@@ -24,7 +24,7 @@ import TablePagination from '../components/TablePagination';
 import ColumnFilter from '../components/ColumnFilter';
 import { useTable } from '../services/tableService';
 
-export default function ScriptAllocation() {
+export default function ScriptAllocation({ isTab = false }) {
   const [searchParams] = useSearchParams();
   const encryptedProjectId = searchParams.get('projectId');
   const projectId = encryptedProjectId ? decryptId(encryptedProjectId) : null;
@@ -274,31 +274,26 @@ export default function ScriptAllocation() {
 
 
 
-  return (
-    <div className="min-h-screen bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4">
-      <ProjectConfigHeader />
+  const content = (
+    <div className="w-full space-y-4">
       
-      <div className="w-full space-y-4 mt-4">
-        
-        {/* Main Header Card */}
-        <div className="bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm sticky top-0 z-20">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="bg-teal-50 text-teal-700 border border-teal-100 text-[8px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider">
-                    Allocation
-                  </span>
-                </div>
-                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none flex items-center gap-2">
-                  <FileText className="text-teal-700" size={20} />
-                  Script Allocation
-                </h1>
-                <p className="text-xs text-gray-500 mt-1">Allocate answer scripts to examiners</p>
-              </div>
-            </div>
-          </div>
+      {!isTab && (
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <ProjectConfigHeader />
         </div>
+      )}
+
+      {(!projectId && !isTab) ? (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-16 text-center">
+          <FileText size={48} className="mx-auto text-gray-200 mb-4" />
+          <h3 className="text-xl font-black text-gray-900 mb-2">Select a Project</h3>
+          <p className="text-sm font-semibold text-gray-500">
+            Please select a project from the dropdown above to view script allocations.
+          </p>
+        </div>
+      ) : (
+        <>
+        {/* Header content moved to ProjectConfigHeader */}
 
         <div className="w-full flex flex-col xl:flex-row gap-4 items-start">
 
@@ -623,7 +618,15 @@ export default function ScriptAllocation() {
         </div>
         )}
         </div>
-      </div>
+        </>
+      )}
+    </div>
+  );
+
+  if (isTab) return content;
+  return (
+    <div className="min-h-screen bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4">
+      {content}
     </div>
   );
 }
