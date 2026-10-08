@@ -544,6 +544,7 @@ export default function PapersManagement({ isTab = false }) {
 
   return (
     <div className="min-h-screen bg-gray-50/50 pb-12 w-full">
+<<<<<<< HEAD
       {!isTab && (
         <div className="bg-white border-b border-gray-200 px-6 lg:px-10 py-6 mb-6 shadow-sm sticky top-0 z-20">
           <ProjectConfigHeader />
@@ -557,6 +558,19 @@ export default function PapersManagement({ isTab = false }) {
                   <FileText className="text-teal-700" size={18} /> Papers Management
                 </h1>
               </div>
+=======
+      <div className="bg-white border-b border-gray-200 px-6 lg:px-10 py-6 mb-6 shadow-sm sticky top-0 z-20">
+        {!isTab && <ProjectConfigHeader />}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2">
+          <div className="flex items-center gap-4">
+            <Link to="/admin/dashboard" className="p-2.5 hover:bg-gray-100 rounded-xl border border-gray-200 bg-gray-50 text-gray-600 transition">
+              <ChevronLeft size={16} />
+            </Link>
+            <div>
+              <h1 className="text-lg font-black text-gray-900 mt-1 flex items-center gap-2 leading-tight">
+                <FileText className="text-teal-700" size={18} /> Papers Management
+              </h1>
+>>>>>>> 003fb00e1eb7c5c709725976bc7d7d3c203a3998
             </div>
             
           </div>
@@ -950,6 +964,7 @@ export default function PapersManagement({ isTab = false }) {
               )}
 
               {projectId && (
+<<<<<<< HEAD
                 <>
                   <button
                     onClick={() => setShowBulkConfigModal(true)}
@@ -991,6 +1006,15 @@ export default function PapersManagement({ isTab = false }) {
               >
                 <Plus size={13} /> Add Paper
               </button>
+=======
+                <button
+                  onClick={() => setShowBulkConfigModal(true)}
+                  className="font-bold text-[10px] uppercase tracking-wider px-3 py-2.5 rounded-md transition-colors flex items-center gap-1.5 border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm whitespace-nowrap"
+                >
+                  <Settings size={12} /> Add Default Sections
+                </button>
+              )}
+>>>>>>> 003fb00e1eb7c5c709725976bc7d7d3c203a3998
             </div>
           </div>
 

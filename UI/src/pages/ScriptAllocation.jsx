@@ -529,27 +529,11 @@ export default function ScriptAllocation({ isTab = false }) {
 
   return (
     <div className="min-h-screen bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4">
-      {!isTab && (
-        <>
-          <ProjectConfigHeader />
-          <div className="bg-white px-5 py-3 rounded-2xl border border-gray-100 shadow-sm sticky top-0 z-20 mt-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-teal-100 text-teal-700 rounded-xl flex items-center justify-center font-bold shadow-xs">
-                  <Zap size={16} />
-                </div>
-                <div>
-                  <h2 className="text-xl font-black text-gray-900 tracking-tight leading-none flex items-center gap-2">
-                    Examiner & Script Allocation System
-                  </h2>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
+      {!isTab && <ProjectConfigHeader />}
+      
       <div className="w-full space-y-4 mt-4">
+        
+        {/* Main Header Card (Removed as per user request to avoid redundancy) */}
 
 
       {(!projectId && !isTab) ? (
