@@ -122,6 +122,25 @@ export const allocationService = {
     return apiCall(`/allocation/project/${projectId}/auto-allocate`, {
       method: 'POST'
     });
+  },
+
+  /**
+   * Get deallocation stats and examiner counts for a project/paper
+   */
+  getDeallocationStats: async (projectId, paperId) => {
+    let url = `/allocation/deallocation-stats?projectId=${projectId}`;
+    if (paperId) url += `&paperId=${paperId}`;
+    return apiCall(url);
+  },
+
+  /**
+   * Overwrite/Adjust examiner script allocation count for a paper
+   */
+  overwriteExaminerCount: async (paperId, examinerId, targetCount) => {
+    return apiCall('/allocation/overwrite-examiner-count', {
+      method: 'POST',
+      body: JSON.stringify({ paperId, examinerId, targetCount })
+    });
   }
 };
 

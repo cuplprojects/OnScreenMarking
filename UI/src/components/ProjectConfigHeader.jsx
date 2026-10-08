@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Calendar,
@@ -79,13 +79,13 @@ export default function ProjectConfigHeader({ completePercentage = 0 }) {
       label: 'Script Allocations',
       icon: <Zap size={12} />,
       path: userType === 'admin' ? '/admin/allocate-scripts' : '/allocate-scripts'
-    },
-    {
-      id: 'attendance',
-      label: 'Attendance & Logs',
-      icon: <Zap size={12} />,
-      path: userType === 'admin' ? '/admin/attendance' : '/attendance'
     }
+    // {
+    //   id: 'attendance',
+    //   label: 'Attendance & Logs',
+    //   icon: <Zap size={12} />,
+    //   path: userType === 'admin' ? '/admin/attendance' : '/attendance'
+    // }
   ];
 
   const isCurrentTab = (tabPath) => {

@@ -48,6 +48,7 @@ import UsersManagement from './pages/UsersManagement';
 import RoleManagement from './pages/RoleManagement';
 import Attendance from './pages/Attendance';
 import ScriptAllocation from './pages/ScriptAllocation';
+import ScriptDeallocation from './pages/ScriptDeallocation';
 import QuestionTypeMaster from './pages/QuestionTypeMaster';
 import SectionMasterManagement from './pages/SectionMasterManagement';
 
@@ -186,17 +187,15 @@ function AppRoutes() {
             element={userType === 'coordinator' ? <ProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
 
-          {/* Papers Management within ConfigLayout */}
-          <Route element={<ConfigLayout />}>
-            <Route 
-              path="/admin/papers" 
-              element={userType === 'admin' ? <PapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-            />
-            <Route 
-              path="/papers" 
-              element={userType === 'coordinator' ? <PapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-            />
-          </Route>
+          {/* Papers Management (Project Context) */}
+          <Route 
+            path="/admin/papers" 
+            element={userType === 'admin' ? <PapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+          <Route 
+            path="/papers" 
+            element={userType === 'coordinator' ? <PapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
           <Route 
             path="/admin/import-papers" 
             element={userType === 'admin' ? <ImportPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
@@ -246,6 +245,14 @@ function AppRoutes() {
           <Route 
             path="/allocate-scripts" 
             element={hasPermission("READ_ALLOCATION") ? <ScriptAllocation /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+          <Route 
+            path="/admin/deallocate-scripts" 
+            element={hasPermission("READ_ALLOCATION") ? <ScriptDeallocation /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+          <Route 
+            path="/deallocate-scripts" 
+            element={hasPermission("READ_ALLOCATION") ? <ScriptDeallocation /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
 
           {/* Examiner Routes */}

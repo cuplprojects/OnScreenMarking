@@ -180,6 +180,32 @@ namespace API.Controllers
             }
         }
 
+        [HttpGet("options")]
+        public async Task<IActionResult> GetPaperOptions([FromQuery] int projectId)
+        {
+            try
+            {
+                if (projectId <= 0) return BadRequest(new { success = false, message = "Valid Project ID is required" });
+
+                var options = await _context.ProjectPapers
+                    .Where(pp => pp.ProjectId == projectId)
+                    .Select(pp => new
+                    {
+                        paperId = pp.Paper.PaperId,
+                        paperCode = pp.Paper.PaperCode,
+                        paperName = pp.Paper.PaperName
+                    })
+                    .OrderBy(p => p.paperCode)
+                    .ToListAsync();
+
+                return Ok(options);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpGet]
         public async Task<ActionResult> GetPapers(
             [FromQuery] int? subjectId = null, 

@@ -333,54 +333,7 @@ export default function ImportPapers() {
                   </div>
                 )}
               </div>
-
-              {/* Master Section Auto-Allocation Selector */}
-              {masterSections.length > 0 && (
-                <div className="space-y-3 pt-3 border-t border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-2 text-xs font-black text-gray-500 uppercase tracking-widest">
-                      <span className="w-4 h-0.5 bg-teal-600 rounded-full"></span> Auto-Allocate Sections
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (selectedMasterSectionIds.length === masterSections.length) {
-                          setSelectedMasterSectionIds([]);
-                        } else {
-                          setSelectedMasterSectionIds(masterSections.map(m => m.id));
-                        }
-                      }}
-                      className="text-[11px] font-bold text-teal-700 hover:underline"
-                    >
-                      {selectedMasterSectionIds.length === masterSections.length ? "Deselect All" : "Select All"}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-gray-500">
-                    Selected sections will be created automatically for all imported papers:
-                  </p>
-                  <div className="bg-white border border-gray-200 rounded-xl p-2.5 max-h-36 overflow-y-auto space-y-1 custom-scrollbar shadow-xs">
-                    {masterSections.map(m => {
-                      const isChecked = selectedMasterSectionIds.includes(m.id);
-                      return (
-                        <label key={m.id} className={`flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg cursor-pointer transition-all ${isChecked ? "bg-teal-50 text-teal-900 font-semibold" : "hover:bg-gray-50 text-gray-700"}`}>
-                          <span className="truncate pr-2">{m.name} ({m.totalQuestions} Qs, {m.totalMarks} Marks)</span>
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => {
-                              setSelectedMasterSectionIds(prev => 
-                                prev.includes(m.id) ? prev.filter(id => id !== m.id) : [...prev, m.id]
-                              );
-                            }}
-                            className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300"
-                          />
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
+              
               {selectedSourceProject && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
                   {/* Search */}
