@@ -23,6 +23,9 @@ import apiCall from '../services/api';
 import ProjectConfigHeader from '../components/ProjectConfigHeader';
 import ColumnFilter from '../components/ColumnFilter';
 import message from '../services/messageService';
+import PapersManagement from './PapersManagement';
+import ScriptAllocation from './ScriptAllocation';
+import Attendance from './Attendance';
 
 export default function ProjectDashboard() {
   const [searchParams] = useSearchParams();

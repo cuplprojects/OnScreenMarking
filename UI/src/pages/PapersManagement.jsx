@@ -545,7 +545,7 @@ export default function PapersManagement({ isTab = false }) {
   return (
     <div className="min-h-screen bg-gray-50/50 pb-12 w-full">
       <div className="bg-white border-b border-gray-200 px-6 lg:px-10 py-6 mb-6 shadow-sm sticky top-0 z-20">
-        <ProjectConfigHeader />
+        {!isTab && <ProjectConfigHeader />}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2">
           <div className="flex items-center gap-4">
             <Link to="/admin/dashboard" className="p-2.5 hover:bg-gray-100 rounded-xl border border-gray-200 bg-gray-50 text-gray-600 transition">
@@ -994,31 +994,6 @@ export default function PapersManagement({ isTab = false }) {
                   <Settings size={12} /> Add Default Sections
                 </button>
               )}
-              {projectId && (
-                <button
-                  onClick={() => {
-                    const importPath = userType === 'admin' ? '/admin/import-papers' : '/import-papers';
-                    navigate(`${importPath}?projectId=${encryptedProjectId}&universityId=${activeUniversityId}`);
-                  }}
-                  className="bg-teal-50 hover:bg-teal-100 text-teal-700 font-extrabold text-[10px] uppercase tracking-wider px-3 py-2.5 rounded-md border border-teal-200 transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap"
-                >
-                  <Folder size={13} /> Import Papers <span className="hidden xl:inline">(From Project)</span>
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  setFormData({
-                    paperCode: "", paperName: "", paperNumber: 1, maxMarks: 100, totalQuestions: "", description: "", 
-                    catchNo: "", projectId: projectId || "", isActive: true, questionPaperPdfUrl: "",
-                  });
-                  setSelectedSubjects([]);
-                  setEditingId(null);
-                  setShowForm(true);
-                }}
-                className="font-extrabold text-[10px] uppercase tracking-wider px-4 py-2.5 rounded-md transition-all flex items-center gap-1.5 shadow-sm border whitespace-nowrap bg-teal-700 hover:bg-teal-800 text-white border-teal-600"
-              >
-                <Plus size={13} /> Add Paper
-              </button>
             </div>
           </div>
 
