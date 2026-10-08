@@ -75,6 +75,7 @@ export default function PapersManagement({ isTab = false }) {
   const projectId = encryptedProjectId ? decryptId(encryptedProjectId) : null;
   const subjectId = searchParams.get("subjectId");
   const universityId = searchParams.get("universityId");
+  const statusFilterFromUrl = searchParams.get("statusFilter");
   const { userType, universityId: userUniversityId } = useAuth();
   const { setBreadcrumb } = useBreadcrumb();
   const activeUniversityId = userType === "coordinator" ? userUniversityId : universityId;
@@ -133,7 +134,10 @@ export default function PapersManagement({ isTab = false }) {
     refresh: refreshTable
   } = useTable({
     fetchFn,
-    initialParams: { pageSize: 10 }
+    initialParams: { 
+      pageSize: 10,
+      filters: { statusFilter: statusFilterFromUrl || '' }
+    }
   });
 
   const [selectedPaperIds, setSelectedPaperIds] = useState([]);
@@ -174,6 +178,7 @@ export default function PapersManagement({ isTab = false }) {
   const [assignedExaminers, setAssignedExaminers] = useState([]);
   const [examinerSearchQuery, setExaminerSearchQuery] = useState("");
   const [allocationLoading, setAllocationLoading] = useState(false);
+  const [pendingRemovals, setPendingRemovals] = useState([]);
 
   // Bulk Config State
   const [bulkConfigData, setBulkConfigData] = useState({
@@ -421,6 +426,19 @@ export default function PapersManagement({ isTab = false }) {
         });
         if (fullPaper.subjectPapers && fullPaper.subjectPapers.length > 0) {
             setSelectedSubjects(fullPaper.subjectPapers.map(sp => sp.subjectId));
+        } else if (paper.subjectId) {
+            setSelectedSubjects([paper.subjectId]);
+        } else if (fullPaper.subjectId) {
+            setSelectedSubjects([fullPaper.subjectId]);
+        } else {
+            try {
+                const paperSubjects = await paperService.getPaperSubjects(paper.paperId);
+                if (paperSubjects && paperSubjects.length > 0) {
+                    setSelectedSubjects(paperSubjects.map(s => s.subjectId));
+                }
+            } catch (e) {
+                console.error("Failed to fetch paper subjects", e);
+            }
         }
 
         try {
@@ -485,6 +503,7 @@ export default function PapersManagement({ isTab = false }) {
 
       const assigned = await apiCall(`/PaperExaminers/paper/${paper.paperId}`);
       setAssignedExaminers(assigned);
+      setPendingRemovals([]);
     } catch (err) {
       console.error(err);
     } finally {
@@ -492,28 +511,46 @@ export default function PapersManagement({ isTab = false }) {
     }
   };
 
-  const handleAssign = async (examinerId) => {
-    try {
-      await apiCall('/PaperExaminers/assign', {
-        method: 'POST', body: JSON.stringify({ paperId: selectedPaper.paperId, examinerId })
-      });
-      const assigned = await apiCall(`/PaperExaminers/paper/${selectedPaper.paperId}`);
-      setAssignedExaminers(assigned);
-      message.success("Examiner assigned successfully");
-      refreshTable();
-    } catch (err) {
-      message.error("Failed to assign examiner");
+  const handleAssign = (examinerId) => {
+    const examiner = availableExaminers.find(e => e.id === examinerId);
+    if (examiner) {
+      setAssignedExaminers(prev => [...prev, {
+        id: `temp-${Date.now()}`,
+        examinerId: examiner.id,
+        examiner: examiner,
+        isNew: true
+      }]);
     }
   };
 
-  const handleRemoveAssignment = async (assignmentId) => {
+  const handleRemoveAssignment = (assignmentId, examinerId) => {
+    if (assignmentId && !assignmentId.toString().startsWith('temp-')) {
+      setPendingRemovals(prev => [...prev, assignmentId]);
+    }
+    setAssignedExaminers(prev => prev.filter(a => a.examinerId !== (examinerId || a.examiner?.id)));
+  };
+
+  const handleDone = async () => {
+    setAllocationLoading(true);
     try {
-      await apiCall(`/PaperExaminers/remove/${assignmentId}`, { method: 'DELETE' });
-      setAssignedExaminers(prev => prev.filter(a => a.id !== assignmentId));
-      message.success("Examiner removed successfully");
+      const newAssignments = assignedExaminers.filter(a => a.isNew);
+      for (const a of newAssignments) {
+        await apiCall('/PaperExaminers/assign', {
+          method: 'POST', body: JSON.stringify({ paperId: selectedPaper.paperId, examinerId: a.examinerId })
+        });
+      }
+      for (const id of pendingRemovals) {
+        await apiCall(`/PaperExaminers/remove/${id}`, { method: 'DELETE' });
+      }
+      if (newAssignments.length > 0 || pendingRemovals.length > 0) {
+        message.success("Assignments updated successfully");
+      }
+      setShowExaminerModal(false);
       refreshTable();
     } catch (err) {
-      message.error("Failed to remove examiner");
+      message.error("Failed to save some assignments");
+    } finally {
+      setAllocationLoading(false);
     }
   };
 
@@ -544,7 +581,6 @@ export default function PapersManagement({ isTab = false }) {
 
   return (
     <div className="min-h-screen bg-gray-50/50 pb-12 w-full">
-<<<<<<< HEAD
       {!isTab && (
         <div className="bg-white border-b border-gray-200 px-6 lg:px-10 py-6 mb-6 shadow-sm sticky top-0 z-20">
           <ProjectConfigHeader />
@@ -558,21 +594,7 @@ export default function PapersManagement({ isTab = false }) {
                   <FileText className="text-teal-700" size={18} /> Papers Management
                 </h1>
               </div>
-=======
-      <div className="bg-white border-b border-gray-200 px-6 lg:px-10 py-6 mb-6 shadow-sm sticky top-0 z-20">
-        {!isTab && <ProjectConfigHeader />}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2">
-          <div className="flex items-center gap-4">
-            <Link to="/admin/dashboard" className="p-2.5 hover:bg-gray-100 rounded-xl border border-gray-200 bg-gray-50 text-gray-600 transition">
-              <ChevronLeft size={16} />
-            </Link>
-            <div>
-              <h1 className="text-lg font-black text-gray-900 mt-1 flex items-center gap-2 leading-tight">
-                <FileText className="text-teal-700" size={18} /> Papers Management
-              </h1>
->>>>>>> 003fb00e1eb7c5c709725976bc7d7d3c203a3998
             </div>
-            
           </div>
         </div>
       )}
@@ -964,7 +986,6 @@ export default function PapersManagement({ isTab = false }) {
               )}
 
               {projectId && (
-<<<<<<< HEAD
                 <>
                   <button
                     onClick={() => setShowBulkConfigModal(true)}
@@ -1006,15 +1027,6 @@ export default function PapersManagement({ isTab = false }) {
               >
                 <Plus size={13} /> Add Paper
               </button>
-=======
-                <button
-                  onClick={() => setShowBulkConfigModal(true)}
-                  className="font-bold text-[10px] uppercase tracking-wider px-3 py-2.5 rounded-md transition-colors flex items-center gap-1.5 border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm whitespace-nowrap"
-                >
-                  <Settings size={12} /> Add Default Sections
-                </button>
-              )}
->>>>>>> 003fb00e1eb7c5c709725976bc7d7d3c203a3998
             </div>
           </div>
 
@@ -1227,7 +1239,7 @@ export default function PapersManagement({ isTab = false }) {
                                         Upload PDF <ChevronRight size={12} />
                                       </button>
                                     ) : !hasEvaluators ? (
-                                      <button onClick={() => { setActivePaper(paper); setShowExaminerModal(true); }} className="inline-flex items-center gap-1 text-[10px] font-black text-teal-600 hover:text-teal-700 transition-colors uppercase tracking-wider bg-white px-2 py-1 rounded shadow-sm border border-gray-200">
+                                      <button onClick={() => openAllocationModal(paper)} className="inline-flex items-center gap-1 text-[10px] font-black text-teal-600 hover:text-teal-700 transition-colors uppercase tracking-wider bg-white px-2 py-1 rounded shadow-sm border border-gray-200">
                                         Assign Examiner <ChevronRight size={12} />
                                       </button>
                                     ) : null}
@@ -1239,28 +1251,46 @@ export default function PapersManagement({ isTab = false }) {
                         </td>
                         <td className="px-5 py-2.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            <Link
-                              to={userType === 'admin' 
-                                ? `/admin/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`
-                                : `/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`}
-                              className="p-1.5 text-gray-400 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-all"
-                              title="Manual Section Configuration"
-                            >
-                              <Layers size={14} />
-                            </Link>
-                            <button
-                              onClick={() => openAllocationModal(paper)}
-                              className="p-1.5 text-gray-400 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-all"
-                              title="Assign Evaluators"
-                            >
-                              <Users size={14} />
-                            </button>
-                            <button
-                              onClick={() => handleEdit(paper)}
-                              className="p-1.5 text-gray-400 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-all"
-                            >
-                              <Edit2 size={14} />
-                            </button>
+                            <div className="relative group/tooltip inline-block">
+                              <Link
+                                to={userType === 'admin' 
+                                  ? `/admin/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`
+                                  : `/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`}
+                                className="p-1.5 text-gray-400 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-all block"
+                              >
+                                <Layers size={14} />
+                              </Link>
+                              <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-bold rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50">
+                                Manual Section Configuration
+                                <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-900"></div>
+                              </div>
+                            </div>
+                            
+                            <div className="relative group/tooltip inline-block">
+                              <button
+                                onClick={() => openAllocationModal(paper)}
+                                className="p-1.5 text-gray-400 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-all block"
+                              >
+                                <Users size={14} />
+                              </button>
+                              <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-bold rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50">
+                                Assign Evaluators
+                                <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-900"></div>
+                              </div>
+                            </div>
+
+                            <div className="relative group/tooltip inline-block">
+                              <button
+                                onClick={() => handleEdit(paper)}
+                                className="p-1.5 text-gray-400 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-all block"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-bold rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50">
+                                Edit Paper Configuration
+                                <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-900"></div>
+                              </div>
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -1560,10 +1590,10 @@ export default function PapersManagement({ isTab = false }) {
                                 </div>
                                 <div>
                                 <p className="text-xs font-bold text-teal-900">{assignment.examiner?.name}</p>
-                                <p className="text-[9px] font-bold text-teal-700/70">Assigned: {new Date(assignment.assignedAt).toLocaleDateString()}</p>
+                                <p className="text-[9px] font-bold text-teal-700/70">Assigned: {new Date(assignment.assignedAt || Date.now()).toLocaleDateString()}</p>
                                 </div>
                             </div>
-                            <button onClick={() => handleRemoveAssignment(assignment.id)} className="p-1.5 text-gray-400 hover:text-rose-500 hover:bg-white rounded-lg transition-all">
+                            <button onClick={() => handleRemoveAssignment(assignment.id, assignment.examinerId || assignment.examiner?.id)} className="p-1.5 text-gray-400 hover:text-rose-500 hover:bg-white rounded-lg transition-all">
                                 <Trash2 size={14} />
                             </button>
                             </div>
@@ -1573,9 +1603,12 @@ export default function PapersManagement({ isTab = false }) {
                     </div>
                 </div>
                 </div>
-                <div className="p-6 bg-gray-50/50 border-t border-gray-100 flex justify-end">
-                <button onClick={closeExaminerModal} className="bg-teal-700 text-white px-8 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-teal-200 hover:bg-teal-800 transition-all">
-                    Done
+                <div className="p-6 bg-gray-50/50 border-t border-gray-100 flex justify-end gap-3">
+                <button onClick={closeExaminerModal} className="px-6 py-2.5 text-gray-500 hover:bg-gray-200 rounded-xl text-xs font-bold transition-all">
+                    Cancel
+                </button>
+                <button onClick={handleDone} disabled={allocationLoading} className="bg-teal-700 text-white px-8 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-teal-200 hover:bg-teal-800 transition-all disabled:opacity-50">
+                    {allocationLoading ? 'Saving...' : 'Done'}
                 </button>
                 </div>
             </div>
