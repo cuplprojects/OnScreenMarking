@@ -13,10 +13,12 @@ namespace API.Controllers
     public class ScriptsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IConfiguration _configuration;
 
-        public ScriptsController(ApplicationDbContext context)
+        public ScriptsController(ApplicationDbContext context, IConfiguration configuration)
         {
             _context = context;
+            _configuration = configuration;
         }
 
         [HttpGet]
@@ -133,14 +135,35 @@ namespace API.Controllers
                 if (script == null || string.IsNullOrEmpty(script.CleanPdfUrl))
                     return NotFound(new { success = false, message = "Script or PDF path not found" });
 
-                // Check if file exists
-                if (!System.IO.File.Exists(script.CleanPdfUrl))
+                var basePath = _configuration["StorageSettings:BasePath"] 
+                    ?? _configuration["StorageSettings:BaseOsmPath"] 
+                    ?? "";
+
+                var fullPath = script.CleanPdfUrl;
+                
+                if (!string.IsNullOrEmpty(basePath) && !Path.IsPathRooted(script.CleanPdfUrl))
                 {
-                    return NotFound(new { success = false, message = $"PDF file not found on disk at: {script.CleanPdfUrl}" });
+                    // If the stored path starts with OSM and basePath also ends with OSM, avoid duplicating it.
+                    // (Assuming base path might be \\192.168.1.16\dev\OSM or \\192.168.1.16\dev)
+                    if (basePath.EndsWith("OSM", StringComparison.OrdinalIgnoreCase) && script.CleanPdfUrl.StartsWith("OSM", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var trimmedUrl = script.CleanPdfUrl.Substring(3).TrimStart('/', '\\');
+                        fullPath = Path.Combine(basePath, trimmedUrl);
+                    }
+                    else
+                    {
+                        fullPath = Path.Combine(basePath, script.CleanPdfUrl);
+                    }
                 }
 
-                var fileBytes = await System.IO.File.ReadAllBytesAsync(script.CleanPdfUrl);
-                return File(fileBytes, "application/pdf", System.IO.Path.GetFileName(script.CleanPdfUrl));
+                // Check if file exists
+                if (!System.IO.File.Exists(fullPath))
+                {
+                    return NotFound(new { success = false, message = $"PDF file not found on disk at: {fullPath} (Stored as: {script.CleanPdfUrl})" });
+                }
+
+                var fileBytes = await System.IO.File.ReadAllBytesAsync(fullPath);
+                return File(fileBytes, "application/pdf", System.IO.Path.GetFileName(fullPath));
             }
             catch (Exception ex)
             {
