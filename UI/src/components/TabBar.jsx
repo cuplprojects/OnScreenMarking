@@ -73,7 +73,7 @@ const TabBar = () => {
         links.push({ label: 'Scripts',          path: '/scripts',               icon: FileText });
       }
       if (hasPermission('READ_MARKING')) {
-        links.push({ label: 'Marking',          path: '/marking',               icon: PenTool });
+
       }
       if (hasPermission('VIEW_REPORTS')) {
         links.push({ label: 'Reports',          path: '/reports',               icon: BarChart3 });

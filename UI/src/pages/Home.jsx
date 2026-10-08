@@ -9,12 +9,17 @@ import {
   TrendingUp, 
   Award,
   ChevronRight,
+  ChevronDown,
   Search,
   Sparkles,
   Calendar,
   X,
   RefreshCw,
   Eye,
+  Briefcase,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import apiCall from '../services/api';
@@ -117,16 +122,8 @@ const Home = () => {
       
       try {
         // Fetch all scripts for stats
-        const allScriptsResponse = await apiCall(`/scripts/examiner/${user.id}?pageSize=0`);
-        const allScripts = allScriptsResponse.items || [];
-
-        const expertiseIds = [user?.subjectId1, user?.subjectId2, user?.subjectId3].filter(id => id && id > 0);
-        let subjectsData = [];
-        if (expertiseIds.length > 0) {
-          subjectsData = await Promise.all(
-            expertiseIds.map(id => apiCall(`/subject/${id}`))
-          );
-        }
+        const allScriptsResponse = await apiCall(`/scripts/examiner/${user.id}?pageSize=1000`);
+        const allScripts = allScriptsResponse.items || (Array.isArray(allScriptsResponse) ? allScriptsResponse : []);
 
         const total = allScripts.length;
         const evaluatedCount = allScripts.filter(s => s.status === 'completed').length;
@@ -143,6 +140,14 @@ const Home = () => {
           pending: pendingCount,
           averageScore: parseFloat(avgScore.toFixed(1)),
         });
+
+        const expertiseIds = [user?.subjectId1, user?.subjectId2, user?.subjectId3].filter(id => id && id > 0);
+        let subjectsData = [];
+        if (expertiseIds.length > 0) {
+          subjectsData = await Promise.all(
+            expertiseIds.map(id => apiCall(`/subject/${id}`))
+          );
+        }
 
         // Calculate subject workloads based on user's expertise subjects and group papers under them
         const workloads = subjectsData.map(sub => {
@@ -223,10 +228,14 @@ const Home = () => {
         onClick={() => handleSort(field)}
         className={`px-5 py-3 cursor-pointer hover:bg-gray-100/80 transition-colors select-none group/header ${isCenter ? 'text-center' : ''}`}
       >
-        <div className={`flex items-center gap-1 ${isCenter ? 'justify-center' : ''}`}>
+        <div className={`flex items-center gap-1.5 ${isCenter ? 'justify-center' : ''}`}>
           <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{label}</span>
-          <span className="text-[9px] text-gray-400 group-hover/header:text-gray-655 transition-colors">
-            {isSorted ? (sortOrder === 'asc' ? ' ?' : ' ?') : ' ?'}
+          <span className="text-gray-400 group-hover/header:text-gray-655 transition-colors flex items-center">
+            {isSorted ? (
+              sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+            ) : (
+              <ArrowUpDown size={12} className="opacity-40 group-hover/header:opacity-100" />
+            )}
           </span>
           {hasFilter && (
             <ColumnFilter columnKey={field} currentFilter={filters[field]} setFilter={setFilter} placeholder={`Filter ${label.toLowerCase()}...`} />
@@ -252,264 +261,140 @@ const Home = () => {
   });
 
   return (
-    <div className="space-y-6 pb-12 transition-all duration-300">
+    <div className="h-[calc(100vh-64px)] bg-gray-50/50 pb-6 w-full flex flex-col px-6 lg:px-10 pt-6 space-y-6 overflow-hidden">
       
-      {/* Dynamic Greetings & Info Card */}
-      <div className="bg-gradient-to-r from-teal-700 via-teal-700 to-violet-850 p-6 rounded-2xl text-white shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-full sm:w-64 h-64 bg-white rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
-        <div className="absolute bottom-0 left-1/3 w-40 h-40 bg-teal-600/10 rounded-full blur-2xl pointer-events-none"></div>
-        
-        <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-6 relative z-10">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-white  border border-white/20 text-xs font-bold tracking-wide">
-              <Sparkles size={13} className="text-amber-300 animate-pulse" />
-              <span>{greeting.icon} {greeting.text}</span>
-            </div>
-            <h1 className="text-3xl font-extrabold tracking-tight">
-              Welcome Back, <span className="text-amber-300 font-black">{user?.name || "Examiner"}</span>
+      <div className="bg-white px-6 py-4 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-teal-700 font-semibold mb-1">
+            <Sparkles size={16} />
+            <h1 className="text-xl font-bold text-gray-900 tracking-tight">
+              Welcome, {user?.name || "Examiner"}
             </h1>
-            <p className="text-teal-100 text-xs max-w-xl leading-relaxed">
-              Your active session is fully authenticated. Let's make marking swift, accurate, and fair today!
-            </p>
           </div>
+          <p className="text-gray-500 text-xs mt-0.5">
+            Examiner Console - Monitor and Evaluate Allocated Scripts
+          </p>
+        </div>
 
-          <div className="flex flex-row sm:flex-row items-center gap-4 bg-white  border border-white/10 p-4 rounded-xl self-start lg:self-center shrink-0">
-            <div className="p-2 bg-white rounded-xl text-center shrink-0">
-              <Calendar size={18} className="mx-auto text-amber-300 mb-0.5" />
-              <span className="block text-[8px] font-black uppercase text-teal-200">Date</span>
-            </div>
-            <div className="text-left">
-              <p className="text-xs font-black tracking-wide text-teal-100">{formattedDate}</p>
-              <p className="text-lg font-black tracking-tight text-white font-mono">{formattedTime}</p>
-            </div>
+        <div className="flex flex-row items-center gap-3 bg-gray-50 border border-gray-100 px-4 py-2 rounded-xl self-start md:self-center">
+          <div className="p-1.5 bg-white rounded-lg text-center shadow-sm">
+            <Calendar size={16} className="mx-auto text-teal-600 mb-0.5" />
+          </div>
+          <div className="text-left">
+            <p className="text-[10px] font-bold tracking-wide text-gray-400 uppercase leading-none mb-1">{formattedDate}</p>
+            <p className="text-sm font-black tracking-tight text-gray-800 font-mono leading-none">{formattedTime}</p>
           </div>
         </div>
       </div>
 
-      {/* Main Single Row Grid of Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div 
-          onClick={() => handleCardClick('all')}
-          className={`cursor-pointer transition-all duration-205 ${
-            filters.statusFilter === 'all' ? 'ring-2 ring-teal-500 rounded-xl shadow-md' : ''
-          }`}
-        >
+      <div className="grid grid-cols-12 gap-6 items-start flex-1 w-full overflow-hidden">
+        
+        {/* LEFT COLUMN - STATS & REGISTRY (8 Columns) */}
+        <div className="col-span-12 xl:col-span-8 flex flex-col gap-6 h-full overflow-hidden">
+          
+          {/* Main Single Row Grid of Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             title="Total Assigned"
             value={stats.totalScripts}
-            icon={<FileText className="text-teal-700" />}
-            bgColor="bg-teal-50"
-            borderClass="border-l-4 border-teal-600 shadow-teal-50"
+            icon={<FileText className="text-teal-600" />}
+            bgColor="bg-teal-50/80 group-hover:bg-teal-100"
+            borderClass="border-l-[3px] border-l-teal-500"
             subtitle="allocated sheets"
+            onClick={() => handleCardClick('all')}
+            isSelected={filters.statusFilter === 'all'}
+            activeRingClass="border-teal-500 ring-1 ring-teal-500 shadow-md"
           />
-        </div>
-        <div 
-          onClick={() => handleCardClick('pending')}
-          className={`cursor-pointer transition-all duration-205 ${
-            filters.statusFilter === 'pending' ? 'ring-2 ring-rose-500 rounded-xl shadow-md' : ''
-          }`}
-        >
           <StatCard
             title="Pending"
             value={stats.pending}
             icon={<AlertCircle className="text-rose-600" />}
-            bgColor="bg-rose-50"
-            borderClass="border-l-4 border-rose-600 shadow-rose-50"
+            bgColor="bg-rose-50/80 group-hover:bg-rose-100"
+            borderClass="border-l-[3px] border-l-rose-500"
             subtitle="awaiting evaluation"
+            onClick={() => handleCardClick('pending')}
+            isSelected={filters.statusFilter === 'pending'}
+            activeRingClass="border-rose-500 ring-1 ring-rose-500 shadow-md"
           />
-        </div>
-        <div 
-          onClick={() => handleCardClick('marking')}
-          className={`cursor-pointer transition-all duration-205 ${
-            filters.statusFilter === 'marking' ? 'ring-2 ring-amber-500 rounded-xl shadow-md' : ''
-          }`}
-        >
           <StatCard
             title="In Progress"
             value={stats.inProgress}
             icon={<Clock className="text-amber-600" />}
-            bgColor="bg-amber-50"
-            borderClass="border-l-4 border-amber-500 shadow-amber-50"
+            bgColor="bg-amber-50/80 group-hover:bg-amber-100"
+            borderClass="border-l-[3px] border-l-amber-500"
             subtitle="currently editing"
+            onClick={() => handleCardClick('marking')}
+            isSelected={filters.statusFilter === 'marking'}
+            activeRingClass="border-amber-500 ring-1 ring-amber-500 shadow-md"
           />
-        </div>
-        <div 
-          onClick={() => handleCardClick('completed')}
-          className={`cursor-pointer transition-all duration-205 ${
-            filters.statusFilter === 'completed' ? 'ring-2 ring-emerald-500 rounded-xl shadow-md' : ''
-          }`}
-        >
           <StatCard
             title="Completed"
             value={stats.evaluated}
             icon={<CheckCircle className="text-emerald-600" />}
-            bgColor="bg-emerald-50"
-            borderClass="border-l-4 border-emerald-600 shadow-emerald-50"
+            bgColor="bg-emerald-50/80 group-hover:bg-emerald-100"
+            borderClass="border-l-[3px] border-l-emerald-500"
             subtitle="successfully marked"
+            onClick={() => handleCardClick('completed')}
+            isSelected={filters.statusFilter === 'completed'}
+            activeRingClass="border-emerald-500 ring-1 ring-emerald-500 shadow-md"
           />
-        </div>
       </div>
 
-      {/* Progress Visualizer */}
-      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-        <div className="flex justify-between items-center mb-3">
-          <div>
-            <h2 className="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-1.5">
-              <Award size={14} className="text-teal-700 animate-bounce" />
-              Marking Progress Velocity
-            </h2>
-            <p className="text-[10px] text-gray-500 mt-0.5">Real-time percentage overview of your workload (Average Evaluated Score: <span className="text-teal-700 font-extrabold">{stats.averageScore} marks</span>)</p>
-          </div>
-          <span className="text-[11px] font-black text-teal-700 bg-teal-50 border border-teal-100 px-2.5 py-1 rounded-md">
-            {stats.totalScripts > 0 ? Math.round((stats.evaluated / stats.totalScripts) * 100) : 0}% Done
-          </span>
-        </div>
-        
-        <div className="space-y-2">
-          <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden border border-gray-100 flex p-0.5">
-            <div
-              className="bg-gradient-to-r from-teal-600 to-teal-600 h-full rounded-full transition-all duration-700"
-              style={{ width: `${stats.totalScripts > 0 ? (stats.evaluated / stats.totalScripts) * 100 : 0}%` }}
-            ></div>
-          </div>
-          <div className="flex justify-between text-[9px] font-bold text-gray-400">
-            <span>0% Start</span>
-            <span>{stats.evaluated} of {stats.totalScripts} Evaluated</span>
-            <span>100% Target</span>
-          </div>
-        </div>
-      </div>
 
-      {/* Subject Expertise & Workload Section */}
-      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-        <h2 className="text-xs font-black uppercase tracking-wider text-gray-800 mb-3 flex items-center gap-1.5">
-          <Award size={13} className="text-teal-600" />
-          <span>Subject Expertise & Script Allocation</span>
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {subjectWorkloads.map((sw) => (
-            <div 
-              key={sw.subjectId} 
-              onClick={() => handleSubjectClick(sw.subjectId)}
-              className={`bg-gray-50 border p-3 rounded-xl flex flex-col justify-between hover:border-teal-400 transition-all duration-300 shadow-sm cursor-pointer ${
-                filters.subjectFilter === sw.subjectId.toString() ? 'ring-2 ring-teal-500 border-teal-500' : 'border-gray-200/50'
-              }`}
-            >
-              <div className="space-y-2.5">
-                <div>
-                  <span className="text-[8px] font-black uppercase text-gray-400 tracking-wider">Expertise Subject</span>
-                  <h4 className="font-extrabold text-xs text-gray-900 mt-0.5 leading-tight">{sw.subjectName}</h4>
-                </div>
-                
-                <div className="space-y-1.5">
-                  <span className="text-[8px] font-black uppercase text-gray-400 tracking-wider block">Allocated Papers</span>
-                  {sw.papers.length > 0 ? (
-                    <div className="space-y-1">
-                      {sw.papers.map(p => (
-                        <div key={p.paperId} className="flex justify-between items-center bg-white px-2.5 py-1 rounded-lg border border-gray-150 shadow-sm">
-                          <div className="max-w-[70%]">
-                            <span className="text-[9px] font-extrabold text-gray-800 block truncate leading-tight">{p.paperName}</span>
-                            {p.paperCode && <span className="text-[8px] text-gray-400 font-mono block truncate">{p.paperCode}</span>}
-                          </div>
-                          <span className="bg-teal-50 border border-teal-100 text-teal-700 text-[8px] font-black px-1.5 py-0.5 rounded uppercase shrink-0">
-                            {p.count} scr
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-[9px] text-gray-400 italic block">No scripts allocated for this subject</span>
-                  )}
-                </div>
-              </div>
-              
-              <div className="mt-3 pt-2.5 border-t border-gray-205 flex justify-between items-center">
-                <span className="text-[8px] text-gray-500 font-bold uppercase">Total Workload</span>
-                <span className="bg-teal-700 text-white text-[9px] font-black px-2 py-0.5 rounded-md shadow-sm">
-                  {sw.totalCount} scripts
-                </span>
-              </div>
-            </div>
-          ))}
-          {subjectWorkloads.length === 0 && (
-            <div className="col-span-3 text-center py-4 text-gray-400 text-[10px] font-bold uppercase tracking-wider border border-dashed border-gray-200 rounded-xl">
-              No Expertise Subjects configured for your profile
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* Interactive Script Control Cockpit */}
-      <div ref={tableRef} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden scroll-mt-6">
-        <div className="p-5 border-b border-gray-100 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div ref={tableRef} className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="p-5 border-b border-gray-100 flex flex-col gap-3 shrink-0">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h2 className="text-xs font-black uppercase tracking-wider text-gray-800">Allocated Scripts Registry</h2>
               <p className="text-[10px] text-gray-500 mt-0.5">Filter, search, and jump directly into evaluating your papers</p>
             </div>
-            <div className="flex items-center gap-2 self-end sm:self-center">
-              <button 
-                onClick={refreshTable}
-                title="Refresh Registry"
-                className="p-2 text-gray-500 hover:text-teal-700 hover:bg-gray-50 border border-gray-200 rounded-md transition-all cursor-pointer shrink-0"
-              >
-                <RefreshCw size={14} />
-              </button>
-              <Link to="/scripts" className="text-[10px] font-black text-teal-600 bg-teal-50 border border-teal-100 hover:bg-teal-100/70 px-3.5 py-2 rounded-xl transition-all shrink-0">
-                Open Script Manager
-              </Link>
-            </div>
-          </div>
-
-          {/* Interactive Filter and Search Bar */}
-          <div className="flex flex-col md:flex-row gap-3 pt-1">
-            {/* Search Input */}
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-405" size={14} />
-              <input
-                type="text"
-                placeholder="Search by Barcode, Paper or Subject name..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-xs border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-550 focus:border-transparent bg-gray-50/50 hover:bg-white transition-all text-gray-800 font-medium"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-455 hover:text-gray-700"
+            
+            <div className="flex flex-col sm:flex-row items-center gap-2 shrink-0">
+              {/* Search Input */}
+              <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border border-gray-100 focus-within:ring-2 focus-within:ring-teal-500/20 focus-within:border-teal-500 transition-all w-64">
+                <Search size={13} className="text-gray-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search by Barcode, Paper..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-transparent text-gray-800 placeholder-gray-400 font-semibold text-[11px] focus:outline-none"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch("")}
+                    className="text-gray-300 hover:text-gray-500 transition"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              
+              {/* Status Dropdown */}
+              <div className="relative">
+                <select
+                  value={filters.statusFilter || 'all'}
+                  onChange={(e) => setFilter('statusFilter', e.target.value)}
+                  className="appearance-none flex items-center justify-center gap-1.5 px-4 py-2 pr-8 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-sm border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
                 >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-
-            {/* Status Tabs */}
-            <div className="flex bg-gray-100/80 p-1 rounded-xl self-start border border-gray-200/50 shrink-0">
-              {[
-                { key: 'all', label: 'All Statuses' },
-                { key: 'pending', label: 'Pending' },
-                { key: 'marking', label: 'In Progress' },
-                { key: 'completed', label: 'Completed' }
-              ].map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => setFilter('statusFilter', tab.key)}
-                  className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                    filters.statusFilter === tab.key
-                      ? 'bg-white text-teal-700 shadow-sm border border-gray-200/40'
-                      : 'text-gray-555 hover:text-gray-900'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+                  <option value="all">All Statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="marking">In Progress</option>
+                  <option value="completed">Completed</option>
+                </select>
+                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-gray-500">
+                  <ChevronDown size={14} />
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Active Filter Badges */}
-          {(filters.statusFilter !== 'all' || filters.subjectFilter) && (
-            <div className="flex flex-wrap gap-2 pt-1.5 border-t border-gray-100">
-              {filters.statusFilter !== 'all' && (
+          {( (filters.statusFilter && filters.statusFilter !== 'all') || filters.subjectFilter ) && (
+            <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+              {filters.statusFilter && filters.statusFilter !== 'all' && (
                 <span className="inline-flex items-center gap-1 bg-teal-50 text-teal-700 text-[9px] font-black px-2.5 py-1 rounded-md border border-teal-100">
                   Status: {filters.statusFilter}
                   <X size={10} className="cursor-pointer" onClick={() => setFilter('statusFilter', 'all')} />
@@ -521,31 +406,6 @@ const Home = () => {
                   <X size={10} className="cursor-pointer" onClick={() => setFilter('subjectFilter', '')} />
                 </span>
               )}
-            </div>
-          )}
-          {/* Assigned Papers for Requesting Scripts */}
-          {assignedPapers.length > 0 && (
-            <div className="mt-8">
-              <h3 className="text-sm font-black text-gray-800 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <FileText size={16} className="text-teal-600" />
-                <span>Assigned Papers (Request Scripts)</span>
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {assignedPapers.map((paper, idx) => (
-                  <div key={idx} className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm hover:border-teal-300 transition-colors flex flex-col justify-between">
-                    <div>
-                      <div className="text-xs font-bold text-gray-400 uppercase">{paper.paperCode}</div>
-                      <div className="text-sm font-bold text-gray-800 mt-1">{paper.paperName}</div>
-                    </div>
-                    <button 
-                      onClick={() => setRequestModalPaper(paper)}
-                      className="mt-4 w-full py-2 bg-teal-50 hover:bg-teal-700 text-teal-700 hover:text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Zap size={14} /> Request Scripts
-                    </button>
-                  </div>
-                ))}
-              </div>
             </div>
           )}
         </div>
@@ -562,9 +422,10 @@ const Home = () => {
             <p className="text-[10px] text-gray-400">Try adjusting your search query or status filter above</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left min-w-[900px]">
-              <thead className="bg-gray-50/70 border-b border-gray-100">
+          <>
+            <div className="flex-1 overflow-auto min-h-0">
+              <table className="w-full text-left min-w-[900px] relative">
+                <thead className="bg-gray-50 border-b border-gray-100 sticky top-0 z-10 shadow-sm">
                 <tr>
                   <SortHeader label="Barcode / Script ID" field="barcode" hasFilter={true} />
                   <SortHeader label="Subject" field="subjectName" hasFilter={true} />
@@ -619,17 +480,17 @@ const Home = () => {
                       {script.status === 'completed' ? (
                         <button
                           onClick={() => handleStartMarking(script)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-[9px] uppercase tracking-wider transition-all cursor-pointer group-hover:scale-105"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold text-[10px] uppercase tracking-wider transition-all cursor-pointer"
                         >
-                          <Eye size={10} />
+                          <Eye size={12} />
                           Review Marks
                         </button>
                       ) : (
                         <button
                           onClick={() => handleStartMarking(script)}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-teal-600 to-teal-650 hover:from-teal-700 hover:to-teal-700 text-white rounded-xl font-extrabold text-[9px] uppercase tracking-wider transition-all shadow-md cursor-pointer animate-pulse hover:scale-105"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg font-bold text-[10px] uppercase tracking-wider transition-all shadow-sm cursor-pointer"
                         >
-                          <Zap size={10} className="fill-white" />
+                          <Zap size={12} className="fill-white" />
                           Evaluate Script
                         </button>
                       )}
@@ -638,8 +499,10 @@ const Home = () => {
                 ))}
               </tbody>
             </table>
+          </div>
 
-            {/* Standard centralized pagination service */}
+          {/* Standard centralized pagination service */}
+          <div className="border-t border-gray-100 bg-white mt-auto rounded-b-xl z-10 relative">
             <TablePagination
               page={page}
               totalPages={totalPages}
@@ -649,7 +512,129 @@ const Home = () => {
               setPageSize={setPageSize}
             />
           </div>
+        </>
         )}
+      </div>
+      </div>
+      
+      {/* RIGHT COLUMN - SIDEBAR WIDGETS (4 Columns) */}
+      <div className="col-span-12 xl:col-span-4 flex flex-col gap-6 h-full overflow-y-auto pr-1">
+        
+        {/* Progress Visualizer */}
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h2 className="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-1.5">
+                <Award size={14} className="text-teal-700 animate-bounce" />
+                Marking Velocity
+              </h2>
+              <p className="text-[10px] text-gray-500 mt-0.5">Average Score: <span className="text-teal-700 font-extrabold">{stats.averageScore}</span></p>
+            </div>
+            <span className="text-[11px] font-black text-teal-700 bg-teal-50 border border-teal-100 px-2.5 py-1 rounded-md">
+              {stats.totalScripts > 0 ? Math.round((stats.evaluated / stats.totalScripts) * 100) : 0}%
+            </span>
+          </div>
+          
+          <div className="space-y-2">
+            <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden border border-gray-100 flex p-0.5">
+              <div
+                className="bg-gradient-to-r from-teal-600 to-teal-600 h-full rounded-full transition-all duration-700"
+                style={{ width: `${stats.totalScripts > 0 ? (stats.evaluated / stats.totalScripts) * 100 : 0}%` }}
+              ></div>
+            </div>
+            <div className="flex justify-between text-[9px] font-bold text-gray-400">
+              <span>0%</span>
+              <span>{stats.evaluated} of {stats.totalScripts} Evaluated</span>
+              <span>100%</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Assigned Papers for Requesting Scripts */}
+        {assignedPapers.length > 0 && (
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+            <h2 className="text-xs font-black text-gray-800 uppercase tracking-wider mb-4 flex items-center gap-1.5">
+              <FileText size={14} className="text-teal-600" />
+              <span>Request New Scripts</span>
+            </h2>
+            <div className="grid grid-cols-1 gap-3 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+              {assignedPapers.map((paper, idx) => (
+                <div key={idx} className="bg-gray-50 border border-gray-200 p-3.5 rounded-xl hover:border-teal-300 transition-colors flex flex-col justify-between group">
+                  <div>
+                    <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{paper.paperCode}</div>
+                    <div className="text-xs font-bold text-gray-800 mt-0.5 leading-tight">{paper.paperName}</div>
+                  </div>
+                  <button 
+                    onClick={() => setRequestModalPaper(paper)}
+                    className="mt-3 w-full py-2 bg-teal-700 hover:bg-teal-800 text-white text-[10px] uppercase font-bold tracking-wider rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                  >
+                    <Zap size={14} /> Request Allocation
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Subject Expertise & Workload Section */}
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex-1">
+          <h2 className="text-xs font-black uppercase tracking-wider text-gray-800 mb-4 flex items-center gap-1.5">
+            <Briefcase size={14} className="text-teal-600" />
+            <span>Subject Expertise Profile</span>
+          </h2>
+          <div className="grid grid-cols-1 gap-4 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
+            {subjectWorkloads.map((sw) => (
+              <div 
+                key={sw.subjectId} 
+                onClick={() => handleSubjectClick(sw.subjectId)}
+                className={`bg-gray-50 border p-3.5 rounded-xl flex flex-col justify-between hover:border-teal-400 transition-all duration-300 shadow-sm cursor-pointer ${
+                  filters.subjectFilter === sw.subjectId.toString() ? 'ring-2 ring-teal-500 border-teal-500' : 'border-gray-200/50'
+                }`}
+              >
+                <div className="space-y-3">
+                  <div>
+                    <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider">Subject Domain</span>
+                    <h4 className="font-extrabold text-sm text-gray-900 mt-0.5 leading-tight">{sw.subjectName}</h4>
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider block">Allocated Papers</span>
+                    {sw.papers.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {sw.papers.map(p => (
+                          <div key={p.paperId} className="flex justify-between items-center bg-white px-2.5 py-1.5 rounded-lg border border-gray-150 shadow-sm">
+                            <div className="max-w-[70%]">
+                              <span className="text-[10px] font-bold text-gray-800 block truncate leading-tight">{p.paperName}</span>
+                            </div>
+                            <span className="bg-teal-50 border border-teal-100 text-teal-700 text-[9px] font-black px-1.5 py-0.5 rounded uppercase shrink-0">
+                              {p.count} scr
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-gray-400 italic block">No scripts allocated</span>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="mt-4 pt-3 border-t border-gray-200 flex justify-between items-center">
+                  <span className="text-[9px] text-gray-500 font-bold uppercase">Total Workload</span>
+                  <span className="bg-teal-700 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-sm">
+                    {sw.totalCount} scripts
+                  </span>
+                </div>
+              </div>
+            ))}
+            {subjectWorkloads.length === 0 && (
+              <div className="text-center py-6 text-gray-400 text-[10px] font-bold uppercase tracking-wider border border-dashed border-gray-200 rounded-xl">
+                No Expertise Subjects configured
+              </div>
+            )}
+          </div>
+        </div>
+
+      </div>
       </div>
 
       <RequestScriptsModal 
@@ -667,21 +652,23 @@ const Home = () => {
   );
 };
 
-const StatCard = ({ title, value, icon, bgColor, borderClass, subtitle }) => {
+const StatCard = ({ title, value, icon, bgColor, borderClass, subtitle, onClick, isSelected, activeRingClass }) => {
   return (
-    <div className={`bg-white rounded-xl p-3 shadow-sm border border-gray-100 ${borderClass} hover:shadow-md hover:translate-y-[-2px] transition-all duration-300 flex flex-col justify-between group h-full`}>
-      <div className="flex justify-between items-center mb-2">
-        <span className="text-[8px] uppercase font-black text-gray-405 tracking-wider">{title}</span>
-        <div className={`p-1.5 ${bgColor} rounded-lg group-hover:scale-110 transition-transform`}>
-          {icon ? <span className="[&>svg]:w-3.5 [&>svg]:h-3.5">{icon}</span> : null}
-        </div>
+    <div 
+      onClick={onClick}
+      className={`bg-white p-4 rounded-xl border ${isSelected ? activeRingClass : 'border-gray-100'} ${borderClass} flex items-center justify-between shadow-sm hover:shadow-md transition-all group h-full cursor-pointer hover:-translate-y-0.5`}
+    >
+      <div className="flex flex-col">
+        <span className="text-xs uppercase font-bold text-slate-400 tracking-wider group-hover:text-teal-600 transition-colors">{title}</span>
+        <span className="text-3xl font-black text-slate-800 mt-1.5">{value}</span>
+        {subtitle && <span className="text-xs font-medium text-slate-400 mt-1">{subtitle}</span>}
       </div>
-      <div>
-        <p className="text-base font-black text-gray-955 tracking-tight">{value}</p>
-        {subtitle && <p className="text-[8px] text-gray-450 font-bold mt-0.5 leading-tight">{subtitle}</p>}
+      <div className={`w-10 h-10 rounded-xl ${bgColor} flex items-center justify-center group-hover:scale-110 transition-all shadow-sm`}>
+        {icon ? <span className="[&>svg]:w-5 [&>svg]:h-5">{icon}</span> : null}
       </div>
     </div>
   );
 };
 
 export default Home;
+

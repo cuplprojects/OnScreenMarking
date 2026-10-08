@@ -18,7 +18,58 @@ import { useTable } from "../services/tableService";
 import TablePagination from "../components/TablePagination";
 import ColumnFilter from "../components/ColumnFilter";
 
-export default function PapersManagement() {
+const SubjectMultiSelect = ({ subjects, selectedSubjects, toggleSubject }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedCount = selectedSubjects.length;
+
+  return (
+    <div className="relative" ref={wrapperRef}>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-teal-500 cursor-pointer outline-none transition-colors"
+      >
+        <span className={selectedCount === 0 ? "text-gray-400" : "text-gray-900"}>
+          {selectedCount === 0 ? "Select Subjects..." : `${selectedCount} subject(s) selected`}
+        </span>
+        <ChevronDown size={14} className="text-gray-500" />
+      </div>
+      
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar py-1">
+          {subjects.length === 0 ? (
+            <div className="px-4 py-3 text-xs text-gray-500 text-center font-semibold">No subjects available</div>
+          ) : (
+            subjects.map(s => (
+              <label key={s.subjectId} className="flex items-center gap-3 cursor-pointer hover:bg-teal-50 px-4 py-2 transition-colors">
+                <input 
+                  type="checkbox" 
+                  checked={selectedSubjects.includes(s.subjectId)} 
+                  onChange={() => toggleSubject(s.subjectId)} 
+                  className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 cursor-pointer" 
+                />
+                <span className="text-gray-700 text-xs font-semibold">{s.subjectName}</span>
+              </label>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default function PapersManagement({ isTab = false }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const encryptedProjectId = searchParams.get("projectId");
   const projectId = encryptedProjectId ? decryptId(encryptedProjectId) : null;
@@ -30,11 +81,13 @@ export default function PapersManagement() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const papersPath = userType === 'admin' ? '/admin/papers' : '/papers';
-    setBreadcrumb([
-      { label: 'Paper Management', path: papersPath, icon: 'FileText' }
-    ]);
-  }, [userType]);
+    if (!isTab) {
+      const papersPath = userType === 'admin' ? '/admin/papers' : '/papers';
+      setBreadcrumb([
+        { label: 'Paper Management', path: papersPath, icon: 'FileText' }
+      ]);
+    }
+  }, [userType, isTab, setBreadcrumb]);
 
   const [subjects, setSubjects] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -53,7 +106,8 @@ export default function PapersManagement() {
       // We will use the dashboard stats endpoint if projectId exists, otherwise we fallback to getAllPapers
       if (projectId) {
          let url = `/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}&statusFilter=${statusFilterVal}`;
-         if (subjectFilter) url += `&subjectId=${subjectFilter}`;
+         const subjectFilterVal = params.subjectName || '';
+      if (subjectFilterVal) url += `&subjectId=${subjectFilterVal}`;
          return apiCall(url);
       }
     }
@@ -474,9 +528,14 @@ export default function PapersManagement() {
       <th onClick={() => handleSort(field)} className={`px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors select-none ${isCenter ? 'text-center' : ''}`}>
         <div className={`flex items-center gap-1 ${isCenter ? 'justify-center' : ''}`}>
           <span>{label}</span>
-          <span className="text-[9px] text-gray-400">{isSorted ? (sortOrder === 'asc' ? ' ?' : ' ?') : ' ?'}</span>
-          {hasFilter && (
-            <ColumnFilter columnKey={field} currentFilter={filters[field]} setFilter={setFilter} placeholder={`Filter ${label.toLowerCase()}...`} />
+          <span className="text-[9px] text-gray-400">{isSorted ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}</span>
+          {hasFilter && !customFilter && (
+            <ColumnFilter columnKey={field} currentFilter={filters[field]} setFilter={setFilter} placeholder={`Filter ${label.toLowerCase()}...`} options={filterOptions} />
+          )}
+          {customFilter && (
+            <div onClick={(e) => e.stopPropagation()} className="ml-1">
+              {customFilter}
+            </div>
           )}
         </div>
       </th>
@@ -542,7 +601,19 @@ export default function PapersManagement() {
         </div>
       </div>
 
-      <div className="px-6 lg:px-10 space-y-6">
+      {(!projectId && !isTab) ? (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-16 text-center">
+          <FileText size={48} className="mx-auto text-gray-200 mb-4" />
+          <h3 className="text-xl font-black text-gray-900 mb-2">Select a Project</h3>
+          <p className="text-sm font-semibold text-gray-500">
+            Please select a project from the dropdown above to view its papers and sections.
+          </p>
+        </div>
+      ) : (
+        <>
+      {/* Heading is now handled by ProjectConfigHeader in ProjectDashboard */}
+
+          <div className="w-full space-y-4">
         
         {showForm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
@@ -893,44 +964,62 @@ export default function PapersManagement() {
                   className="pl-9 pr-4 py-2 text-xs font-semibold bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 w-full sm:w-64 shadow-sm"
                 />
               </div>
-              
-              <div className="relative flex items-center gap-2">
-                <Filter size={14} className="text-gray-400" />
-                <select
-                  value={subjectFilter}
-                  onChange={(e) => {
-                    setSubjectFilter(e.target.value);
-                    setPage(1); // Reset to page 1 on filter change
-                  }}
-                  className="pl-2 pr-8 py-2 text-xs font-semibold bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-sm appearance-none outline-none"
-                >
-                  <option value="">All Subjects</option>
-                  {subjects.map(s => (
-                    <option key={s.subjectId} value={s.subjectId}>{s.subjectName}</option>
-                  ))}
-                </select>
-                <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              </div>
             </div>
             
-            {/* Bulk Actions */}
-            {selectedPaperIds.length > 0 && (
-              <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
-                <span className="text-xs font-bold text-gray-500 mr-2">{selectedPaperIds.length} Selected</span>
+            <div className="flex flex-wrap items-center gap-2.5 justify-end">
+              {/* Bulk Actions */}
+              {selectedPaperIds.length > 0 && (
+                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300 mr-2 sm:mr-4 border-r border-gray-200 pr-2 sm:pr-4">
+                  <span className="text-xs font-bold text-gray-500 hidden sm:inline-block mr-2">{selectedPaperIds.length} Selected</span>
+                  <button
+                    onClick={() => setShowBulkConfigModal(true)}
+                    className="bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-[10px] uppercase tracking-wider px-3 py-2 rounded-md transition-all shadow-sm flex items-center gap-1.5"
+                  >
+                    <Layers size={13} /> <span className="hidden sm:inline">Bulk Configure</span>
+                  </button>
+                  <button
+                    onClick={() => setShowImportSectionsModal(true)}
+                    className="bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-[10px] uppercase tracking-wider px-3 py-2 rounded-md transition-all shadow-sm flex items-center gap-1.5"
+                  >
+                    <Copy size={13} /> <span className="hidden sm:inline">Import</span>
+                  </button>
+                </div>
+              )}
+
+              {projectId && (
                 <button
                   onClick={() => setShowBulkConfigModal(true)}
-                  className="bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-[10px] uppercase tracking-wider px-4 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                  className="font-bold text-[10px] uppercase tracking-wider px-3 py-2.5 rounded-md transition-colors flex items-center gap-1.5 border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm whitespace-nowrap"
                 >
-                  <Layers size={13} /> Bulk Configure Sections
+                  <Settings size={12} /> Add Default Sections
                 </button>
+              )}
+              {projectId && (
                 <button
-                  onClick={() => setShowImportSectionsModal(true)}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] uppercase tracking-wider px-4 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                  onClick={() => {
+                    const importPath = userType === 'admin' ? '/admin/import-papers' : '/import-papers';
+                    navigate(`${importPath}?projectId=${encryptedProjectId}&universityId=${activeUniversityId}`);
+                  }}
+                  className="bg-teal-50 hover:bg-teal-100 text-teal-700 font-extrabold text-[10px] uppercase tracking-wider px-3 py-2.5 rounded-md border border-teal-200 transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap"
                 >
-                  <Copy size={13} /> Import Sections
+                  <Folder size={13} /> Import Papers <span className="hidden xl:inline">(From Project)</span>
                 </button>
-              </div>
-            )}
+              )}
+              <button
+                onClick={() => {
+                  setFormData({
+                    paperCode: "", paperName: "", paperNumber: 1, maxMarks: 100, totalQuestions: "", description: "", 
+                    catchNo: "", projectId: projectId || "", isActive: true, questionPaperPdfUrl: "",
+                  });
+                  setSelectedSubjects([]);
+                  setEditingId(null);
+                  setShowForm(true);
+                }}
+                className="font-extrabold text-[10px] uppercase tracking-wider px-4 py-2.5 rounded-md transition-all flex items-center gap-1.5 shadow-sm border whitespace-nowrap bg-teal-700 hover:bg-teal-800 text-white border-teal-600"
+              >
+                <Plus size={13} /> Add Paper
+              </button>
+            </div>
           </div>
 
           {tableLoading && papers.length === 0 ? (
@@ -1164,14 +1253,14 @@ export default function PapersManagement() {
                               to={userType === 'admin' 
                                 ? `/admin/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`
                                 : `/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`}
-                              className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[9px] font-extrabold uppercase tracking-wider transition-colors flex items-center gap-1 border border-indigo-100"
+                              className="px-2.5 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-md text-[9px] font-extrabold uppercase tracking-wider transition-colors flex items-center gap-1 border border-teal-200"
                               title="Manual Section Configuration"
                             >
                               <Layers size={10} /> Sections
                             </Link>
                             <button
                               onClick={() => openAllocationModal(paper)}
-                              className="px-2.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-lg text-[9px] font-extrabold uppercase tracking-wider transition-colors flex items-center gap-1 border border-orange-100"
+                              className="px-2.5 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-md text-[9px] font-extrabold uppercase tracking-wider transition-colors flex items-center gap-1 border border-teal-200"
                             >
                               <Users size={10} /> Assign
                             </button>
@@ -1510,6 +1599,8 @@ export default function PapersManagement() {
           onChange={handleTableFileChange}
         />
       </div>
+        </>
+      )}
     </div>
   );
 }

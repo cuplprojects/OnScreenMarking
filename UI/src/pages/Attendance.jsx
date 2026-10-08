@@ -22,7 +22,7 @@ import userService from '../services/userService';
 import message from '../services/messageService';
 import ProjectConfigHeader from '../components/ProjectConfigHeader';
 
-export default function Attendance() {
+export default function Attendance({ isTab = false }) {
   const [attendanceLogs, setAttendanceLogs] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -354,11 +354,10 @@ export default function Attendance() {
     ? parsedData.filter(row => !row.isValid) 
     : parsedData;
 
-  return (
-    <div className="min-h-screen bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4">
-      <div className="w-full space-y-4">
-        
-        {/* Header */}
+  const content = (
+    <div className="w-full space-y-4">
+      
+      {/* Header */}
         <div className="bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -732,6 +731,12 @@ export default function Attendance() {
           </div>
         </div>
       </div>
+  );
+
+  if (isTab) return content;
+  return (
+    <div className="min-h-screen bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4">
+      {content}
     </div>
   );
 }

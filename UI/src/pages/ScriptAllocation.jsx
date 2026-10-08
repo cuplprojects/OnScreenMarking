@@ -34,7 +34,7 @@ import TablePagination from '../components/TablePagination';
 import ColumnFilter from '../components/ColumnFilter';
 import { useTable } from '../services/tableService';
 
-export default function ScriptAllocation() {
+export default function ScriptAllocation({ isTab = false }) {
   const [searchParams] = useSearchParams();
   const encryptedProjectId = searchParams.get('projectId');
   const projectId = encryptedProjectId ? decryptId(encryptedProjectId) : null;
@@ -561,6 +561,19 @@ export default function ScriptAllocation() {
           </div>
         </div>
 
+
+      {(!projectId && !isTab) ? (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-16 text-center">
+          <FileText size={48} className="mx-auto text-gray-200 mb-4" />
+          <h3 className="text-xl font-black text-gray-900 mb-2">Select a Project</h3>
+          <p className="text-sm font-semibold text-gray-500">
+            Please select a project from the dropdown above to view script allocations.
+          </p>
+        </div>
+      ) : (
+        <>
+        {/* Header content moved to ProjectConfigHeader */}
+
         {/* TAB 1: ALLOCATION WORKFLOW */}
         {activeMainTab === 'allocate' && (
           <div className="w-full flex flex-col xl:flex-row gap-4 items-start">
@@ -919,6 +932,8 @@ export default function ScriptAllocation() {
             )}
           </div>
         )}
+        </>
+      )}
       </div>
 
       {/* Reassign Modal */}

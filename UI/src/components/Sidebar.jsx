@@ -75,7 +75,7 @@ const Sidebar = () => {
         items.push({ icon: <FileText size={20} />, label: 'Scripts', path: '/scripts' });
       }
       if (hasPermission("READ_MARKING")) {
-        items.push({ icon: <PenTool size={20} />, label: 'Marking', path: '/marking' });
+
       }
       
       if (hasPermission("VIEW_REPORTS")) {

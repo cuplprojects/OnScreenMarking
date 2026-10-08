@@ -194,18 +194,30 @@ export default function ProjectDashboard() {
     );
   };
 
+  const activeTab = searchParams.get('tab') || 'project-dashboard';
+
   useEffect(() => {
-    setBreadcrumb([
+    let tabLabel = 'Project Stats Dashboard';
+    let tabIcon = 'Layers';
+    if (activeTab === 'papers') { tabLabel = 'Papers & Sections'; tabIcon = 'FileText'; }
+    else if (activeTab === 'allocations') { tabLabel = 'Script Allocations'; tabIcon = 'Zap'; }
+    else if (activeTab === 'attendance') { tabLabel = 'Attendance & Logs'; tabIcon = 'Zap'; }
+
+    const crumbs = [
       { label: 'Coordinator Dashboard', path: '/coordinator/dashboard', icon: 'LayoutDashboard' },
-      { label: 'Project Stats Dashboard', path: `/project-dashboard?projectId=${encryptedProjectId}`, icon: 'Layers' }
-    ]);
-  }, [encryptedProjectId]);
+      { label: 'Project Dashboard', path: `/project-dashboard?projectId=${encryptedProjectId}`, icon: 'Layers' }
+    ];
+    if (activeTab !== 'project-dashboard') {
+      crumbs.push({ label: tabLabel, path: `/project-dashboard?projectId=${encryptedProjectId}&tab=${activeTab}`, icon: tabIcon });
+    }
+    setBreadcrumb(crumbs);
+  }, [encryptedProjectId, activeTab, setBreadcrumb]);
 
   useEffect(() => {
     if (projectId) {
       fetchProjectStats();
     } else {
-      setError("No project ID specified.");
+      setError(null);
       setLoading(false);
     }
   }, [projectId]);
@@ -294,19 +306,46 @@ export default function ProjectDashboard() {
         
         {/* Unified Card Header */}
         <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-          <ProjectConfigHeader completePercentage={stats.completePercentage} />
+          <ProjectConfigHeader 
+            completePercentage={stats?.completePercentage || 0}
+            titleBadge={activeTab === 'allocations' ? 'Allocation' : null}
+            title={
+              activeTab === 'papers' ? "Papers & Sections Management" :
+              activeTab === 'allocations' ? "Script Allocation" :
+              activeTab === 'attendance' ? "Attendance & Logs" :
+              "Project Stats Dashboard"
+            }
+            subtitle={activeTab === 'allocations' ? 'Allocate answer scripts to examiners' : null}
+            titleIcon={
+              activeTab === 'papers' ? <FileText size={18} /> :
+              (activeTab === 'allocations' || activeTab === 'attendance') ? <Zap size={18} /> :
+              <Layers size={18} />
+            }
+          />
         </div>
 
-        {/* Stats Banner */}
-        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 w-full">
-        
-        {/* Total Papers */}
-        <div 
-          onClick={() => handleCardClick('')}
-          className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 transition-all duration-200 cursor-pointer hover:bg-gray-50 flex flex-col justify-between gap-2 ${
-            !filters.statusFilter ? 'bg-teal-50/50 shadow-[inset_0_-2px_0_0_#3b82f6]' : ''
-          }`}
-        >
+        {!projectId ? (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-16 text-center">
+            <Layers size={48} className="mx-auto text-gray-200 mb-4" />
+            <h3 className="text-xl font-black text-gray-900 mb-2">Select a Project</h3>
+            <p className="text-sm font-semibold text-gray-500">
+              Please select a project from the dropdown above to view its dashboard.
+            </p>
+          </div>
+        ) : (
+          <>
+            {activeTab === 'project-dashboard' && (
+              <>
+                {/* Stats Banner */}
+                <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 w-full">
+            
+            {/* Total Papers */}
+            <div 
+              onClick={() => handleCardClick('')}
+              className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 transition-all duration-200 cursor-pointer hover:bg-gray-50 flex flex-col justify-between gap-2 ${
+                !filters.statusFilter ? 'bg-teal-50/50 shadow-[inset_0_-2px_0_0_#3b82f6]' : ''
+              }`}
+            >
           <div className="flex items-start justify-between w-full">
             <div>
               <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-0.5"> Papers</span>
@@ -686,9 +725,17 @@ export default function ProjectDashboard() {
           </div>
         </div>
       </div>
+              </>
+            )}
+
+            {activeTab === 'papers' && <PapersManagement isTab={true} />}
+            {activeTab === 'allocations' && <ScriptAllocation isTab={true} />}
+            {activeTab === 'attendance' && <Attendance isTab={true} />}
+          </>
+        )}
       </div>
       
-      {/* Bulk Assign Modal */}
+  {/* Bulk Assign Modal */}
       {isBulkAssignModalOpen && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -769,4 +816,3 @@ export default function ProjectDashboard() {
     </div>
   );
 }
-
