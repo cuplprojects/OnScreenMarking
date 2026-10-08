@@ -590,7 +590,7 @@ namespace API.Controllers
                             ProjectId = request.TargetProjectId,
                             PaperId = paperId,
                             CatchNo = sourcePp?.CatchNo ?? "",
-                            QuestionPaperPdfUrl = sourcePp?.QuestionPaperPdfUrl ?? "",
+                            QuestionPaperPdfUrl = "",
                             IsActive = true,
                             CreatedAt = DateTime.UtcNow,
                             UpdatedAt = DateTime.UtcNow
