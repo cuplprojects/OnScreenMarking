@@ -16,7 +16,7 @@ namespace API.Models
         public string Description { get; set; }
         
         public int TotalQuestions { get; set; }
-        public int TotalMarks { get; set; }
+        public decimal TotalMarks { get; set; }
         public int StartQuestion { get; set; }
         public int EndQuestion { get; set; }
         public int MaxQuestionsToAttempt { get; set; }

@@ -1,9 +1,10 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useConfigHeader } from '../context/ConfigHeaderContext';
 import paperService from '../services/paperService';
 import subjectService from '../services/subjectService';
+import sectionService from '../services/sectionService';
 import { useTable } from '../services/tableService';
 import TablePagination from '../components/TablePagination';
 import {
@@ -13,13 +14,246 @@ import {
   ArrowUp,
   ArrowDown,
   X,
-  Check
+  Check,
+  Layers,
+  Plus,
+  ExternalLink
 } from 'lucide-react';
 import message from '../services/messageService';
 import { useBreadcrumb } from '../context/BreadcrumbContext';
 
+// Modal for managing paper master sections directly
+function ManagePaperSectionsModal({ isOpen, onClose, paper, masterSections = [], onSaved }) {
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (paper && isOpen) {
+      fetchPaperSections();
+    }
+  }, [paper, isOpen]);
+
+  const fetchPaperSections = async () => {
+    try {
+      setLoading(true);
+      const mapped = await sectionService.getPaperMasterSections(paper.paperId);
+      if (mapped && Array.isArray(mapped)) {
+        setSelectedIds(mapped.map(m => m.id));
+      } else {
+        setSelectedIds([]);
+      }
+    } catch (err) {
+      console.error("Failed to load paper master sections", err);
+      setSelectedIds([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isOpen || !paper) return null;
+
+  const selectedSectionsList = masterSections.filter(m => selectedIds.includes(m.id));
+  const totalQuestions = selectedSectionsList.reduce((sum, s) => sum + (s.totalQuestions || 0), 0);
+  const totalMarks = Math.round(selectedSectionsList.reduce((sum, s) => sum + (parseFloat(s.totalMarks) || 0), 0) * 100) / 100;
+
+  const maxQuestions = paper?.totalQuestions ? parseInt(paper.totalQuestions, 10) : 0;
+  const maxMarks = paper?.maxMarks ? parseFloat(paper.maxMarks) : 0;
+
+  const handleToggle = (id) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(prev => prev.filter(x => x !== id));
+      return;
+    }
+
+    const sec = masterSections.find(m => m.id === id);
+    if (!sec) return;
+
+    const newQuestions = totalQuestions + (sec.totalQuestions || 0);
+    const newMarks = Math.round((totalMarks + (parseFloat(sec.totalMarks) || 0)) * 100) / 100;
+
+    if (maxQuestions > 0 && newQuestions > maxQuestions) {
+      message.error(`Cannot add "${sec.name}": Total questions (${newQuestions}) would exceed paper question limit (${maxQuestions}).`);
+      return;
+    }
+
+    if (maxMarks > 0 && newMarks > maxMarks) {
+      message.error(`Cannot add "${sec.name}": Total marks (${newMarks}) would exceed paper max marks limit (${maxMarks}).`);
+      return;
+    }
+
+    setSelectedIds(prev => [...prev, id]);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.length === masterSections.length) {
+      setSelectedIds([]);
+      return;
+    }
+
+    const sumQuestions = masterSections.reduce((sum, s) => sum + (s.totalQuestions || 0), 0);
+    const sumMarks = Math.round(masterSections.reduce((sum, s) => sum + (parseFloat(s.totalMarks) || 0), 0) * 100) / 100;
+
+    if (maxQuestions > 0 && sumQuestions > maxQuestions) {
+      message.error(`Cannot select all sections: Total questions (${sumQuestions}) exceeds paper limit (${maxQuestions}).`);
+      return;
+    }
+
+    if (maxMarks > 0 && sumMarks > maxMarks) {
+      message.error(`Cannot select all sections: Total marks (${sumMarks}) exceeds paper max marks limit (${maxMarks}).`);
+      return;
+    }
+
+    setSelectedIds(masterSections.map(m => m.id));
+  };
+
+  const handleSave = async () => {
+    if (maxQuestions > 0 && totalQuestions > maxQuestions) {
+      message.error(`Total selected questions (${totalQuestions}) exceeds paper question limit (${maxQuestions}).`);
+      return;
+    }
+
+    if (maxMarks > 0 && totalMarks > maxMarks) {
+      message.error(`Total selected marks (${totalMarks}) exceeds paper max marks limit (${maxMarks}).`);
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await sectionService.savePaperMasterSections(paper.paperId, selectedIds);
+      message.success("Master sections mapped successfully!");
+      if (onSaved) onSaved();
+      onClose();
+    } catch (err) {
+      message.error("Failed to save section mapping");
+      console.error(err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 select-none">
+      <div className="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] overflow-hidden border border-gray-100 shadow-2xl flex flex-col animate-scale-up">
+        {/* Header */}
+        <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-100 text-teal-700 flex items-center justify-center font-bold">
+              <Layers size={20} />
+            </div>
+          </div>
+          <button 
+            onClick={onClose}
+            className="p-1.5 bg-white hover:bg-gray-100 border border-gray-200 text-gray-500 rounded-md transition cursor-pointer"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Stats summary bar */}
+        <div className="grid grid-cols-3 gap-3 p-4 bg-teal-50/50 border-b border-teal-100/60 text-xs">
+          <div className="bg-white p-2.5 rounded-xl border border-teal-100 shadow-2xs">
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sections Mapped</div>
+            <div className="text-base font-black text-teal-900 mt-0.5">{selectedIds.length}</div>
+          </div>
+          <div className={`bg-white p-2.5 rounded-xl border shadow-2xs ${maxQuestions > 0 && totalQuestions > maxQuestions ? 'border-red-300 bg-red-50/30' : maxQuestions > 0 && totalQuestions === maxQuestions ? 'border-amber-300 bg-amber-50/30' : 'border-teal-100'}`}>
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Questions</div>
+            <div className={`text-base font-black mt-0.5 ${maxQuestions > 0 && totalQuestions > maxQuestions ? 'text-red-700' : 'text-teal-900'}`}>
+              {totalQuestions} {maxQuestions > 0 ? <span className="text-xs font-semibold text-gray-500">/ {maxQuestions}</span> : ''}
+            </div>
+          </div>
+          <div className={`bg-white p-2.5 rounded-xl border shadow-2xs ${maxMarks > 0 && totalMarks > maxMarks ? 'border-red-300 bg-red-50/30' : maxMarks > 0 && totalMarks === maxMarks ? 'border-amber-300 bg-amber-50/30' : 'border-teal-100'}`}>
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Marks</div>
+            <div className={`text-base font-black mt-0.5 ${maxMarks > 0 && totalMarks > maxMarks ? 'text-red-700' : 'text-teal-900'}`}>
+              {totalMarks} {maxMarks > 0 ? <span className="text-xs font-semibold text-gray-500">/ {maxMarks}</span> : ''}
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 flex-1 overflow-y-auto custom-scrollbar space-y-4">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-black uppercase text-gray-500 tracking-wider">Available Section Masters</label>
+            <button
+              type="button"
+              onClick={handleSelectAll}
+              className="text-xs font-bold text-teal-700 hover:underline"
+            >
+              {selectedIds.length === masterSections.length ? "Deselect All" : "Select All"}
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="p-8 text-center text-xs font-semibold text-gray-400">Loading master sections...</div>
+          ) : masterSections.length === 0 ? (
+            <div className="p-8 text-center text-xs text-gray-500 bg-amber-50 border border-amber-200 rounded-xl">
+              No Section Masters created yet. Create section templates under <strong>Section Masters Management</strong> first.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {masterSections.map(sec => {
+                const isChecked = selectedIds.includes(sec.id);
+                return (
+                  <label
+                    key={sec.id}
+                    className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+                      isChecked
+                        ? 'bg-teal-50/60 border-teal-300 text-teal-900 font-semibold shadow-2xs'
+                        : 'bg-white border-gray-200 hover:border-gray-300 text-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => handleToggle(sec.id)}
+                        className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 border-gray-300 accent-teal-600 cursor-pointer"
+                      />
+                      <div>
+                        <div className="text-xs font-extrabold text-gray-900">{sec.name}</div>
+                        <div className="text-[11px] text-gray-500 font-medium">
+                          Q{sec.startQuestion}-Q{sec.endQuestion} ({sec.totalQuestions} Qs) • {sec.totalMarks} Marks
+                        </div>
+                      </div>
+                    </div>
+                    {isChecked && <Check size={16} className="text-teal-700" />}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
+          <span className="text-[11px] text-gray-500 font-medium">
+            Changes auto-apply to newly imported project papers.
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-md font-bold text-xs transition cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={submitting}
+              className="px-5 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md font-bold text-xs transition cursor-pointer shadow disabled:opacity-50"
+            >
+              {submitting ? 'Saving...' : 'Save Mapping'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Modal for adding a master paper
-function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subjects = [] }) {
+function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subjects = [], masterSections = [] }) {
   const [formData, setFormData] = useState({
     paperCode: '',
     paperName: '',
@@ -28,6 +262,7 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
     maxMarks: 100,
     totalQuestions: 10,
     subjectIds: [],
+    masterSectionIds: [],
     isActive: true
   });
 
@@ -38,8 +273,16 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
     if (initialData) {
       setFormData({
         ...initialData,
-        catchNo: initialData.catchNo || ''
+        catchNo: initialData.catchNo || '',
+        masterSectionIds: initialData.masterSectionIds || []
       });
+      if (initialData.paperId && (!initialData.masterSectionIds || initialData.masterSectionIds.length === 0)) {
+        sectionService.getPaperMasterSections(initialData.paperId).then(mapped => {
+          if (mapped && Array.isArray(mapped)) {
+            setFormData(prev => ({ ...prev, masterSectionIds: mapped.map(m => m.id) }));
+          }
+        }).catch(err => console.error(err));
+      }
     } else {
       setFormData({
         paperCode: '',
@@ -49,6 +292,7 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
         maxMarks: 100,
         totalQuestions: 10,
         subjectIds: [],
+        masterSectionIds: [],
         isActive: true
       });
     }
@@ -56,12 +300,30 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
     setIsDropdownOpen(false);
   }, [initialData, isOpen]);
 
+  const selectedSectionsList = masterSections.filter(m => formData.masterSectionIds.includes(m.id));
+  const currentTotalQuestions = selectedSectionsList.reduce((sum, s) => sum + (s.totalQuestions || 0), 0);
+  const currentTotalMarks = selectedSectionsList.reduce((sum, s) => sum + (s.totalMarks || 0), 0);
+
+  const paperLimitQuestions = parseInt(formData.totalQuestions || 0, 10);
+  const paperLimitMarks = parseFloat(formData.maxMarks || 0);
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (formData.subjectIds.length === 0) {
       message.error("Please select at least one subject");
       return;
     }
+
+    if (paperLimitQuestions > 0 && currentTotalQuestions > paperLimitQuestions) {
+      message.error(`Total selected section questions (${currentTotalQuestions}) exceeds paper total questions (${paperLimitQuestions}).`);
+      return;
+    }
+
+    if (paperLimitMarks > 0 && currentTotalMarks > paperLimitMarks) {
+      message.error(`Total selected section marks (${currentTotalMarks}) exceeds paper max marks (${paperLimitMarks}).`);
+      return;
+    }
+
     onSubmit(formData);
   };
 
@@ -71,6 +333,37 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
       subjectIds: prev.subjectIds.includes(subId)
         ? prev.subjectIds.filter(id => id !== subId)
         : [...prev.subjectIds, subId]
+    }));
+  };
+
+  const toggleMasterSection = (mId) => {
+    if (formData.masterSectionIds.includes(mId)) {
+      setFormData(prev => ({
+        ...prev,
+        masterSectionIds: prev.masterSectionIds.filter(id => id !== mId)
+      }));
+      return;
+    }
+
+    const sec = masterSections.find(m => m.id === mId);
+    if (!sec) return;
+
+    const newQuestions = currentTotalQuestions + (sec.totalQuestions || 0);
+    const newMarks = currentTotalMarks + (sec.totalMarks || 0);
+
+    if (paperLimitQuestions > 0 && newQuestions > paperLimitQuestions) {
+      message.error(`Cannot add "${sec.name}": Total questions (${newQuestions}) would exceed paper question limit (${paperLimitQuestions}).`);
+      return;
+    }
+
+    if (paperLimitMarks > 0 && newMarks > paperLimitMarks) {
+      message.error(`Cannot add "${sec.name}": Total marks (${newMarks}) would exceed paper max marks limit (${paperLimitMarks}).`);
+      return;
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      masterSectionIds: [...prev.masterSectionIds, mId]
     }));
   };
 
@@ -148,10 +441,11 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
               <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Max Marks</label>
               <input
                 type="number"
-                min="1"
+                step="0.01"
+                min="0.01"
                 required
                 value={formData.maxMarks}
-                onChange={e => setFormData({ ...formData, maxMarks: parseInt(e.target.value) })}
+                onChange={e => setFormData({ ...formData, maxMarks: parseFloat(e.target.value) || e.target.value })}
                 className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 px-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
               />
             </div>
@@ -222,6 +516,59 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
             )}
           </div>
 
+          {masterSections.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider">Default Master Sections</label>
+                  <div className="text-[10px] font-semibold text-gray-400 mt-0.5">
+                    Qs: <span className={paperLimitQuestions > 0 && currentTotalQuestions > paperLimitQuestions ? "text-red-600 font-bold" : "text-teal-700 font-bold"}>{currentTotalQuestions}</span>/{paperLimitQuestions || '∞'} | 
+                    Marks: <span className={paperLimitMarks > 0 && currentTotalMarks > paperLimitMarks ? "text-red-600 font-bold" : "text-teal-700 font-bold"}>{currentTotalMarks}</span>/{paperLimitMarks || '∞'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (formData.masterSectionIds.length === masterSections.length) {
+                      setFormData({ ...formData, masterSectionIds: [] });
+                    } else {
+                      const sumQuestions = masterSections.reduce((sum, s) => sum + (s.totalQuestions || 0), 0);
+                      const sumMarks = masterSections.reduce((sum, s) => sum + (s.totalMarks || 0), 0);
+                      if (paperLimitQuestions > 0 && sumQuestions > paperLimitQuestions) {
+                        message.error(`Cannot select all: Total questions (${sumQuestions}) exceeds paper question limit (${paperLimitQuestions}).`);
+                        return;
+                      }
+                      if (paperLimitMarks > 0 && sumMarks > paperLimitMarks) {
+                        message.error(`Cannot select all: Total marks (${sumMarks}) exceeds paper max marks limit (${paperLimitMarks}).`);
+                        return;
+                      }
+                      setFormData({ ...formData, masterSectionIds: masterSections.map(m => m.id) });
+                    }
+                  }}
+                  className="text-[10px] font-bold text-teal-700 hover:underline cursor-pointer"
+                >
+                  {formData.masterSectionIds.length === masterSections.length ? "Deselect All" : "Select All"}
+                </button>
+              </div>
+              <div className="bg-gray-50/50 border border-gray-200 rounded-xl p-2 max-h-36 overflow-y-auto space-y-1 custom-scrollbar">
+                {masterSections.map(m => {
+                  const isChecked = formData.masterSectionIds.includes(m.id);
+                  return (
+                    <label key={m.id} className={`flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg cursor-pointer transition-all ${isChecked ? "bg-teal-50 text-teal-900 font-semibold" : "hover:bg-gray-100 text-gray-700"}`}>
+                      <span className="truncate pr-2">{m.name} ({m.totalQuestions} Qs, {m.totalMarks} Marks)</span>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleMasterSection(m.id)}
+                        className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300 accent-teal-600"
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Status *</label>
             <div className="flex items-center gap-6 text-xs text-gray-700 bg-gray-50/50 border border-gray-200 px-4 py-2 rounded-xl">
@@ -286,6 +633,9 @@ export default function MasterPapersManagement() {
   }, [userType, setBreadcrumb]);
 
   const [subjects, setSubjects] = useState([]);
+  const [masterSections, setMasterSections] = useState([]);
+  const [sectionsPaperModal, setSectionsPaperModal] = useState(null);
+
   useEffect(() => {
     const fetchSubjects = async () => {
       try {
@@ -297,6 +647,18 @@ export default function MasterPapersManagement() {
     };
     if (activeUniversityId) fetchSubjects();
   }, [activeUniversityId]);
+
+  useEffect(() => {
+    const fetchMasterSections = async () => {
+      try {
+        const data = await sectionService.getSectionMasters();
+        setMasterSections(data || []);
+      } catch (err) {
+        console.error("Failed to fetch section masters", err);
+      }
+    };
+    fetchMasterSections();
+  }, []);
 
   const fetchFn = useCallback((params) => {
     // Inject isMaster=true flag
@@ -372,6 +734,7 @@ export default function MasterPapersManagement() {
       maxMarks: paper.maxMarks,
       totalQuestions: paper.totalQuestions,
       subjectIds: paper.subjectIds || [],
+      masterSectionIds: paper.masterSectionIds || [],
       isActive: paper.isActive
     });
     setShowForm(true);
@@ -379,17 +742,24 @@ export default function MasterPapersManagement() {
 
   const handleSubmit = async (data) => {
     try {
+      let savedPaperId = editingData?.paperId;
       if (editingData) {
         await paperService.updatePaper(editingData.paperId, data);
-        message.success("Paper updated successfully!");
       } else {
-        await paperService.createPaper({
+        const created = await paperService.createPaper({
           ...data,
           universityId: parseInt(activeUniversityId, 10),
           projectId: null // Ensure it's an academic paper
         });
-        message.success("Academic paper created successfully!");
+        savedPaperId = created?.paperId || created?.id;
       }
+
+      if (savedPaperId && data.masterSectionIds) {
+        await sectionService.savePaperMasterSections(savedPaperId, data.masterSectionIds);
+      }
+
+      message.success(editingData ? "Paper updated successfully!" : "Academic paper created successfully!");
+
       refresh();
       setShowForm(false);
       setEditingData(null);
@@ -407,6 +777,16 @@ export default function MasterPapersManagement() {
         onSubmit={handleSubmit}
         initialData={editingData}
         subjects={subjects}
+        masterSections={masterSections}
+      />
+
+      {/* Modal for configuring paper sections */}
+      <ManagePaperSectionsModal
+        isOpen={!!sectionsPaperModal}
+        onClose={() => setSectionsPaperModal(null)}
+        paper={sectionsPaperModal}
+        masterSections={masterSections}
+        onSaved={refresh}
       />
 
       {/* Papers List Table */}
@@ -457,12 +837,8 @@ export default function MasterPapersManagement() {
                       <div className="flex items-center gap-1.5">Paper Number {getSortIcon('paperNumber')}</div>
                     </th>
                     <th className="px-6 py-2.5">Linked Subjects</th>
-                    <th className="px-6 py-2.5 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        Status
-                        <React.Suspense fallback={null}><ColumnFilter columnKey="isActive" currentFilter={filters.isActive} setFilter={setFilter} options={[{ label: 'Active', value: 'true' }, { label: 'Inactive', value: 'false' }]} /></React.Suspense>
-                      </div>
-                    </th>
+                    <th className="px-6 py-2.5">Master Sections</th>
+                   
                     <th className="px-6 py-2.5 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -496,21 +872,29 @@ export default function MasterPapersManagement() {
                           </div>
                         ) : '-'}
                       </td>
-                      <td className="px-6 py-2.5 text-center">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${paper.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-gray-50 text-gray-500 border-gray-200'
-                          }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${paper.isActive ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`}></span>
-                          {paper.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-2.5 text-right">
+                      <td className="px-6 py-2.5">
                         <button
-                          onClick={() => handleEdit(paper)}
-                          className="p-2 bg-gray-50 hover:bg-teal-50 hover:text-teal-700 text-gray-600 rounded-xl border border-gray-200 hover:border-teal-200 transition-all cursor-pointer shadow-sm group"
-                          title="Edit Paper"
+                          onClick={() => setSectionsPaperModal(paper)}
+                          className="bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200/80 px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Configure Master Sections"
                         >
-                          <Edit2 size={14} className="group-hover:scale-110 transition-transform" />
+                          <Layers size={12} className="text-teal-600 shrink-0" />
+                          {paper.masterSectionNames.length > 0 && (
+                            <span className="truncate max-w-[140px]">{paper.masterSectionNames.join(', ')}</span>
+                          )}
                         </button>
+                      </td>
+                     
+                      <td className="px-6 py-2.5 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => handleEdit(paper)}
+                            className="p-2 bg-gray-50 hover:bg-teal-50 hover:text-teal-700 text-gray-600 rounded-xl border border-gray-200 hover:border-teal-200 transition-all cursor-pointer shadow-sm group"
+                            title="Edit Paper"
+                          >
+                            <Edit2 size={14} className="group-hover:scale-110 transition-transform" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

@@ -32,8 +32,8 @@ const handleResponse = async (response, options = {}) => {
   
   const data = await response.json();
   
-  // Show success messages for mutations if they provide a message
-  if (response.ok && data?.success && data?.message && ['POST', 'PUT', 'DELETE'].includes(options.method)) {
+  // Show success messages for mutations only if explicitly requested
+  if (response.ok && data?.success && data?.message && options.showSuccessToast) {
     message.success(data.message);
   }
   

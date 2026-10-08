@@ -83,6 +83,8 @@ namespace API.Models.DTOs
         public string? CatchNo { get; set; }
         public string? QuestionPaperPdfUrl { get; set; }
         public bool IsActive { get; set; }
+        public List<int>? MasterSectionIds { get; set; }
+        public List<string>? MasterSectionNames { get; set; }
     }
 
     public class AcceptInvitationRequest

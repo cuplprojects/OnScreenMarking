@@ -100,6 +100,54 @@ using (var scope = app.Services.CreateScope())
         {
             Console.WriteLine("Self-Healing Database: UserType column already exists in Invitations table. Skipping alter query.");
         }
+
+        // Ensure PaperSectionMasters table exists
+        try
+        {
+            var psmTableExists = false;
+            using (var command = dbContext.Database.GetDbConnection().CreateCommand())
+            {
+                command.CommandText = "SHOW TABLES LIKE 'PaperSectionMasters';";
+                using (var reader = command.ExecuteReader())
+                {
+                    psmTableExists = reader.HasRows;
+                }
+            }
+
+            if (!psmTableExists)
+            {
+                dbContext.Database.ExecuteSqlRaw(@"
+                    CREATE TABLE IF NOT EXISTS `PaperSectionMasters` (
+                        `Id` INT NOT NULL AUTO_INCREMENT,
+                        `PaperId` INT NOT NULL,
+                        `SectionMasterId` INT NOT NULL,
+                        `CreatedAt` DATETIME(6) NOT NULL,
+                        PRIMARY KEY (`Id`),
+                        UNIQUE KEY `IX_PaperSectionMasters_PaperId_SectionMasterId` (`PaperId`, `SectionMasterId`),
+                        KEY `IX_PaperSectionMasters_SectionMasterId` (`SectionMasterId`),
+                        CONSTRAINT `FK_PaperSectionMasters_Papers_PaperId` FOREIGN KEY (`PaperId`) REFERENCES `Papers` (`PaperId`) ON DELETE CASCADE,
+                        CONSTRAINT `FK_PaperSectionMasters_SectionMasters_SectionMasterId` FOREIGN KEY (`SectionMasterId`) REFERENCES `SectionMasters` (`Id`) ON DELETE CASCADE
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                ");
+                Console.WriteLine("Self-Healing Database: Successfully created PaperSectionMasters table.");
+            }
+        }
+        catch (Exception exPsm)
+        {
+            Console.WriteLine($"Self-Healing Database Warning (PaperSectionMasters): {exPsm.Message}");
+        }
+
+        // Ensure TotalMarks columns support decimals up to 2 decimal places
+        try
+        {
+            dbContext.Database.ExecuteSqlRaw("ALTER TABLE `SectionMasters` MODIFY COLUMN `TotalMarks` DECIMAL(10,2) NOT NULL;");
+            dbContext.Database.ExecuteSqlRaw("ALTER TABLE `Sections` MODIFY COLUMN `TotalMarks` DECIMAL(10,2) NOT NULL;");
+            Console.WriteLine("Self-Healing Database: Successfully updated TotalMarks columns to DECIMAL(10,2).");
+        }
+        catch (Exception exMarks)
+        {
+            Console.WriteLine($"Self-Healing Database Note (Decimal TotalMarks): {exMarks.Message}");
+        }
     }
     catch (Exception ex)
     {
@@ -136,6 +184,31 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 app.UseStaticFiles();
+
+// Physical static file provider for StorageSettings BasePath under /osm RequestPath
+try
+{
+    var storageBasePath = builder.Configuration["StorageSettings:BasePath"] 
+        ?? builder.Configuration["StorageSettings:BaseOsmPath"] 
+        ?? Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "storage");
+
+    if (!Directory.Exists(storageBasePath))
+    {
+        Directory.CreateDirectory(storageBasePath);
+    }
+
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(storageBasePath),
+        RequestPath = "/osm",
+        ServeUnknownFileTypes = true
+    });
+}
+catch (Exception exStorage)
+{
+    Console.WriteLine($"Storage Static Files Warning: {exStorage.Message}");
+}
+
 app.UseCors();
 app.UseLoggingMiddleware();
 app.UseAuthentication();

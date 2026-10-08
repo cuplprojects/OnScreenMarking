@@ -1,4 +1,5 @@
 const listeners = new Set();
+const recentMessages = new Map();
 
 const subscribe = (listener) => {
   listeners.add(listener);
@@ -8,8 +9,26 @@ const subscribe = (listener) => {
 };
 
 const notify = (text, type = 'info', duration = 3000) => {
+  if (!text) return;
+  const strText = String(text).trim();
+  const key = `${type}:${strText.toLowerCase()}`;
+  const now = Date.now();
+
+  // Deduplicate identical messages sent within 1500ms
+  if (recentMessages.has(key) && (now - recentMessages.get(key) < 1500)) {
+    return;
+  }
+  recentMessages.set(key, now);
+
+  // Periodic cleanup
+  if (recentMessages.size > 50) {
+    for (const [k, time] of recentMessages.entries()) {
+      if (now - time > 5000) recentMessages.delete(k);
+    }
+  }
+
   const id = Date.now() + Math.random().toString(36).substring(2, 9);
-  listeners.forEach((listener) => listener({ id, text, type, duration }));
+  listeners.forEach((listener) => listener({ id, text: strText, type, duration }));
 };
 
 const message = {

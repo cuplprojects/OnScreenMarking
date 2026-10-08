@@ -16,11 +16,13 @@ namespace API.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _environment;
+        private readonly Microsoft.Extensions.Configuration.IConfiguration _configuration;
 
-        public PapersController(ApplicationDbContext context, IWebHostEnvironment environment)
+        public PapersController(ApplicationDbContext context, IWebHostEnvironment environment, Microsoft.Extensions.Configuration.IConfiguration configuration)
         {
             _context = context;
             _environment = environment;
+            _configuration = configuration;
         }
 
         [HttpGet("dashboard-stats")]
@@ -202,6 +204,8 @@ namespace API.Controllers
                         .ThenInclude(sp => sp.Subject)
                     .Include(p => p.ProjectPapers)
                         .ThenInclude(pp => pp.Project)
+                    .Include(p => p.PaperSectionMasters)
+                        .ThenInclude(psm => psm.SectionMaster)
                     .AsQueryable();
 
                 if (subjectId.HasValue)
@@ -289,6 +293,13 @@ namespace API.Controllers
                         .ToList(),
                     SubjectNames = p.SubjectPapers
                         .Select(sp => sp.Subject.SubName)
+                        .ToList(),
+                    MasterSectionIds = p.PaperSectionMasters
+                        .Select(psm => psm.SectionMasterId)
+                        .ToList(),
+                    MasterSectionNames = p.PaperSectionMasters
+                        .Where(psm => psm.SectionMaster != null)
+                        .Select(psm => psm.SectionMaster.Name)
                         .ToList()
                 }).ToList();
 
@@ -659,9 +670,49 @@ namespace API.Controllers
                 var paper = await _context.Papers
                     .Include(p => p.SubjectPapers)
                     .Include(p => p.ProjectPapers)
+                    .Include(p => p.PaperSectionMasters)
+                        .ThenInclude(psm => psm.SectionMaster)
                     .FirstOrDefaultAsync(p => p.PaperId == id);
                 if (paper == null)
                     return NotFound(new { success = false, message = "Paper not found" });
+
+                // Validate if reducing TotalQuestions or MaxMarks conflicts with currently mapped master sections
+                if (paper.PaperSectionMasters != null && paper.PaperSectionMasters.Any())
+                {
+                    List<SectionMaster> mappedSections;
+                    if (paperDto.MasterSectionIds != null)
+                    {
+                        mappedSections = await _context.SectionMasters
+                            .Where(sm => paperDto.MasterSectionIds.Contains(sm.Id))
+                            .ToListAsync();
+                    }
+                    else
+                    {
+                        mappedSections = paper.PaperSectionMasters
+                            .Where(psm => psm.SectionMaster != null)
+                            .Select(psm => psm.SectionMaster)
+                            .ToList();
+                    }
+
+                    int sumQuestions = mappedSections.Sum(sm => sm.TotalQuestions);
+                    decimal sumMarks = mappedSections.Sum(sm => sm.TotalMarks);
+
+                    if (paperDto.TotalQuestions > 0 && sumQuestions > paperDto.TotalQuestions)
+                    {
+                        return BadRequest(new { 
+                            success = false, 
+                            message = $"Cannot reduce total questions to {paperDto.TotalQuestions}. Mapped sections require at least {sumQuestions} questions." 
+                        });
+                    }
+
+                    if (paperDto.MaxMarks > 0 && sumMarks > paperDto.MaxMarks)
+                    {
+                        return BadRequest(new { 
+                            success = false, 
+                            message = $"Cannot reduce max marks to {paperDto.MaxMarks}. Mapped sections require at least {sumMarks} marks." 
+                        });
+                    }
+                }
 
                 paper.PaperName = paperDto.PaperName;
                 paper.MaxMarks = paperDto.MaxMarks;
@@ -788,22 +839,27 @@ namespace API.Controllers
                 if (paper == null)
                     return NotFound(new { success = false, message = "Paper not found" });
 
-                var uploadsFolder = Path.Combine(_environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads", "question-papers");
-                if (!Directory.Exists(uploadsFolder))
+                var basePath = _configuration["StorageSettings:BasePath"] 
+                    ?? _configuration["StorageSettings:BaseOsmPath"] 
+                    ?? Path.Combine(_environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "storage");
+
+                var projFolder = (projectId.HasValue && projectId.Value > 0) ? projectId.Value.ToString() : "master";
+                var targetFolder = Path.Combine(basePath, "osm", projFolder, paper.PaperId.ToString(), "questionpaperpdf");
+                if (!Directory.Exists(targetFolder))
                 {
-                    Directory.CreateDirectory(uploadsFolder);
+                    Directory.CreateDirectory(targetFolder);
                 }
 
                 var safeCode = string.Join("_", (paper.PaperCode ?? "QP").Split(Path.GetInvalidFileNameChars()));
                 var uniqueFileName = $"QP_{safeCode}_{Guid.NewGuid():N}.pdf";
-                var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+                var filePath = Path.Combine(targetFolder, uniqueFileName);
 
                 using (var fileStream = new FileStream(filePath, FileMode.Create))
                 {
                     await file.CopyToAsync(fileStream);
                 }
 
-                var fileUrl = $"/uploads/question-papers/{uniqueFileName}";
+                var fileUrl = $"/osm/{projFolder}/{paper.PaperId}/questionpaperpdf/{uniqueFileName}";
 
                 if (projectId.HasValue && projectId.Value > 0)
                 {
@@ -910,11 +966,11 @@ namespace API.Controllers
 
                 var allPapers = await papersQuery.ToListAsync();
 
-                var uploadsFolder = Path.Combine(_environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads", "question-papers");
-                if (!Directory.Exists(uploadsFolder))
-                {
-                    Directory.CreateDirectory(uploadsFolder);
-                }
+                var basePath = _configuration["StorageSettings:BasePath"] 
+                    ?? _configuration["StorageSettings:BaseOsmPath"] 
+                    ?? Path.Combine(_environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "storage");
+
+                var projFolder = (projectId.HasValue && projectId.Value > 0) ? projectId.Value.ToString() : "master";
 
                 var results = new List<object>();
                 int matchedCount = 0;
@@ -982,16 +1038,22 @@ namespace API.Controllers
 
                     if (matchedPaper != null)
                     {
+                        var targetFolder = Path.Combine(basePath, "osm", projFolder, matchedPaper.PaperId.ToString(), "questionpaperpdf");
+                        if (!Directory.Exists(targetFolder))
+                        {
+                            Directory.CreateDirectory(targetFolder);
+                        }
+
                         var safeCode = string.Join("_", (matchedPaper.PaperCode ?? "QP").Split(Path.GetInvalidFileNameChars()));
                         var uniqueFileName = $"QP_{safeCode}_{Guid.NewGuid():N}.pdf";
-                        var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+                        var filePath = Path.Combine(targetFolder, uniqueFileName);
 
                         using (var stream = new FileStream(filePath, FileMode.Create))
                         {
                             await file.CopyToAsync(stream);
                         }
 
-                        var fileUrl = $"/uploads/question-papers/{uniqueFileName}";
+                        var fileUrl = $"/osm/{projFolder}/{matchedPaper.PaperId}/questionpaperpdf/{uniqueFileName}";
 
                         if (projectId.HasValue && projectId.Value > 0)
                         {
