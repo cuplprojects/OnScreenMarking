@@ -282,8 +282,8 @@ export default function ProjectManagement() {
                           </button>
                           <Link
                             to={userType === 'admin'
-                              ? `/admin/papers?projectId=${encryptId(project.projectId)}`
-                              : `/papers?projectId=${encryptId(project.projectId)}`}
+                              ? `/admin/project-dashboard?projectId=${encryptId(project.projectId)}&tab=papers&statusFilter=sections_missing`
+                              : `/project-dashboard?projectId=${encryptId(project.projectId)}&tab=papers&statusFilter=sections_missing`}
                             className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-xl font-bold text-[10px] uppercase tracking-wider border border-teal-100 transition cursor-pointer"
                           >
                             Configure Paper

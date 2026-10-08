@@ -933,11 +933,13 @@ export default function SectionConfig() {
                         <tr key={section.id} className="hover:bg-teal-50/30 transition-colors group">
                           <td className="px-6 py-2.5">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-sm">
-                                {section.name}
+                              <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center font-black text-sm shrink-0">
+                                {section.name.replace(/^Section\s+/i, '').substring(0, 2).toUpperCase()}
                               </div>
                               <div className="flex flex-col">
-                                <span className="font-bold text-gray-900 text-sm">Section {section.name}</span>
+                                <span className="font-bold text-gray-900 text-sm">
+                                  {section.name.toLowerCase().startsWith('section') ? section.name : `Section ${section.name}`}
+                                </span>
                                 <span className="text-xs text-gray-500 max-w-[200px] truncate" title={section.description}>
                                   {section.description || 'No description'}
                                 </span>

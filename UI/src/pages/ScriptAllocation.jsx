@@ -681,17 +681,22 @@ export default function ScriptAllocation({ isTab = false }) {
                                 </span>
                               </td>
                               <td className="px-4 py-2.5 text-center">
-                                <button
-                                  onClick={() => openAllocationPane(paper)}
-                                  className={`p-1.5 rounded-lg transition-all ${
-                                    isActive 
-                                      ? 'bg-teal-100 text-teal-700' 
-                                      : 'text-gray-400 hover:bg-teal-50 hover:text-teal-700'
-                                  }`}
-                                  title="Allocate Scripts"
-                                >
-                                  {isActive ? <X size={14} /> : <Zap size={14} />}
-                                </button>
+                                <div className="relative group/tooltip inline-block">
+                                  <button
+                                    onClick={() => openAllocationPane(paper)}
+                                    className={`p-1.5 rounded-lg transition-all block ${
+                                      isActive 
+                                        ? 'bg-teal-100 text-teal-700' 
+                                        : 'text-gray-400 hover:bg-teal-50 hover:text-teal-700'
+                                    }`}
+                                  >
+                                    {isActive ? <X size={14} /> : <Zap size={14} />}
+                                  </button>
+                                  <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-bold rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50">
+                                    {isActive ? "Close Allocation Pane" : "Allocate Scripts"}
+                                    <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-900"></div>
+                                  </div>
+                                </div>
                               </td>
                             </tr>
                           );
