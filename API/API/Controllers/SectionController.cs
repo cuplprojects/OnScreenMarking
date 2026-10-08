@@ -862,6 +862,36 @@ namespace API.Controllers
                 if (request == null || request.PaperId <= 0)
                     return BadRequest(new { success = false, message = "Valid Paper ID is required" });
 
+                var paper = await _context.Papers.FindAsync(request.PaperId);
+                if (paper == null)
+                    return NotFound(new { success = false, message = "Paper not found" });
+
+                if (request.MasterSectionIds != null && request.MasterSectionIds.Any())
+                {
+                    var masterSections = await _context.SectionMasters
+                        .Where(sm => request.MasterSectionIds.Contains(sm.Id))
+                        .ToListAsync();
+
+                    int sumQuestions = masterSections.Sum(sm => sm.TotalQuestions);
+                    decimal sumMarks = masterSections.Sum(sm => sm.TotalMarks);
+
+                    if (paper.TotalQuestions > 0 && sumQuestions > paper.TotalQuestions)
+                    {
+                        return BadRequest(new { 
+                            success = false, 
+                            message = $"Selected sections total questions ({sumQuestions}) exceeds paper total questions limit ({paper.TotalQuestions})." 
+                        });
+                    }
+
+                    if (paper.MaxMarks > 0 && sumMarks > paper.MaxMarks)
+                    {
+                        return BadRequest(new { 
+                            success = false, 
+                            message = $"Selected sections total marks ({sumMarks}) exceeds paper max marks limit ({paper.MaxMarks})." 
+                        });
+                    }
+                }
+
                 var existing = await _context.PaperSectionMasters.Where(psm => psm.PaperId == request.PaperId).ToListAsync();
                 _context.PaperSectionMasters.RemoveRange(existing);
 
@@ -919,7 +949,7 @@ namespace API.Controllers
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }
         public int TotalQuestions { get; set; }
-        public int TotalMarks { get; set; }
+        public decimal TotalMarks { get; set; }
         public int StartQuestion { get; set; }
         public int EndQuestion { get; set; }
         public int MaxQuestionsToAttempt { get; set; }

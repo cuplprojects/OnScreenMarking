@@ -19,7 +19,7 @@ namespace API.Models
         public string Name { get; set; }
         public string Description { get; set; }
         public int TotalQuestions { get; set; }
-        public int TotalMarks { get; set; }
+        public decimal TotalMarks { get; set; }
         public int StartQuestion { get; set; } // e.g., 1
         public int EndQuestion { get; set; } // e.g., 10
         public int MaxQuestionsToAttempt { get; set; } // e.g., 8 (out of 10)

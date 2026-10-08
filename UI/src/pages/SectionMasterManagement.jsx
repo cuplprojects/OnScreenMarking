@@ -399,10 +399,11 @@ export default function SectionMasterManagement() {
                   </label>
                   <input
                     type="number"
-                    min="1"
+                    step="0.01"
+                    min="0.01"
                     required
                     value={formData.totalMarks}
-                    onChange={(e) => handleFieldChange('totalMarks', e.target.value)}
+                    onChange={(e) => handleFieldChange('totalMarks', parseFloat(e.target.value) || e.target.value)}
                     className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none transition"
                   />
                 </div>
