@@ -134,12 +134,14 @@ export default function ProjectConfigHeader({ completePercentage = 0, title, tit
       id: 'allocations',
       label: 'Script Allocations',
       icon: <Zap size={12} />,
-    },
-    {
-      id: 'attendance',
-      label: 'Attendance & Logs',
-      icon: <Zap size={12} />,
+      path: userType === 'admin' ? '/admin/allocate-scripts' : '/allocate-scripts'
     }
+    // {
+    //   id: 'attendance',
+    //   label: 'Attendance & Logs',
+    //   icon: <Zap size={12} />,
+    //   path: userType === 'admin' ? '/admin/attendance' : '/attendance'
+    // }
   ];
 
   const currentTab = searchParams.get('tab') || 'project-dashboard';

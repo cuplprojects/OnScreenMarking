@@ -11,6 +11,7 @@ import {
   BookOpen,
   Zap,
   Search,
+  Sliders,
   X
 } from 'lucide-react';
 import { useTable } from '../services/tableService';
@@ -254,13 +255,6 @@ export default function ProjectDashboard() {
         unconfiguredPapersCount: projStats.unconfiguredPapersCount || 0,
         completePercentage: projStats.totalScripts > 0 ? Math.round((projStats.completedScripts / projStats.totalScripts) * 100) : 0
       });
-
-      // 3. Fetch papers to get project paper IDs for workloads
-      const papersResponse = await apiCall(`/papers?projectId=${projectId}&pageSize=100`);
-      const papersData = papersResponse?.items || papersResponse || [];
-      const projPaperIds = (papersData || []).map(p => p.paperId);
-
-      // Manual examiner logic removed, using useTable hook below
     } catch (err) {
       console.error("Failed to load project dashboard stats:", err);
       setError(err.message || "Failed to load project details");
@@ -416,15 +410,28 @@ export default function ProjectDashboard() {
         {/* In Progress */}
         <div 
           onClick={() => handleCardClick('marking')}
-          className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 transition-all duration-200 cursor-pointer hover:bg-teal-50/30 flex items-center justify-between gap-2 ${
+          className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 transition-all duration-200 cursor-pointer hover:bg-teal-50/30 flex flex-col justify-between gap-2 ${
             filters.statusFilter === 'marking' ? 'bg-teal-50 shadow-[inset_0_-2px_0_0_#3b82f6]' : ''
           }`}
         >
-          <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">In Marking</span>
-            <h3 className="text-xl font-black text-teal-700">{stats.allocatedScripts}</h3>
+          <div className="flex items-start justify-between w-full">
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">In Marking</span>
+              <h3 className="text-xl font-black text-teal-700">{stats.allocatedScripts}</h3>
+            </div>
+            <div className="p-1.5 bg-teal-50 rounded-xl text-teal-700"><Clock size={14} /></div>
           </div>
-          <div className="p-1.5 bg-teal-50 rounded-xl text-teal-700"><Clock size={14} /></div>
+
+          <Link 
+            to={userType === 'admin' 
+              ? `/admin/deallocate-scripts?projectId=${encryptedProjectId}` 
+              : `/deallocate-scripts?projectId=${encryptedProjectId}`}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full flex items-center justify-center gap-1.5 px-2 py-1 mt-1 bg-teal-100 hover:bg-teal-200 text-teal-800 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors"
+          >
+            <Sliders size={12} />
+            Deallocate & Overwrite
+          </Link>
         </div>
 
         {/* Completed */}
@@ -714,112 +721,6 @@ export default function ProjectDashboard() {
                   setPageSize={setPageSize}
                 />
               </>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT COMPONENT - Assigned Examiners */}
-        <div className="col-span-12 lg:col-span-4 space-y-6">
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
-              <div>
-                <h3 className="text-xs font-black uppercase text-gray-900 tracking-wider flex items-center gap-1.5">
-                  <Users size={15} className="text-teal-600" />
-                  <span>Assigned Examiners Stats</span>
-                </h3>
-                <p className="text-[10px] text-gray-500">Active evaluators allocated to scripts within this project</p>
-              </div>
-              {/* Examiner Filters */}
-              <div className="flex items-center gap-2">
-                <select
-                  value={examinerStatusFilter}
-                  onChange={(e) => {
-                    setExaminerStatusFilter(e.target.value);
-                    setExaminerPage(1);
-                  }}
-                  className="bg-gray-50 border border-gray-200 text-gray-700 text-[10px] font-bold px-2 py-1.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
-                >
-                  <option value="All">All Status</option>
-                  <option value="Free">Free</option>
-                  <option value="Busy">Busy</option>
-                </select>
-                <div className="max-w-[150px] flex items-center gap-2 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200 w-full shrink-0">
-                  <Search size={10} className="text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search examiners..."
-                    value={examinerSearch}
-                    onChange={(e) => {
-                      setExaminerSearch(e.target.value);
-                      setExaminerPage(1);
-                    }}
-                    className="w-full bg-transparent text-gray-800 placeholder-gray-400 font-semibold text-[9px] focus:outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {examinersLoading ? (
-              <div className="p-12 text-center flex flex-col items-center gap-3">
-                <div className="animate-spin rounded-full h-8 w-8 border-4 border-teal-600 border-t-transparent"></div>
-                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Loading Examiners...</p>
-              </div>
-            ) : paginatedExaminersList.length === 0 ? (
-              <div className="p-12 text-center text-gray-400 border border-dashed border-gray-150 rounded-xl">
-                <Users size={28} className="mx-auto text-gray-200 mb-1.5" />
-                <p className="text-[9px] font-bold uppercase tracking-wider">No Evaluators Mapping</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {paginatedExaminersList.map((ex) => (
-                  <div key={ex.id} className="bg-gray-50/50 border border-gray-100 p-3.5 rounded-xl flex items-center justify-between">
-                    <div>
-                      <span className="font-extrabold text-gray-900 tracking-tight text-xs block">{ex.name}</span>
-                      <span className="text-[9px] text-gray-400 font-bold block">{ex.email}</span>
-                      {ex.subjectExpertise && (
-                        <span className="text-[9px] text-teal-700 font-bold block mt-1">
-                          <BookOpen size={10} className="inline mr-1" />
-                          {ex.subjectExpertise}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="text-right">
-                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-wider mb-1 ${
-                        ex.workload === 'Free' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
-                      }`}>
-                        {ex.workload}
-                      </span>
-                      <span className="text-[9px] text-gray-400 block font-bold">
-                         <span className="text-gray-900 font-extrabold">{ex.projectAllocatedCount}</span> scripts
-                      </span>
-                    </div>
-                  </div>
-                ))}
-
-                {/* Examiner Pagination Controls */}
-                <div className="flex items-center justify-between border-t border-gray-100 pt-3 select-none">
-                  <span className="text-[9px] font-bold text-gray-400">
-                    Page {examinerPage} of {totalExaminerPages}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setExaminerPage(p => Math.max(1, p - 1))}
-                      disabled={examinerPage === 1}
-                      className="px-2 py-1 bg-gray-50 border border-gray-200 rounded text-[9px] font-bold text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Prev
-                    </button>
-                    <button
-                      onClick={() => setExaminerPage(p => Math.min(totalExaminerPages, p + 1))}
-                      disabled={examinerPage >= totalExaminerPages}
-                      className="px-2 py-1 bg-gray-50 border border-gray-200 rounded text-[9px] font-bold text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              </div>
             )}
           </div>
         </div>

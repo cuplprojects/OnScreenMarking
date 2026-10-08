@@ -26,6 +26,7 @@ import { useAuth } from '../context/AuthContext';
 import apiCall from '../services/api';
 import allocationService from '../services/allocationService';
 import sectionService from '../services/sectionService';
+import userService from '../services/userService';
 import message from '../services/messageService';
 import { decryptId } from '../utils/encryption';
 import ProjectConfigHeader from '../components/ProjectConfigHeader';
@@ -50,7 +51,7 @@ export default function ScriptAllocation({ isTab = false }) {
   // Active Pane / Modal State
   const [activePaper, setActivePaper] = useState(null); // Paper being configured in right pane (if single mode)
   const [isMultiPaperMode, setIsMultiPaperMode] = useState(false);
-  const [scripts, setScripts] = useState([]);
+  const [scriptCounts, setScriptCounts] = useState({ pending: 0, allocated: 0, total: 0, experts: 0 });
   const [examiners, setExaminers] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -113,7 +114,7 @@ export default function ScriptAllocation({ isTab = false }) {
   // Fetch all examiners for management dropdown
   useEffect(() => {
     if (activeUniversityId) {
-      apiCall(`/PaperExaminers/university/${activeUniversityId}`)
+      userService.getExaminers(activeUniversityId)
         .then(res => {
           setAllExaminersList(Array.isArray(res) ? res : res?.items || []);
         })
@@ -167,7 +168,7 @@ export default function ScriptAllocation({ isTab = false }) {
     if (activePaper?.paperId === paper.paperId && !isMultiPaperMode) {
       // Toggle off
       setActivePaper(null);
-      setScripts([]);
+      setScriptCounts({ pending: 0, allocated: 0, total: 0, experts: 0 });
       setExaminers([]);
       return;
     }
@@ -184,16 +185,32 @@ export default function ScriptAllocation({ isTab = false }) {
         return;
       }
 
-      const scriptsData = await apiCall(`/scripts?paperId=${paper.paperId}&limit=1000`);
-      const paperScripts = (scriptsData || []).map(s => ({ ...s, paperId: paper.paperId, paperName: paper.paperName }));
-      setScripts(paperScripts);
+      // Fetch lightweight paper script counts instead of 1000 heavy script objects
+      let countsData = null;
+      try {
+        countsData = await apiCall(`/scripts/paper-counts?paperId=${paper.paperId}`);
+      } catch (err) {
+        countsData = {
+          pendingScripts: paper.pendingScripts || 0,
+          allocatedScripts: paper.allocatedScripts || 0,
+          totalScripts: paper.totalScripts || 0,
+          expertsCount: paper.expertsCount || 0
+        };
+      }
+
+      const pendingCount = countsData?.pendingScripts ?? paper.pendingScripts ?? 0;
+      setScriptCounts({
+        pending: pendingCount,
+        allocated: countsData?.allocatedScripts ?? paper.allocatedScripts ?? 0,
+        total: countsData?.totalScripts ?? paper.totalScripts ?? 0,
+        experts: countsData?.expertsCount ?? paper.expertsCount ?? 0
+      });
 
       const examinersData = await apiCall(`/PaperExaminers/paper/${paper.paperId}`);
       setExaminers(examinersData || []);
 
       // Default distribution counts
       const counts = {};
-      const pendingCount = paperScripts.filter(s => s.status?.toLowerCase() === 'pending' || !s.allocationId).length;
       const activeEx = (examinersData || []);
       const baseShare = activeEx.length > 0 ? Math.floor(pendingCount / activeEx.length) : 0;
       const remainder = activeEx.length > 0 ? pendingCount % activeEx.length : 0;
@@ -224,15 +241,26 @@ export default function ScriptAllocation({ isTab = false }) {
     try {
       const selectedPapersData = papers.filter(p => selectedPaperIds.includes(p.paperId));
       
-      // Combine scripts across selected papers
-      let combinedScripts = [];
+      let totalPending = 0;
+      let totalAllocated = 0;
+      let totalScriptsSum = 0;
       let combinedExaminersMap = new Map();
 
       for (const p of selectedPapersData) {
-        const sData = await apiCall(`/scripts?paperId=${p.paperId}&limit=1000`);
-        if (Array.isArray(sData)) {
-          combinedScripts.push(...sData.map(s => ({ ...s, paperId: p.paperId, paperName: p.paperName })));
+        let pCounts = null;
+        try {
+          pCounts = await apiCall(`/scripts/paper-counts?paperId=${p.paperId}`);
+        } catch (e) {
+          pCounts = {
+            pendingScripts: p.pendingScripts || 0,
+            allocatedScripts: p.allocatedScripts || 0,
+            totalScripts: p.totalScripts || 0
+          };
         }
+
+        totalPending += (pCounts?.pendingScripts ?? p.pendingScripts ?? 0);
+        totalAllocated += (pCounts?.allocatedScripts ?? p.allocatedScripts ?? 0);
+        totalScriptsSum += (pCounts?.totalScripts ?? p.totalScripts ?? 0);
 
         const exData = await apiCall(`/PaperExaminers/paper/${p.paperId}`);
         if (Array.isArray(exData)) {
@@ -244,15 +272,20 @@ export default function ScriptAllocation({ isTab = false }) {
         }
       }
 
-      setScripts(combinedScripts);
+      setScriptCounts({
+        pending: totalPending,
+        allocated: totalAllocated,
+        total: totalScriptsSum,
+        experts: combinedExaminersMap.size
+      });
+
       const uniqueExaminers = Array.from(combinedExaminersMap.values());
       setExaminers(uniqueExaminers);
 
       // Distribute pending scripts across examiners
-      const pendingCount = combinedScripts.filter(s => s.status?.toLowerCase() === 'pending' || !s.allocationId).length;
       const counts = {};
-      const baseShare = uniqueExaminers.length > 0 ? Math.floor(pendingCount / uniqueExaminers.length) : 0;
-      const remainder = uniqueExaminers.length > 0 ? pendingCount % uniqueExaminers.length : 0;
+      const baseShare = uniqueExaminers.length > 0 ? Math.floor(totalPending / uniqueExaminers.length) : 0;
+      const remainder = uniqueExaminers.length > 0 ? totalPending % uniqueExaminers.length : 0;
 
       uniqueExaminers.forEach((ex, idx) => {
         counts[ex.examinerId] = baseShare + (idx < remainder ? 1 : 0);
@@ -270,33 +303,33 @@ export default function ScriptAllocation({ isTab = false }) {
   // Allocation Calculation Helpers
   // -------------------------------------------------------------
   const calculateEvenDistribution = () => {
-    const pendingScripts = scripts.filter(s => s.status?.toLowerCase() === 'pending' || !s.allocationId);
-    if (examiners.length === 0 || pendingScripts.length === 0) {
+    const pendingCount = scriptCounts.pending;
+    if (examiners.length === 0 || pendingCount === 0) {
       message.warning('No pending scripts or examiners available');
       return;
     }
 
     const counts = {};
-    const baseCount = Math.floor(pendingScripts.length / examiners.length);
-    const remainder = pendingScripts.length % examiners.length;
+    const baseCount = Math.floor(pendingCount / examiners.length);
+    const remainder = pendingCount % examiners.length;
 
     examiners.forEach((examiner, index) => {
       counts[examiner.examinerId] = baseCount + (index < remainder ? 1 : 0);
     });
 
     setExaminerCounts(counts);
-    message.info(`Evenly distributed ${pendingScripts.length} pending scripts across ${examiners.length} examiners.`);
+    message.info(`Evenly distributed ${pendingCount} pending scripts across ${examiners.length} examiners.`);
   };
 
   const calculateDailyQuotaDistribution = () => {
-    const pendingScripts = scripts.filter(s => s.status?.toLowerCase() === 'pending' || !s.allocationId);
-    if (examiners.length === 0 || pendingScripts.length === 0) {
+    const pendingCount = scriptCounts.pending;
+    if (examiners.length === 0 || pendingCount === 0) {
       message.warning('No pending scripts or examiners available');
       return;
     }
 
     const counts = {};
-    let remaining = pendingScripts.length;
+    let remaining = pendingCount;
 
     examiners.forEach((examiner) => {
       const quota = Math.min(remaining, dailyQuotaLimit);
@@ -328,13 +361,13 @@ export default function ScriptAllocation({ isTab = false }) {
         let successCount = 0;
 
         for (const paper of targetPapers) {
-          const paperPending = scripts.filter(s => s.paperId === paper.paperId && (s.status?.toLowerCase() === 'pending' || !s.allocationId));
-          if (paperPending.length === 0) continue;
+          const pendingCount = paper.pendingScripts || 0;
+          if (pendingCount === 0) continue;
 
           // Scale examiner counts proportionally for this paper
           const paperAllocations = examiners.map(e => {
             const requested = examinerCounts[e.examinerId] || 0;
-            return { examinerId: e.examinerId, count: Math.min(requested, paperPending.length) };
+            return { examinerId: e.examinerId, count: Math.min(requested, pendingCount) };
           }).filter(a => a.count > 0);
 
           if (paperAllocations.length > 0) {
@@ -492,13 +525,12 @@ export default function ScriptAllocation({ isTab = false }) {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-teal-100 text-teal-700 rounded-xl flex items-center justify-center font-bold shadow-xs">
-                <Zap size={22} />
+                <Zap size={16} />
               </div>
               <div>
-                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none flex items-center gap-2">
+                <h2 className="text-xl font-black text-gray-900 tracking-tight leading-none flex items-center gap-2">
                   Examiner & Script Allocation System
-                </h1>
-                <p className="text-xs text-gray-500 mt-1">Cross-paper distribution, daily allotments, and reallocation management</p>
+                </h2>
               </div>
             </div>
 
@@ -523,16 +555,6 @@ export default function ScriptAllocation({ isTab = false }) {
                   }`}
                 >
                   Allocate Papers
-                </button>
-                <button
-                  onClick={() => setActiveMainTab('manage')}
-                  className={`px-4 py-2 rounded-lg text-xs font-extrabold transition-all ${
-                    activeMainTab === 'manage' 
-                      ? 'bg-white text-teal-800 shadow-xs' 
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Manage & Reassign
                 </button>
               </div>
             </div>
@@ -738,7 +760,7 @@ export default function ScriptAllocation({ isTab = false }) {
                       <div className="flex items-center justify-center py-12">
                         <Loader className="animate-spin text-teal-700" size={32} />
                       </div>
-                    ) : scripts.length === 0 ? (
+                    ) : scriptCounts.total === 0 && scriptCounts.pending === 0 ? (
                       <div className="bg-gray-50 rounded-xl border border-dashed border-gray-200 p-10 text-center">
                         <FileText className="mx-auto text-gray-300 mb-3" size={36} />
                         <p className="text-xs font-bold text-gray-500">No scripts available for allocation</p>
@@ -793,7 +815,7 @@ export default function ScriptAllocation({ isTab = false }) {
                             <div>
                               <h4 className="text-xs font-bold text-teal-900">Equal Distribution Across Examiners</h4>
                               <p className="text-[11px] text-teal-700 mt-0.5">
-                                Automatically splits <span className="font-bold">{scripts.filter(s => s.status?.toLowerCase() === 'pending' || !s.allocationId).length}</span> pending scripts among <span className="font-bold">{examiners.length}</span> assigned examiners.
+                                Automatically splits <span className="font-bold">{scriptCounts.pending}</span> pending scripts among <span className="font-bold">{examiners.length}</span> assigned examiners.
                               </p>
                             </div>
                             <button
@@ -870,7 +892,7 @@ export default function ScriptAllocation({ isTab = false }) {
                                     <input
                                       type="number"
                                       min="0"
-                                      max={scripts.length}
+                                      max={scriptCounts.pending || 0}
                                       value={examinerCounts[examiner.examinerId] || 0}
                                       onChange={(e) => updateExaminerCount(examiner.examinerId, parseInt(e.target.value) || 0)}
                                       className="w-20 px-2.5 py-1.5 text-center text-xs font-bold border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none bg-gray-50 focus:bg-white"
@@ -882,19 +904,6 @@ export default function ScriptAllocation({ isTab = false }) {
                           )}
                         </div>
 
-                        {/* Revoke All for Single Paper Action */}
-                        {!isMultiPaperMode && activePaper && (
-                          <div className="pt-2 border-t border-gray-100">
-                            <button
-                              type="button"
-                              onClick={() => handleRevokeAllForPaper(activePaper.paperId)}
-                              className="text-xs font-bold text-red-600 hover:text-red-700 hover:underline flex items-center gap-1"
-                            >
-                              <Trash2 size={13} />
-                              Revoke All Existing Allocations for this Paper
-                            </button>
-                          </div>
-                        )}
 
                         {/* Submit Action Buttons */}
                         <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-100">
@@ -923,143 +932,6 @@ export default function ScriptAllocation({ isTab = false }) {
             )}
           </div>
         )}
-
-        {/* TAB 2: MANAGE & REASSIGN ALLOCATIONS */}
-        {activeMainTab === 'manage' && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-5 space-y-4">
-            
-            {/* Header & Filter Bar */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b border-gray-100">
-              <div>
-                <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
-                  <ArrowRightLeft size={18} className="text-teal-700" />
-                  Manage Active Allocations
-                </h2>
-                <p className="text-xs text-gray-500 font-medium">Reassign allocated scripts to different examiners or revoke allocations back to pending status</p>
-              </div>
-
-              {/* Action Buttons for Selected Items */}
-              {selectedAllocationIds.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowReassignModal(true)}
-                    className="bg-teal-700 hover:bg-teal-800 text-white text-xs font-extrabold px-3.5 py-2 rounded-lg shadow-sm transition-all flex items-center gap-1.5"
-                  >
-                    <ArrowRightLeft size={13} />
-                    Reassign ({selectedAllocationIds.length})
-                  </button>
-                  <button
-                    onClick={handleRevokeSelected}
-                    className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-extrabold px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5"
-                  >
-                    <Trash2 size={13} />
-                    Revoke ({selectedAllocationIds.length})
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border border-gray-200 w-full sm:w-72">
-                <Search size={13} className="text-gray-400 shrink-0" />
-                <input
-                  type="text"
-                  placeholder="Search by Roll No or Examiner..."
-                  value={manageSearchQuery}
-                  onChange={(e) => setManageSearchQuery(e.target.value)}
-                  className="w-full bg-transparent text-xs text-gray-800 outline-none"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={fetchAllocationsList}
-                  className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-all"
-                  title="Refresh allocations"
-                >
-                  <RefreshCw size={14} className={allocationsLoading ? "animate-spin" : ""} />
-                </button>
-              </div>
-            </div>
-
-            {/* Allocations Table */}
-            {allocationsLoading ? (
-              <div className="p-12 text-center flex flex-col items-center gap-3">
-                <Loader className="animate-spin text-teal-700" size={32} />
-                <span className="text-xs font-bold text-gray-400">Loading active allocations...</span>
-              </div>
-            ) : getFilteredAllocations().length === 0 ? (
-              <div className="p-12 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                <CheckCircle2 className="mx-auto text-gray-300 mb-2" size={32} />
-                <p className="text-xs font-bold text-gray-500">No active allocations found for selected criteria</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto border border-gray-100 rounded-xl">
-                <table className="w-full text-left border-collapse whitespace-nowrap">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                      <th className="px-4 py-2.5 text-center w-10">
-                        <input
-                          type="checkbox"
-                          checked={selectedAllocationIds.length > 0 && selectedAllocationIds.length === getFilteredAllocations().length}
-                          onChange={toggleSelectAllAllocations}
-                          className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300 cursor-pointer"
-                        />
-                      </th>
-                      <th className="px-4 py-2.5">Allocation ID</th>
-                      <th className="px-4 py-2.5">Script / Roll No</th>
-                      <th className="px-4 py-2.5">Paper</th>
-                      <th className="px-4 py-2.5">Assigned Examiner</th>
-                      <th className="px-4 py-2.5">Allocated At</th>
-                      <th className="px-4 py-2.5 text-center">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 text-xs">
-                    {getFilteredAllocations().map(alloc => {
-                      const isSelected = selectedAllocationIds.includes(alloc.allocationId);
-                      return (
-                        <tr 
-                          key={alloc.allocationId} 
-                          className={`hover:bg-gray-50/70 transition-colors ${isSelected ? 'bg-teal-50/30 font-medium' : ''}`}
-                        >
-                          <td className="px-4 py-2.5 text-center">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => toggleSelectAllocation(alloc.allocationId)}
-                              className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300 cursor-pointer"
-                            />
-                          </td>
-                          <td className="px-4 py-2.5 font-bold text-gray-900">#{alloc.allocationId}</td>
-                          <td className="px-4 py-2.5 text-gray-700 font-medium">
-                            {alloc.script?.rollNo || `Script #${alloc.scriptId}`}
-                          </td>
-                          <td className="px-4 py-2.5 text-gray-600">
-                            {alloc.script?.projectPaper?.paperName || alloc.script?.paperCode || `Paper #${alloc.script?.paperId || '-'}`}
-                          </td>
-                          <td className="px-4 py-2.5 font-semibold text-teal-900">
-                            {alloc.examiner?.fullName || alloc.examiner?.userName || `Examiner #${alloc.examinerId}`}
-                          </td>
-                          <td className="px-4 py-2.5 text-gray-500 text-[11px]">
-                            {alloc.allocatedAt ? new Date(alloc.allocatedAt).toLocaleDateString() : '-'}
-                          </td>
-                          <td className="px-4 py-2.5 text-center">
-                            <span className="px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              {alloc.status || 'Allocated'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-          </div>
-        )}
-
         </>
       )}
       </div>

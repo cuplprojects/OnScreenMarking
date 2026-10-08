@@ -148,6 +148,43 @@ namespace API.Controllers
             }
         }
 
+        [HttpGet("paper-counts")]
+        public async Task<IActionResult> GetPaperScriptCounts([FromQuery] int paperId)
+        {
+            try
+            {
+                var totalScripts = await _context.Scripts
+                    .CountAsync(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId);
+
+                var allocatedScripts = await _context.Scripts
+                    .CountAsync(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId && s.Status == "allocated");
+
+                var completedScripts = await _context.Scripts
+                    .CountAsync(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId && s.Status == "completed");
+
+                var pendingScripts = await _context.Scripts
+                    .CountAsync(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId && (s.Status == "pending" || s.Status == null || s.Status == ""));
+
+                var expertsCount = await _context.PaperExaminers
+                    .CountAsync(pe => pe.PaperId == paperId);
+
+                return Ok(new
+                {
+                    success = true,
+                    paperId,
+                    totalScripts,
+                    pendingScripts,
+                    allocatedScripts,
+                    completedScripts,
+                    expertsCount
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpPost]
         [Authorize(Roles = "admin,coordinator")]
         public async Task<ActionResult<ScriptDto>> CreateScript([FromBody] ScriptDto scriptDto)
