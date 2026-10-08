@@ -135,25 +135,12 @@ namespace API.Controllers
                 if (script == null || string.IsNullOrEmpty(script.CleanPdfUrl))
                     return NotFound(new { success = false, message = "Script or PDF path not found" });
 
-                var basePath = _configuration["StorageSettings:BasePath"] 
-                    ?? _configuration["StorageSettings:BaseOsmPath"] 
-                    ?? "";
-
+                var basePath = _configuration["StorageSettings:BasePath"] ?? "";
                 var fullPath = script.CleanPdfUrl;
                 
                 if (!string.IsNullOrEmpty(basePath) && !Path.IsPathRooted(script.CleanPdfUrl))
                 {
-                    // If the stored path starts with OSM and basePath also ends with OSM, avoid duplicating it.
-                    // (Assuming base path might be \\192.168.1.16\dev\OSM or \\192.168.1.16\dev)
-                    if (basePath.EndsWith("OSM", StringComparison.OrdinalIgnoreCase) && script.CleanPdfUrl.StartsWith("OSM", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var trimmedUrl = script.CleanPdfUrl.Substring(3).TrimStart('/', '\\');
-                        fullPath = Path.Combine(basePath, trimmedUrl);
-                    }
-                    else
-                    {
-                        fullPath = Path.Combine(basePath, script.CleanPdfUrl);
-                    }
+                    fullPath = Path.Combine(basePath, script.CleanPdfUrl);
                 }
 
                 // Check if file exists

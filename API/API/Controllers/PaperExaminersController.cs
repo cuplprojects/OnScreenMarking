@@ -115,6 +115,20 @@ namespace API.Controllers
                 if (assignment == null)
                     return NotFound(new { success = false, message = "Assignment not found" });
 
+                var allocationsToRemove = await _context.Allocations
+                    .Include(a => a.Script)
+                    .ThenInclude(s => s.ProjectPaper)
+                    .Where(a => a.ExaminerId == assignment.ExaminerId 
+                             && a.Script.ProjectPaper.PaperId == assignment.PaperId 
+                             && a.Status == "allocated")
+                    .ToListAsync();
+
+                foreach (var allocation in allocationsToRemove)
+                {
+                    allocation.Script.Status = "pending";
+                }
+                
+                _context.Allocations.RemoveRange(allocationsToRemove);
                 _context.PaperExaminers.Remove(assignment);
                 await _context.SaveChangesAsync();
 

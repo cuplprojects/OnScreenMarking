@@ -185,29 +185,7 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseStaticFiles();
 
-// Physical static file provider for StorageSettings BasePath under /osm RequestPath
-try
-{
-    var storageBasePath = builder.Configuration["StorageSettings:BasePath"] 
-        ?? builder.Configuration["StorageSettings:BaseOsmPath"] 
-        ?? Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "storage");
-
-    if (!Directory.Exists(storageBasePath))
-    {
-        Directory.CreateDirectory(storageBasePath);
-    }
-
-    app.UseStaticFiles(new StaticFileOptions
-    {
-        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(storageBasePath),
-        RequestPath = "/osm",
-        ServeUnknownFileTypes = true
-    });
-}
-catch (Exception exStorage)
-{
-    Console.WriteLine($"Storage Static Files Warning: {exStorage.Message}");
-}
+// OSM static files are now served dynamically via FilesController.cs
 
 app.UseCors();
 app.UseLoggingMiddleware();

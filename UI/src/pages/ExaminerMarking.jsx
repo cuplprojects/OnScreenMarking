@@ -1357,7 +1357,7 @@ const ExaminerMarking = () => {
             </div>
             <div className="flex-1 bg-gray-100">
               <iframe 
-                src={`${import.meta.env.VITE_API_URL.replace('/api', '')}${paperInfo.questionPaperPdfUrl}`}
+                src={`${import.meta.env.VITE_API_URL.replace('/api', '')}/${paperInfo.questionPaperPdfUrl.replace(/^\//, '')}`}
                 className="w-full h-full border-0"
                 title="Question Paper"
               />

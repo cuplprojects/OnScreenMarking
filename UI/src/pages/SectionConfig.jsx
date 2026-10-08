@@ -564,17 +564,19 @@ export default function SectionConfig() {
 
                 {!showSectionForm && (
                   <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => {
-                        setSelectedMasterSectionIds(sectionMasters.map(m => m.id));
-                        setShowImportMasterModal(true);
-                      }}
-                      className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl font-bold bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 transition-all text-sm shrink-0 active:scale-95 shadow-sm"
-                      title="Import Predefined Master Sections"
-                    >
-                      <Layers className="w-4 h-4" />
-                      Import Master Sections
-                    </button>
+                    {!isAddSectionDisabled() && (
+                      <button
+                        onClick={() => {
+                          setSelectedMasterSectionIds(sectionMasters.map(m => m.id));
+                          setShowImportMasterModal(true);
+                        }}
+                        className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl font-bold bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 transition-all text-sm shrink-0 active:scale-95 shadow-sm"
+                        title="Import Predefined Master Sections"
+                      >
+                        <Layers className="w-4 h-4" />
+                        Import Master Sections
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         setEditingSectionId(null);

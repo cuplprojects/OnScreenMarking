@@ -180,12 +180,6 @@ export default function PapersManagement({ isTab = false }) {
   const [allocationLoading, setAllocationLoading] = useState(false);
   const [pendingRemovals, setPendingRemovals] = useState([]);
 
-  // Bulk Config State
-  const [bulkConfigData, setBulkConfigData] = useState({
-    name: "Section A", description: "", totalQuestions: 10, totalMarks: 100, 
-    startQuestion: 1, endQuestion: 10, maxQuestionsToAttempt: 10
-  });
-
   // Import Sections State
   const [sourcePaperId, setSourcePaperId] = useState("");
   const [importingSections, setImportingSections] = useState(false);
@@ -261,26 +255,6 @@ export default function PapersManagement({ isTab = false }) {
     setFormData(prev => ({ ...prev, projectId: id }));
   };
 
-  // -------------------------------------------------------------
-  // Bulk Section Configuration
-  // -------------------------------------------------------------
-  const handleBulkConfigSubmit = async (e) => {
-    e.preventDefault();
-    if (selectedPaperIds.length === 0) return message.error("Select papers first");
-    
-    try {
-      await sectionService.bulkCreateSections({
-        sectionDetails: bulkConfigData,
-        paperIds: selectedPaperIds
-      });
-      message.success("Sections configured successfully");
-      setShowBulkConfigModal(false);
-      setSelectedPaperIds([]);
-      refreshTable();
-    } catch (err) {
-      message.error("Failed to bulk configure sections");
-    }
-  };
 
   // -------------------------------------------------------------
   // Import Sections
@@ -968,13 +942,6 @@ export default function PapersManagement({ isTab = false }) {
               {/* Bulk Actions */}
               {selectedPaperIds.length > 0 && (
                 <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300 mr-2 sm:mr-4 border-r border-gray-200 pr-2 sm:pr-4">
-                  <span className="text-xs font-bold text-gray-500 hidden sm:inline-block mr-2">{selectedPaperIds.length} Selected</span>
-                  <button
-                    onClick={() => setShowBulkConfigModal(true)}
-                    className="bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-[10px] uppercase tracking-wider px-3 py-2 rounded-md transition-all shadow-sm flex items-center gap-1.5"
-                  >
-                    <Layers size={13} /> <span className="hidden sm:inline">Bulk Configure</span>
-                  </button>
                   <button
                     onClick={() => setShowImportSectionsModal(true)}
                     className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[10px] uppercase tracking-wider px-3 py-2 rounded-md transition-all shadow-sm flex items-center gap-1.5"
@@ -987,12 +954,6 @@ export default function PapersManagement({ isTab = false }) {
 
               {projectId && (
                 <>
-                  <button
-                    onClick={() => setShowBulkConfigModal(true)}
-                    className="font-bold text-[10px] uppercase tracking-wider px-3 py-2.5 rounded-md transition-colors flex items-center gap-1.5 border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm whitespace-nowrap"
-                  >
-                    <Settings size={12} /> Add Default Sections
-                  </button>
                   <button
                     onClick={() => {
                       const importQpPath = userType === 'admin' ? '/admin/import-question-papers' : '/import-question-papers';
@@ -1107,7 +1068,7 @@ export default function PapersManagement({ isTab = false }) {
                         <td className="px-5 py-2.5 text-center">
                           {paper.questionPaperPdfUrl ? (
                             <a
-                              href={`${import.meta.env.VITE_API_URL.replace('/api', '')}${paper.questionPaperPdfUrl}`}
+                              href={`${import.meta.env.VITE_API_URL.replace('/api', '')}/${paper.questionPaperPdfUrl.replace(/^\//, '')}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors shadow-sm"
@@ -1311,61 +1272,6 @@ export default function PapersManagement({ isTab = false }) {
             </div>
           )}
         </div>
-
-        {/* ------------------------------------------------------------------ */}
-        {/* Bulk Configuration Modal */}
-        {/* ------------------------------------------------------------------ */}
-        {showBulkConfigModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4">
-            <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
-              <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                <div>
-                  <h3 className="text-lg font-black text-gray-900">Bulk Configure Sections</h3>
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Applying to {selectedPaperIds.length} papers</p>
-                </div>
-                <button onClick={() => setShowBulkConfigModal(false)} className="p-1.5 hover:bg-gray-200 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
-                  <X size={18} />
-                </button>
-              </div>
-              <form onSubmit={handleBulkConfigSubmit} className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Section Name</label>
-                    <input type="text" value={bulkConfigData.name} onChange={e => setBulkConfigData({...bulkConfigData, name: e.target.value})} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none" required />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Total Questions</label>
-                    <input type="number" value={bulkConfigData.totalQuestions} onChange={e => setBulkConfigData({...bulkConfigData, totalQuestions: parseInt(e.target.value)})} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none" required min="1" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Start Question No.</label>
-                    <input type="number" value={bulkConfigData.startQuestion} onChange={e => setBulkConfigData({...bulkConfigData, startQuestion: parseInt(e.target.value)})} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none" required min="1" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">End Question No.</label>
-                    <input type="number" value={bulkConfigData.endQuestion} onChange={e => setBulkConfigData({...bulkConfigData, endQuestion: parseInt(e.target.value)})} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none" required min="1" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Total Marks</label>
-                    <input type="number" value={bulkConfigData.totalMarks} onChange={e => setBulkConfigData({...bulkConfigData, totalMarks: parseInt(e.target.value)})} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none" required min="1" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Questions to Attempt</label>
-                    <input type="number" value={bulkConfigData.maxQuestionsToAttempt} onChange={e => setBulkConfigData({...bulkConfigData, maxQuestionsToAttempt: parseInt(e.target.value)})} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none" required min="1" />
-                  </div>
-                </div>
-                <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Description (Optional)</label>
-                    <textarea value={bulkConfigData.description} onChange={e => setBulkConfigData({...bulkConfigData, description: e.target.value})} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none" rows="2" />
-                </div>
-                <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
-                  <button type="button" onClick={() => setShowBulkConfigModal(false)} className="px-5 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors">Cancel</button>
-                  <button type="submit" className="px-5 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-md shadow-md transition-colors">Apply to {selectedPaperIds.length} Papers</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
 
         {/* ------------------------------------------------------------------ */}
         {/* Import Sections Modal */}

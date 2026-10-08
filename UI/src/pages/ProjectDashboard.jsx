@@ -398,16 +398,18 @@ export default function ProjectDashboard() {
             <div className="p-1.5 bg-amber-50 rounded-xl text-amber-600"><AlertCircle size={14} /></div>
           </div>
           
-          <Link 
-            to={userType === 'admin' 
-              ? `/admin/allocate-scripts?projectId=${encryptedProjectId}` 
-              : `/allocate-scripts?projectId=${encryptedProjectId}`}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full flex items-center justify-center gap-1.5 px-2 py-1 mt-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors"
-          >
-            <Zap size={12} />
-            Allocate Scripts
-          </Link>
+          {stats.pendingScripts > 0 && (
+            <Link 
+              to={userType === 'admin' 
+                ? `/admin/allocate-scripts?projectId=${encryptedProjectId}` 
+                : `/allocate-scripts?projectId=${encryptedProjectId}`}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full flex items-center justify-center gap-1.5 px-2 py-1 mt-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors"
+            >
+              <Zap size={12} />
+              Allocate Scripts
+            </Link>
+          )}
         </div>
 
         {/* In Progress */}
@@ -499,14 +501,16 @@ export default function ProjectDashboard() {
                   </button>
                 )}
                 
-                <button
-                  onClick={handleAutoAllocateProject}
-                  disabled={isBulkAutoAllocating}
-                  className="px-3 py-2 bg-teal-700 hover:bg-teal-800 text-white text-[10px] font-bold uppercase tracking-wider rounded-md shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                >
-                  <Zap size={12} className={isBulkAutoAllocating ? "animate-pulse" : ""} />
-                  {isBulkAutoAllocating ? "Allocating..." : "Auto-Allocate All"}
-                </button>
+                {stats.pendingScripts > 0 && (
+                  <button
+                    onClick={handleAutoAllocateProject}
+                    disabled={isBulkAutoAllocating}
+                    className="px-3 py-2 bg-teal-700 hover:bg-teal-800 text-white text-[10px] font-bold uppercase tracking-wider rounded-md shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    <Zap size={12} className={isBulkAutoAllocating ? "animate-pulse" : ""} />
+                    {isBulkAutoAllocating ? "Allocating..." : "Auto-Allocate All"}
+                  </button>
+                )}
 
                 {/* Search input */}
                 <div className="relative flex items-center bg-white px-3 py-2 rounded-xl border border-gray-200 focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-100 shadow-sm w-full sm:w-64 min-w-[200px] transition-all">

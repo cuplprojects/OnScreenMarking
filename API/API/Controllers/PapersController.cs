@@ -887,7 +887,7 @@ namespace API.Controllers
                     ?? Path.Combine(_environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "storage");
 
                 var projFolder = (projectId.HasValue && projectId.Value > 0) ? projectId.Value.ToString() : "master";
-                var targetFolder = Path.Combine(basePath, "osm", projFolder, paper.PaperId.ToString(), "questionpaperpdf");
+                var targetFolder = Path.Combine(basePath, "OSM", projFolder, paper.PaperId.ToString(), "questionpaperpdf");
                 if (!Directory.Exists(targetFolder))
                 {
                     Directory.CreateDirectory(targetFolder);
@@ -902,7 +902,7 @@ namespace API.Controllers
                     await file.CopyToAsync(fileStream);
                 }
 
-                var fileUrl = $"/osm/{projFolder}/{paper.PaperId}/questionpaperpdf/{uniqueFileName}";
+                var fileUrl = $"/OSM/{projFolder}/{paper.PaperId}/questionpaperpdf/{uniqueFileName}";
 
                 if (projectId.HasValue && projectId.Value > 0)
                 {
