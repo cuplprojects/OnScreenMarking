@@ -1599,6 +1599,8 @@ export default function PapersManagement({ isTab = false }) {
           onChange={handleTableFileChange}
         />
       </div>
+        </>
+      )}
     </div>
   );
 }

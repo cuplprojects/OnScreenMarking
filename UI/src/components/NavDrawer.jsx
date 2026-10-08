@@ -116,7 +116,7 @@ function useNavGroups(userType, hasPermission) {
       work.items.push({ label: 'Scripts', path: '/scripts', icon: FileText });
     }
     if (hasPermission('READ_MARKING')) {
-      work.items.push({ label: 'Marking', path: '/marking', icon: PenTool });
+
     }
     if (hasPermission('VIEW_REPORTS')) {
       work.items.push({ label: 'Reports', path: '/reports', icon: BarChart3 });

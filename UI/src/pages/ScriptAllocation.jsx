@@ -1060,6 +1060,8 @@ export default function ScriptAllocation({ isTab = false }) {
           </div>
         )}
 
+        </>
+      )}
       </div>
 
       {/* Reassign Modal */}
