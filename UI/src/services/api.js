@@ -48,9 +48,15 @@ const apiCall = async (endpoint, options = {}) => {
     ...options.headers,
   };
 
+  let body = options.body;
+  if (body && typeof body === 'object' && !(body instanceof FormData)) {
+    body = JSON.stringify(body);
+  }
+
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers,
+    body,
   });
 
   return handleResponse(response, options);

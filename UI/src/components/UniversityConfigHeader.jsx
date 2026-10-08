@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Building2, BookOpen, Calendar, School,
-  GraduationCap, FileText, ChevronDown, Loader2, Plus, Search, X
+  GraduationCap, FileText, ChevronDown, Loader2, Plus, Search, X, Layers
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useConfigHeader } from '../context/ConfigHeaderContext';
@@ -23,14 +23,17 @@ const SECTION_MAP = {
   '/master-papers':       'master-papers',
   '/admin/papers':      'master-papers',
   '/papers':            'master-papers',
+  '/admin/section-masters': 'section-masters',
+  '/section-masters':       'section-masters',
 };
 
 const SECTIONS = [
-  { id: 'departments',   label: 'Departments', icon: Building2 },
-  { id: 'courses',       label: 'Courses',     icon: GraduationCap },
-  { id: 'subjects',      label: 'Subjects',    icon: BookOpen },
-  { id: 'sessions',      label: 'Sessions',    icon: Calendar },
-  { id: 'master-papers', label: 'Papers',      icon: FileText },
+  { id: 'departments',     label: 'Departments',     icon: Building2 },
+  { id: 'courses',         label: 'Courses',         icon: GraduationCap },
+  { id: 'subjects',        label: 'Subjects',        icon: BookOpen },
+  { id: 'sessions',        label: 'Sessions',        icon: Calendar },
+  { id: 'master-papers',   label: 'Papers',          icon: FileText },
+  { id: 'section-masters', label: 'Section Masters', icon: Layers },
 ];
 
 export default function UniversityConfigHeader() {

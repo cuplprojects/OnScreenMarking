@@ -21,9 +21,7 @@ import { decryptId, encryptId } from '../utils/encryption';
 import apiCall from '../services/api';
 import ProjectConfigHeader from '../components/ProjectConfigHeader';
 import ColumnFilter from '../components/ColumnFilter';
-import PapersManagement from './PapersManagement';
-import ScriptAllocation from './ScriptAllocation';
-import Attendance from './Attendance';
+import message from '../services/messageService';
 
 export default function ProjectDashboard() {
   const [searchParams] = useSearchParams();
@@ -137,14 +135,13 @@ export default function ProjectDashboard() {
   };
 
   const handleAutoAllocateProject = async () => {
-    if (!window.confirm("This will automatically distribute all pending scripts across all configured papers evenly among their assigned examiners. Proceed?")) return;
     setIsBulkAutoAllocating(true);
     try {
-      const res = await apiCall(`/allocations/project/${projectId}/auto-allocate`, { method: 'POST' });
-      alert(res.message);
+      const res = await apiCall(`/allocation/project/${projectId}/auto-allocate`, { method: 'POST' });
+      message.success(res.message || "Project auto-allocated successfully");
       refreshTable();
     } catch (err) {
-      alert("Error: " + err.message);
+      message.error("Error: " + (err.message || "Failed to auto-allocate project"));
     } finally {
       setIsBulkAutoAllocating(false);
     }
@@ -586,6 +583,19 @@ export default function ProjectDashboard() {
                           }
                         }
 
+                        let stageTooltip = stageText;
+                        if (currentStage === 1) {
+                          if (!paper.isSectionsConfigured) {
+                            stageTooltip = "Sections not created yet. Click 'Sections' to configure.";
+                          } else if (paper.configuredMarks !== paper.maxMarks) {
+                            stageTooltip = `Section marks (${paper.configuredMarks || 0}) do not match Paper Max Marks (${paper.maxMarks}). Click 'Sections' to balance marks.`;
+                          }
+                        } else if (currentStage === 2) {
+                          stageTooltip = "Sections complete. Next: Assign Examiners to this paper.";
+                        } else if (currentStage === 3) {
+                          stageTooltip = "Examiners assigned. Ready to allocate pending scripts.";
+                        }
+
                         const isAllocateDisabled = currentStage < 3 || paper.pendingScripts <= 0;
                         const isAssignDisabled = currentStage < 2;
 
@@ -612,7 +622,10 @@ export default function ProjectDashboard() {
                             <td className="px-2 py-2.5 text-center text-teal-700">{paper.allocatedScripts}</td>
                             <td className="px-2 py-2.5 text-center text-emerald-600">{paper.completedScripts}</td>
                             <td className="px-2 py-2.5 text-center">
-                              <span className={`inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-bold border whitespace-nowrap ${stageColor}`}>
+                              <span 
+                                className={`inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-bold border whitespace-nowrap cursor-help ${stageColor}`}
+                                title={stageTooltip}
+                              >
                                 {stageText}
                               </span>
                             </td>

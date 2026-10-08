@@ -84,7 +84,8 @@ namespace API.Controllers
                     }).ToList(),
                     courseSubjects = s.CourseSubjects.Select(cs => new
                     {
-                        course = cs.Course != null ? new { name = cs.Course.Name } : null
+                        courseId = cs.CourseId,
+                        course = cs.Course != null ? new { id = cs.Course.Id, name = cs.Course.Name } : null
                     }).ToList()
                 });
 
@@ -263,7 +264,8 @@ namespace API.Controllers
                     }).ToList(),
                     courseSubjects = s.CourseSubjects.Select(cs => new
                     {
-                        course = cs.Course != null ? new { name = cs.Course.Name } : null
+                        courseId = cs.CourseId,
+                        course = cs.Course != null ? new { id = cs.Course.Id, name = cs.Course.Name } : null
                     }).ToList()
                 });
 
@@ -310,6 +312,8 @@ namespace API.Controllers
                         .ThenInclude(ds => ds.Department)
                     .Include(s => s.SubjectPapers)
                         .ThenInclude(sp => sp.Paper)
+                    .Include(s => s.CourseSubjects)
+                        .ThenInclude(cs => cs.Course)
                     .Include(s => s.ExaminerExpertises)
                     .FirstOrDefaultAsync(s => s.SubjectId == id);
 

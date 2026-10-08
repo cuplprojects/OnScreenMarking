@@ -28,6 +28,6 @@ namespace API.Models
         public ICollection<SubjectPaper> SubjectPapers { get; set; }
     = new List<SubjectPaper>();
         public ICollection<Section> Sections { get; set; } = new List<Section>();
-
+        public ICollection<PaperSectionMaster> PaperSectionMasters { get; set; } = new List<PaperSectionMaster>();
     }
 }

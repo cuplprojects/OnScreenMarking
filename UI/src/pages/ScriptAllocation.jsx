@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import {
   FileText,
@@ -10,11 +10,20 @@ import {
   Clock,
   AlertCircle,
   Loader,
-  Zap
+  Zap,
+  Calendar,
+  ArrowRightLeft,
+  Filter,
+  CheckSquare,
+  Square,
+  Trash2,
+  RefreshCw,
+  Sliders,
+  Sparkles,
+  ChevronDown
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import apiCall from '../services/api';
-import paperService from '../services/paperService';
 import allocationService from '../services/allocationService';
 import sectionService from '../services/sectionService';
 import message from '../services/messageService';
@@ -28,25 +37,45 @@ export default function ScriptAllocation({ isTab = false }) {
   const [searchParams] = useSearchParams();
   const encryptedProjectId = searchParams.get('projectId');
   const projectId = encryptedProjectId ? decryptId(encryptedProjectId) : null;
-  const sessionId = searchParams.get('sessionId');
-  const paperIdFromUrl = searchParams.get('paperId');
-  const { userType, universityId: userUniversityId } = useAuth();
   const universityIdFromUrl = searchParams.get('universityId');
+  const { userType, universityId: userUniversityId } = useAuth();
   const activeUniversityId = userType === 'coordinator' ? userUniversityId : universityIdFromUrl;
 
-  const [activePaper, setActivePaper] = useState(null); // The paper currently selected for bulk allocation
+  // Global Page View State
+  const [activeMainTab, setActiveMainTab] = useState('allocate'); // 'allocate' | 'manage'
+
+  // Multi-paper selection state
+  const [selectedPaperIds, setSelectedPaperIds] = useState([]);
+
+  // Active Pane / Modal State
+  const [activePaper, setActivePaper] = useState(null); // Paper being configured in right pane (if single mode)
+  const [isMultiPaperMode, setIsMultiPaperMode] = useState(false);
   const [scripts, setScripts] = useState([]);
   const [examiners, setExaminers] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [allocationData, setAllocationData] = useState({});
-  
-  // Bulk allocation state
-  const [bulkMode, setBulkMode] = useState('even'); // 'even' or 'custom'
+
+  // Bulk Allocation Strategy State
+  const [bulkMode, setBulkMode] = useState('even'); // 'even' | 'daily' | 'custom'
+  const [dailyQuotaLimit, setDailyQuotaLimit] = useState(50);
   const [examinerCounts, setExaminerCounts] = useState({});
   const [bulkLoading, setBulkLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('allocate'); // 'allocate' | 'manage'
+  const [autoProjectLoading, setAutoProjectLoading] = useState(false);
 
+  // Manage Tab & Reallocation State
+  const [allocationsList, setAllocationsList] = useState([]);
+  const [allocationsLoading, setAllocationsLoading] = useState(false);
+  const [selectedAllocationIds, setSelectedAllocationIds] = useState([]);
+  const [allExaminersList, setAllExaminersList] = useState([]);
+  const [targetReassignExaminerId, setTargetReassignExaminerId] = useState('');
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [reassignLoading, setReassignLoading] = useState(false);
+  const [managePaperFilter, setManagePaperFilter] = useState('');
+  const [manageExaminerFilter, setManageExaminerFilter] = useState('');
+  const [manageSearchQuery, setManageSearchQuery] = useState('');
+
+  // -------------------------------------------------------------
+  // Table Fetch Function for Papers
+  // -------------------------------------------------------------
   const fetchFn = useCallback((params) => {
     if (projectId) {
       const searchVal = params.search || '';
@@ -81,6 +110,357 @@ export default function ScriptAllocation({ isTab = false }) {
     initialParams: { pageSize: 10 }
   });
 
+  // Fetch all examiners for management dropdown
+  useEffect(() => {
+    if (activeUniversityId) {
+      apiCall(`/PaperExaminers/university/${activeUniversityId}`)
+        .then(res => {
+          setAllExaminersList(Array.isArray(res) ? res : res?.items || []);
+        })
+        .catch(err => console.error("Failed to load examiners list", err));
+    }
+  }, [activeUniversityId]);
+
+  // Load active allocations when entering Manage tab
+  useEffect(() => {
+    if (activeMainTab === 'manage' && projectId) {
+      fetchAllocationsList();
+    }
+  }, [activeMainTab, projectId, managePaperFilter, manageExaminerFilter]);
+
+  const fetchAllocationsList = async () => {
+    setAllocationsLoading(true);
+    try {
+      let url = `/allocations?limit=1000`;
+      if (manageExaminerFilter) url += `&examinerId=${manageExaminerFilter}`;
+      const data = await apiCall(url);
+      setAllocationsList(Array.isArray(data) ? data : data?.items || []);
+    } catch (err) {
+      console.error("Failed to fetch allocations", err);
+      message.error("Failed to fetch allocations list");
+    } finally {
+      setAllocationsLoading(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // Selection Handlers
+  // -------------------------------------------------------------
+  const toggleSelectAllPapers = () => {
+    if (selectedPaperIds.length === papers.length) {
+      setSelectedPaperIds([]);
+    } else {
+      setSelectedPaperIds(papers.map(p => p.paperId));
+    }
+  };
+
+  const toggleSelectPaper = (id) => {
+    setSelectedPaperIds(prev =>
+      prev.includes(id) ? prev.filter(pId => pId !== id) : [...prev, id]
+    );
+  };
+
+  // -------------------------------------------------------------
+  // Open Single Paper Allocation Pane
+  // -------------------------------------------------------------
+  const openAllocationPane = async (paper) => {
+    if (activePaper?.paperId === paper.paperId && !isMultiPaperMode) {
+      // Toggle off
+      setActivePaper(null);
+      setScripts([]);
+      setExaminers([]);
+      return;
+    }
+
+    setIsMultiPaperMode(false);
+    setActivePaper(paper);
+    setLoading(true);
+    try {
+      const sectionsData = await sectionService.getAllSections(paper.paperId);
+      if (!sectionsData || sectionsData.length === 0) {
+        message.warning(`Paper "${paper.paperName}" does not have sections configured yet.`);
+        setActivePaper(null);
+        setLoading(false);
+        return;
+      }
+
+      const scriptsData = await apiCall(`/scripts?paperId=${paper.paperId}&limit=1000`);
+      const paperScripts = (scriptsData || []).map(s => ({ ...s, paperId: paper.paperId, paperName: paper.paperName }));
+      setScripts(paperScripts);
+
+      const examinersData = await apiCall(`/PaperExaminers/paper/${paper.paperId}`);
+      setExaminers(examinersData || []);
+
+      // Default distribution counts
+      const counts = {};
+      const pendingCount = paperScripts.filter(s => s.status?.toLowerCase() === 'pending' || !s.allocationId).length;
+      const activeEx = (examinersData || []);
+      const baseShare = activeEx.length > 0 ? Math.floor(pendingCount / activeEx.length) : 0;
+      const remainder = activeEx.length > 0 ? pendingCount % activeEx.length : 0;
+
+      activeEx.forEach((ex, idx) => {
+        counts[ex.examinerId] = baseShare + (idx < remainder ? 1 : 0);
+      });
+      setExaminerCounts(counts);
+
+    } catch (err) {
+      message.error('Failed to fetch paper allocation details');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // Open Multi-Paper Allocation Pane
+  // -------------------------------------------------------------
+  const openMultiPaperPane = async () => {
+    if (selectedPaperIds.length === 0) return message.warning("Please select at least one paper");
+
+    setIsMultiPaperMode(true);
+    setActivePaper(null);
+    setLoading(true);
+
+    try {
+      const selectedPapersData = papers.filter(p => selectedPaperIds.includes(p.paperId));
+      
+      // Combine scripts across selected papers
+      let combinedScripts = [];
+      let combinedExaminersMap = new Map();
+
+      for (const p of selectedPapersData) {
+        const sData = await apiCall(`/scripts?paperId=${p.paperId}&limit=1000`);
+        if (Array.isArray(sData)) {
+          combinedScripts.push(...sData.map(s => ({ ...s, paperId: p.paperId, paperName: p.paperName })));
+        }
+
+        const exData = await apiCall(`/PaperExaminers/paper/${p.paperId}`);
+        if (Array.isArray(exData)) {
+          exData.forEach(ex => {
+            if (!combinedExaminersMap.has(ex.examinerId)) {
+              combinedExaminersMap.set(ex.examinerId, ex);
+            }
+          });
+        }
+      }
+
+      setScripts(combinedScripts);
+      const uniqueExaminers = Array.from(combinedExaminersMap.values());
+      setExaminers(uniqueExaminers);
+
+      // Distribute pending scripts across examiners
+      const pendingCount = combinedScripts.filter(s => s.status?.toLowerCase() === 'pending' || !s.allocationId).length;
+      const counts = {};
+      const baseShare = uniqueExaminers.length > 0 ? Math.floor(pendingCount / uniqueExaminers.length) : 0;
+      const remainder = uniqueExaminers.length > 0 ? pendingCount % uniqueExaminers.length : 0;
+
+      uniqueExaminers.forEach((ex, idx) => {
+        counts[ex.examinerId] = baseShare + (idx < remainder ? 1 : 0);
+      });
+      setExaminerCounts(counts);
+
+    } catch (err) {
+      message.error('Failed to load multi-paper allocation details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // Allocation Calculation Helpers
+  // -------------------------------------------------------------
+  const calculateEvenDistribution = () => {
+    const pendingScripts = scripts.filter(s => s.status?.toLowerCase() === 'pending' || !s.allocationId);
+    if (examiners.length === 0 || pendingScripts.length === 0) {
+      message.warning('No pending scripts or examiners available');
+      return;
+    }
+
+    const counts = {};
+    const baseCount = Math.floor(pendingScripts.length / examiners.length);
+    const remainder = pendingScripts.length % examiners.length;
+
+    examiners.forEach((examiner, index) => {
+      counts[examiner.examinerId] = baseCount + (index < remainder ? 1 : 0);
+    });
+
+    setExaminerCounts(counts);
+    message.info(`Evenly distributed ${pendingScripts.length} pending scripts across ${examiners.length} examiners.`);
+  };
+
+  const calculateDailyQuotaDistribution = () => {
+    const pendingScripts = scripts.filter(s => s.status?.toLowerCase() === 'pending' || !s.allocationId);
+    if (examiners.length === 0 || pendingScripts.length === 0) {
+      message.warning('No pending scripts or examiners available');
+      return;
+    }
+
+    const counts = {};
+    let remaining = pendingScripts.length;
+
+    examiners.forEach((examiner) => {
+      const quota = Math.min(remaining, dailyQuotaLimit);
+      counts[examiner.examinerId] = quota;
+      remaining -= quota;
+    });
+
+    setExaminerCounts(counts);
+    message.info(`Applied daily quota limit of ${dailyQuotaLimit} scripts/examiner.`);
+  };
+
+  const updateExaminerCount = (examinerId, count) => {
+    setExaminerCounts(prev => ({
+      ...prev,
+      [examinerId]: Math.max(0, count)
+    }));
+  };
+
+  // -------------------------------------------------------------
+  // Perform Bulk Allocation
+  // -------------------------------------------------------------
+  const handleBulkAllocate = async () => {
+    try {
+      setBulkLoading(true);
+
+      if (isMultiPaperMode) {
+        // Allocate per paper across selected papers
+        const targetPapers = papers.filter(p => selectedPaperIds.includes(p.paperId));
+        let successCount = 0;
+
+        for (const paper of targetPapers) {
+          const paperPending = scripts.filter(s => s.paperId === paper.paperId && (s.status?.toLowerCase() === 'pending' || !s.allocationId));
+          if (paperPending.length === 0) continue;
+
+          // Scale examiner counts proportionally for this paper
+          const paperAllocations = examiners.map(e => {
+            const requested = examinerCounts[e.examinerId] || 0;
+            return { examinerId: e.examinerId, count: Math.min(requested, paperPending.length) };
+          }).filter(a => a.count > 0);
+
+          if (paperAllocations.length > 0) {
+            await allocationService.bulkAllocateScripts(paper.paperId, paperAllocations);
+            successCount++;
+          }
+        }
+
+        message.success(`Bulk allocation completed across ${successCount} papers!`);
+        setIsMultiPaperMode(false);
+        setSelectedPaperIds([]);
+      } else if (activePaper) {
+        const payload = examiners.map(e => ({
+          examinerId: e.examinerId,
+          count: examinerCounts[e.examinerId] || 0
+        })).filter(a => a.count > 0);
+
+        const res = await allocationService.bulkAllocateScripts(activePaper.paperId, payload);
+        message.success(res.message || 'Bulk allocation completed successfully');
+        openAllocationPane(activePaper);
+      }
+
+      refreshTable();
+    } catch (err) {
+      message.error(err.message || 'Failed to perform bulk allocation');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // Auto-Allocate Entire Project
+  // -------------------------------------------------------------
+  const handleAutoAllocateProject = async () => {
+    if (!projectId) return;
+
+    setAutoProjectLoading(true);
+    try {
+      const res = await allocationService.autoAllocateProject(projectId);
+      message.success(res.message || "Project-wide auto allocation completed!");
+      refreshTable();
+      if (activeMainTab === 'manage') fetchAllocationsList();
+    } catch (err) {
+      message.error("Failed to auto-allocate project: " + (err.response?.data?.message || err.message));
+    } finally {
+      setAutoProjectLoading(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // Reassign & Revoke Handlers (Manage Tab)
+  // -------------------------------------------------------------
+  const toggleSelectAllocation = (id) => {
+    setSelectedAllocationIds(prev =>
+      prev.includes(id) ? prev.filter(aId => aId !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllAllocations = () => {
+    const filtered = getFilteredAllocations();
+    if (selectedAllocationIds.length === filtered.length) {
+      setSelectedAllocationIds([]);
+    } else {
+      setSelectedAllocationIds(filtered.map(a => a.allocationId));
+    }
+  };
+
+  const getFilteredAllocations = () => {
+    return allocationsList.filter(alloc => {
+      const matchesSearch = !manageSearchQuery || 
+        alloc.script?.rollNo?.toLowerCase().includes(manageSearchQuery.toLowerCase()) ||
+        alloc.examiner?.fullName?.toLowerCase().includes(manageSearchQuery.toLowerCase()) ||
+        alloc.allocationId.toString().includes(manageSearchQuery);
+      return matchesSearch;
+    });
+  };
+
+  const handleReassignSelected = async () => {
+    if (selectedAllocationIds.length === 0) return message.warning("Please select at least one allocation to reassign");
+    if (!targetReassignExaminerId) return message.warning("Please select a target examiner");
+
+    setReassignLoading(true);
+    try {
+      const res = await allocationService.reassignAllocations(
+        selectedAllocationIds,
+        parseInt(targetReassignExaminerId, 10)
+      );
+      message.success(res.message || "Allocations reassigned successfully");
+      setSelectedAllocationIds([]);
+      setShowReassignModal(false);
+      fetchAllocationsList();
+      refreshTable();
+    } catch (err) {
+      message.error(err.message || "Failed to reassign allocations");
+    } finally {
+      setReassignLoading(false);
+    }
+  };
+
+  const handleRevokeSelected = async () => {
+    if (selectedAllocationIds.length === 0) return message.warning("Please select allocations to revoke");
+
+    try {
+      const res = await allocationService.revokeAllocations(selectedAllocationIds);
+      message.success(res.message || "Selected allocations revoked successfully");
+      setSelectedAllocationIds([]);
+      fetchAllocationsList();
+      refreshTable();
+    } catch (err) {
+      message.error(err.message || "Failed to revoke allocations");
+    }
+  };
+
+  const handleRevokeAllForPaper = async (paperId) => {
+    try {
+      const res = await apiCall(`/allocation/paper/${paperId}/revoke-all`, { method: 'POST' });
+      message.success(res.message || "Paper allocations revoked");
+      refreshTable();
+      if (activePaper?.paperId === paperId) openAllocationPane(activePaper);
+      if (activeMainTab === 'manage') fetchAllocationsList();
+    } catch (err) {
+      message.error("Failed to revoke paper allocations");
+    }
+  };
+
+  // Helper Header Component for Sorting
   const SortHeader = ({ label, field, isCenter = false, hasFilter = false }) => {
     const isSorted = sortField === field;
     return (
@@ -101,187 +481,64 @@ export default function ScriptAllocation({ isTab = false }) {
     );
   };
 
-  const openAllocationPane = async (paper) => {
-    if (activePaper?.paperId === paper.paperId) {
-      // Toggle off
-      setActivePaper(null);
-      setScripts([]);
-      setExaminers([]);
-      setAllocationData({});
-      return;
-    }
-
-    setActivePaper(paper);
-    setLoading(true);
-    try {
-      // Verify sections
-      const sectionsData = await sectionService.getAllSections(paper.paperId);
-      if (!sectionsData || sectionsData.length === 0) {
-        message.warning(`Paper "${paper.paperName}" does not have sections configured yet.`);
-        setActivePaper(null);
-        setLoading(false);
-        return;
-      }
-
-      // Fetch scripts
-      const scriptsData = await apiCall(`/scripts?paperId=${paper.paperId}&limit=1000`);
-      const paperScripts = (scriptsData || []).map(s => ({...s, paperId: paper.paperId, paperName: paper.paperName}));
-      setScripts(paperScripts);
-
-      const allocation = {};
-      paperScripts.forEach(script => {
-        // Also fallback to consider it pending if it has no allocationId and is not completed
-        const isPending = script.status?.toLowerCase() === 'pending' || (script.status?.toLowerCase() !== 'completed' && !script.allocationId);
-        allocation[script.id] = isPending ? null : (script.allocationId || 'allocated');
-      });
-      setAllocationData(allocation);
-
-      // Fetch examiners
-      const examinersData = await apiCall(`/PaperExaminers/paper/${paper.paperId}`);
-      setExaminers(examinersData || []);
-
-      // Initialize examiner counts for bulk allocation
-      const counts = {};
-      (examinersData || []).forEach(examiner => {
-        counts[examiner.examinerId] = 0;
-      });
-      setExaminerCounts(counts);
-
-    } catch (err) {
-      message.error('Failed to fetch paper details');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAllocateScript = async (Id, examinerId) => {
-    try {
-      await allocationService.createAllocation(Id, examinerId);
-
-      setAllocationData(prev => ({
-        ...prev,
-        [Id]: examinerId
-      }));
-
-      message.success('Script allocated successfully');
-    } catch (err) {
-      message.error('Failed to allocate script');
-      console.error(err);
-    }
-  };
-
-  const handleRemoveAllocation = async (Id) => {
-    try {
-      // Get the allocation ID first
-      const allocation = await allocationService.getScriptAllocation(Id);
-      if (allocation && allocation.id) {
-        await allocationService.cancelAllocation(allocation.id);
-      }
-
-      setAllocationData(prev => ({
-        ...prev,
-        [Id]: null
-      }));
-
-      message.success('Allocation removed successfully');
-    } catch (err) {
-      message.error('Failed to remove allocation');
-      console.error(err);
-    }
-  };
-
-  const pendingCount = scripts.filter(s => !allocationData[s.id]).length;
-  const allocatedCount = scripts.filter(s => allocationData[s.id]).length;
-
-  const filteredScripts = scripts.filter(script =>
-    script.studentName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    script.rollNo?.includes(searchQuery)
-  );
-
-  const openBulkModal = () => {
-    // Legacy function, no longer opens a modal, since the pane IS the modal.
-  };
-
-  const calculateEvenDistribution = () => {
-    const pendingScripts = scripts.filter(s => !allocationData[s.id]);
-    const activeExaminers = examiners.filter(e => e.examinerId);
-    
-    if (activeExaminers.length === 0 || pendingScripts.length === 0) {
-      message.warning('No pending scripts or examiners available');
-      return;
-    }
-
-    const counts = {};
-    const baseCount = Math.floor(pendingScripts.length / activeExaminers.length);
-    const remainder = pendingScripts.length % activeExaminers.length;
-
-    activeExaminers.forEach((examiner, index) => {
-      counts[examiner.examinerId] = baseCount + (index < remainder ? 1 : 0);
-    });
-
-    setExaminerCounts(counts);
-  };
-
-  const handleBulkAllocate = async () => {
-    try {
-      setBulkLoading(true);
-      const pendingScripts = scripts.filter(s => !allocationData[s.id]);
+  return (
+    <div className="min-h-screen bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4">
+      <ProjectConfigHeader />
       
-      const payload = {
-        paperId: activePaper.paperId,
-        allocations: examiners.map(e => ({
-          examinerId: e.examinerId,
-          count: examinerCounts[e.examinerId] || 0
-        })).filter(a => a.count > 0)
-      };
-      
-      const res = await apiCall('/allocations/bulk-allocate', {
-        method: 'POST',
-        body: payload
-      });
-      
-      message.success(res.message || 'Bulk allocation completed successfully');
-      openAllocationPane(activePaper); // refresh
-    } catch (err) {
-      message.error(err.message || 'Failed to perform bulk allocation');
-    } finally {
-      setBulkLoading(false);
-    }
-  };
+      <div className="w-full space-y-4 mt-4">
+        
+        {/* Main Header Card */}
+        <div className="bg-white px-5 py-3 rounded-2xl border border-gray-100 shadow-sm sticky top-0 z-20">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-teal-100 text-teal-700 rounded-xl flex items-center justify-center font-bold shadow-xs">
+                <Zap size={22} />
+              </div>
+              <div>
+                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none flex items-center gap-2">
+                  Examiner & Script Allocation System
+                </h1>
+                <p className="text-xs text-gray-500 mt-1">Cross-paper distribution, daily allotments, and reallocation management</p>
+              </div>
+            </div>
 
-  const [isRevokingAll, setIsRevokingAll] = useState(false);
-  const handleRevokeAll = async () => {
-    if (!window.confirm("Are you sure you want to revoke ALL allocations for this paper? This will return all assigned scripts back to the pending pool.")) return;
-    setIsRevokingAll(true);
-    try {
-      const res = await apiCall(`/allocations/paper/${activePaper.paperId}/revoke-all`, { method: 'POST' });
-      message.success(res.message);
-      openAllocationPane(activePaper); // refresh
-    } catch (err) {
-      message.error(err.message || 'Failed to revoke allocations');
-    } finally {
-      setIsRevokingAll(false);
-    }
-  };
+            {/* Quick Actions & Navigation Tabs */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleAutoAllocateProject}
+                disabled={autoProjectLoading}
+                className="bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-[11px] uppercase tracking-wider px-4 py-2.5 rounded-xl shadow-md shadow-teal-200 transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {autoProjectLoading ? <Loader size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                {autoProjectLoading ? "Auto-Allocating..." : "Auto-Allocate All Papers"}
+              </button>
 
-  const updateExaminerCount = (examinerId, count) => {
-    setExaminerCounts(prev => ({
-      ...prev,
-      [examinerId]: Math.max(0, count)
-    }));
-  };
-
-
-
-  const content = (
-    <div className="w-full space-y-4">
-      
-      {!isTab && (
-        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-          <ProjectConfigHeader />
+              <div className="flex p-1 bg-gray-100 rounded-xl border border-gray-200">
+                <button
+                  onClick={() => setActiveMainTab('allocate')}
+                  className={`px-4 py-2 rounded-lg text-xs font-extrabold transition-all ${
+                    activeMainTab === 'allocate' 
+                      ? 'bg-white text-teal-800 shadow-xs' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Allocate Papers
+                </button>
+                <button
+                  onClick={() => setActiveMainTab('manage')}
+                  className={`px-4 py-2 rounded-lg text-xs font-extrabold transition-all ${
+                    activeMainTab === 'manage' 
+                      ? 'bg-white text-teal-800 shadow-xs' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Manage & Reassign
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-      )}
+
 
       {(!projectId && !isTab) ? (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-16 text-center">
@@ -295,339 +552,576 @@ export default function ScriptAllocation({ isTab = false }) {
         <>
         {/* Header content moved to ProjectConfigHeader */}
 
-        <div className="w-full flex flex-col xl:flex-row gap-4 items-start">
+        {/* TAB 1: ALLOCATION WORKFLOW */}
+        {activeMainTab === 'allocate' && (
+          <div className="w-full flex flex-col xl:flex-row gap-4 items-start">
 
-        {/* Left Column: Master List */}
-        <div className={`w-full ${activePaper ? 'xl:w-[50%]' : 'xl:w-full'} flex flex-col transition-all duration-300`}>
-          <div className="mb-4">
-            <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
-              <div className="w-6 h-6 bg-teal-100 text-teal-700 rounded-md flex items-center justify-center font-bold text-xs">
-                1
+            {/* Left Column: Papers List & Multi-Select */}
+            <div className={`w-full ${(activePaper || isMultiPaperMode) ? 'xl:w-[50%]' : 'xl:w-full'} flex flex-col transition-all duration-300`}>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
+                  <div className="w-6 h-6 bg-teal-100 text-teal-700 rounded-md flex items-center justify-center font-bold text-xs">
+                    1
+                  </div>
+                  Select Papers to Allocate
+                </h2>
+                {selectedPaperIds.length > 0 && (
+                  <button
+                    onClick={openMultiPaperPane}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] uppercase tracking-wider px-3.5 py-1.5 rounded-lg shadow-sm transition-all flex items-center gap-1.5"
+                  >
+                    <Zap size={13} />
+                    Allocate Selected ({selectedPaperIds.length} Papers)
+                  </button>
+                )}
               </div>
-              Select Paper
-            </h2>
-          </div>
 
-          {tableLoading && papers.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-12 text-center flex flex-col items-center gap-3">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
-              <span className="text-xs font-bold text-gray-400">Loading papers...</span>
-            </div>
-          ) : papers.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-16 text-center text-gray-500 font-medium leading-relaxed max-w-sm mx-auto space-y-3">
-              <FileText className="mx-auto text-gray-450 mb-2" size={32} />
-              <div>
-                <h3 className="font-extrabold text-gray-900 text-xs uppercase tracking-wider">No Papers Found</h3>
-                <p className="text-[10px] text-gray-400 mt-1">There are no papers found for this project.</p>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col animate-fade-in">
-              <div className="p-4 border-b border-gray-100 bg-white flex items-center gap-3">
-                <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border border-gray-100 focus-within:ring-2 focus-within:ring-teal-500/20 focus-within:border-teal-500 transition-all w-full max-w-md">
-                  <Search size={13} className="text-gray-400 shrink-0" />
-                  <input 
-                    type="text" 
-                    placeholder="Search papers by code or name..." 
-                    className="w-full bg-transparent text-gray-800 placeholder-gray-400 font-semibold text-[11px] focus:outline-none"
-                    value={paperSearchQuery}
-                    onChange={(e) => setPaperSearchQuery(e.target.value)}
+              {tableLoading && papers.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-12 text-center flex flex-col items-center gap-3">
+                  <Loader className="animate-spin text-teal-700" size={32} />
+                  <span className="text-xs font-bold text-gray-400">Loading papers...</span>
+                </div>
+              ) : papers.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-16 text-center text-gray-500 font-medium leading-relaxed max-w-sm mx-auto space-y-3">
+                  <FileText className="mx-auto text-gray-400" size={32} />
+                  <div>
+                    <h3 className="font-extrabold text-gray-900 text-xs uppercase tracking-wider">No Papers Found</h3>
+                    <p className="text-[10px] text-gray-400 mt-1">There are no papers found for this project.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col animate-fade-in">
+                  <div className="p-3.5 border-b border-gray-100 bg-white flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border border-gray-100 focus-within:ring-2 focus-within:ring-teal-500/20 focus-within:border-teal-500 transition-all w-full max-w-md">
+                      <Search size={13} className="text-gray-400 shrink-0" />
+                      <input 
+                        type="text" 
+                        placeholder="Search papers by code or name..." 
+                        className="w-full bg-transparent text-gray-800 placeholder-gray-400 font-semibold text-[11px] focus:outline-none"
+                        value={paperSearchQuery}
+                        onChange={(e) => setPaperSearchQuery(e.target.value)}
+                      />
+                      {paperSearchQuery && (
+                        <button onClick={() => setPaperSearchQuery('')} className="text-gray-300 hover:text-gray-500 transition">
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="text-[11px] font-bold text-gray-500">
+                      {selectedPaperIds.length} of {papers.length} selected
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse whitespace-nowrap">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-500 uppercase tracking-widest select-none">
+                          <th className="px-4 py-2.5 text-center w-10">
+                            <input
+                              type="checkbox"
+                              checked={selectedPaperIds.length > 0 && selectedPaperIds.length === papers.length}
+                              onChange={toggleSelectAllPapers}
+                              className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300 cursor-pointer"
+                            />
+                          </th>
+                          <SortHeader label="Code" field="paperCode" hasFilter={true} />
+                          <SortHeader label="Paper Name" field="paperName" hasFilter={true} />
+                          <th className="px-4 py-2.5 text-center">Pending</th>
+                          <th className="px-4 py-2.5 text-center">Allocated</th>
+                          <th className="px-4 py-2.5 text-center">Experts</th>
+                          <th className="px-4 py-2.5 text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 text-xs">
+                        {papers.map(paper => {
+                          const isSelected = selectedPaperIds.includes(paper.paperId);
+                          const isActive = activePaper?.paperId === paper.paperId;
+                          return (
+                            <tr 
+                              key={paper.paperId} 
+                              className={`hover:bg-gray-50/70 transition-colors ${
+                                isActive ? 'bg-teal-50/40 font-semibold' : isSelected ? 'bg-indigo-50/30' : ''
+                              }`}
+                            >
+                              <td className="px-4 py-2.5 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleSelectPaper(paper.paperId)}
+                                  className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300 cursor-pointer"
+                                />
+                              </td>
+                              <td className="px-4 py-2.5 font-extrabold text-gray-900">{paper.paperCode}</td>
+                              <td className="px-4 py-2.5 text-gray-600 font-medium">{paper.paperName}</td>
+                              <td className="px-4 py-2.5 text-center">
+                                <span className="inline-flex items-center gap-1 bg-yellow-50 text-yellow-700 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-yellow-100">
+                                  <Clock size={11} />
+                                  {paper.pendingScripts}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2.5 text-center">
+                                <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-emerald-100">
+                                  <CheckCircle2 size={11} />
+                                  {paper.allocatedScripts}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2.5 text-center">
+                                <span className="inline-flex items-center gap-1 bg-teal-50 text-teal-700 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-teal-100">
+                                  <Users size={11} />
+                                  {paper.expertsCount || 0}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2.5 text-center">
+                                <button
+                                  onClick={() => openAllocationPane(paper)}
+                                  className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all shadow-xs inline-flex items-center justify-center gap-1.5 ${
+                                    isActive 
+                                      ? 'bg-teal-700 text-white hover:bg-teal-800' 
+                                      : 'bg-white border border-gray-200 text-gray-600 hover:border-teal-300 hover:text-teal-700'
+                                  }`}
+                                >
+                                  <Zap size={11} />
+                                  {isActive ? 'Close' : 'Allocate'}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <TablePagination 
+                    page={page}
+                    totalPages={totalPages}
+                    totalCount={totalCount}
+                    pageSize={pageSize}
+                    setPage={setPage}
+                    setPageSize={setPageSize}
                   />
-                  {paperSearchQuery && (
-                    <button onClick={() => setPaperSearchQuery('')} className="text-gray-300 hover:text-gray-500 transition">
-                      <X size={12} />
-                    </button>
-                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Right Column: Allocation Configuration Pane (Single or Multi Paper) */}
+            {(activePaper || isMultiPaperMode) && (
+              <div className="w-full xl:w-[50%] flex flex-col animate-in slide-in-from-right-4 duration-300">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm flex-1 flex flex-col overflow-hidden">
+                  
+                  {/* Pane Header */}
+                  <div className="p-5 bg-gray-50 border-b border-gray-100">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-teal-100 text-teal-700 rounded-lg flex items-center justify-center font-bold text-sm">
+                          2
+                        </div>
+                        <div>
+                          <h2 className="text-base font-black text-gray-900 tracking-tight">
+                            {isMultiPaperMode ? `Multi-Paper Allocation (${selectedPaperIds.length} Papers)` : `Allocate: ${activePaper.paperName}`}
+                          </h2>
+                          <p className="text-xs text-gray-500 font-medium">
+                            {isMultiPaperMode ? "Configure batch allocation across selected papers" : `Paper Code: ${activePaper.paperCode}`}
+                          </p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => { setActivePaper(null); setIsMultiPaperMode(false); }}
+                        className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 rounded-lg transition-all"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-5 overflow-y-auto max-h-[750px] space-y-5">
+                    {loading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader className="animate-spin text-teal-700" size={32} />
+                      </div>
+                    ) : scripts.length === 0 ? (
+                      <div className="bg-gray-50 rounded-xl border border-dashed border-gray-200 p-10 text-center">
+                        <FileText className="mx-auto text-gray-300 mb-3" size={36} />
+                        <p className="text-xs font-bold text-gray-500">No scripts available for allocation</p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Allocation Strategy Tabs */}
+                        <div>
+                          <p className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider mb-2">
+                            Select Distribution Strategy
+                          </p>
+                          <div className="grid grid-cols-3 gap-2 p-1 bg-gray-100 rounded-xl border border-gray-200">
+                            <button
+                              type="button"
+                              onClick={() => setBulkMode('even')}
+                              className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                                bulkMode === 'even'
+                                  ? 'bg-white text-teal-800 shadow-xs border border-gray-200'
+                                  : 'text-gray-600 hover:text-gray-900'
+                              }`}
+                            >
+                              Even Distribution
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setBulkMode('daily')}
+                              className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                                bulkMode === 'daily'
+                                  ? 'bg-white text-teal-800 shadow-xs border border-gray-200'
+                                  : 'text-gray-600 hover:text-gray-900'
+                              }`}
+                            >
+                              Daily Quota / Limit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setBulkMode('custom')}
+                              className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                                bulkMode === 'custom'
+                                  ? 'bg-white text-teal-800 shadow-xs border border-gray-200'
+                                  : 'text-gray-600 hover:text-gray-900'
+                              }`}
+                            >
+                              Custom Ratio
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Strategy Details Box */}
+                        {bulkMode === 'even' && (
+                          <div className="p-4 bg-teal-50/70 border border-teal-200 rounded-xl flex items-center justify-between gap-4">
+                            <div>
+                              <h4 className="text-xs font-bold text-teal-900">Equal Distribution Across Examiners</h4>
+                              <p className="text-[11px] text-teal-700 mt-0.5">
+                                Automatically splits <span className="font-bold">{scripts.filter(s => s.status?.toLowerCase() === 'pending' || !s.allocationId).length}</span> pending scripts among <span className="font-bold">{examiners.length}</span> assigned examiners.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={calculateEvenDistribution}
+                              className="px-3.5 py-1.5 bg-teal-700 text-white rounded-lg text-xs font-bold hover:bg-teal-800 transition-all shrink-0"
+                            >
+                              Calculate
+                            </button>
+                          </div>
+                        )}
+
+                        {bulkMode === 'daily' && (
+                          <div className="p-4 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-3">
+                            <div className="flex items-center justify-between gap-4">
+                              <div>
+                                <h4 className="text-xs font-bold text-indigo-900">Daily Allotment Limit</h4>
+                                <p className="text-[11px] text-indigo-700 mt-0.5">
+                                  Set maximum scripts allotted per examiner per day.
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <label className="text-xs font-bold text-gray-600">Quota:</label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="200"
+                                  value={dailyQuotaLimit}
+                                  onChange={(e) => setDailyQuotaLimit(parseInt(e.target.value) || 10)}
+                                  className="w-16 px-2 py-1 border border-indigo-300 rounded-md text-xs font-bold text-center bg-white"
+                                />
+                              </div>
+                            </div>
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                onClick={calculateDailyQuotaDistribution}
+                                className="px-3.5 py-1.5 bg-indigo-700 text-white rounded-lg text-xs font-bold hover:bg-indigo-800 transition-all"
+                              >
+                                Apply Daily Limit
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Examiners List & Allocation Input */}
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <p className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">
+                              Assigned Examiners ({examiners.length})
+                            </p>
+                          </div>
+
+                          {examiners.length === 0 ? (
+                            <div className="p-8 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                              <Users className="mx-auto text-gray-300 mb-2" size={28} />
+                              <p className="text-xs font-bold text-gray-500">No examiners assigned for selected scope</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+                              {examiners.map(examiner => (
+                                <div key={examiner.examinerId} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-xl hover:border-teal-300 transition-all">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-xs uppercase">
+                                      {(examiner.examinerName || 'E').charAt(0)}
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-bold text-gray-900">{examiner.examinerName || 'Examiner'}</p>
+                                      <p className="text-[10px] text-gray-400 font-medium">ID: {examiner.examinerId}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase">Count</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max={scripts.length}
+                                      value={examinerCounts[examiner.examinerId] || 0}
+                                      onChange={(e) => updateExaminerCount(examiner.examinerId, parseInt(e.target.value) || 0)}
+                                      className="w-20 px-2.5 py-1.5 text-center text-xs font-bold border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none bg-gray-50 focus:bg-white"
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Revoke All for Single Paper Action */}
+                        {!isMultiPaperMode && activePaper && (
+                          <div className="pt-2 border-t border-gray-100">
+                            <button
+                              type="button"
+                              onClick={() => handleRevokeAllForPaper(activePaper.paperId)}
+                              className="text-xs font-bold text-red-600 hover:text-red-700 hover:underline flex items-center gap-1"
+                            >
+                              <Trash2 size={13} />
+                              Revoke All Existing Allocations for this Paper
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Submit Action Buttons */}
+                        <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-100">
+                          <button
+                            type="button"
+                            onClick={() => { setActivePaper(null); setIsMultiPaperMode(false); }}
+                            className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleBulkAllocate}
+                            disabled={bulkLoading || examiners.length === 0}
+                            className="px-5 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-lg shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50"
+                          >
+                            {bulkLoading ? <Loader className="animate-spin" size={14} /> : <Zap size={14} />}
+                            {bulkLoading ? 'Allocating...' : 'Confirm Allocation'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="overflow-x-auto">
+            )}
+          </div>
+        )}
+
+        {/* TAB 2: MANAGE & REASSIGN ALLOCATIONS */}
+        {activeMainTab === 'manage' && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-5 space-y-4">
+            
+            {/* Header & Filter Bar */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b border-gray-100">
+              <div>
+                <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
+                  <ArrowRightLeft size={18} className="text-teal-700" />
+                  Manage Active Allocations
+                </h2>
+                <p className="text-xs text-gray-500 font-medium">Reassign allocated scripts to different examiners or revoke allocations back to pending status</p>
+              </div>
+
+              {/* Action Buttons for Selected Items */}
+              {selectedAllocationIds.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowReassignModal(true)}
+                    className="bg-teal-700 hover:bg-teal-800 text-white text-xs font-extrabold px-3.5 py-2 rounded-lg shadow-sm transition-all flex items-center gap-1.5"
+                  >
+                    <ArrowRightLeft size={13} />
+                    Reassign ({selectedAllocationIds.length})
+                  </button>
+                  <button
+                    onClick={handleRevokeSelected}
+                    className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-extrabold px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5"
+                  >
+                    <Trash2 size={13} />
+                    Revoke ({selectedAllocationIds.length})
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border border-gray-200 w-full sm:w-72">
+                <Search size={13} className="text-gray-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search by Roll No or Examiner..."
+                  value={manageSearchQuery}
+                  onChange={(e) => setManageSearchQuery(e.target.value)}
+                  className="w-full bg-transparent text-xs text-gray-800 outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fetchAllocationsList}
+                  className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-all"
+                  title="Refresh allocations"
+                >
+                  <RefreshCw size={14} className={allocationsLoading ? "animate-spin" : ""} />
+                </button>
+              </div>
+            </div>
+
+            {/* Allocations Table */}
+            {allocationsLoading ? (
+              <div className="p-12 text-center flex flex-col items-center gap-3">
+                <Loader className="animate-spin text-teal-700" size={32} />
+                <span className="text-xs font-bold text-gray-400">Loading active allocations...</span>
+              </div>
+            ) : getFilteredAllocations().length === 0 ? (
+              <div className="p-12 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                <CheckCircle2 className="mx-auto text-gray-300 mb-2" size={32} />
+                <p className="text-xs font-bold text-gray-500">No active allocations found for selected criteria</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto border border-gray-100 rounded-xl">
                 <table className="w-full text-left border-collapse whitespace-nowrap">
                   <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
-                      <SortHeader label="Code" field="paperCode" hasFilter={true} />
-                      <SortHeader label="Paper Name" field="paperName" hasFilter={true} />
-                      <th className="px-6 py-2.5 text-center">Pending</th>
-                      <th className="px-6 py-2.5 text-center">Allocated</th>
-                      <th className="px-6 py-2.5 text-center">Experts</th>
-                      <th className="px-6 py-2.5 text-center">Action</th>
+                    <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                      <th className="px-4 py-2.5 text-center w-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedAllocationIds.length > 0 && selectedAllocationIds.length === getFilteredAllocations().length}
+                          onChange={toggleSelectAllAllocations}
+                          className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300 cursor-pointer"
+                        />
+                      </th>
+                      <th className="px-4 py-2.5">Allocation ID</th>
+                      <th className="px-4 py-2.5">Script / Roll No</th>
+                      <th className="px-4 py-2.5">Paper</th>
+                      <th className="px-4 py-2.5">Assigned Examiner</th>
+                      <th className="px-4 py-2.5">Allocated At</th>
+                      <th className="px-4 py-2.5 text-center">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs">
-                    {papers.map(paper => (
-                      <tr 
-                        key={paper.paperId} 
-                        className={`hover:bg-gray-50/50 transition-colors ${activePaper?.paperId === paper.paperId ? 'bg-teal-50/30' : ''}`}
-                      >
-                        <td className="px-6 py-2.5 font-extrabold text-gray-900">{paper.paperCode}</td>
-                        <td className="px-6 py-2.5 text-gray-600 font-medium">{paper.paperName}</td>
-                        <td className="px-6 py-2.5 text-center">
-                          <span className="inline-flex items-center gap-1.5 bg-yellow-50 text-yellow-700 px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-wider border border-yellow-100">
-                            <Clock size={12} />
-                            {paper.pendingScripts}
-                          </span>
-                        </td>
-                        <td className="px-6 py-2.5 text-center">
-                          <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-wider border border-emerald-100">
-                            <CheckCircle2 size={12} />
-                            {paper.allocatedScripts}
-                          </span>
-                        </td>
-                        <td className="px-6 py-2.5 text-center">
-                          <span className="inline-flex items-center gap-1.5 bg-teal-50 text-teal-700 px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-wider border border-teal-100">
-                            <Users size={12} />
-                            {paper.expertsCount || 0}
-                          </span>
-                        </td>
-                        <td className="px-6 py-2.5 text-center">
-                          <button
-                            onClick={() => openAllocationPane(paper)}
-                            className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm inline-flex items-center justify-center gap-1.5 ${
-                              activePaper?.paperId === paper.paperId 
-                                ? 'bg-teal-700 text-white hover:bg-teal-800' 
-                                : 'bg-white border border-gray-200 text-gray-600 hover:border-teal-300 hover:text-teal-700'
-                            }`}
-                          >
-                            <Zap size={12} />
-                            {activePaper?.paperId === paper.paperId ? 'Close' : 'Bulk Allocate'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {getFilteredAllocations().map(alloc => {
+                      const isSelected = selectedAllocationIds.includes(alloc.allocationId);
+                      return (
+                        <tr 
+                          key={alloc.allocationId} 
+                          className={`hover:bg-gray-50/70 transition-colors ${isSelected ? 'bg-teal-50/30 font-medium' : ''}`}
+                        >
+                          <td className="px-4 py-2.5 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelectAllocation(alloc.allocationId)}
+                              className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300 cursor-pointer"
+                            />
+                          </td>
+                          <td className="px-4 py-2.5 font-bold text-gray-900">#{alloc.allocationId}</td>
+                          <td className="px-4 py-2.5 text-gray-700 font-medium">
+                            {alloc.script?.rollNo || `Script #${alloc.scriptId}`}
+                          </td>
+                          <td className="px-4 py-2.5 text-gray-600">
+                            {alloc.script?.projectPaper?.paperName || alloc.script?.paperCode || `Paper #${alloc.script?.paperId || '-'}`}
+                          </td>
+                          <td className="px-4 py-2.5 font-semibold text-teal-900">
+                            {alloc.examiner?.fullName || alloc.examiner?.userName || `Examiner #${alloc.examinerId}`}
+                          </td>
+                          <td className="px-4 py-2.5 text-gray-500 text-[11px]">
+                            {alloc.allocatedAt ? new Date(alloc.allocatedAt).toLocaleDateString() : '-'}
+                          </td>
+                          <td className="px-4 py-2.5 text-center">
+                            <span className="px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              {alloc.status || 'Allocated'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
-              <TablePagination 
-                page={page}
-                totalPages={totalPages}
-                totalCount={totalCount}
-                pageSize={pageSize}
-                setPage={setPage}
-                setPageSize={setPageSize}
-              />
-            </div>
-          )}
-        </div>
+            )}
 
-        {/* Right Column: Detail View */}
-        {activePaper && (
-        <div className="w-full xl:w-[50%] flex flex-col animate-in slide-in-from-right-4 duration-300">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm flex-1 flex flex-col overflow-hidden">
-            <div className="p-6 bg-gray-50 border-b border-gray-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <div className="w-7 h-7 bg-teal-100 text-teal-700 rounded-lg flex items-center justify-center font-bold text-sm">
-                      2
-                    </div>
-                    <h2 className="text-lg font-black text-gray-900 tracking-tight">
-                      Bulk Allocate Scripts
-                    </h2>
-                  </div>
-                  <div className="flex items-center gap-2 ml-10">
-                    <p className="text-sm font-semibold text-gray-600">
-                      {activePaper.paperName}
-                    </p>
-                    <span className="text-xs font-bold text-gray-400 bg-gray-200/50 px-2 py-0.5 rounded-md">
-                      {activePaper.paperCode}
-                    </span>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => openAllocationPane(activePaper)}
-                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 rounded-full transition-all"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-              <div className="mt-4 flex gap-4 border-b border-gray-200">
-                <button
-                  onClick={() => setActiveTab('allocate')}
-                  className={`pb-2 text-sm font-bold transition-all border-b-2 ${
-                    activeTab === 'allocate' 
-                      ? 'border-teal-600 text-teal-700' 
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  Allocate Scripts
-                </button>
-                <button
-                  onClick={() => setActiveTab('manage')}
-                  className={`pb-2 text-sm font-bold transition-all border-b-2 ${
-                    activeTab === 'manage' 
-                      ? 'border-teal-600 text-teal-700' 
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  Manage Allocations
-                </button>
-              </div>
+          </div>
+        )}
+
+      </div>
+
+      {/* Reassign Modal */}
+      {showReassignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 relative space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                <ArrowRightLeft size={16} className="text-teal-700" />
+                Reassign Selected Allocations
+              </h3>
+              <button 
+                onClick={() => setShowReassignModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1"
+              >
+                <X size={16} />
+              </button>
             </div>
 
-            <div className="p-6 overflow-y-auto max-h-[800px]">
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader className="animate-spin text-teal-700" size={32} />
-                </div>
-              ) : scripts.length === 0 ? (
-                <div className="bg-gray-50 rounded-xl border border-dashed border-gray-200 p-12 text-center">
-                  <FileText className="mx-auto text-gray-300 mb-4" size={48} />
-                  <p className="text-gray-500 font-bold">No scripts available for allocation</p>
-                </div>
-              ) : (
-                <>
-                  {activeTab === 'allocate' ? (
-                    <>
-                      {/* Mode Selection */}
-                  <div className="mb-6">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Allocation Strategy</p>
-                    <div className="flex gap-2 p-1.5 bg-gray-100 rounded-xl border border-gray-200/60">
-                      <button
-                        onClick={() => setBulkMode('even')}
-                        className={`flex-1 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                          bulkMode === 'even'
-                            ? 'bg-white text-teal-700 shadow-sm border border-gray-200/50'
-                            : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                      >
-                        Even Distribution
-                      </button>
-                      <button
-                        onClick={() => setBulkMode('custom')}
-                        className={`flex-1 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                          bulkMode === 'custom'
-                            ? 'bg-white text-teal-700 shadow-sm border border-gray-200/50'
-                            : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                      >
-                        Custom Distribution
-                      </button>
-                    </div>
-                  </div>
+            <p className="text-xs text-gray-600">
+              Reassign <span className="font-bold text-gray-900">{selectedAllocationIds.length}</span> selected script allocation(s) to a new examiner:
+            </p>
 
-                  {/* Even Distribution */}
-                  {bulkMode === 'even' && (
-                    <div className="mb-8 p-6 bg-gradient-to-br from-teal-50 to-indigo-50/30 rounded-xl border border-teal-100/60 shadow-sm relative overflow-hidden group">
-                      <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity duration-500 pointer-events-none">
-                        <Zap size={120} />
-                      </div>
-                      <div className="flex items-start gap-4 relative z-10">
-                        <div className="p-3 bg-white rounded-xl shadow-sm text-teal-700 ring-1 ring-black/5">
-                          <Zap size={22} className="fill-teal-600/20" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-base font-black text-gray-900 mb-1 tracking-tight">Automatic Distribution</p>
-                          <p className="text-sm text-gray-600 mb-5 leading-relaxed">
-                            Distribute <span className="font-bold text-gray-900 px-1">{scripts.filter(s => !allocationData[s.id]).length}</span> pending scripts evenly among <span className="font-bold text-gray-900 px-1">{examiners.length}</span> available examiners.
-                          </p>
-                          <button
-                            onClick={calculateEvenDistribution}
-                            className="px-5 py-2.5 bg-teal-700 text-white rounded-md text-sm font-bold hover:bg-teal-800 hover:shadow-md hover:-translate-y-0.5 transition-all active:translate-y-0"
-                          >
-                            Calculate Distribution
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+            <div>
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                Target Examiner <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={targetReassignExaminerId}
+                onChange={(e) => setTargetReassignExaminerId(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 text-xs px-3 py-2 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none font-medium text-gray-800"
+              >
+                <option value="">Select Examiner...</option>
+                {allExaminersList.map(ex => (
+                  <option key={ex.examinerId || ex.id} value={ex.examinerId || ex.id}>
+                    {ex.fullName || ex.examinerName || ex.userName} (ID: {ex.examinerId || ex.id})
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                  {/* Examiner List */}
-                  <div className="mb-8">
-                    <div className="flex items-center justify-between mb-5">
-                      <p className="text-xs font-black text-gray-500 uppercase tracking-widest">Examiners Pool</p>
-                      <span className="text-[10px] font-black text-teal-700 bg-teal-100/50 px-2.5 py-1 rounded-md border border-teal-200/50 uppercase tracking-wide shadow-sm">
-                        {examiners.length} Available
-                      </span>
-                    </div>
-                    
-                    {examiners.length === 0 ? (
-                      <div className="p-10 text-center bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
-                        <Users className="mx-auto text-gray-300 mb-3" size={32} />
-                        <p className="text-sm font-bold text-gray-500">No subject experts assigned</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
-                        {examiners.map(examiner => (
-                          <div key={examiner.examinerId} className="flex items-center justify-between p-4 bg-white border border-gray-200/75 rounded-xl hover:border-teal-300 hover:shadow-md hover:bg-teal-50/20 transition-all duration-300 group">
-                            <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-100 to-indigo-50 text-teal-700 flex items-center justify-center font-black text-sm uppercase shadow-sm border border-teal-100/50 group-hover:scale-110 transition-transform duration-300">
-                                {(examiner.examinerName || 'E').charAt(0)}
-                              </div>
-                              <div>
-                                <p className="text-sm font-black text-gray-900 tracking-tight group-hover:text-teal-700 transition-colors">{examiner.examinerName || 'Unknown Examiner'}</p>
-                                <p className="text-[10px] font-bold text-gray-400 mt-0.5 tracking-wider uppercase">ID: {examiner.examinerId}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider group-hover:text-teal-600 transition-colors">Allocate</span>
-                              <input
-                                type="number"
-                                min="0"
-                                max={scripts.length}
-                                value={examinerCounts[examiner.examinerId] || 0}
-                                onChange={(e) => updateExaminerCount(examiner.examinerId, parseInt(e.target.value) || 0)}
-                                className="w-24 px-3 py-2 text-center text-sm font-black border border-gray-200 rounded-xl focus:ring-4 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all shadow-sm group-hover:border-teal-200 bg-gray-50 focus:bg-white"
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex justify-end gap-4 pt-6 mt-4 border-t border-gray-100 sticky bottom-0 bg-white/95 backdrop-blur-sm pb-2">
-                    <button
-                      onClick={() => openAllocationPane(activePaper)}
-                      className="px-6 py-2.5 text-sm font-black text-gray-500 hover:text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-all duration-300"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleBulkAllocate}
-                      disabled={bulkLoading || examiners.length === 0}
-                      className="px-8 py-2.5 text-sm font-black text-white bg-gradient-to-r from-teal-600 to-indigo-600 rounded-md hover:from-teal-700 hover:to-indigo-700 shadow-lg shadow-teal-500/30 hover:shadow-teal-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 hover:-translate-y-0.5 active:translate-y-0"
-                    >
-                      {bulkLoading ? <Loader className="animate-spin" size={18} /> : <Zap size={18} />}
-                      {bulkLoading ? 'Allocating...' : 'Confirm Allocation'}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="space-y-6">
-                  <div className="bg-amber-50 p-6 rounded-xl border border-amber-200/60 shadow-sm">
-                    <h3 className="text-sm font-black text-amber-900 mb-2 flex items-center gap-2">
-                      <AlertCircle size={16} /> Danger Zone
-                    </h3>
-                    <p className="text-xs text-amber-800 font-medium leading-relaxed mb-6">
-                      Revoking allocations will immediately remove scripts from all examiners assigned to <span className="font-bold">{activePaper.paperCode}</span> and return them to the "Pending" pool. Examiners will lose access to mark these scripts.
-                    </p>
-                    <button 
-                      onClick={handleRevokeAll}
-                      disabled={isRevokingAll || scripts.filter(s => allocationData[s.id]).length === 0}
-                      className="px-5 py-2.5 bg-rose-600 text-white text-sm font-bold rounded-xl hover:bg-rose-700 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed w-full flex items-center justify-center gap-2"
-                    >
-                      {isRevokingAll ? <Loader className="animate-spin" size={16} /> : <X size={16} />}
-                      {isRevokingAll ? 'Revoking...' : `Revoke All Allocations (${scripts.filter(s => allocationData[s.id]).length} active)`}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowReassignModal(false)}
+                className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleReassignSelected}
+                disabled={reassignLoading || !targetReassignExaminerId}
+                className="px-5 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-lg shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {reassignLoading ? <Loader className="animate-spin" size={14} /> : <ArrowRightLeft size={14} />}
+                {reassignLoading ? 'Reassigning...' : 'Confirm Reassign'}
+              </button>
             </div>
           </div>
         </div>
-        )}
-        </div>
-        </>
       )}
     </div>
   );
-
-  if (isTab) return content;
-  return (
-    <div className="min-h-screen bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4">
-      {content}
-    </div>
-  );
 }
-

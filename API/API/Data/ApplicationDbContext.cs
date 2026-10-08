@@ -52,9 +52,15 @@ namespace API.Data
         public DbSet<PageEvent> PageEvents { get; set; }
         public DbSet<GeneratedPdf> GeneratedPdfs { get; set; }
         public DbSet<UploadQueue> UploadQueues { get; set; }
+        public DbSet<PaperSectionMaster> PaperSectionMasters { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<PaperSectionMaster>()
+                .HasIndex(psm => new { psm.PaperId, psm.SectionMasterId })
+                .IsUnique();
 
             // University configuration
             modelBuilder.Entity<University>()

@@ -43,11 +43,13 @@ import ProjectManagement from './pages/ProjectManagement';
 import MasterPapersManagement from './pages/MasterPapersManagement';
 import PapersManagement from './pages/PapersManagement';
 import ImportPapers from './pages/ImportPapers';
+import ImportQuestionPapers from './pages/ImportQuestionPapers';
 import UsersManagement from './pages/UsersManagement';
 import RoleManagement from './pages/RoleManagement';
 import Attendance from './pages/Attendance';
 import ScriptAllocation from './pages/ScriptAllocation';
 import QuestionTypeMaster from './pages/QuestionTypeMaster';
+import SectionMasterManagement from './pages/SectionMasterManagement';
 
 function AppRoutes() {
   const { isAuthenticated, userType, loading, hasPermission } = useAuth();
@@ -158,6 +160,22 @@ function AppRoutes() {
               path="/sessions" 
               element={userType === 'coordinator' ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
+            <Route 
+              path="/admin/question-types" 
+              element={userType === 'admin' ? <QuestionTypeMaster /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+            <Route 
+              path="/question-types" 
+              element={userType === 'coordinator' ? <QuestionTypeMaster /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+            <Route 
+              path="/admin/section-masters" 
+              element={userType === 'admin' ? <SectionMasterManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+            <Route 
+              path="/section-masters" 
+              element={userType === 'coordinator' ? <SectionMasterManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
           </Route>
           <Route 
             path="/admin/projects" 
@@ -188,16 +206,20 @@ function AppRoutes() {
             element={userType === 'coordinator' ? <ImportPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
+            path="/admin/import-question-papers" 
+            element={userType === 'admin' ? <ImportQuestionPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+          <Route 
+            path="/import-question-papers" 
+            element={userType === 'coordinator' ? <ImportQuestionPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+          <Route 
             path="/admin/section-config" 
             element={userType === 'admin' ? <SectionConfig /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/section-config" 
             element={userType === 'examiner' || userType === 'coordinator' ? <SectionConfig /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-          />
-          <Route 
-            path="/admin/question-types" 
-            element={userType === 'admin' || userType === 'coordinator' ? <QuestionTypeMaster /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
 
           {/* Dynamic Permissions Controlled Routes */}

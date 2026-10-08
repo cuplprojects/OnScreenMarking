@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { 
   FileText, Plus, Edit2, UserPlus, X, Search, CheckCircle2, Trash2, 
-  ChevronLeft, ChevronRight, ChevronDown, Filter, Users, BookOpen, Layers, Folder, AlertCircle, Copy, Settings
+  ChevronLeft, ChevronRight, ChevronDown, Filter, Users, BookOpen, Layers, Folder, AlertCircle, Copy, Upload, Info
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useBreadcrumb } from "../context/BreadcrumbContext";
@@ -152,6 +152,21 @@ export default function PapersManagement({ isTab = false }) {
   });
   const [uploading, setUploading] = useState(false);
 
+  // Subject Dropdown State
+  const [isSubjectDropdownOpen, setIsSubjectDropdownOpen] = useState(false);
+  const [subjectSearchText, setSubjectSearchText] = useState("");
+  const subjectDropdownRef = React.useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (subjectDropdownRef.current && !subjectDropdownRef.current.contains(event.target)) {
+        setIsSubjectDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // Examiner Allocation State
   const [showExaminerModal, setShowExaminerModal] = useState(false);
   const [selectedPaper, setSelectedPaper] = useState(null);
@@ -169,6 +184,15 @@ export default function PapersManagement({ isTab = false }) {
   // Import Sections State
   const [sourcePaperId, setSourcePaperId] = useState("");
   const [importingSections, setImportingSections] = useState(false);
+  const [sectionMasters, setSectionMasters] = useState([]);
+  const [importSectionMode, setImportSectionMode] = useState('master'); // 'master' | 'paper'
+  const [selectedMasterSectionIds, setSelectedMasterSectionIds] = useState([]);
+  const [overwriteExistingSections, setOverwriteExistingSections] = useState(true);
+
+  // Table Level Question Paper Upload State
+  const [uploadingPaperId, setUploadingPaperId] = useState(null);
+  const [activePaperForUpload, setActivePaperForUpload] = useState(null);
+  const tableFileInputRef = React.useRef(null);
 
   useEffect(() => {
     fetchInitialData();
@@ -185,6 +209,17 @@ export default function PapersManagement({ isTab = false }) {
         const mappedSubs = subjectsArray.map(s => ({ ...s, subjectName: s.subName || s.subjectName || '' }));
         setSubjects(mappedSubs);
       }
+
+      try {
+        const masters = await sectionService.getSectionMasters();
+        setSectionMasters(masters || []);
+        if (masters && masters.length > 0) {
+          setSelectedMasterSectionIds(masters.map(m => m.id));
+        }
+      } catch (masterErr) {
+        console.error("Failed to load section masters", masterErr);
+      }
+
       refreshTable();
     } catch (err) {
       console.error(err);
@@ -248,22 +283,79 @@ export default function PapersManagement({ isTab = false }) {
   const handleImportSectionsSubmit = async (e) => {
     e.preventDefault();
     if (selectedPaperIds.length === 0) return message.error("Select target papers first");
-    if (!sourcePaperId) return message.error("Select a source paper");
 
     setImportingSections(true);
     try {
-      await sectionService.importSections({
-        sourcePaperId: parseInt(sourcePaperId, 10),
-        targetPaperIds: selectedPaperIds
-      });
-      message.success("Sections imported successfully");
+      if (importSectionMode === 'master') {
+        if (selectedMasterSectionIds.length === 0) {
+          message.error("Please select at least one Master Section to import");
+          setImportingSections(false);
+          return;
+        }
+        await sectionService.importMasterSections({
+          targetPaperIds: selectedPaperIds,
+          masterSectionIds: selectedMasterSectionIds,
+          overwriteExisting: overwriteExistingSections
+        });
+        message.success("Master sections imported successfully");
+      } else {
+        if (!sourcePaperId) {
+          message.error("Select a source paper");
+          setImportingSections(false);
+          return;
+        }
+        await sectionService.importSections({
+          sourcePaperId: parseInt(sourcePaperId, 10),
+          targetPaperIds: selectedPaperIds
+        });
+        message.success("Sections imported successfully");
+      }
       setShowImportSectionsModal(false);
       setSelectedPaperIds([]);
       refreshTable();
     } catch (err) {
-      message.error("Failed to import sections");
+      message.error("Failed to import sections: " + (err.response?.data?.message || err.message));
     } finally {
       setImportingSections(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // Table-Level Question Paper Upload Handlers
+  // -------------------------------------------------------------
+  const triggerTableUpload = (paper) => {
+    setActivePaperForUpload(paper);
+    if (tableFileInputRef.current) {
+      tableFileInputRef.current.value = "";
+      tableFileInputRef.current.click();
+    }
+  };
+
+  const handleTableFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !activePaperForUpload) return;
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      message.error("Please select a valid PDF file.");
+      return;
+    }
+
+    const currentPaperId = activePaperForUpload.paperId;
+    const currentProjectId = activePaperForUpload.projectId || projectId;
+
+    setUploadingPaperId(currentPaperId);
+    try {
+      await paperService.uploadQuestionPaper(
+        currentPaperId,
+        currentProjectId,
+        file
+      );
+      message.success("Question paper PDF uploaded successfully!");
+      refreshTable();
+    } catch (err) {
+      message.error("Failed to upload question paper: " + (err.response?.data?.message || err.message));
+    } finally {
+      setUploadingPaperId(null);
+      setActivePaperForUpload(null);
     }
   };
 
@@ -274,25 +366,44 @@ export default function PapersManagement({ isTab = false }) {
     e.preventDefault();
     if (selectedSubjects.length === 0) return message.error("Please select at least one subject");
 
+    const targetProjectId = formData.projectId || projectId || (projects.length > 0 ? projects[0].projectId : null);
+    if (!targetProjectId) return message.error("Please select a project");
+
     try {
       const payload = {
         ...formData,
         subjectIds: selectedSubjects.map(id => parseInt(id, 10)),
-        projectId: parseInt(formData.projectId, 10),
+        projectId: parseInt(targetProjectId, 10),
+        universityId: activeUniversityId ? parseInt(activeUniversityId, 10) : undefined,
         paperNumber: parseInt(formData.paperNumber, 10),
         maxMarks: parseFloat(formData.maxMarks),
         totalQuestions: formData.totalQuestions === "" ? 0 : parseInt(formData.totalQuestions, 10),
       };
 
+      let savedPaperId = editingId;
       if (editingId) {
         await paperService.updatePaper(editingId, payload);
       } else {
-        await paperService.createPaper(payload);
+        const res = await paperService.createPaper(payload);
+        savedPaperId = res?.paperId || res?.id || res;
+      }
+
+      if (savedPaperId && selectedMasterSectionIds.length > 0) {
+        try {
+          await sectionService.savePaperMasterSections(savedPaperId, selectedMasterSectionIds);
+          await sectionService.importMasterSections({
+            targetPaperIds: [savedPaperId],
+            masterSectionIds: selectedMasterSectionIds,
+            overwriteExisting: false
+          });
+        } catch (secErr) {
+          console.error("Failed to map/import master sections to paper", secErr);
+        }
       }
 
       handleCancel();
       refreshTable();
-      message.success("Paper saved successfully");
+      message.success("Paper and sections saved successfully");
     } catch (err) {
       message.error("Error saving paper");
     }
@@ -304,15 +415,23 @@ export default function PapersManagement({ isTab = false }) {
         setFormData({
             paperCode: fullPaper.paperCode, paperName: fullPaper.paperName, paperNumber: fullPaper.paperNumber,
             maxMarks: fullPaper.maxMarks, totalQuestions: fullPaper.totalQuestions, description: fullPaper.description || "",
-            catchNo: fullPaper.catchNo || "", projectId: fullPaper.projectId, isActive: fullPaper.isActive,
+            catchNo: fullPaper.catchNo || "", projectId: fullPaper.projectId ? String(fullPaper.projectId) : (projectId || ""), 
+            isActive: fullPaper.isActive,
             questionPaperPdfUrl: fullPaper.questionPaperPdfUrl || "",
         });
         if (fullPaper.subjectPapers && fullPaper.subjectPapers.length > 0) {
             setSelectedSubjects(fullPaper.subjectPapers.map(sp => sp.subjectId));
         }
+
+        try {
+          const mappedMasters = await sectionService.getPaperMasterSections(fullPaper.paperId);
+          if (Array.isArray(mappedMasters) && mappedMasters.length > 0) {
+            setSelectedMasterSectionIds(mappedMasters.map(m => m.id));
+          }
+        } catch (e) { console.error(e); }
+
         setEditingId(fullPaper.paperId);
         setShowForm(true);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
         message.error("Failed to fetch paper details");
     }
@@ -321,10 +440,15 @@ export default function PapersManagement({ isTab = false }) {
   const handleCancel = () => {
     setFormData({
       paperCode: "", paperName: "", paperNumber: 1, maxMarks: 100, totalQuestions: "", description: "", 
-      catchNo: "", projectId: projectId || "", isActive: true, questionPaperPdfUrl: "",
+      catchNo: "", projectId: projectId || (projects.length > 0 ? String(projects[0].projectId) : ""), 
+      isActive: true, questionPaperPdfUrl: "",
     });
     setSelectedSubjects([]);
+    if (sectionMasters.length > 0) {
+      setSelectedMasterSectionIds(sectionMasters.map(m => m.id));
+    }
     setEditingId(null);
+    setIsSubjectDropdownOpen(false);
     setShowForm(false);
   };
 
@@ -376,6 +500,7 @@ export default function PapersManagement({ isTab = false }) {
       const assigned = await apiCall(`/PaperExaminers/paper/${selectedPaper.paperId}`);
       setAssignedExaminers(assigned);
       message.success("Examiner assigned successfully");
+      refreshTable();
     } catch (err) {
       message.error("Failed to assign examiner");
     }
@@ -385,12 +510,19 @@ export default function PapersManagement({ isTab = false }) {
     try {
       await apiCall(`/PaperExaminers/remove/${assignmentId}`, { method: 'DELETE' });
       setAssignedExaminers(prev => prev.filter(a => a.id !== assignmentId));
+      message.success("Examiner removed successfully");
+      refreshTable();
     } catch (err) {
       message.error("Failed to remove examiner");
     }
   };
 
-  const SortHeader = ({ label, field, isCenter = false, hasFilter = false, customFilter = null, filterOptions = null }) => {
+  const closeExaminerModal = () => {
+    setShowExaminerModal(false);
+    refreshTable();
+  };
+
+  const SortHeader = ({ label, field, isCenter = false, hasFilter = false }) => {
     const isSorted = sortField === field;
     return (
       <th onClick={() => handleSort(field)} className={`px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors select-none ${isCenter ? 'text-center' : ''}`}>
@@ -410,14 +542,64 @@ export default function PapersManagement({ isTab = false }) {
     );
   };
 
-  const content = (
-    <div className="w-full space-y-4">
-      
-      {!isTab && (
-        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm mb-4">
-          <ProjectConfigHeader title="Papers & Sections Management" titleIcon={<FileText size={18} />} />
+  return (
+    <div className="min-h-screen bg-gray-50/50 pb-12 w-full">
+      <div className="bg-white border-b border-gray-200 px-6 lg:px-10 py-6 mb-6 shadow-sm sticky top-0 z-20">
+        <ProjectConfigHeader />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2">
+          <div className="flex items-center gap-4">
+            <Link to="/admin/dashboard" className="p-2.5 hover:bg-gray-100 rounded-xl border border-gray-200 bg-gray-50 text-gray-600 transition">
+              <ChevronLeft size={16} />
+            </Link>
+            <div>
+              <h1 className="text-lg font-black text-gray-900 mt-1 flex items-center gap-2 leading-tight">
+                <FileText className="text-teal-700" size={18} /> Papers Management
+              </h1>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2.5">
+            {projectId && (
+              <>
+                <button
+                  onClick={() => {
+                    const importPath = userType === 'admin' ? '/admin/import-papers' : '/import-papers';
+                    navigate(`${importPath}?projectId=${encryptedProjectId}&universityId=${activeUniversityId}`);
+                  }}
+                  className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] uppercase tracking-wider px-4 py-2.5 rounded-xl border border-indigo-200 transition-all flex items-center gap-1.5 shadow-sm"
+                >
+                  <Folder size={13} /> Import Papers (From Project)
+                </button>
+                <button
+                  onClick={() => {
+                    const importQpPath = userType === 'admin' ? '/admin/import-question-papers' : '/import-question-papers';
+                    navigate(`${importQpPath}?projectId=${encryptedProjectId}&universityId=${activeUniversityId}`);
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] uppercase tracking-wider px-4 py-2.5 rounded-xl border border-emerald-500 transition-all flex items-center gap-1.5 shadow-sm"
+                >
+                  <Upload size={13} /> Bulk Import Q.P. (Catch-wise)
+                </button>
+              </>
+            )}
+            {selectedPaperIds.length > 0 && (
+              <button
+                onClick={() => setShowImportSectionsModal(true)}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[10px] uppercase tracking-wider px-4 py-2.5 rounded-xl border border-amber-500 transition-all flex items-center gap-1.5 shadow-sm"
+              >
+                <Layers size={13} /> Allocate Sections to Selected ({selectedPaperIds.length})
+              </button>
+            )}
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className={`font-extrabold text-[10px] uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm border ${
+                showForm ? "bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200" : "bg-teal-700 hover:bg-teal-800 text-white border-teal-600"
+              }`}
+            >
+              {showForm ? <X size={13} /> : <Plus size={13} />} {showForm ? "Cancel" : "Add Paper"}
+            </button>
+          </div>
         </div>
-      )}
+      </div>
 
       {(!projectId && !isTab) ? (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-16 text-center">
@@ -434,127 +616,338 @@ export default function PapersManagement({ isTab = false }) {
           <div className="w-full space-y-4">
         
         {showForm && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 p-4">
-              <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl relative flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200 overflow-hidden">
-                <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0 bg-gray-50/50">
-                    <div>
-                      <h3 className="text-lg font-black text-gray-900 flex items-center gap-2">
-                        {editingId ? <Edit2 size={18} className="text-teal-700" /> : <Plus size={18} className="text-teal-700" />}
-                        {editingId ? "Edit Paper Configuration" : "Create New Paper"}
-                      </h3>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Fill in the paper details below</p>
-                    </div>
-                    <button onClick={handleCancel} className="p-1.5 hover:bg-gray-200 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
-                      <X size={18} />
-                    </button>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-gray-100 relative max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+              
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3.5 mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-teal-100 text-teal-700 rounded-xl flex items-center justify-center shadow-xs">
+                    {editingId ? <Edit2 size={16} /> : <Plus size={16} />}
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-gray-900 leading-tight">
+                      {editingId ? "Edit Paper Configuration" : "Create New Paper"}
+                    </h2>
+                    <p className="text-xs text-gray-500 font-medium">Configure paper metadata and subject mappings</p>
+                  </div>
                 </div>
-                
-                <div className="p-6 overflow-y-auto">
-                <form id="paperForm" onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Paper Code *</label>
-                    <input type="text" value={formData.paperCode} onChange={(e) => setFormData({ ...formData, paperCode: e.target.value })} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none transition-all" required />
-                    </div>
-                    <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Paper Name *</label>
-                    <input type="text" value={formData.paperName} onChange={(e) => setFormData({ ...formData, paperName: e.target.value })} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none transition-all" required />
-                    </div>
-                    <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Catch Number</label>
-                    <input type="text" value={formData.catchNo} onChange={(e) => setFormData({ ...formData, catchNo: e.target.value })} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none transition-all" />
-                    </div>
+                <button 
+                  type="button" 
+                  onClick={handleCancel}
+                  className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1.5 rounded-lg transition-all"
+                  title="Close"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Row 1: Code, Name, Catch No */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                      Paper Code <span className="text-red-500">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      value={formData.paperCode} 
+                      onChange={(e) => setFormData({ ...formData, paperCode: e.target.value })} 
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                      placeholder="e.g. MATH-101"
+                      required 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                      Paper Name <span className="text-red-500">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      value={formData.paperName} 
+                      onChange={(e) => setFormData({ ...formData, paperName: e.target.value })} 
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                      placeholder="e.g. Mathematics-I"
+                      required 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Catch Number</label>
+                    <input 
+                      type="text" 
+                      value={formData.catchNo} 
+                      onChange={(e) => setFormData({ ...formData, catchNo: e.target.value })} 
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                      placeholder="e.g. C-4501"
+                    />
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Row 2: Subjects Multi-Select Dropdown & Project Select (if no project in URL context) */}
+                <div className={`grid grid-cols-1 ${!projectId ? 'sm:grid-cols-2' : ''} gap-3.5`}>
+                  {/* Multi-Select Subjects Dropdown */}
+                  <div className="relative" ref={subjectDropdownRef}>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                      Subjects ({selectedSubjects.length} selected) <span className="text-red-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsSubjectDropdownOpen(!isSubjectDropdownOpen)}
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium flex items-center justify-between shadow-2xs"
+                    >
+                      <span className="truncate">
+                        {selectedSubjects.length === 0 ? (
+                          <span className="text-gray-400 font-normal">Select subjects...</span>
+                        ) : (
+                          <span className="text-teal-800 font-semibold">
+                            {selectedSubjects.length === 1 
+                              ? subjects.find(s => s.subjectId === selectedSubjects[0])?.subjectName || "1 Subject Selected"
+                              : `${selectedSubjects.length} Subjects Selected`
+                            }
+                          </span>
+                        )}
+                      </span>
+                      <ChevronDown size={14} className={`text-gray-400 transition-transform ${isSubjectDropdownOpen ? "rotate-180" : ""}`} />
+                    </button>
+
+                    {isSubjectDropdownOpen && (
+                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2.5 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
+                        <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
+                          <Search size={13} className="text-gray-400" />
+                          <input 
+                            type="text" 
+                            placeholder="Search subjects..."
+                            value={subjectSearchText}
+                            onChange={(e) => setSubjectSearchText(e.target.value)}
+                            className="w-full bg-transparent text-xs text-gray-800 outline-none placeholder-gray-400"
+                          />
+                          {subjectSearchText && (
+                            <button type="button" onClick={() => setSubjectSearchText("")} className="text-gray-400 hover:text-gray-600">
+                              <X size={12} />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] px-1 text-gray-500 font-medium">
+                          <span>{selectedSubjects.length} selected</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedSubjects(subjects.map(s => s.subjectId))}
+                              className="text-teal-700 hover:underline font-semibold"
+                            >
+                              Select All
+                            </button>
+                            <span>•</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedSubjects([])}
+                              className="text-gray-500 hover:underline"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar pr-1">
+                          {subjects.filter(s => (s.subjectName || "").toLowerCase().includes(subjectSearchText.toLowerCase())).length === 0 ? (
+                            <div className="text-xs text-gray-400 py-2 text-center">No subjects found</div>
+                          ) : (
+                            subjects
+                              .filter(s => (s.subjectName || "").toLowerCase().includes(subjectSearchText.toLowerCase()))
+                              .map(s => {
+                                const isSelected = selectedSubjects.includes(s.subjectId);
+                                return (
+                                  <label 
+                                    key={s.subjectId}
+                                    className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer select-none transition-all ${
+                                      isSelected ? "bg-teal-50 text-teal-900 font-medium" : "hover:bg-gray-50 text-gray-700"
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => toggleSubject(s.subjectId)}
+                                      className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300"
+                                    />
+                                    <span className="truncate">{s.subjectName}</span>
+                                  </label>
+                                );
+                              })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Project Select (Only shown if page is not already scoped to a specific project) */}
+                  {!projectId && (
                     <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Subjects ({selectedSubjects.length} selected) *</label>
-                    <SubjectMultiSelect subjects={subjects} selectedSubjects={selectedSubjects} toggleSubject={toggleSubject} />
-                    </div>
-                    <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Project *</label>
-                    <select value={formData.projectId} onChange={(e) => handleProjectChange(e.target.value)} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none transition-all" required>
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                        Project <span className="text-red-500">*</span>
+                      </label>
+                      <select 
+                        value={formData.projectId} 
+                        onChange={(e) => handleProjectChange(e.target.value)} 
+                        className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                        required
+                      >
                         <option value="">Select Project</option>
                         {projects.map((p) => (
-                        <option key={p.projectId} value={p.projectId}>{p.projectName}</option>
+                          <option key={p.projectId} value={p.projectId}>{p.projectName}</option>
                         ))}
-                    </select>
+                      </select>
                     </div>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Paper Number</label>
-                    <input type="number" value={formData.paperNumber} onChange={(e) => setFormData({ ...formData, paperNumber: e.target.value })} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none transition-all" min="1" />
-                    </div>
-                    <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Max Marks</label>
-                    <input type="number" value={formData.maxMarks} onChange={(e) => setFormData({ ...formData, maxMarks: e.target.value })} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none transition-all" min="0" />
-                    </div>
-                    <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Total Questions</label>
-                    <input type="number" value={formData.totalQuestions} onChange={(e) => setFormData({ ...formData, totalQuestions: e.target.value })} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none transition-all" min="0" />
-                    </div>
+                {/* Selected Subjects Badges Display (Quick View) */}
+                {selectedSubjects.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {selectedSubjects.map(subId => {
+                      const sub = subjects.find(s => s.subjectId === subId);
+                      if (!sub) return null;
+                      return (
+                        <span 
+                          key={subId} 
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-[10px] font-semibold"
+                        >
+                          {sub.subjectName}
+                          <button 
+                            type="button" 
+                            onClick={() => toggleSubject(subId)}
+                            className="hover:text-teal-900 transition-colors"
+                          >
+                            <X size={10} />
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Row 3: Paper Number, Max Marks, Total Questions */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Paper Number</label>
+                    <input 
+                      type="number" 
+                      value={formData.paperNumber} 
+                      onChange={(e) => setFormData({ ...formData, paperNumber: e.target.value })} 
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                      placeholder="1"
+                      min="1" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Max Marks</label>
+                    <input 
+                      type="number" 
+                      value={formData.maxMarks} 
+                      onChange={(e) => setFormData({ ...formData, maxMarks: e.target.value })} 
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                      placeholder="100"
+                      min="0" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Total Questions</label>
+                    <input 
+                      type="number" 
+                      value={formData.totalQuestions} 
+                      onChange={(e) => setFormData({ ...formData, totalQuestions: e.target.value })} 
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                      placeholder="10"
+                      min="0" 
+                    />
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Description</label>
-                        <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500 outline-none transition-all resize-none" rows="3" />
+                {/* Row 4: Description */}
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Description</label>
+                  <input 
+                    type="text" 
+                    value={formData.description} 
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })} 
+                    className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                    placeholder="Brief description or guidelines (optional)..." 
+                  />
+                </div>
+
+                {/* Row 5: Master Section Mappings */}
+                {sectionMasters.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600">
+                        Master Sections ({selectedMasterSectionIds.length} selected)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selectedMasterSectionIds.length === sectionMasters.length) {
+                            setSelectedMasterSectionIds([]);
+                          } else {
+                            setSelectedMasterSectionIds(sectionMasters.map(m => m.id));
+                          }
+                        }}
+                        className="text-[10px] font-bold text-teal-700 hover:underline"
+                      >
+                        {selectedMasterSectionIds.length === sectionMasters.length ? "Deselect All" : "Select All"}
+                      </button>
                     </div>
-                    <div>
-                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Question Paper PDF</label>
-                        <div className="flex flex-col gap-2">
-                            <input
-                                type="file"
-                                accept="application/pdf"
-                                onChange={async (e) => {
-                                    const file = e.target.files[0];
-                                    if (!file) return;
-                                    setUploading(true);
-                                    const token = sessionStorage.getItem('token');
-                                    const formDataObj = new FormData();
-                                    formDataObj.append("file", file);
-                                    try {
-                                        const response = await fetch(`${import.meta.env.VITE_API_URL}/upload`, {
-                                            method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formDataObj
-                                        });
-                                        if (!response.ok) throw new Error("Failed to upload PDF");
-                                        const res = await response.json();
-                                        setFormData(prev => ({ ...prev, questionPaperPdfUrl: res.url }));
-                                        message.success("Question paper PDF uploaded successfully!");
-                                    } catch (err) {
-                                        message.error("Failed to upload question paper PDF: " + err.message);
-                                    } finally {
-                                        setUploading(false);
-                                    }
+                    <div className="bg-gray-50/70 border border-gray-200 rounded-lg p-2 max-h-[85px] overflow-y-auto custom-scrollbar">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {sectionMasters.map((m) => {
+                          const isSelected = selectedMasterSectionIds.includes(m.id);
+                          return (
+                            <label
+                              key={m.id}
+                              className={`flex items-center gap-2 px-2.5 py-1 rounded-md border text-xs cursor-pointer select-none transition-all ${
+                                isSelected
+                                  ? "bg-teal-50 border-teal-300 text-teal-900 font-semibold"
+                                  : "bg-white border-gray-200 text-gray-700 hover:bg-gray-100/50"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {
+                                  setSelectedMasterSectionIds(prev =>
+                                    prev.includes(m.id) ? prev.filter(id => id !== m.id) : [...prev, m.id]
+                                  );
                                 }}
-                                className="w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100"
-                                disabled={uploading}
-                            />
-                            {uploading && <p className="text-xs text-teal-700 animate-pulse">Uploading PDF...</p>}
-                            {formData.questionPaperPdfUrl && (
-                                <p className="text-xs text-green-600 flex items-center gap-1">
-                                <CheckCircle2 size={12} />
-                                Attached: <a href={`${import.meta.env.VITE_API_URL.replace('/api', '')}${formData.questionPaperPdfUrl}`} target="_blank" rel="noopener noreferrer" className="underline font-bold text-teal-700">View PDF</a>
-                                </p>
-                            )}
-                        </div>
+                                className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300"
+                              />
+                              <span className="truncate text-[11px]">{m.name} ({m.totalMarks}M)</span>
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
-                </div>
+                  </div>
+                )}
 
-                </form>
-                </div>
-                <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 shrink-0">
-                    <button type="button" onClick={handleCancel} className="px-4 py-2 rounded-xl text-xs font-extrabold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-sm">
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
+                  <button 
+                    type="button" 
+                    onClick={handleCancel} 
+                    className="px-4 py-2 rounded-lg text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all"
+                  >
                     Cancel
-                    </button>
-                    <button type="submit" form="paperForm" className="px-4 py-2 rounded-xl text-xs font-extrabold bg-teal-700 hover:bg-teal-800 text-white transition-colors shadow-sm flex items-center gap-1.5">
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="px-5 py-2 rounded-lg text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 shadow-sm transition-all flex items-center gap-1.5"
+                  >
+                    {editingId ? <Edit2 size={13} /> : <Plus size={13} />}
                     {editingId ? "Update Configuration" : "Save Paper"}
-                    </button>
+                  </button>
                 </div>
-              </div>
+              </form>
             </div>
+          </div>
         )}
 
         {/* Papers Main Table Area */}
@@ -653,12 +1046,8 @@ export default function PapersManagement({ isTab = false }) {
                       />
                     </th>
                     <SortHeader label="Code & Name" field="paperCode" hasFilter={true} />
-                    <SortHeader 
-                      label="Subject & Max" 
-                      field="subjectName" 
-                      hasFilter={true}
-                      filterOptions={subjects.map(s => ({ value: s.subjectId, label: s.subjectName }))}
-                    />
+                    <SortHeader label="Subject & Max" field="subjectName" hasFilter={true} />
+                    <th className="px-5 py-3.5 text-center border-b border-gray-100">Question Paper</th>
                     <th className="px-5 py-3.5 text-center border-b border-gray-100">Configuration Status</th>
                     <th className="px-5 py-3.5 text-right border-b border-gray-100">Actions</th>
                   </tr>
@@ -697,22 +1086,166 @@ export default function PapersManagement({ isTab = false }) {
                           </div>
                         </td>
                         <td className="px-5 py-2.5 text-center">
-                          {paper.isSectionsConfigured ? (
-                            <div className="flex flex-col items-center gap-1.5">
-                              <span className="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                Configured
-                              </span>
-                              {missingQp && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-100 whitespace-nowrap">
-                                  <AlertCircle size={10} /> Missing Q.P
-                                </span>
-                              )}
-                            </div>
+                          {paper.questionPaperPdfUrl ? (
+                            <a
+                              href={`${import.meta.env.VITE_API_URL.replace('/api', '')}${paper.questionPaperPdfUrl}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors shadow-sm"
+                              title="View Question Paper PDF"
+                            >
+                              <FileText size={13} className="text-emerald-600" />
+                              View PDF
+                            </a>
                           ) : (
-                            <span className="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200">
-                              Unconfigured
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => triggerTableUpload(paper)}
+                              disabled={uploadingPaperId === paper.paperId}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-colors shadow-sm"
+                              title="Upload Question Paper PDF"
+                            >
+                              {uploadingPaperId === paper.paperId ? (
+                                <span className="flex items-center gap-1 text-teal-600 animate-pulse">
+                                  <span className="w-3 h-3 border-2 border-teal-600 border-t-transparent rounded-full animate-spin inline-block"></span>
+                                  Uploading...
+                                </span>
+                              ) : (
+                                <>
+                                  <Upload size={12} />
+                                  Upload PDF
+                                </>
+                              )}
+                            </button>
                           )}
+                        </td>
+                        <td className="px-5 py-2.5 text-center">
+                          {(() => {
+                            const missingReasons = [];
+                            const statusDetails = [];
+
+                            const hasSections = !!paper.isSectionsConfigured && (paper.sectionsCount || 0) > 0;
+                            const marksMatch = hasSections && (paper.maxMarks > 0 ? paper.configuredMarks === paper.maxMarks : true);
+                            const hasEvaluators = (paper.expertsCount || 0) > 0;
+                            const hasQp = !!paper.questionPaperPdfUrl;
+
+                            if (!hasSections) {
+                              missingReasons.push("No sections configured for this paper");
+                              statusDetails.push({ label: "Sections", ok: false, text: "0 sections created" });
+                            } else if (!marksMatch) {
+                              const diff = (paper.maxMarks || 0) - (paper.configuredMarks || 0);
+                              const diffText = diff > 0 ? `${diff} marks pending` : `${Math.abs(diff)} marks exceeded`;
+                              missingReasons.push(`Section marks (${paper.configuredMarks || 0}) don't equal Max Marks (${paper.maxMarks || 0}) - ${diffText}`);
+                              statusDetails.push({ 
+                                label: "Section Marks", 
+                                ok: false, 
+                                text: `${paper.sectionsCount} section(s), ${paper.configuredMarks || 0}/${paper.maxMarks} marks (${diffText})` 
+                              });
+                            } else {
+                              statusDetails.push({ 
+                                label: "Sections & Marks", 
+                                ok: true, 
+                                text: `${paper.sectionsCount} section(s), ${paper.configuredMarks}/${paper.maxMarks} marks matched` 
+                              });
+                            }
+
+                            if (!hasEvaluators) {
+                              missingReasons.push("No evaluators / examiners assigned");
+                              statusDetails.push({ label: "Evaluators", ok: false, text: "0 evaluators assigned" });
+                            } else {
+                              statusDetails.push({ label: "Evaluators", ok: true, text: `${paper.expertsCount} evaluator(s) assigned` });
+                            }
+
+                            if (!hasQp) {
+                              missingReasons.push("Question Paper PDF not uploaded");
+                              statusDetails.push({ label: "Question Paper", ok: false, text: "PDF not uploaded" });
+                            } else {
+                              statusDetails.push({ label: "Question Paper", ok: true, text: "PDF uploaded" });
+                            }
+
+                            let sectionBadge = "Unconfigured";
+                            let sectionBadgeColor = "bg-amber-50 text-amber-700 border-amber-200";
+
+                            if (hasSections && marksMatch) {
+                              sectionBadge = "Configured";
+                              sectionBadgeColor = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                            } else if (hasSections && !marksMatch) {
+                              sectionBadge = `Marks (${paper.configuredMarks || 0}/${paper.maxMarks})`;
+                              sectionBadgeColor = "bg-amber-50 text-amber-700 border-amber-200";
+                            }
+
+                            const tooltipTitle = missingReasons.length > 0 
+                              ? `Configuration Status:\n• ` + missingReasons.join("\n• ")
+                              : "Configuration complete: Sections, Marks, Evaluators and Question Paper are fully configured.";
+
+                            const isFullyReady = missingReasons.length === 0;
+
+                            return (
+                              <div className="relative group inline-flex flex-col items-center gap-1 cursor-help" title={tooltipTitle}>
+                                <div className="flex items-center gap-1">
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border ${sectionBadgeColor}`}>
+                                    {sectionBadge}
+                                    <Info size={10} className="opacity-70 group-hover:opacity-100 transition-opacity" />
+                                  </span>
+                                </div>
+                                
+                                {paper.expertsCount > 0 ? (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold text-teal-700 bg-teal-50 border border-teal-100 whitespace-nowrap">
+                                    <Users size={9} /> {paper.expertsCount} Evaluator{paper.expertsCount > 1 ? 's' : ''}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold text-gray-400 bg-gray-50 border border-gray-100 whitespace-nowrap">
+                                    No Evaluator
+                                  </span>
+                                )}
+
+                                {missingQp && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-100 whitespace-nowrap">
+                                    <AlertCircle size={9} /> Missing Q.P
+                                  </span>
+                                )}
+
+                                {/* Floating Tooltip Breakdown */}
+                                <div className="hidden group-hover:flex flex-col absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900/95 backdrop-blur-sm text-white text-left rounded-xl shadow-2xl z-50 pointer-events-none animate-in fade-in zoom-in-95 duration-150 border border-gray-700">
+                                  <div className="flex items-center justify-between border-b border-gray-800 pb-1.5 mb-2">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-gray-300 flex items-center gap-1">
+                                      <Info size={12} className="text-teal-400" /> Configuration Breakdown
+                                    </span>
+                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${isFullyReady ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                                      {isFullyReady ? 'Ready' : 'Pending'}
+                                    </span>
+                                  </div>
+
+                                  <div className="space-y-1.5">
+                                    {statusDetails.map((item, idx) => (
+                                      <div key={idx} className="flex items-start gap-1.5 text-[10px]">
+                                        <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0 font-bold text-[8px] mt-0.5 ${item.ok ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                                          {item.ok ? '✓' : '✕'}
+                                        </span>
+                                        <div className="leading-tight flex-1">
+                                          <span className="font-bold text-gray-200 block">{item.label}</span>
+                                          <span className={item.ok ? 'text-gray-400 text-[9px]' : 'text-rose-300 text-[9px]'}>{item.text}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  {missingReasons.length > 0 && (
+                                    <div className="mt-2 pt-1.5 border-t border-gray-800 text-[9px] text-amber-300/90 leading-tight">
+                                      <span className="font-bold text-amber-300">Why Unconfigured:</span>
+                                      <ul className="list-disc list-inside mt-0.5 space-y-0.5 text-gray-300">
+                                        {missingReasons.map((reason, rIdx) => (
+                                          <li key={rIdx}>{reason}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+
+                                  <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900/95"></div>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="px-5 py-2.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
@@ -818,41 +1351,150 @@ export default function PapersManagement({ isTab = false }) {
         {/* ------------------------------------------------------------------ */}
         {showImportSectionsModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4">
-            <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
+            <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
               <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
                 <div>
                   <h3 className="text-lg font-black text-gray-900">Import Sections</h3>
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">To {selectedPaperIds.length} selected papers</p>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Applying to {selectedPaperIds.length} selected paper(s)</p>
                 </div>
                 <button onClick={() => setShowImportSectionsModal(false)} className="p-1.5 hover:bg-gray-200 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
                   <X size={18} />
                 </button>
               </div>
+
+              {/* Tab Selector */}
+              <div className="flex border-b border-gray-200 bg-gray-50/50 px-6 pt-3 gap-4">
+                <button
+                  type="button"
+                  onClick={() => setImportSectionMode('master')}
+                  className={`pb-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+                    importSectionMode === 'master'
+                      ? 'border-teal-700 text-teal-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  <Layers size={14} /> Master Sections
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImportSectionMode('paper')}
+                  className={`pb-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+                    importSectionMode === 'paper'
+                      ? 'border-teal-700 text-teal-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  <Copy size={14} /> From Configured Paper
+                </button>
+              </div>
+
               <form onSubmit={handleImportSectionsSubmit} className="p-6 space-y-4">
-                <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl mb-2 flex gap-3">
-                   <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
-                   <p className="text-[10px] font-bold text-amber-800">
-                     Warning: This will overwrite any existing sections on the target papers. Make sure the target papers share the same structure as the source paper.
-                   </p>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Select Source Paper</label>
-                  <select 
-                    value={sourcePaperId} 
-                    onChange={e => setSourcePaperId(e.target.value)} 
-                    className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none" 
-                    required
-                  >
-                    <option value="">-- Select a configured paper --</option>
-                    {papers.filter(p => p.isSectionsConfigured && !selectedPaperIds.includes(p.paperId)).map(p => (
-                      <option key={p.paperId} value={p.paperId}>{p.paperCode} - {p.paperName}</option>
-                    ))}
-                  </select>
-                </div>
+                {importSectionMode === 'master' ? (
+                  <div className="space-y-4">
+                    <p className="text-xs text-gray-600">
+                      Select predefined master section structures to automatically generate and assign sections to the chosen papers.
+                    </p>
+
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      {sectionMasters.length === 0 ? (
+                        <p className="text-xs text-gray-400 text-center py-4">No master sections available.</p>
+                      ) : (
+                        sectionMasters.map(master => {
+                          const isChecked = selectedMasterSectionIds.includes(master.id);
+                          return (
+                            <label
+                              key={master.id}
+                              className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                                isChecked ? 'bg-teal-50/60 border-teal-300' : 'bg-white border-gray-200 hover:bg-gray-50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedMasterSectionIds(prev => [...prev, master.id]);
+                                  } else {
+                                    setSelectedMasterSectionIds(prev => prev.filter(id => id !== master.id));
+                                  }
+                                }}
+                                className="mt-1 rounded border-gray-300 text-teal-700 focus:ring-teal-500"
+                              />
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-bold text-gray-900 text-sm">{master.name}</span>
+                                  <span className="text-[10px] font-extrabold px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md">
+                                    {master.totalMarks} Marks
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-gray-500 mt-0.5">
+                                  Q{master.startQuestion} - Q{master.endQuestion} ({master.totalQuestions || (master.endQuestion - master.startQuestion + 1)} Questions) &bull; Attempt {master.maxQuestionsToAttempt}
+                                </div>
+                                {master.description && (
+                                  <p className="text-[10px] text-gray-400 mt-1">{master.description}</p>
+                                )}
+                              </div>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMasterSectionIds(sectionMasters.map(m => m.id))}
+                        className="text-[11px] text-teal-700 font-bold hover:underline"
+                      >
+                        Select All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMasterSectionIds([])}
+                        className="text-[11px] text-gray-500 font-bold hover:underline"
+                      >
+                        Clear Selection
+                      </button>
+                    </div>
+
+                    <label className="flex items-center gap-2 pt-2 border-t border-gray-100 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={overwriteExistingSections}
+                        onChange={(e) => setOverwriteExistingSections(e.target.checked)}
+                        className="rounded border-gray-300 text-teal-700 focus:ring-teal-500"
+                      />
+                      <span className="text-xs font-semibold text-gray-700">Overwrite existing sections on target papers</span>
+                    </label>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl flex gap-3">
+                      <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                      <p className="text-[10px] font-bold text-amber-800">
+                        Warning: This will overwrite any existing sections on the target papers with the structure from the source paper.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Select Source Paper</label>
+                      <select 
+                        value={sourcePaperId} 
+                        onChange={e => setSourcePaperId(e.target.value)} 
+                        className="w-full text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none" 
+                        required={importSectionMode === 'paper'}
+                      >
+                        <option value="">-- Select a configured paper --</option>
+                        {papers.filter(p => p.isSectionsConfigured && !selectedPaperIds.includes(p.paperId)).map(p => (
+                          <option key={p.paperId} value={p.paperId}>{p.paperCode} - {p.paperName}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
                 
                 <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
                   <button type="button" onClick={() => setShowImportSectionsModal(false)} className="px-5 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors">Cancel</button>
-                  <button type="submit" disabled={importingSections} className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md shadow-md transition-colors disabled:opacity-50 flex items-center gap-2">
+                  <button type="submit" disabled={importingSections} className="px-5 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-xl shadow-md transition-colors disabled:opacity-50 flex items-center gap-2">
                     {importingSections ? 'Importing...' : 'Confirm Import'}
                   </button>
                 </div>
@@ -872,7 +1514,7 @@ export default function PapersManagement({ isTab = false }) {
                     <h3 className="text-xl font-black text-gray-900">Assign Examiners</h3>
                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Allocation for {selectedPaper?.paperCode}: {selectedPaper?.paperName}</p>
                 </div>
-                <button onClick={() => setShowExaminerModal(false)} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+                <button onClick={closeExaminerModal} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
                     <X size={20} className="text-gray-400 hover:text-gray-600" />
                 </button>
                 </div>
@@ -941,23 +1583,22 @@ export default function PapersManagement({ isTab = false }) {
                 </div>
                 </div>
                 <div className="p-6 bg-gray-50/50 border-t border-gray-100 flex justify-end">
-                <button onClick={() => setShowExaminerModal(false)} className="bg-teal-700 text-white px-8 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-teal-200 hover:bg-teal-800 transition-all">
+                <button onClick={closeExaminerModal} className="bg-teal-700 text-white px-8 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-teal-200 hover:bg-teal-800 transition-all">
                     Done
                 </button>
                 </div>
             </div>
             </div>
         )}
-          </div>
-          </>
-        )}
-    </div>
-  );
-
-  if (isTab) return content;
-  return (
-    <div className="min-h-screen bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4">
-      {content}
+        {/* Hidden Table File Input for Question Paper Upload */}
+        <input
+          type="file"
+          ref={tableFileInputRef}
+          accept="application/pdf"
+          style={{ display: "none" }}
+          onChange={handleTableFileChange}
+        />
+      </div>
     </div>
   );
 }

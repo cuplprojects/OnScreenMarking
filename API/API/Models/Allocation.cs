@@ -24,7 +24,7 @@ namespace API.Models
 
     public int TimeTakenSeconds { get; set; }
 
-    public string Status { get; set; }
+    public string Status { get; set; } = "allocated";
 
     public DateTime? Deadline { get; set; }
 }

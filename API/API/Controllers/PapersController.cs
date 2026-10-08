@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Hosting;
+using System.IO;
 using API.Data;
 using API.Models;
 using API.Models.DTOs;
@@ -13,10 +15,12 @@ namespace API.Controllers
     public class PapersController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IWebHostEnvironment _environment;
 
-        public PapersController(ApplicationDbContext context)
+        public PapersController(ApplicationDbContext context, IWebHostEnvironment environment)
         {
             _context = context;
+            _environment = environment;
         }
 
         [HttpGet("dashboard-stats")]
@@ -71,7 +75,7 @@ namespace API.Controllers
                             query = query.Where(p => _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.Status == "completed") > 0);
                             break;
                         case "unconfigured":
-                            query = query.Where(p => !p.Sections.Any());
+                            query = query.Where(p => !_context.Sections.Any(s => s.PaperId == p.PaperId));
                             break;
                     }
                 }
@@ -128,32 +132,34 @@ namespace API.Controllers
 
                 var totalCount = await query.CountAsync();
 
-                // Get paginated papers first, then do the complex selections
-                var paginatedPapers = await query
+                var items = await query
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize)
+                    .Select(p => new
+                    {
+                        paperId = p.PaperId,
+                        paperCode = p.PaperCode,
+                        paperName = p.PaperName,
+                        catchNo = p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.CatchNo).FirstOrDefault() 
+                            ?? p.ProjectPapers.Select(pp => pp.CatchNo).FirstOrDefault() ?? "",
+                        questionPaperPdfUrl = p.ProjectPapers.Where(pp => pp.ProjectId == projectId && !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl)).Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() 
+                            ?? p.ProjectPapers.Where(pp => !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl)).Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() ?? "",
+                        projectId = projectId,
+                        maxMarks = p.MaxMarks,
+                        totalQuestions = p.TotalQuestions,
+                        isActive = p.IsActive,
+                        subjectName = p.SubjectPapers.Select(sp => sp.Subject.SubName).FirstOrDefault() ?? "N/A",
+                        subjectId = p.SubjectPapers.Select(sp => sp.SubjectId).FirstOrDefault(),
+                        totalScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.ProjectPaper.ProjectId == projectId),
+                        completedScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.ProjectPaper.ProjectId == projectId && s.Status == "completed"),
+                        allocatedScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.ProjectPaper.ProjectId == projectId && (s.Status == "allocated" || s.Status == "marking")),
+                        pendingScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.ProjectPaper.ProjectId == projectId && (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any()))),
+                        isSectionsConfigured = _context.Sections.Any(s => s.PaperId == p.PaperId),
+                        sectionsCount = _context.Sections.Count(s => s.PaperId == p.PaperId),
+                        configuredMarks = _context.Sections.Where(s => s.PaperId == p.PaperId).Sum(s => (int?)s.TotalMarks) ?? 0,
+                        expertsCount = _context.PaperExaminers.Count(pe => pe.PaperId == p.PaperId)
+                    })
                     .ToListAsync();
-
-                // Now do the expensive selections on the paginated data
-                var items = paginatedPapers.Select(p => new
-                {
-                    paperId = p.PaperId,
-                    paperCode = p.PaperCode,
-                    paperName = p.PaperName,
-                    catchNo = p.ProjectPapers.FirstOrDefault()?.CatchNo ?? "",
-                    maxMarks = p.MaxMarks,
-                    totalQuestions = p.TotalQuestions,
-                    isActive = p.IsActive,
-                    subjectName = p.SubjectPapers.Select(sp => sp.Subject.SubName).FirstOrDefault() ?? "N/A",
-                    subjectId = p.SubjectPapers.Select(sp => sp.SubjectId).FirstOrDefault(),
-                    totalScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId),
-                    completedScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.Status == "completed"),
-                    allocatedScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (s.Status == "allocated" || s.Status == "marking")),
-                    pendingScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any()))),
-                    isSectionsConfigured = p.Sections.Any(),
-                    configuredMarks = p.Sections.Sum(s => (int?)s.TotalMarks) ?? 0,
-                    expertsCount = _context.PaperExaminers.Count(pe => pe.PaperId == p.PaperId)
-                }).ToList();
 
                 var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
@@ -193,7 +199,9 @@ namespace API.Controllers
 
                 var query = _context.Papers
                     .Include(p => p.SubjectPapers)
-                    .ThenInclude(sp => sp.Subject)
+                        .ThenInclude(sp => sp.Subject)
+                    .Include(p => p.ProjectPapers)
+                        .ThenInclude(pp => pp.Project)
                     .AsQueryable();
 
                 if (subjectId.HasValue)
@@ -208,18 +216,20 @@ namespace API.Controllers
                 // Filter by isMaster status vs university/project papers
                 if (isMaster)
                 {
-                    // Master papers belong directly to a university (not through projects)
-                    query = query.Where(p => p.UniversityId.HasValue);
-                    
+                    // Master papers belong directly to a university
                     if (universityId.HasValue)
                     {
                         query = query.Where(p => p.UniversityId == universityId.Value);
                     }
+                    else
+                    {
+                        query = query.Where(p => p.UniversityId.HasValue);
+                    }
                 }
-                else if (universityId.HasValue)
+                else if (universityId.HasValue && !projectId.HasValue)
                 {
-                    // Session papers belong to projects in the specified university
-                    query = query.Where(p => p.ProjectPapers.Any(pp => pp.Project.UniversityId == universityId.Value) && !p.UniversityId.HasValue);
+                    // Papers associated with this university or its projects
+                    query = query.Where(p => p.UniversityId == universityId.Value || p.ProjectPapers.Any(pp => pp.Project.UniversityId == universityId.Value));
                 }
 
                 // Search filter
@@ -270,6 +280,10 @@ namespace API.Controllers
                     TotalQuestions = p.TotalQuestions,
                     Description = p.Description,
                     IsActive = p.IsActive,
+                    UniversityId = p.UniversityId,
+                    ProjectId = p.ProjectPapers.Select(pp => (int?)pp.ProjectId).FirstOrDefault(),
+                    CatchNo = p.ProjectPapers.Select(pp => pp.CatchNo).FirstOrDefault() ?? "",
+                    QuestionPaperPdfUrl = p.ProjectPapers.Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() ?? "",
                     SubjectIds = p.SubjectPapers
                         .Select(sp => sp.SubjectId)
                         .ToList(),
@@ -301,34 +315,38 @@ namespace API.Controllers
             try
             {
                 var paper = await _context.Papers
-           
-           .Include(p => p.Sections)
-           .Include(p => p.SubjectPapers)
-               .ThenInclude(sp => sp.Subject)
-           .FirstOrDefaultAsync(p => p.PaperId == id);
+                    .Include(p => p.Sections)
+                    .Include(p => p.SubjectPapers)
+                        .ThenInclude(sp => sp.Subject)
+                    .Include(p => p.ProjectPapers)
+                    .FirstOrDefaultAsync(p => p.PaperId == id);
 
                 if (paper == null)
                     return NotFound(new { success = false, message = "Paper not found" });
 
+                var firstProjectPaper = paper.ProjectPapers.FirstOrDefault();
+
                 var paperDto = new PaperDto
                 {
                     PaperId = paper.PaperId,
-                                        PaperCode = paper.PaperCode,
+                    PaperCode = paper.PaperCode,
                     PaperName = paper.PaperName,
                     PaperNumber = paper.PaperNumber,
                     MaxMarks = paper.MaxMarks,
                     TotalQuestions = paper.TotalQuestions,
                     Description = paper.Description,
-                    CatchNo = "",
-                    QuestionPaperPdfUrl = "",
+                    CatchNo = firstProjectPaper?.CatchNo ?? "",
+                    QuestionPaperPdfUrl = firstProjectPaper?.QuestionPaperPdfUrl ?? "",
                     IsActive = paper.IsActive,
+                    UniversityId = paper.UniversityId,
+                    ProjectId = firstProjectPaper?.ProjectId,
                     SubjectIds = paper.SubjectPapers
-                .Select(sp => sp.SubjectId)
-                .ToList(),
+                        .Select(sp => sp.SubjectId)
+                        .ToList(),
 
                     SubjectNames = paper.SubjectPapers
-                .Select(sp => sp.Subject.SubName)
-                .ToList()
+                        .Select(sp => sp.Subject.SubName)
+                        .ToList()
                 };
 
                 return Ok(paperDto);
@@ -342,24 +360,65 @@ namespace API.Controllers
         [HttpPost]
         [Authorize(Roles = "admin,coordinator")]
         public async Task<ActionResult<PaperDto>> CreatePaper(
-      [FromBody] PaperDto paperDto)
+            [FromBody] PaperDto paperDto)
         {
             try
             {
-                // Validate project exists
-                var project = await _context.Projects
-                    .FindAsync(paperDto.ProjectId);
+                Project? project = null;
+                int? resolvedUniversityId = paperDto.UniversityId;
 
-                if (project == null)
+                // If ProjectId is provided, validate project exists and determine university
+                if (paperDto.ProjectId.HasValue && paperDto.ProjectId.Value > 0)
+                {
+                    project = await _context.Projects.FindAsync(paperDto.ProjectId.Value);
+
+                    if (project == null)
+                    {
+                        return BadRequest(new
+                        {
+                            success = false,
+                            message = "Project not found"
+                        });
+                    }
+
+                    if (!resolvedUniversityId.HasValue || resolvedUniversityId.Value <= 0)
+                    {
+                        resolvedUniversityId = project.UniversityId;
+                    }
+                }
+                else
+                {
+                    // Academic / Master paper without a project requires UniversityId
+                    if (!resolvedUniversityId.HasValue || resolvedUniversityId.Value <= 0)
+                    {
+                        return BadRequest(new
+                        {
+                            success = false,
+                            message = "University ID is required for master paper"
+                        });
+                    }
+
+                    var uniExists = await _context.Universities.AnyAsync(u => u.UniversityId == resolvedUniversityId.Value);
+                    if (!uniExists)
+                    {
+                        return BadRequest(new
+                        {
+                            success = false,
+                            message = "University not found"
+                        });
+                    }
+                }
+
+                // Validate subjects exist
+                if (paperDto.SubjectIds == null || !paperDto.SubjectIds.Any())
                 {
                     return BadRequest(new
                     {
                         success = false,
-                        message = "Project not found"
+                        message = "At least one subject is required"
                     });
                 }
 
-                // Validate subjects exist
                 var subjects = await _context.Subjects
                     .Where(s => paperDto.SubjectIds.Contains(s.SubjectId))
                     .ToListAsync();
@@ -392,16 +451,16 @@ namespace API.Controllers
                     MaxMarks = paperDto.MaxMarks,
                     TotalQuestions = paperDto.TotalQuestions,
                     Description = paperDto.Description,
-                    IsActive = true,
+                    UniversityId = resolvedUniversityId,
+                    IsActive = paperDto.IsActive,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
 
                 _context.Papers.Add(paper);
-
                 await _context.SaveChangesAsync();
 
-                // Create mappings
+                // Create SubjectPaper mappings
                 foreach (var subjectId in paperDto.SubjectIds)
                 {
                     _context.SubjectPapers.Add(new SubjectPaper
@@ -411,7 +470,25 @@ namespace API.Controllers
                     });
                 }
 
+                // Create ProjectPaper mapping if ProjectId is provided
+                if (paperDto.ProjectId.HasValue && paperDto.ProjectId.Value > 0)
+                {
+                    _context.ProjectPapers.Add(new ProjectPaper
+                    {
+                        ProjectId = paperDto.ProjectId.Value,
+                        PaperId = paper.PaperId,
+                        CatchNo = paperDto.CatchNo ?? "",
+                        QuestionPaperPdfUrl = paperDto.QuestionPaperPdfUrl ?? "",
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    });
+                }
+
                 await _context.SaveChangesAsync();
+
+                paperDto.PaperId = paper.PaperId;
+                paperDto.UniversityId = resolvedUniversityId;
 
                 return CreatedAtAction(
                     nameof(GetPaper),
@@ -428,13 +505,161 @@ namespace API.Controllers
             }
         }
 
+        [HttpPost("import")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> ImportPapers([FromBody] ImportPapersRequest request)
+        {
+            try
+            {
+                if (request == null || request.TargetProjectId <= 0 || request.SourcePaperIds == null || !request.SourcePaperIds.Any())
+                {
+                    return BadRequest(new { success = false, message = "Invalid import request parameters" });
+                }
+
+                var project = await _context.Projects.FindAsync(request.TargetProjectId);
+                if (project == null)
+                {
+                    return NotFound(new { success = false, message = "Target project not found" });
+                }
+
+                int importedCount = 0;
+                int sectionsConfiguredCount = 0;
+
+                // Load explicit master sections if provided
+                List<SectionMaster> explicitMasterSections = new List<SectionMaster>();
+                if (request.MasterSectionIds != null && request.MasterSectionIds.Any())
+                {
+                    explicitMasterSections = await _context.SectionMasters
+                        .Where(m => request.MasterSectionIds.Contains(m.Id))
+                        .ToListAsync();
+                }
+
+                foreach (var paperId in request.SourcePaperIds.Distinct())
+                {
+                    var paper = await _context.Papers.FindAsync(paperId);
+                    if (paper == null) continue;
+
+                    var alreadyLinked = await _context.ProjectPapers
+                        .AnyAsync(pp => pp.ProjectId == request.TargetProjectId && pp.PaperId == paperId);
+
+                    if (!alreadyLinked)
+                    {
+                        var sourcePp = await _context.ProjectPapers
+                            .Where(pp => pp.PaperId == paperId && !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl))
+                            .FirstOrDefaultAsync();
+
+                        _context.ProjectPapers.Add(new ProjectPaper
+                        {
+                            ProjectId = request.TargetProjectId,
+                            PaperId = paperId,
+                            CatchNo = sourcePp?.CatchNo ?? "",
+                            QuestionPaperPdfUrl = sourcePp?.QuestionPaperPdfUrl ?? "",
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        });
+                        importedCount++;
+                    }
+
+                    // Auto-import mapped or explicit master sections for this paper
+                    var existingSections = await _context.Sections.Where(s => s.PaperId == paperId).ToListAsync();
+                    var sectionsToCreate = new List<SectionMaster>();
+
+                    if (explicitMasterSections.Any())
+                    {
+                        sectionsToCreate.AddRange(explicitMasterSections);
+                    }
+                    else
+                    {
+                        var mappedMasterSections = await _context.PaperSectionMasters
+                            .Include(psm => psm.SectionMaster)
+                            .Where(psm => psm.PaperId == paperId)
+                            .Select(psm => psm.SectionMaster)
+                            .ToListAsync();
+
+                        if (mappedMasterSections.Any())
+                        {
+                            sectionsToCreate.AddRange(mappedMasterSections);
+                        }
+                    }
+
+                    if (sectionsToCreate.Any())
+                    {
+                        int currentMaxQ = existingSections.Any() ? existingSections.Max(s => s.EndQuestion) : 0;
+
+                        foreach (var master in sectionsToCreate)
+                        {
+                            if (existingSections.Any(s => s.Name.Equals(master.Name, StringComparison.OrdinalIgnoreCase))) continue;
+
+                            int startQ = currentMaxQ > 0 ? currentMaxQ + 1 : (master.StartQuestion > 0 ? master.StartQuestion : 1);
+                            int totalQ = master.TotalQuestions > 0 ? master.TotalQuestions : 10;
+                            int endQ = startQ + totalQ - 1;
+                            currentMaxQ = endQ;
+
+                            var newSec = new Section
+                            {
+                                PaperId = paperId,
+                                SectionMasterId = master.Id,
+                                Name = master.Name,
+                                Description = master.Description ?? "",
+                                TotalQuestions = totalQ,
+                                TotalMarks = master.TotalMarks > 0 ? master.TotalMarks : 100,
+                                StartQuestion = startQ,
+                                EndQuestion = endQ,
+                                MaxQuestionsToAttempt = master.MaxQuestionsToAttempt > 0 ? master.MaxQuestionsToAttempt : totalQ,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            _context.Sections.Add(newSec);
+                            await _context.SaveChangesAsync();
+                            sectionsConfiguredCount++;
+
+                            // Generate default Question items for this section
+                            decimal marksPerQ = totalQ > 0 ? (decimal)newSec.TotalMarks / totalQ : 1;
+                            var questions = new List<Question>();
+                            for (int qNo = startQ; qNo <= endQ; qNo++)
+                            {
+                                questions.Add(new Question
+                                {
+                                    SectionId = newSec.Id,
+                                    QuestionNo = qNo.ToString(),
+                                    Marks = marksPerQ,
+                                    Type = "MCQ",
+                                    IsOptional = false,
+                                    CreatedAt = DateTime.UtcNow
+                                });
+                            }
+                            _context.Questions.AddRange(questions);
+                            await _context.SaveChangesAsync();
+                        }
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+
+                string responseMsg = $"{importedCount} paper(s) imported successfully";
+                if (sectionsConfiguredCount > 0)
+                {
+                    responseMsg += $" with {sectionsConfiguredCount} section(s) configured automatically.";
+                }
+
+                return Ok(new { success = true, message = responseMsg });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpPut("{id}")]
         [Authorize(Roles = "admin,coordinator")]
         public async Task<IActionResult> UpdatePaper(int id, [FromBody] PaperDto paperDto)
         {
             try
             {
-                var paper = await _context.Papers.FirstOrDefaultAsync(p => p.PaperId == id);
+                var paper = await _context.Papers
+                    .Include(p => p.SubjectPapers)
+                    .Include(p => p.ProjectPapers)
+                    .FirstOrDefaultAsync(p => p.PaperId == id);
                 if (paper == null)
                     return NotFound(new { success = false, message = "Paper not found" });
 
@@ -442,10 +667,59 @@ namespace API.Controllers
                 paper.MaxMarks = paperDto.MaxMarks;
                 paper.TotalQuestions = paperDto.TotalQuestions;
                 paper.Description = paperDto.Description;
-                //// paperDto.CatchNo;
-                //// paperDto.QuestionPaperPdfUrl;
                 paper.IsActive = paperDto.IsActive;
+                if (paperDto.UniversityId.HasValue && paperDto.UniversityId.Value > 0)
+                {
+                    paper.UniversityId = paperDto.UniversityId.Value;
+                }
                 paper.UpdatedAt = DateTime.UtcNow;
+
+                // Update ProjectPaper details if projectId is provided
+                if (paperDto.ProjectId.HasValue && paperDto.ProjectId.Value > 0)
+                {
+                    var pp = paper.ProjectPapers.FirstOrDefault(x => x.ProjectId == paperDto.ProjectId.Value);
+                    if (pp != null)
+                    {
+                        if (paperDto.CatchNo != null) pp.CatchNo = paperDto.CatchNo;
+                        if (paperDto.QuestionPaperPdfUrl != null) pp.QuestionPaperPdfUrl = paperDto.QuestionPaperPdfUrl;
+                        pp.UpdatedAt = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        _context.ProjectPapers.Add(new ProjectPaper
+                        {
+                            ProjectId = paperDto.ProjectId.Value,
+                            PaperId = paper.PaperId,
+                            CatchNo = paperDto.CatchNo ?? "",
+                            QuestionPaperPdfUrl = paperDto.QuestionPaperPdfUrl ?? "",
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+                else if (paperDto.CatchNo != null && paper.ProjectPapers.Any())
+                {
+                    foreach (var pp in paper.ProjectPapers)
+                    {
+                        pp.CatchNo = paperDto.CatchNo;
+                        pp.UpdatedAt = DateTime.UtcNow;
+                    }
+                }
+
+                // Update subjects mapping if provided
+                if (paperDto.SubjectIds != null && paperDto.SubjectIds.Any())
+                {
+                    _context.SubjectPapers.RemoveRange(paper.SubjectPapers);
+                    foreach (var sId in paperDto.SubjectIds)
+                    {
+                        _context.SubjectPapers.Add(new SubjectPaper
+                        {
+                            PaperId = paper.PaperId,
+                            SubjectId = sId
+                        });
+                    }
+                }
 
                 _context.Papers.Update(paper);
                 await _context.SaveChangesAsync();
@@ -491,6 +765,312 @@ namespace API.Controllers
                     .ToListAsync();
 
                 return Ok(sections);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("{id}/question-paper")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> UploadQuestionPaper(int id, [FromQuery] int? projectId, IFormFile file)
+        {
+            try
+            {
+                if (file == null || file.Length == 0)
+                    return BadRequest(new { success = false, message = "No file uploaded" });
+
+                var paper = await _context.Papers
+                    .Include(p => p.ProjectPapers)
+                    .FirstOrDefaultAsync(p => p.PaperId == id);
+
+                if (paper == null)
+                    return NotFound(new { success = false, message = "Paper not found" });
+
+                var uploadsFolder = Path.Combine(_environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads", "question-papers");
+                if (!Directory.Exists(uploadsFolder))
+                {
+                    Directory.CreateDirectory(uploadsFolder);
+                }
+
+                var safeCode = string.Join("_", (paper.PaperCode ?? "QP").Split(Path.GetInvalidFileNameChars()));
+                var uniqueFileName = $"QP_{safeCode}_{Guid.NewGuid():N}.pdf";
+                var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                using (var fileStream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(fileStream);
+                }
+
+                var fileUrl = $"/uploads/question-papers/{uniqueFileName}";
+
+                if (projectId.HasValue && projectId.Value > 0)
+                {
+                    var projectPaper = paper.ProjectPapers.FirstOrDefault(pp => pp.ProjectId == projectId.Value);
+                    if (projectPaper != null)
+                    {
+                        projectPaper.QuestionPaperPdfUrl = fileUrl;
+                        projectPaper.UpdatedAt = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        _context.ProjectPapers.Add(new ProjectPaper
+                        {
+                            ProjectId = projectId.Value,
+                            PaperId = paper.PaperId,
+                            QuestionPaperPdfUrl = fileUrl,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+                else
+                {
+                    if (paper.ProjectPapers.Any())
+                    {
+                        foreach (var pp in paper.ProjectPapers)
+                        {
+                            pp.QuestionPaperPdfUrl = fileUrl;
+                            pp.UpdatedAt = DateTime.UtcNow;
+                        }
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, url = fileUrl, message = "Question paper PDF uploaded successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpDelete("{id}/question-paper")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> RemoveQuestionPaper(int id, [FromQuery] int? projectId)
+        {
+            try
+            {
+                var paper = await _context.Papers
+                    .Include(p => p.ProjectPapers)
+                    .FirstOrDefaultAsync(p => p.PaperId == id);
+
+                if (paper == null)
+                    return NotFound(new { success = false, message = "Paper not found" });
+
+                if (projectId.HasValue && projectId.Value > 0)
+                {
+                    var projectPaper = paper.ProjectPapers.FirstOrDefault(pp => pp.ProjectId == projectId.Value);
+                    if (projectPaper != null)
+                    {
+                        projectPaper.QuestionPaperPdfUrl = null;
+                        projectPaper.UpdatedAt = DateTime.UtcNow;
+                    }
+                }
+                else
+                {
+                    foreach (var pp in paper.ProjectPapers)
+                    {
+                        pp.QuestionPaperPdfUrl = null;
+                        pp.UpdatedAt = DateTime.UtcNow;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                return Ok(new { success = true, message = "Question paper removed successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("bulk-upload-question-papers")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> BulkUploadQuestionPapers([FromQuery] int? projectId, List<IFormFile> files)
+        {
+            try
+            {
+                if (files == null || !files.Any())
+                {
+                    return BadRequest(new { success = false, message = "No files uploaded" });
+                }
+
+                var papersQuery = _context.Papers
+                    .Include(p => p.ProjectPapers)
+                    .AsQueryable();
+
+                if (projectId.HasValue && projectId.Value > 0)
+                {
+                    papersQuery = papersQuery.Where(p => p.ProjectPapers.Any(pp => pp.ProjectId == projectId.Value));
+                }
+
+                var allPapers = await papersQuery.ToListAsync();
+
+                var uploadsFolder = Path.Combine(_environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads", "question-papers");
+                if (!Directory.Exists(uploadsFolder))
+                {
+                    Directory.CreateDirectory(uploadsFolder);
+                }
+
+                var results = new List<object>();
+                int matchedCount = 0;
+                int unmatchedCount = 0;
+
+                foreach (var file in files)
+                {
+                    if (file == null || file.Length == 0) continue;
+
+                    var originalFileName = Path.GetFileName(file.FileName);
+                    var fileNameWithoutExt = Path.GetFileNameWithoutExtension(originalFileName)?.Trim() ?? "";
+
+                    string cleanFileName = fileNameWithoutExt;
+                    if (cleanFileName.StartsWith("QP_", StringComparison.OrdinalIgnoreCase))
+                        cleanFileName = cleanFileName.Substring(3);
+                    else if (cleanFileName.StartsWith("QP-", StringComparison.OrdinalIgnoreCase))
+                        cleanFileName = cleanFileName.Substring(3);
+                    else if (cleanFileName.StartsWith("CATCH_", StringComparison.OrdinalIgnoreCase))
+                        cleanFileName = cleanFileName.Substring(6);
+                    else if (cleanFileName.StartsWith("CATCH-", StringComparison.OrdinalIgnoreCase))
+                        cleanFileName = cleanFileName.Substring(6);
+                    else if (cleanFileName.StartsWith("CATCH", StringComparison.OrdinalIgnoreCase))
+                        cleanFileName = cleanFileName.Substring(5);
+
+                    cleanFileName = cleanFileName.Trim('_', '-', ' ');
+
+                    Paper? matchedPaper = null;
+                    ProjectPaper? matchedProjectPaper = null;
+
+                    if (projectId.HasValue && projectId.Value > 0)
+                    {
+                        matchedPaper = allPapers.FirstOrDefault(p =>
+                            p.ProjectPapers.Any(pp => pp.ProjectId == projectId.Value &&
+                                !string.IsNullOrEmpty(pp.CatchNo) &&
+                                (pp.CatchNo.Trim().Equals(fileNameWithoutExt, StringComparison.OrdinalIgnoreCase) ||
+                                 pp.CatchNo.Trim().Equals(cleanFileName, StringComparison.OrdinalIgnoreCase))
+                            )
+                        );
+
+                        if (matchedPaper != null)
+                        {
+                            matchedProjectPaper = matchedPaper.ProjectPapers.FirstOrDefault(pp => pp.ProjectId == projectId.Value);
+                        }
+                    }
+
+                    if (matchedPaper == null)
+                    {
+                        matchedPaper = allPapers.FirstOrDefault(p =>
+                            p.ProjectPapers.Any(pp =>
+                                !string.IsNullOrEmpty(pp.CatchNo) &&
+                                (pp.CatchNo.Trim().Equals(fileNameWithoutExt, StringComparison.OrdinalIgnoreCase) ||
+                                 pp.CatchNo.Trim().Equals(cleanFileName, StringComparison.OrdinalIgnoreCase))
+                            )
+                        );
+                    }
+
+                    if (matchedPaper == null)
+                    {
+                        matchedPaper = allPapers.FirstOrDefault(p =>
+                            !string.IsNullOrEmpty(p.PaperCode) &&
+                            (p.PaperCode.Trim().Equals(fileNameWithoutExt, StringComparison.OrdinalIgnoreCase) ||
+                             p.PaperCode.Trim().Equals(cleanFileName, StringComparison.OrdinalIgnoreCase))
+                        );
+                    }
+
+                    if (matchedPaper != null)
+                    {
+                        var safeCode = string.Join("_", (matchedPaper.PaperCode ?? "QP").Split(Path.GetInvalidFileNameChars()));
+                        var uniqueFileName = $"QP_{safeCode}_{Guid.NewGuid():N}.pdf";
+                        var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                        using (var stream = new FileStream(filePath, FileMode.Create))
+                        {
+                            await file.CopyToAsync(stream);
+                        }
+
+                        var fileUrl = $"/uploads/question-papers/{uniqueFileName}";
+
+                        if (projectId.HasValue && projectId.Value > 0)
+                        {
+                            if (matchedProjectPaper == null)
+                            {
+                                matchedProjectPaper = matchedPaper.ProjectPapers.FirstOrDefault(pp => pp.ProjectId == projectId.Value);
+                            }
+
+                            if (matchedProjectPaper != null)
+                            {
+                                matchedProjectPaper.QuestionPaperPdfUrl = fileUrl;
+                                matchedProjectPaper.UpdatedAt = DateTime.UtcNow;
+                            }
+                            else
+                            {
+                                matchedProjectPaper = new ProjectPaper
+                                {
+                                    ProjectId = projectId.Value,
+                                    PaperId = matchedPaper.PaperId,
+                                    QuestionPaperPdfUrl = fileUrl,
+                                    IsActive = true,
+                                    CreatedAt = DateTime.UtcNow,
+                                    UpdatedAt = DateTime.UtcNow
+                                };
+                                _context.ProjectPapers.Add(matchedProjectPaper);
+                            }
+                        }
+                        else
+                        {
+                            foreach (var pp in matchedPaper.ProjectPapers)
+                            {
+                                pp.QuestionPaperPdfUrl = fileUrl;
+                                pp.UpdatedAt = DateTime.UtcNow;
+                            }
+                        }
+
+                        matchedCount++;
+                        var matchedCatch = matchedProjectPaper?.CatchNo ?? matchedPaper.ProjectPapers.Select(pp => pp.CatchNo).FirstOrDefault() ?? "";
+
+                        results.Add(new
+                        {
+                            fileName = originalFileName,
+                            status = "Success",
+                            message = $"Matched to Paper '{matchedPaper.PaperCode}' ({matchedPaper.PaperName})",
+                            paperId = matchedPaper.PaperId,
+                            paperCode = matchedPaper.PaperCode,
+                            paperName = matchedPaper.PaperName,
+                            catchNo = matchedCatch,
+                            fileUrl = fileUrl
+                        });
+                    }
+                    else
+                    {
+                        unmatchedCount++;
+                        results.Add(new
+                        {
+                            fileName = originalFileName,
+                            status = "Unmatched",
+                            message = $"No paper found matching Catch No / Code '{fileNameWithoutExt}'",
+                            paperId = (int?)null,
+                            paperCode = "",
+                            paperName = "",
+                            catchNo = fileNameWithoutExt,
+                            fileUrl = ""
+                        });
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    totalFiles = files.Count,
+                    matchedCount = matchedCount,
+                    unmatchedCount = unmatchedCount,
+                    message = $"Processed {files.Count} files: {matchedCount} allocated to papers, {unmatchedCount} unmatched.",
+                    results = results
+                });
             }
             catch (Exception ex)
             {

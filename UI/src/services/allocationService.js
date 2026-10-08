@@ -93,6 +93,35 @@ export const allocationService = {
    */
   getScriptAllocation: async (scriptId) => {
     return apiCall(`/allocation/script/${scriptId}`);
+  },
+
+  /**
+   * Reassign allocations to a target examiner
+   */
+  reassignAllocations: async (allocationIds, targetExaminerId) => {
+    return apiCall('/allocation/reassign', {
+      method: 'POST',
+      body: JSON.stringify({ allocationIds, targetExaminerId })
+    });
+  },
+
+  /**
+   * Revoke multiple allocations
+   */
+  revokeAllocations: async (allocationIds) => {
+    return apiCall('/allocation/revoke', {
+      method: 'POST',
+      body: JSON.stringify({ allocationIds })
+    });
+  },
+
+  /**
+   * Auto allocate all pending scripts across project
+   */
+  autoAllocateProject: async (projectId) => {
+    return apiCall(`/allocation/project/${projectId}/auto-allocate`, {
+      method: 'POST'
+    });
   }
 };
 
