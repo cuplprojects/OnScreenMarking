@@ -335,21 +335,21 @@ export default function UsersManagement() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
-                      <th className="px-6 py-2.5">Photo</th>
-                      <th className="px-6 py-2.5 cursor-pointer hover:text-gray-700 transition-colors group" onClick={() => handleSort('name')}>
+                      <th className="py-2.5 md:px-6 px-4">Photo</th>
+                      <th className="py-2.5 cursor-pointer hover:text-gray-700 transition-colors group md:px-6 px-4" onClick={() => handleSort('name')}>
                         <div className="flex items-center gap-1">Name {sortField === 'name' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
                           <ColumnFilter columnKey="name" currentFilter={filters.name} setFilter={setFilter} placeholder="Filter name..." />
                         </div>
                       </th>
-                      <th className="px-6 py-2.5 cursor-pointer hover:text-gray-700 transition-colors group" onClick={() => handleSort('email')}>
+                      <th className="py-2.5 cursor-pointer hover:text-gray-700 transition-colors group md:px-6 px-4" onClick={() => handleSort('email')}>
                         <div className="flex items-center gap-1">Email {sortField === 'email' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
                           <ColumnFilter columnKey="email" currentFilter={filters.email} setFilter={setFilter} placeholder="Filter email..." />
                         </div>
                       </th>
-                      <th className="px-6 py-2.5 cursor-pointer hover:text-gray-700 transition-colors group" onClick={() => handleSort('userType')}>
+                      <th className="py-2.5 cursor-pointer hover:text-gray-700 transition-colors group md:px-6 px-4" onClick={() => handleSort('userType')}>
                         <div className="flex items-center gap-1">
                           System Role {sortField === 'userType' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
                           <ColumnFilter 
@@ -365,12 +365,12 @@ export default function UsersManagement() {
                           />
                         </div>
                       </th>
-                      <th className="px-6 py-2.5 cursor-pointer hover:text-gray-700 transition-colors group" onClick={() => handleSort('universityName')}>
+                      <th className="py-2.5 cursor-pointer hover:text-gray-700 transition-colors group md:px-6 px-4" onClick={() => handleSort('universityName')}>
                         <div className="flex items-center gap-1">University {sortField === 'universityName' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
                           <ColumnFilter columnKey="universityId" currentFilter={filters.universityId} setFilter={setFilter} placeholder="Filter university..." options={universities.map(u => ({ value: u.universityId, label: u.universityName }))} />
                         </div>
                       </th>
-                      <th className="px-6 py-2.5 text-center cursor-pointer hover:text-gray-700 transition-colors" onClick={() => handleSort('isActive')}>
+                      <th className="py-2.5 text-center cursor-pointer hover:text-gray-700 transition-colors md:px-6 px-4" onClick={() => handleSort('isActive')}>
                         <div className="flex items-center justify-center gap-1">
                           Status {sortField === 'isActive' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
                           <ColumnFilter 
@@ -385,13 +385,13 @@ export default function UsersManagement() {
                           />
                         </div>
                       </th>
-                      <th className="px-6 py-2.5 text-right">Actions</th>
+                      <th className="py-2.5 text-right md:px-6 px-4">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs">
                     {users.map((user) => (
                       <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
-                        <td className="px-6 py-2.5">
+                        <td className="py-2.5 md:px-6 px-4">
                           <Link to={`/profile?userId=${user.id}`} title="View Detailed Profile">
                             {user.profileImage ? (
                               <div className="relative group w-8 h-8 rounded-xl overflow-hidden border border-gray-250/70 shadow-sm shrink-0">
@@ -407,7 +407,7 @@ export default function UsersManagement() {
                             )}
                           </Link>
                         </td>
-                        <td className="px-6 py-2.5 font-extrabold text-gray-900">
+                        <td className="py-2.5 font-extrabold text-gray-900 md:px-6 px-4">
                           {editingUserId === user.id ? (
                             <input
                               type="text"
@@ -419,7 +419,7 @@ export default function UsersManagement() {
                             user.name
                           )}
                         </td>
-                        <td className="px-6 py-2.5 text-gray-600 font-medium">
+                        <td className="py-2.5 text-gray-600 font-medium md:px-6 px-4">
                           {editingUserId === user.id ? (
                             <input
                               type="email"
@@ -431,7 +431,7 @@ export default function UsersManagement() {
                             user.email
                           )}
                         </td>
-                        <td className="px-6 py-2.5">
+                        <td className="py-2.5 md:px-6 px-4">
                           {editingUserId === user.id ? (
                             <select
                               value={editFormData.userType}
@@ -460,7 +460,7 @@ export default function UsersManagement() {
                             </span>
                           )}
                         </td>
-                        <td className="px-6 py-2.5 text-gray-600 text-sm font-semibold">
+                        <td className="py-2.5 text-gray-600 text-sm font-semibold md:px-6 px-4">
                           {editingUserId === user.id ? (
                             <select
                               value={editFormData.universityId}
@@ -478,7 +478,7 @@ export default function UsersManagement() {
                             user.university?.universityName || "-"
                           )}
                         </td>
-                        <td className="px-6 py-2.5 text-center">
+                        <td className="py-2.5 text-center md:px-6 px-4">
                           {editingUserId === user.id ? (
                             <select
                               value={editFormData.isActive}
@@ -499,7 +499,7 @@ export default function UsersManagement() {
                             </span>
                           )}
                         </td>
-                        <td className="px-6 py-2.5 text-right whitespace-nowrap">
+                        <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
                           {editingUserId === user.id ? (
                             <div className="flex items-center justify-end gap-1.5">
                               <button

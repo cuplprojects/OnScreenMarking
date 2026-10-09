@@ -159,22 +159,22 @@ export default function UniversityManagement() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
-                    <th className="px-6 py-2.5 cursor-pointer hover:text-gray-700 transition-colors group" onClick={() => handleSort('universityName')}>
+                    <th className="py-2.5 cursor-pointer hover:text-gray-700 transition-colors group md:px-6 px-4" onClick={() => handleSort('universityName')}>
                       <div className="flex items-center gap-1">
                         University Name 
                         {sortField === 'universityName' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
                       </div>
                     </th>
-                    <th className="px-6 py-2.5 cursor-pointer hover:text-gray-700 transition-colors group" onClick={() => handleSort('createdAt')}>
+                    <th className="py-2.5 cursor-pointer hover:text-gray-700 transition-colors group md:px-6 px-4" onClick={() => handleSort('createdAt')}>
                       <div className="flex items-center gap-1">
                         Created On 
                         {sortField === 'createdAt' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
                       </div>
                     </th>
-                    <th className="px-6 py-2.5 text-center cursor-pointer hover:text-gray-700 transition-colors" onClick={() => handleSort('isActive')}>
+                    <th className="py-2.5 text-center cursor-pointer hover:text-gray-700 transition-colors md:px-6 px-4" onClick={() => handleSort('isActive')}>
                       <div className="flex items-center justify-center gap-1">
                         Status 
                         {sortField === 'isActive' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
@@ -189,19 +189,19 @@ export default function UniversityManagement() {
                         />
                       </div>
                     </th>
-                    <th className="px-6 py-2.5 text-right">Actions</th>
+                    <th className="py-2.5 text-right md:px-6 px-4">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-sm">
                   {universities.map((university) => (
                     <tr key={university.universityId} className="hover:bg-gray-50/50 transition-colors group">
-                      <td className="px-6 py-2.5 font-extrabold text-gray-900">
+                      <td className="py-2.5 font-extrabold text-gray-900 md:px-6 px-4">
                         {university.universityName}
                       </td>
-                      <td className="px-6 py-2.5 text-gray-500 font-medium text-xs">
+                      <td className="py-2.5 text-gray-500 font-medium text-xs md:px-6 px-4">
                         {new Date(university.createdAt).toLocaleDateString()}
                       </td>
-                      <td className="px-6 py-2.5 text-center">
+                      <td className="py-2.5 text-center md:px-6 px-4">
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${
                           university.isActive
                             ? "bg-emerald-50 text-emerald-700 border-emerald-100"
@@ -211,7 +211,7 @@ export default function UniversityManagement() {
                           {university.isActive ? "Active" : "Inactive"}
                         </span>
                       </td>
-                      <td className="px-6 py-2.5 text-right whitespace-nowrap">
+                      <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
                         <div className="flex items-center justify-end gap-2 transition-opacity">
                           <button
                             onClick={() => handleEdit(university)}
@@ -268,7 +268,7 @@ export default function UniversityManagement() {
             </div>
             
             {/* Modal Form */}
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto space-y-5 p-4 md:p-6">
               <div>
                 <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">University Name *</label>
                 <input

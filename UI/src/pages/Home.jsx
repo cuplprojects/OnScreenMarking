@@ -261,9 +261,9 @@ const Home = () => {
   });
 
   return (
-    <div className="h-[calc(100vh-64px)] bg-gray-50/50 pb-6 w-full flex flex-col px-6 lg:px-10 pt-6 space-y-6 overflow-hidden">
+    <div className="h-[calc(100vh-64px)] bg-gray-50/50 pb-6 w-full flex flex-col lg:px-10 pt-6 space-y-6 overflow-hidden md:px-6 px-4">
       
-      <div className="bg-white px-6 py-4 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white py-4 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 md:px-6 px-4">
         <div>
           <div className="flex items-center gap-2 text-teal-700 font-semibold mb-1">
             <Sparkles size={16} />
@@ -424,7 +424,7 @@ const Home = () => {
         ) : (
           <>
             <div className="flex-1 overflow-auto min-h-0">
-              <table className="w-full text-left min-w-[900px] relative">
+              <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left min-w-[900px] relative">
                 <thead className="bg-gray-50 border-b border-gray-100 sticky top-0 z-10 shadow-sm">
                 <tr>
                   <SortHeader label="Barcode / Script ID" field="barcode" hasFilter={true} />

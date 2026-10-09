@@ -556,7 +556,7 @@ export default function PapersManagement({ isTab = false }) {
   return (
     <div className="min-h-screen bg-gray-50/50 pb-12 w-full">
       {!isTab && (
-        <div className="bg-white border-b border-gray-200 px-6 lg:px-10 py-6 mb-6 shadow-sm sticky top-0 z-20">
+        <div className="bg-white border-b border-gray-200 lg:px-10 py-6 mb-6 shadow-sm sticky top-0 z-20 md:px-6 px-4">
           <ProjectConfigHeader />
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2">
             <div className="flex items-center gap-4">
@@ -589,7 +589,7 @@ export default function PapersManagement({ isTab = false }) {
         
         {showForm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-gray-100 relative max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-gray-100 relative max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200 p-4 md:p-6">
               
               {/* Modal Header */}
               <div className="flex items-center justify-between border-b border-gray-100 pb-3.5 mb-5">
@@ -869,7 +869,7 @@ export default function PapersManagement({ isTab = false }) {
                       </button>
                     </div>
                     <div className="bg-gray-50/70 border border-gray-200 rounded-lg p-2 max-h-[85px] overflow-y-auto custom-scrollbar">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <div className="grid sm:grid-cols-3 gap-2 grid-cols-1 md:grid-cols-2">
                         {sectionMasters.map((m) => {
                           const isSelected = selectedMasterSectionIds.includes(m.id);
                           return (
@@ -1003,7 +1003,7 @@ export default function PapersManagement({ isTab = false }) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left">
                 <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
                   <tr>
                     <th className="px-5 py-3.5 w-12 text-center border-b border-gray-100">
@@ -1055,7 +1055,7 @@ export default function PapersManagement({ isTab = false }) {
                             </div>
                             <div>
                               <span className="text-gray-900 font-extrabold text-sm block">{paper.paperCode}</span>
-                              <span className="text-[10px] text-gray-500 block">{paper.paperName}</span>
+                              <span className="text-sm text-gray-800 font-semibold block">{paper.paperName}</span>
                             </div>
                           </div>
                         </td>
@@ -1279,7 +1279,7 @@ export default function PapersManagement({ isTab = false }) {
         {showImportSectionsModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4">
             <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
-              <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <div className="py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 md:px-6 px-4">
                 <div>
                   <h3 className="text-lg font-black text-gray-900">Import Sections</h3>
                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Applying to {selectedPaperIds.length} selected paper(s)</p>
@@ -1290,7 +1290,7 @@ export default function PapersManagement({ isTab = false }) {
               </div>
 
               {/* Tab Selector */}
-              <div className="flex border-b border-gray-200 bg-gray-50/50 px-6 pt-3 gap-4">
+              <div className="flex border-b border-gray-200 bg-gray-50/50 pt-3 gap-4 md:px-6 px-4">
                 <button
                   type="button"
                   onClick={() => setImportSectionMode('master')}
@@ -1315,7 +1315,7 @@ export default function PapersManagement({ isTab = false }) {
                 </button>
               </div>
 
-              <form onSubmit={handleImportSectionsSubmit} className="p-6 space-y-4">
+              <form onSubmit={handleImportSectionsSubmit} className="space-y-4 p-4 md:p-6">
                 {importSectionMode === 'master' ? (
                   <div className="space-y-4">
                     <p className="text-xs text-gray-600">
@@ -1436,7 +1436,7 @@ export default function PapersManagement({ isTab = false }) {
         {showExaminerModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4">
             <div className="bg-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-                <div className="p-6 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between">
+                <div className="bg-gray-50/50 border-b border-gray-100 flex items-center justify-between p-4 md:p-6">
                 <div>
                     <h3 className="text-xl font-black text-gray-900">Assign Examiners</h3>
                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Allocation for {selectedPaper?.paperCode}: {selectedPaper?.paperName}</p>
@@ -1446,7 +1446,7 @@ export default function PapersManagement({ isTab = false }) {
                 </button>
                 </div>
 
-                <div className="p-6">
+                <div className="p-4 md:p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {/* Available Examiners */}
                     <div>
@@ -1509,11 +1509,11 @@ export default function PapersManagement({ isTab = false }) {
                     </div>
                 </div>
                 </div>
-                <div className="p-6 bg-gray-50/50 border-t border-gray-100 flex justify-end gap-3">
-                <button onClick={closeExaminerModal} className="px-6 py-2.5 text-gray-500 hover:bg-gray-200 rounded-xl text-xs font-bold transition-all">
+                <div className="bg-gray-50/50 border-t border-gray-100 flex justify-end gap-3 p-4 md:p-6">
+                <button onClick={closeExaminerModal} className="py-2.5 text-gray-500 hover:bg-gray-200 rounded-xl text-xs font-bold transition-all md:px-6 px-4">
                     Cancel
                 </button>
-                <button onClick={handleDone} disabled={allocationLoading} className="bg-teal-700 text-white px-8 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-teal-200 hover:bg-teal-800 transition-all disabled:opacity-50">
+                <button onClick={handleDone} disabled={allocationLoading} className="bg-teal-700 text-white py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-teal-200 hover:bg-teal-800 transition-all disabled:opacity-50 px-4 md:px-8">
                     {allocationLoading ? 'Saving...' : 'Done'}
                 </button>
                 </div>

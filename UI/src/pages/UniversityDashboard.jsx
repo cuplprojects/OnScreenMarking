@@ -130,7 +130,7 @@ export default function UniversityDashboard() {
          <div className="absolute bottom-[-5%] left-[-5%] w-[40%] h-[40%] bg-teal-600/5 rounded-full blur-[120px]"></div>
       </div>
 
-      <div className="max-w-[1600px] mx-auto px-8 relative z-10">
+      <div className="max-w-[1600px] mx-auto relative z-10 md:px-8 px-4">
         {/* Header Section */}
         <div className="py-16 flex flex-col lg:flex-row lg:items-center justify-between gap-10">
           <div className="flex items-center gap-8">
@@ -165,7 +165,7 @@ export default function UniversityDashboard() {
         </div>
 
         {/* Scoped Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
+        <div className="grid lg:grid-cols-4 gap-8 mb-16 grid-cols-1 md:grid-cols-2">
           <QuickStat label="Departments" value={stats.departments} color="text-teal-700" />
           <QuickStat label="Subjects" value={stats.subjects} color="text-teal-700" />
           <QuickStat label="Active Papers" value={stats.papers} color="text-teal-700" />
@@ -209,7 +209,7 @@ export default function UniversityDashboard() {
 
 function QuickStat({ label, value, color }) {
   return (
-    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-200 shadow-xl group hover:border-teal-500/30 transition-all duration-500">
+    <div className="bg-white rounded-[2.5rem] border border-gray-200 shadow-xl group hover:border-teal-500/30 transition-all duration-500 p-4 md:p-8">
       <div className="flex items-center justify-between mb-4">
         <p className="text-gray-400 text-[10px] uppercase font-black tracking-[0.3em]">{label}</p>
         <div className="w-1.5 h-1.5 bg-gray-100 group-hover:bg-teal-700 rounded-full transition-colors"></div>

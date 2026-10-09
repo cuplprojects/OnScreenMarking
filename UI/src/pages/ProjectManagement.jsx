@@ -210,11 +210,11 @@ export default function ProjectManagement() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
                     <th
-                      className="px-6 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group"
+                      className="py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4"
                       onClick={() => handleSort('projectName')}
                     >
                       <div className="flex items-center gap-1.5">
@@ -223,7 +223,7 @@ export default function ProjectManagement() {
                       </div>
                     </th>
                     <th
-                      className="px-6 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group"
+                      className="py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4"
                       onClick={() => handleSort('sessionName')}
                     >
                       <div className="flex items-center gap-1.5">
@@ -232,7 +232,7 @@ export default function ProjectManagement() {
                       </div>
                     </th>
                     <th
-                      className="px-6 py-2.5 text-center cursor-pointer hover:bg-gray-100 transition-colors group"
+                      className="py-2.5 text-center cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4"
                       onClick={() => handleSort('isActive')}
                     >
                       <div className="flex items-center justify-center gap-1.5">
@@ -248,21 +248,21 @@ export default function ProjectManagement() {
                         />
                       </div>
                     </th>
-                    <th className="px-6 py-2.5 text-right">Actions</th>
+                    <th className="py-2.5 text-right md:px-6 px-4">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-xs">
                   {projects.map((project) => (
                     <tr key={project.projectId} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-6 py-2.5">
+                      <td className="py-2.5 md:px-6 px-4">
                         <span className="font-extrabold text-gray-900 tracking-tight block text-sm">{project.projectName}</span>
                       </td>
-                      <td className="px-6 py-2.5">
+                      <td className="py-2.5 md:px-6 px-4">
                         <span className="font-extrabold text-gray-900 tracking-tight block text-sm">
                           Session: {project.session?.sessionName || 'Unknown Session'}
                         </span>
                       </td>
-                      <td className="px-6 py-2.5 text-center">
+                      <td className="py-2.5 text-center md:px-6 px-4">
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${project.isActive
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-100 shadow-sm'
                             : 'bg-gray-50 text-gray-500 border-gray-200'
@@ -271,7 +271,7 @@ export default function ProjectManagement() {
                           {project.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </td>
-                      <td className="px-6 py-2.5 text-right whitespace-nowrap">
+                      <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleEdit(project)}

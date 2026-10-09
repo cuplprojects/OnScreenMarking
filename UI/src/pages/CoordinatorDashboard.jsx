@@ -190,8 +190,8 @@ export default function CoordinatorDashboard() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-6 py-4">
-        <div className="bg-white rounded-xl p-8 shadow-xl max-w-md w-full border border-red-100">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center py-4 md:px-6 px-4">
+        <div className="bg-white rounded-xl shadow-xl max-w-md w-full border border-red-100 p-4 md:p-8">
           <div className="flex items-center gap-3 mb-4 text-red-600">
             <AlertCircle size={28} />
             <h2 className="text-lg font-bold"> Synch Failure</h2>
@@ -220,7 +220,7 @@ export default function CoordinatorDashboard() {
     <div className="min-h-screen bg-gray-50/50 pb-12 w-full flex flex-col">
       
       {/* Main Glass Header - Full Width */}
-      <div className="bg-white border-b border-gray-200 px-6 lg:px-10 py-5 mb-6 shadow-sm">
+      <div className="bg-white border-b border-gray-200 lg:px-10 py-5 mb-6 shadow-sm md:px-6 px-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-gray-900 tracking-tight">
@@ -248,7 +248,7 @@ export default function CoordinatorDashboard() {
         </div>
       </div>
 
-      <div className="px-6 lg:px-10 flex-1">
+      <div className="lg:px-10 flex-1 md:px-6 px-4">
         {/* Alert Bar */}
         {unassignedCount > 0 && (
           <div className="mb-6 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-pulse">
@@ -285,7 +285,7 @@ export default function CoordinatorDashboard() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid lg:grid-cols-4 gap-4 grid-cols-1 md:grid-cols-2">
               {/* Departments Card */}
               <div
                 onClick={() => navigate('/departments')}
@@ -414,7 +414,7 @@ export default function CoordinatorDashboard() {
                         </h3>
 
                         {/* Script statistics breakdown */}
-                        <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-gray-100 text-[10px] font-bold text-gray-500">
+                        <div className="grid gap-2 mt-4 pt-3 border-t border-gray-100 text-[10px] font-bold text-gray-500 grid-cols-1 md:grid-cols-2">
                           <div>
                             <span className="text-gray-400 uppercase tracking-wider text-[8px] block">Total Papers</span>
                             <span className="text-gray-900 font-extrabold text-xs block">{pStat.papersCount}</span>

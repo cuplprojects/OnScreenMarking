@@ -377,7 +377,7 @@ export default function Attendance({ isTab = false }) {
         </div>
 
         {/* Stats Dashboard */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid lg:grid-cols-4 gap-4 grid-cols-1 md:grid-cols-2">
           <div className="bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
             <div className="w-10 h-10 bg-teal-50 text-teal-700 rounded-xl flex items-center justify-center shrink-0">
               <Calendar size={20} />
@@ -455,7 +455,7 @@ export default function Attendance({ isTab = false }) {
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-fadeIn">
             
             {/* Preview Banner */}
-            <div className="p-6 bg-gradient-to-r from-teal-50 to-indigo-50 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="bg-gradient-to-r from-teal-50 to-indigo-50 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 p-4 md:p-6">
               <div>
                 <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                   <FileSpreadsheet className="text-teal-700" />
@@ -492,7 +492,7 @@ export default function Attendance({ isTab = false }) {
             </div>
 
             {/* Parsing Statistics & Filters */}
-            <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between gap-4 bg-gray-50/50">
+            <div className="border-b border-gray-100 flex flex-col sm:flex-row justify-between gap-4 bg-gray-50/50 p-4 md:p-6">
               <div className="flex items-center gap-6">
                 <div className="flex items-center gap-2 text-sm text-green-700 font-bold bg-green-50 px-3 py-1 rounded-full border border-green-100">
                   <span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" />
@@ -518,16 +518,16 @@ export default function Attendance({ isTab = false }) {
 
             {/* Preview Table */}
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 text-gray-500 font-bold text-xs uppercase border-b border-gray-100">
-                    <th className="py-4 px-6 text-center">Row</th>
-                    <th className="py-4 px-6">Email</th>
-                    <th className="py-4 px-6">Examiner Name</th>
-                    <th className="py-4 px-6">Date</th>
-                    <th className="py-4 px-6">Status</th>
-                    <th className="py-4 px-6">Remarks</th>
-                    <th className="py-4 px-6 text-right">Validation Status</th>
+                    <th className="py-4 text-center md:px-6 px-4">Row</th>
+                    <th className="py-4 md:px-6 px-4">Email</th>
+                    <th className="py-4 md:px-6 px-4">Examiner Name</th>
+                    <th className="py-4 md:px-6 px-4">Date</th>
+                    <th className="py-4 md:px-6 px-4">Status</th>
+                    <th className="py-4 md:px-6 px-4">Remarks</th>
+                    <th className="py-4 text-right md:px-6 px-4">Validation Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-sm">
@@ -545,19 +545,19 @@ export default function Attendance({ isTab = false }) {
                           !row.isValid ? 'bg-red-50/10' : ''
                         }`}
                       >
-                        <td className="py-2.5 px-6 text-center text-gray-400 font-semibold">
+                        <td className="py-2.5 text-center text-gray-400 font-semibold md:px-6 px-4">
                           {row.rowNum}
                         </td>
-                        <td className="py-2.5 px-6 font-semibold text-gray-900">
+                        <td className="py-2.5 font-semibold text-gray-900 md:px-6 px-4">
                           {row.email}
                         </td>
-                        <td className="py-2.5 px-6 text-gray-600">
+                        <td className="py-2.5 text-gray-600 md:px-6 px-4">
                           {row.name}
                         </td>
-                        <td className="py-2.5 px-6 text-gray-600">
+                        <td className="py-2.5 text-gray-600 md:px-6 px-4">
                           {row.date}
                         </td>
-                        <td className="py-2.5 px-6">
+                        <td className="py-2.5 md:px-6 px-4">
                           <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${
                             row.status.toLowerCase() === 'present'
                               ? 'bg-green-100 text-green-700'
@@ -568,10 +568,10 @@ export default function Attendance({ isTab = false }) {
                             {row.status}
                           </span>
                         </td>
-                        <td className="py-2.5 px-6 text-gray-500 max-w-xs truncate">
+                        <td className="py-2.5 text-gray-500 max-w-xs truncate md:px-6 px-4">
                           {row.remarks || '-'}
                         </td>
-                        <td className="py-2.5 px-6 text-right">
+                        <td className="py-2.5 text-right md:px-6 px-4">
                           {row.isValid ? (
                             <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 bg-green-100/50 border border-green-200 px-2.5 py-1 rounded-md">
                               <CheckCircle2 size={14} />
@@ -646,7 +646,7 @@ export default function Attendance({ isTab = false }) {
 
         {/* History Table */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-6 py-2.5 border-b border-gray-100 flex justify-between items-center">
+          <div className="py-2.5 border-b border-gray-100 flex justify-between items-center md:px-6 px-4">
             <div>
               <h3 className="font-bold text-gray-900 text-base">Attendance Log Registry</h3>
               <p className="text-xs text-gray-500 mt-0.5">Showing compiled attendance records</p>
@@ -673,34 +673,34 @@ export default function Attendance({ isTab = false }) {
                 <p className="text-sm text-gray-400 mt-1">Try broadening your search term or upload a new spreadsheet.</p>
               </div>
             ) : (
-              <table className="w-full text-left border-collapse">
+              <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50/30 text-gray-500 font-bold text-xs uppercase border-b border-gray-100">
-                    <th className="py-4 px-6">Date</th>
-                    <th className="py-4 px-6">Examiner</th>
-                    <th className="py-4 px-6">Email</th>
-                    <th className="py-4 px-6">Status</th>
-                    <th className="py-4 px-6">Remarks</th>
-                    <th className="py-4 px-6 text-right">Actions</th>
+                    <th className="py-4 md:px-6 px-4">Date</th>
+                    <th className="py-4 md:px-6 px-4">Examiner</th>
+                    <th className="py-4 md:px-6 px-4">Email</th>
+                    <th className="py-4 md:px-6 px-4">Status</th>
+                    <th className="py-4 md:px-6 px-4">Remarks</th>
+                    <th className="py-4 text-right md:px-6 px-4">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-sm">
                   {filteredLogs.map((log) => (
                     <tr key={log.attendanceId} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="py-2.5 px-6 font-semibold text-gray-900">
+                      <td className="py-2.5 font-semibold text-gray-900 md:px-6 px-4">
                         {log?.date ? new Date(log.date).toLocaleDateString(undefined, {
                           year: 'numeric',
                           month: 'short',
                           day: 'numeric'
                         }) : '-'}
                       </td>
-                      <td className="py-2.5 px-6 font-medium text-gray-800">
+                      <td className="py-2.5 font-medium text-gray-800 md:px-6 px-4">
                         {log?.examinerName || 'Unknown'}
                       </td>
-                      <td className="py-2.5 px-6 text-gray-600">
+                      <td className="py-2.5 text-gray-600 md:px-6 px-4">
                         {log?.examinerEmail || '-'}
                       </td>
-                      <td className="py-2.5 px-6">
+                      <td className="py-2.5 md:px-6 px-4">
                         <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
                           (log?.status || '').toLowerCase() === 'present'
                             ? 'bg-green-100 text-green-700 border border-green-200'
@@ -711,10 +711,10 @@ export default function Attendance({ isTab = false }) {
                           {log?.status || 'Unknown'}
                         </span>
                       </td>
-                      <td className="py-2.5 px-6 text-gray-500 max-w-xs truncate">
+                      <td className="py-2.5 text-gray-500 max-w-xs truncate md:px-6 px-4">
                         {log.remarks || '-'}
                       </td>
-                      <td className="py-2.5 px-6 text-right">
+                      <td className="py-2.5 text-right md:px-6 px-4">
                         <button
                           onClick={() => handleDelete(log.attendanceId)}
                           className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"

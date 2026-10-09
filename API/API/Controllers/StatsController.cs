@@ -101,6 +101,51 @@ namespace API.Controllers
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
+
+        [HttpGet("project-counts/{projectId}")]
+        public async Task<IActionResult> GetProjectStats(int projectId)
+        {
+            try
+            {
+                var project = await _context.Projects
+                    .AsNoTracking()
+                    .Include(p => p.ProjectPapers)
+                        .ThenInclude(pp => pp.Scripts)
+                    .Include(p => p.ProjectPapers)
+                        .ThenInclude(pp => pp.Paper)
+                            .ThenInclude(p => p.Sections)
+                    .FirstOrDefaultAsync(p => p.ProjectId == projectId);
+
+                if (project == null)
+                {
+                    return NotFound(new { success = false, message = "Project not found" });
+                }
+
+                var papersCount = project.ProjectPapers.Count;
+                var totalScripts = project.ProjectPapers.SelectMany(pp => pp.Scripts).Count();
+                var pendingScripts = project.ProjectPapers.SelectMany(pp => pp.Scripts).Count(s => s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any()));
+                var allocatedScripts = project.ProjectPapers.SelectMany(pp => pp.Scripts).Count(s => s.Status == "allocated" || s.Status == "marking");
+                var completedScripts = project.ProjectPapers.SelectMany(pp => pp.Scripts).Count(s => s.Status == "completed");
+                var unconfiguredPapersCount = project.ProjectPapers.Count(pp => !pp.Paper.Sections.Any());
+
+                return Ok(new
+                {
+                    success = true,
+                    projectId = project.ProjectId,
+                    projectName = project.ProjectName,
+                    papersCount = papersCount,
+                    totalScripts = totalScripts,
+                    pendingScripts = pendingScripts,
+                    allocatedScripts = allocatedScripts,
+                    completedScripts = completedScripts,
+                    unconfiguredPapersCount = unconfiguredPapersCount
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
         [HttpGet("admin-counts")]
         public async Task<IActionResult> GetAdminCounts()
         {

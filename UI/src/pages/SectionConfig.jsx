@@ -116,7 +116,7 @@ export default function SectionConfig() {
 
       setBreadcrumb([
         { label: parentLabel, path: parentPath, icon: parentIcon },
-        { label: 'Subject Configuration', path: configPath, icon: 'Layers' }
+        { label: 'Section Configuration', path: configPath, icon: 'Layers' }
       ]);
       fetchQuestionTypes();
       fetchSectionMasters();
@@ -509,7 +509,7 @@ export default function SectionConfig() {
             </div>
             <div>
               <h1 className="text-sm font-bold tracking-tight">
-                Subject Configuration
+                Section Configuration
               </h1>
               <p className="text-teal-100/80 text-[10px] font-medium leading-none mt-0.5">
                 Structure and manage examination sections
@@ -522,7 +522,7 @@ export default function SectionConfig() {
         {/* Step 3: Manage Sections */}
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
           {/* Header & Stats in a single row */}
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 md:p-6">
             <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
               <div className="flex items-center gap-4">
                 <button
@@ -538,7 +538,7 @@ export default function SectionConfig() {
               </div>
 
               <div className="flex items-center gap-4 flex-grow max-w-2xl">
-                <div className="flex-grow grid grid-cols-3 gap-3">
+                <div className="flex-grow grid gap-3 sm:grid-cols-2 grid-cols-1 lg:grid-cols-3">
                   <div className="bg-teal-50 p-3 rounded-xl border border-teal-100 flex items-center gap-3">
                     <Award className="w-5 h-5 text-teal-600" />
                     <div>
@@ -564,7 +564,7 @@ export default function SectionConfig() {
 
                 {!showSectionForm && (
                   <div className="flex items-center gap-3">
-                    {!isAddSectionDisabled() && (
+                    {sections.length === 0 && !isAddSectionDisabled() && (
                       <button
                         onClick={() => {
                           setSelectedMasterSectionIds(sectionMasters.map(m => m.id));
@@ -599,7 +599,7 @@ export default function SectionConfig() {
 
           {/* Section Creation Form - Side by Side */}
           {showSectionForm && (
-            <div className="bg-white border border-teal-200 rounded-2xl p-6 shadow-xl animate-in zoom-in-95 duration-300">
+            <div className="bg-white border border-teal-200 rounded-2xl shadow-xl animate-in zoom-in-95 duration-300 p-4 md:p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-4">
                   <div className="p-2 bg-teal-100 rounded-xl">
@@ -613,7 +613,7 @@ export default function SectionConfig() {
                   <button
                     onClick={handleSaveSection}
                     disabled={loading}
-                    className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-bold shadow-md transition-all disabled:opacity-50 text-sm"
+                    className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-bold shadow-md transition-all disabled:opacity-50 text-sm md:px-6 px-4"
                   >
                     {loading ? 'Saving...' : 'Save Changes'}
                   </button>
@@ -623,7 +623,7 @@ export default function SectionConfig() {
                       setShowQuestionPreview(false);
                       setEditingSectionId(null);
                     }}
-                    className="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-all text-sm"
+                    className="py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-all text-sm md:px-6 px-4"
                   >
                     Close
                   </button>
@@ -663,7 +663,7 @@ export default function SectionConfig() {
 
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
                     <label className="block text-gray-700 text-xs font-bold mb-2 uppercase tracking-tight">Structure</label>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-3 grid-cols-1 md:grid-cols-2">
                       <div>
                         <p className="text-[10px] text-gray-500 mb-1">Start Q#</p>
                         <input
@@ -800,7 +800,7 @@ export default function SectionConfig() {
                 <div className="xl:col-span-9">
                   {showQuestionPreview ? (
                     <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden flex flex-col h-[600px]">
-                      <div className="bg-gray-100 px-6 py-3 border-b border-gray-200 flex justify-between items-center">
+                      <div className="bg-gray-100 py-3 border-b border-gray-200 flex justify-between items-center md:px-6 px-4">
                         <div className="flex items-center gap-3">
                           <h4 className="text-sm font-bold text-gray-700 uppercase tracking-tight">Question Configuration</h4>
                           <span className="text-xs font-medium text-gray-500">({questions.length} Questions)</span>
@@ -815,7 +815,7 @@ export default function SectionConfig() {
                         </button>
                       </div>
                       <div className="overflow-auto flex-grow custom-scrollbar">
-                        <table className="w-full text-left border-collapse">
+                        <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
                           <thead className="sticky top-0 bg-white z-10 shadow-sm">
                             <tr>
                               <th className="px-4 py-3 text-gray-600 text-[10px] font-bold uppercase tracking-wider">Q No</th>
@@ -919,21 +919,21 @@ export default function SectionConfig() {
               </div>
               <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
+                  <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
                     <thead className="bg-gray-50/50 border-b border-gray-100">
                       <tr>
-                        <th className="px-6 py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider">Section</th>
-                        <th className="px-6 py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider">Questions</th>
-                        <th className="px-6 py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider">Total Marks</th>
-                        <th className="px-6 py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider">Attempt</th>
-                        <th className="px-6 py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider">Avg Marks</th>
-                        <th className="px-6 py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                        <th className="py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider md:px-6 px-4">Section</th>
+                        <th className="py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider md:px-6 px-4">Questions</th>
+                        <th className="py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider md:px-6 px-4">Total Marks</th>
+                        <th className="py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider md:px-6 px-4">Attempt</th>
+                        <th className="py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider md:px-6 px-4">Avg Marks</th>
+                        <th className="py-2.5 text-xs font-bold text-gray-500 uppercase tracking-wider text-right md:px-6 px-4">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {sections.map((section) => (
                         <tr key={section.id} className="hover:bg-teal-50/30 transition-colors group">
-                          <td className="px-6 py-2.5">
+                          <td className="py-2.5 md:px-6 px-4">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center font-black text-sm shrink-0">
                                 {section.name.replace(/^Section\s+/i, '').substring(0, 2).toUpperCase()}
@@ -948,18 +948,18 @@ export default function SectionConfig() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-2.5">
+                          <td className="py-2.5 md:px-6 px-4">
                             <div className="flex flex-col">
                               <span className="font-bold text-gray-900 text-sm">Q{section.startQuestion} - Q{section.endQuestion}</span>
                               <span className="text-xs text-gray-500">{section.questions?.length || 0} questions</span>
                             </div>
                           </td>
-                          <td className="px-6 py-2.5 font-bold text-gray-900 text-sm">{section.totalMarks}</td>
-                          <td className="px-6 py-2.5 font-bold text-gray-900 text-sm">{section.maxQuestionsToAttempt}</td>
-                          <td className="px-6 py-2.5 font-bold text-gray-900 text-sm">
+                          <td className="py-2.5 font-bold text-gray-900 text-sm md:px-6 px-4">{section.totalMarks}</td>
+                          <td className="py-2.5 font-bold text-gray-900 text-sm md:px-6 px-4">{section.maxQuestionsToAttempt}</td>
+                          <td className="py-2.5 font-bold text-gray-900 text-sm md:px-6 px-4">
                             {(section.totalMarks / (section.endQuestion - section.startQuestion + 1)).toFixed(1)}
                           </td>
-                          <td className="px-6 py-2.5">
+                          <td className="py-2.5 md:px-6 px-4">
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 onClick={() => handleEditSection(section)}
@@ -996,14 +996,14 @@ export default function SectionConfig() {
                   setSelectedMasterSectionIds(sectionMasters.map(m => m.id));
                   setShowImportMasterModal(true);
                 }}
-                className="bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 px-6 py-3.5 rounded-xl font-bold transition-all hover:scale-105 flex items-center gap-2"
+                className="bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 py-3.5 rounded-xl font-bold transition-all hover:scale-105 flex items-center gap-2 md:px-6 px-4"
               >
                 <Layers className="w-4 h-4" />
                 Import Master Sections
               </button>
               <button
                 onClick={() => setShowSectionForm(true)}
-                className="bg-teal-700 hover:bg-teal-800 text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-teal-500/20 transition-all hover:scale-105 flex items-center gap-2"
+                className="bg-teal-700 hover:bg-teal-800 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-teal-500/20 transition-all hover:scale-105 flex items-center gap-2 px-4 md:px-8"
               >
                 <Plus className="w-4 h-4" />
                 Create First Section
@@ -1016,7 +1016,7 @@ export default function SectionConfig() {
       {sectionToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 text-center">
+            <div className="text-center p-4 md:p-6">
               <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
                 <Trash2 className="w-6 h-6 text-red-600" />
               </div>
@@ -1049,7 +1049,7 @@ export default function SectionConfig() {
       {showImportMasterModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+            <div className="py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 md:px-6 px-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-teal-100 rounded-xl">
                   <Layers className="w-5 h-5 text-teal-700" />
@@ -1066,7 +1066,7 @@ export default function SectionConfig() {
               </button>
             </div>
 
-            <form onSubmit={handleImportMasterSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleImportMasterSubmit} className="space-y-4 p-4 md:p-6">
               <p className="text-xs text-gray-600">
                 Choose the predefined Master Sections to create in this paper. Questions and marks will be generated automatically based on the master configuration.
               </p>

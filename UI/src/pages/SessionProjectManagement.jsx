@@ -151,11 +151,11 @@ export default function SessionProjectManagement() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
                   <th
-                    className="px-6 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group w-2/3"
+                    className="py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4 w-full md:w-2/3"
                     onClick={() => handleSort('sessionName')}
                   >
                     <div className="flex items-center gap-1.5">
@@ -163,7 +163,7 @@ export default function SessionProjectManagement() {
                       <ColumnFilter columnKey="sessionName" currentFilter={filters.sessionName} setFilter={setFilter} placeholder="Filter session name..." />
                     </div>
                   </th>
-                  <th className="px-6 py-2.5 text-center">
+                  <th className="py-2.5 text-center md:px-6 px-4">
                     <div className="flex items-center justify-center gap-2">
                       <span
                         className="cursor-pointer hover:text-gray-700 flex items-center gap-1"
@@ -182,13 +182,13 @@ export default function SessionProjectManagement() {
                       </span>
                     </div>
                   </th>
-                  <th className="px-6 py-2.5 text-right">Actions</th>
+                  <th className="py-2.5 text-right md:px-6 px-4">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-xs">
                 {sessions.map((session) => (
                   <tr key={session.sessionId} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-2.5">
+                    <td className="py-2.5 md:px-6 px-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-600 font-extrabold shadow-sm shrink-0 border border-gray-100">
                           <Calendar size={18} />
@@ -201,7 +201,7 @@ export default function SessionProjectManagement() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-2.5 text-center">
+                    <td className="py-2.5 text-center md:px-6 px-4">
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${
                         session.isActive
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-100 shadow-sm'
@@ -211,7 +211,7 @@ export default function SessionProjectManagement() {
                         {session.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td className="px-6 py-2.5 text-right whitespace-nowrap">
+                    <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => handleEdit(session)}

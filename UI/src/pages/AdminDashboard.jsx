@@ -195,7 +195,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="h-[calc(100vh-64px)] flex flex-col bg-zinc-50 pb-6 w-full px-6 lg:px-10 pt-6 overflow-hidden">
+    <div className="h-[calc(100vh-64px)] flex flex-col bg-zinc-50 pb-6 w-full lg:px-10 pt-6 overflow-hidden md:px-6 px-4">
       
       {/* Dynamic Unallocated Alert Warning Banner */}
       {/* <div className="pt-6">
@@ -250,7 +250,7 @@ export default function AdminDashboard() {
               </span>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid md:grid-cols-4 gap-4 grid-cols-1 md:grid-cols-2">
               {/* Universities Card */}
               <div className="bg-white p-3.5 rounded-xl border border-gray-100 border-l-[3px] border-l-teal-500 flex items-center justify-between shadow-sm hover:shadow-md hover:border-teal-200 transition-all group">
                 <div className="flex flex-col">
@@ -335,7 +335,7 @@ export default function AdminDashboard() {
             </div>
 
             {error ? (
-              <div className="p-6 text-center text-red-600">
+              <div className="text-center text-red-600 p-4 md:p-6">
                 <AlertCircle className="mx-auto mb-1.5" size={24} />
                 <p className="text-xs font-semibold">{error}</p>
               </div>
@@ -347,7 +347,7 @@ export default function AdminDashboard() {
             ) : (
               <div className="flex flex-col shrink min-h-0 overflow-hidden">
                 <div className="overflow-auto shrink min-h-0">
-                  <table className="w-full text-left">
+                  <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left">
                     <thead className="bg-gray-50 border-b border-gray-100 sticky top-0 z-10">
                       <tr>
                         <th className="px-5 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 transition-colors group" onClick={() => handleSort('universityName')}>

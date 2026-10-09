@@ -36,7 +36,7 @@ const Reports = () => {
       </div>
 
       {/* Report Type Selector */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white rounded-lg shadow p-4 md:p-6">
         <div className="flex flex-wrap gap-3">
           {['summary', 'subject', 'examiner'].map((type) => (
             <button
@@ -55,7 +55,7 @@ const Reports = () => {
       </div>
 
       {/* Date Range Selector */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white rounded-lg shadow p-4 md:p-6">
         <div className="flex items-center gap-4">
           <Calendar size={20} className="text-gray-400" />
           <select
@@ -82,7 +82,7 @@ const Reports = () => {
             {summaryStats.map((stat, index) => {
               const Icon = stat.icon;
               return (
-                <div key={index} className="bg-white rounded-lg shadow p-6">
+                <div key={index} className="bg-white rounded-lg shadow p-4 md:p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-medium text-gray-600">{stat.label}</h3>
                     <div className={`${stat.color} p-3 rounded-lg`}>
@@ -97,7 +97,7 @@ const Reports = () => {
           </div>
 
           {/* Score Distribution Chart */}
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow p-4 md:p-6">
             <h2 className="text-lg font-bold text-gray-900 mb-6">Score Distribution</h2>
             <div className="space-y-4">
               {[
@@ -129,26 +129,26 @@ const Reports = () => {
       {reportType === 'subject' && (
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Subject</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Total Scripts</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Evaluated</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Pending</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Avg Score</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Progress</th>
+                  <th className="py-3 text-left text-xs font-medium text-gray-700 uppercase md:px-6 px-4">Subject</th>
+                  <th className="py-3 text-left text-xs font-medium text-gray-700 uppercase md:px-6 px-4">Total Scripts</th>
+                  <th className="py-3 text-left text-xs font-medium text-gray-700 uppercase md:px-6 px-4">Evaluated</th>
+                  <th className="py-3 text-left text-xs font-medium text-gray-700 uppercase md:px-6 px-4">Pending</th>
+                  <th className="py-3 text-left text-xs font-medium text-gray-700 uppercase md:px-6 px-4">Avg Score</th>
+                  <th className="py-3 text-left text-xs font-medium text-gray-700 uppercase md:px-6 px-4">Progress</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {subjectStats.map((subject, index) => (
                   <tr key={index} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-2.5 text-sm font-medium text-gray-900">{subject.subject}</td>
-                    <td className="px-6 py-2.5 text-sm text-gray-600">{subject.total}</td>
-                    <td className="px-6 py-2.5 text-sm font-medium text-green-600">{subject.evaluated}</td>
-                    <td className="px-6 py-2.5 text-sm font-medium text-red-600">{subject.pending}</td>
-                    <td className="px-6 py-2.5 text-sm font-bold text-gray-900">{subject.avgScore}%</td>
-                    <td className="px-6 py-2.5 text-sm">
+                    <td className="py-2.5 text-sm font-medium text-gray-900 md:px-6 px-4">{subject.subject}</td>
+                    <td className="py-2.5 text-sm text-gray-600 md:px-6 px-4">{subject.total}</td>
+                    <td className="py-2.5 text-sm font-medium text-green-600 md:px-6 px-4">{subject.evaluated}</td>
+                    <td className="py-2.5 text-sm font-medium text-red-600 md:px-6 px-4">{subject.pending}</td>
+                    <td className="py-2.5 text-sm font-bold text-gray-900 md:px-6 px-4">{subject.avgScore}%</td>
+                    <td className="py-2.5 text-sm md:px-6 px-4">
                       <div className="w-24 bg-gray-200 rounded-full h-2">
                         <div
                           className="bg-teal-700 h-2 rounded-full"
@@ -168,24 +168,24 @@ const Reports = () => {
       {reportType === 'examiner' && (
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Examiner Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Scripts Evaluated</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Avg Time/Script</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Accuracy Rate</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Rating</th>
+                  <th className="py-3 text-left text-xs font-medium text-gray-700 uppercase md:px-6 px-4">Examiner Name</th>
+                  <th className="py-3 text-left text-xs font-medium text-gray-700 uppercase md:px-6 px-4">Scripts Evaluated</th>
+                  <th className="py-3 text-left text-xs font-medium text-gray-700 uppercase md:px-6 px-4">Avg Time/Script</th>
+                  <th className="py-3 text-left text-xs font-medium text-gray-700 uppercase md:px-6 px-4">Accuracy Rate</th>
+                  <th className="py-3 text-left text-xs font-medium text-gray-700 uppercase md:px-6 px-4">Rating</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {examinerPerformance.map((examiner, index) => (
                   <tr key={index} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-2.5 text-sm font-medium text-gray-900">{examiner.name}</td>
-                    <td className="px-6 py-2.5 text-sm text-gray-600">{examiner.evaluated}</td>
-                    <td className="px-6 py-2.5 text-sm text-gray-600">{examiner.avgTime}</td>
-                    <td className="px-6 py-2.5 text-sm font-medium text-green-600">{examiner.accuracy}</td>
-                    <td className="px-6 py-2.5 text-sm">
+                    <td className="py-2.5 text-sm font-medium text-gray-900 md:px-6 px-4">{examiner.name}</td>
+                    <td className="py-2.5 text-sm text-gray-600 md:px-6 px-4">{examiner.evaluated}</td>
+                    <td className="py-2.5 text-sm text-gray-600 md:px-6 px-4">{examiner.avgTime}</td>
+                    <td className="py-2.5 text-sm font-medium text-green-600 md:px-6 px-4">{examiner.accuracy}</td>
+                    <td className="py-2.5 text-sm md:px-6 px-4">
                       <span className="text-yellow-500">?????</span>
                     </td>
                   </tr>

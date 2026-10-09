@@ -224,28 +224,28 @@ export default function CollegeManagement() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
-                    <th className="px-6 py-2.5 cursor-pointer hover:text-gray-700 transition-colors group" onClick={() => handleSort('collegeName')}>
+                    <th className="py-2.5 cursor-pointer hover:text-gray-700 transition-colors group md:px-6 px-4" onClick={() => handleSort('collegeName')}>
                       <div className="flex items-center gap-1">
                         College Name 
                         {sortField === 'collegeName' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
                       </div>
                     </th>
-                    <th className="px-6 py-2.5 cursor-pointer hover:text-gray-700 transition-colors group" onClick={() => handleSort('collegeCode')}>
+                    <th className="py-2.5 cursor-pointer hover:text-gray-700 transition-colors group md:px-6 px-4" onClick={() => handleSort('collegeCode')}>
                       <div className="flex items-center gap-1">
                         College Code 
                         {sortField === 'collegeCode' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
                       </div>
                     </th>
-                    <th className="px-6 py-2.5 cursor-pointer hover:text-gray-700 transition-colors group" onClick={() => handleSort('createdAt')}>
+                    <th className="py-2.5 cursor-pointer hover:text-gray-700 transition-colors group md:px-6 px-4" onClick={() => handleSort('createdAt')}>
                       <div className="flex items-center gap-1">
                         Created On 
                         {sortField === 'createdAt' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
                       </div>
                     </th>
-                    <th className="px-6 py-2.5 text-center cursor-pointer hover:text-gray-700 transition-colors" onClick={() => handleSort('isActive')}>
+                    <th className="py-2.5 text-center cursor-pointer hover:text-gray-700 transition-colors md:px-6 px-4" onClick={() => handleSort('isActive')}>
                       <div className="flex items-center justify-center gap-1">
                         Status 
                         {sortField === 'isActive' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
@@ -260,22 +260,22 @@ export default function CollegeManagement() {
                         />
                       </div>
                     </th>
-                    <th className="px-6 py-2.5 text-right">Actions</th>
+                    <th className="py-2.5 text-right md:px-6 px-4">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-sm">
                   {colleges.map((college) => (
                     <tr key={college.id} className="hover:bg-gray-50/50 transition-colors group">
-                      <td className="px-6 py-2.5 font-extrabold text-gray-900">
+                      <td className="py-2.5 font-extrabold text-gray-900 md:px-6 px-4">
                         {college.collegeName}
                       </td>
-                      <td className="px-6 py-2.5 text-gray-600 font-medium text-xs">
+                      <td className="py-2.5 text-gray-600 font-medium text-xs md:px-6 px-4">
                         {college.collegeCode}
                       </td>
-                      <td className="px-6 py-2.5 text-gray-500 font-medium text-xs">
+                      <td className="py-2.5 text-gray-500 font-medium text-xs md:px-6 px-4">
                         {college.createdAt ? new Date(college.createdAt).toLocaleDateString() : 'N/A'}
                       </td>
-                      <td className="px-6 py-2.5 text-center">
+                      <td className="py-2.5 text-center md:px-6 px-4">
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${
                           college.isActive
                             ? "bg-emerald-50 text-emerald-700 border-emerald-100"
@@ -285,7 +285,7 @@ export default function CollegeManagement() {
                           {college.isActive ? "Active" : "Inactive"}
                         </span>
                       </td>
-                      <td className="px-6 py-2.5 text-right whitespace-nowrap">
+                      <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
                         <div className="flex items-center justify-end gap-2 transition-opacity">
                           <button
                             onClick={() => handleEdit(college)}
@@ -342,7 +342,7 @@ export default function CollegeManagement() {
             </div>
             
             {/* Modal Form */}
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto space-y-5 p-4 md:p-6">
               <div>
                 <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">College Name *</label>
                 <input
@@ -434,7 +434,7 @@ export default function CollegeManagement() {
             </div>
             
             {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto space-y-6 p-4 md:p-6">
               {/* Download Template Section */}
               <div className="flex items-center justify-between p-4 bg-teal-50 border border-teal-100 rounded-xl">
                 <div className="flex items-center gap-3">
@@ -481,7 +481,7 @@ export default function CollegeManagement() {
                 {importResults && (
                   <div className="p-4 rounded-xl bg-gray-50/50 border border-gray-200 space-y-3">
                     <h4 className="font-extrabold text-[10px] text-gray-500 uppercase tracking-wide">Import Results</h4>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-3 grid-cols-1 md:grid-cols-2">
                       <div className="p-3 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl text-center">
                          <div className="text-2xl font-black">{importResults.importedCount}</div>
                          <div className="text-[10px] font-bold uppercase tracking-wider">Imported</div>

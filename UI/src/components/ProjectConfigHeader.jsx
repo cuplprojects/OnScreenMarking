@@ -15,7 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import { decryptId, encryptId } from '../utils/encryption';
 import apiCall from '../services/api';
 
-export default function ProjectConfigHeader({ completePercentage = 0, title, titleIcon, titleBadge, subtitle }) {
+export default function ProjectConfigHeader({ completePercentage = 0, title, titleIcon, titleBadge, subtitle, initialProjectName }) {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -24,7 +24,7 @@ export default function ProjectConfigHeader({ completePercentage = 0, title, tit
   const encryptedProjectId = searchParams.get('projectId');
   const projectId = encryptedProjectId ? decryptId(encryptedProjectId) : null;
 
-  const [projectName, setProjectName] = useState('Project Management');
+  const [projectName, setProjectName] = useState(initialProjectName || 'Project Management');
   const [loading, setLoading] = useState(false);
   const [currentUniversityId, setCurrentUniversityId] = useState(userType === 'coordinator' ? userUniversityId : searchParams.get('universityId'));
 
@@ -41,11 +41,23 @@ export default function ProjectConfigHeader({ completePercentage = 0, title, tit
   const debounceTimerRef = useRef(null);
 
   useEffect(() => {
+    if (initialProjectName) {
+      setProjectName(initialProjectName);
+    }
+  }, [initialProjectName]);
+
+  useEffect(() => {
     if (projectId) {
       sessionStorage.setItem('selectedProjectId', projectId);
-      fetchProjectDetails();
+      if (initialProjectName) { 
+        setProjectName(initialProjectName);
+      } else {
+        const cached = sessionStorage.getItem(`projectName_${projectId}`);
+        if (cached) setProjectName(cached);
+        else fetchProjectDetails();
+      }
     }
-  }, [projectId]);
+  }, [projectId, initialProjectName]);
 
   const fetchProjectDetails = async () => {
     try {

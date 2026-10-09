@@ -213,15 +213,15 @@ export default function SectionMasterManagement() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50/75 border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest select-none">
-                  <th className="px-6 py-3.5">Section Name & Description</th>
-                  <th className="px-6 py-3.5 text-center">Question Range</th>
-                  <th className="px-6 py-3.5 text-center">Total Marks</th>
-                  <th className="px-6 py-3.5 text-center">Attempt Limit</th>
-                  <th className="px-6 py-3.5 text-center">Marks / Q</th>
-                  <th className="px-6 py-3.5 text-right">Actions</th>
+                  <th className="py-3.5 md:px-6 px-4">Section Name & Description</th>
+                  <th className="py-3.5 text-center md:px-6 px-4">Question Range</th>
+                  <th className="py-3.5 text-center md:px-6 px-4">Total Marks</th>
+                  <th className="py-3.5 text-center md:px-6 px-4">Attempt Limit</th>
+                  <th className="py-3.5 text-center md:px-6 px-4">Marks / Q</th>
+                  <th className="py-3.5 text-right md:px-6 px-4">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-xs">
@@ -231,7 +231,7 @@ export default function SectionMasterManagement() {
 
                   return (
                     <tr key={master.id} className="hover:bg-gray-50/50 transition-colors group">
-                      <td className="px-6 py-3.5">
+                      <td className="py-3.5 md:px-6 px-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 bg-teal-50 text-teal-700 rounded-xl flex items-center justify-center font-black text-sm shrink-0 border border-teal-100">
                             {master.name?.substring(0, 2) || 'S'}
@@ -246,7 +246,7 @@ export default function SectionMasterManagement() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-3.5 text-center">
+                      <td className="py-3.5 text-center md:px-6 px-4">
                         <span className="inline-flex items-center gap-1 font-bold text-gray-800 bg-gray-100 px-2.5 py-1 rounded-lg text-xs">
                           Q{master.startQuestion} - Q{master.endQuestion}
                         </span>
@@ -254,21 +254,21 @@ export default function SectionMasterManagement() {
                           {totalQ} questions
                         </span>
                       </td>
-                      <td className="px-6 py-3.5 text-center">
+                      <td className="py-3.5 text-center md:px-6 px-4">
                         <span className="inline-flex items-center gap-1 font-black text-teal-800 bg-teal-50 border border-teal-100 px-2.5 py-1 rounded-lg text-xs">
                           <Award size={12} className="text-teal-600" />
                           {master.totalMarks}
                         </span>
                       </td>
-                      <td className="px-6 py-3.5 text-center">
+                      <td className="py-3.5 text-center md:px-6 px-4">
                         <span className="font-bold text-gray-700">
                           {master.maxQuestionsToAttempt} of {totalQ}
                         </span>
                       </td>
-                      <td className="px-6 py-3.5 text-center font-bold text-gray-600">
+                      <td className="py-3.5 text-center font-bold text-gray-600 md:px-6 px-4">
                         {marksPerQ}
                       </td>
-                      <td className="px-6 py-3.5 text-right">
+                      <td className="py-3.5 text-right md:px-6 px-4">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => handleOpenEdit(master)}
@@ -300,7 +300,7 @@ export default function SectionMasterManagement() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+            <div className="py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 md:px-6 px-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-teal-100 text-teal-700 rounded-xl">
                   <Layers size={18} />
@@ -322,7 +322,7 @@ export default function SectionMasterManagement() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4 p-4 md:p-6">
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wider">
                   Section Name *
@@ -350,7 +350,7 @@ export default function SectionMasterManagement() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
                 <div>
                   <label className="block text-[11px] font-bold text-gray-600 mb-1 uppercase tracking-wider">
                     Start Question #
@@ -379,7 +379,7 @@ export default function SectionMasterManagement() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid gap-3 sm:grid-cols-2 grid-cols-1 lg:grid-cols-3">
                 <div>
                   <label className="block text-[10px] font-bold text-gray-500 mb-1 uppercase tracking-wider">
                     Total Questions

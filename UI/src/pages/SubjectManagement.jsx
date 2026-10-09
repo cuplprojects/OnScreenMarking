@@ -224,11 +224,11 @@ export default function SubjectManagement() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
                     <th 
-                      className="px-6 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group"
+                      className="py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4"
                       onClick={() => handleSort('subName')}
                     >
                       <div className="flex items-center gap-1.5">
@@ -237,7 +237,7 @@ export default function SubjectManagement() {
                       </div>
                     </th>
                     <th 
-                      className="px-6 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group"
+                      className="py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4"
                       onClick={() => handleSort('subCode')}
                     >
                       <div className="flex items-center gap-1.5">
@@ -245,7 +245,7 @@ export default function SubjectManagement() {
                         <ColumnFilter columnKey="subCode" currentFilter={filters.subCode} setFilter={setFilter} placeholder="Filter subject code..." />
                       </div>
                     </th>
-                    <th className="px-6 py-2.5">
+                    <th className="py-2.5 md:px-6 px-4">
                       <div className="flex items-center gap-1.5">
                         Departments
                         {!departmentId && (
@@ -264,9 +264,9 @@ export default function SubjectManagement() {
                         )}
                       </div>
                     </th>
-                    <th className="px-6 py-2.5">Courses</th>
+                    <th className="py-2.5 md:px-6 px-4">Courses</th>
                     <th 
-                      className="px-6 py-2.5 text-center cursor-pointer hover:bg-gray-100 transition-colors group"
+                      className="py-2.5 text-center cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4"
                       onClick={() => handleSort('status')}
                     >
                       <div className="flex items-center justify-center gap-1.5">
@@ -282,13 +282,13 @@ export default function SubjectManagement() {
                         />
                       </div>
                     </th>
-                    <th className="px-6 py-2.5 text-right">Actions</th>
+                    <th className="py-2.5 text-right md:px-6 px-4">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-xs">
                   {subjects.map((subject) => (
                     <tr key={subject.subjectId} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-6 py-2.5">
+                      <td className="py-2.5 md:px-6 px-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 bg-gray-50 rounded-xl flex items-center justify-center text-gray-600 font-extrabold shadow-sm">
                             <BookOpen size={18} />
@@ -298,12 +298,12 @@ export default function SubjectManagement() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-2.5">
+                      <td className="py-2.5 md:px-6 px-4">
                         <span className="px-2.5 py-1 bg-gray-100 border border-gray-200 text-gray-700 rounded-md font-bold text-[10px] tracking-wide">
                           {subject.subCode || 'N/A'}
                         </span>
                       </td>
-                      <td className="px-6 py-2.5 max-w-xs">
+                      <td className="py-2.5 max-w-xs md:px-6 px-4">
                         {subject.departmentSubjects && subject.departmentSubjects.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {subject.departmentSubjects.map((ds) => ds.department?.name).filter(Boolean).map((name, idx) => (
@@ -319,7 +319,7 @@ export default function SubjectManagement() {
                           <span className="text-gray-400 font-medium text-[10px]">No departments assigned</span>
                         )}
                       </td>
-                      <td className="px-6 py-2.5 max-w-xs">
+                      <td className="py-2.5 max-w-xs md:px-6 px-4">
                         {subject.courseSubjects && subject.courseSubjects.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {subject.courseSubjects.map((cs) => cs.course?.name).filter(Boolean).map((name, idx) => (
@@ -335,7 +335,7 @@ export default function SubjectManagement() {
                           <span className="text-gray-400 font-medium text-[10px]">No courses mapped</span>
                         )}
                       </td>
-                      <td className="px-6 py-2.5 text-center">
+                      <td className="py-2.5 text-center md:px-6 px-4">
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${
                           subject.status 
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
@@ -345,7 +345,7 @@ export default function SubjectManagement() {
                           {subject.status ? 'Active' : 'Inactive'}
                         </span>
                       </td>
-                      <td className="px-6 py-2.5 text-right whitespace-nowrap">
+                      <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleEdit(subject)}

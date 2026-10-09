@@ -240,22 +240,22 @@ export default function RoleManagement() {
         {/* Table Card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden animate-fade-in">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
-                  <th className="px-6 py-2.5 cursor-pointer hover:text-gray-700" onClick={() => handleSort('hierarchyLevel')}>
+                  <th className="py-2.5 cursor-pointer hover:text-gray-700 md:px-6 px-4" onClick={() => handleSort('hierarchyLevel')}>
                     <div className="flex items-center gap-1">
                       ID
                       {sortField === 'hierarchyLevel' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
                     </div>
                   </th>
-                  <th className="px-6 py-2.5 cursor-pointer hover:text-gray-700" onClick={() => handleSort('roleName')}>
+                  <th className="py-2.5 cursor-pointer hover:text-gray-700 md:px-6 px-4" onClick={() => handleSort('roleName')}>
                     <div className="flex items-center gap-1">
                       Name
                       {sortField === 'roleName' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
                     </div>
                   </th>
-                  <th className="px-6 py-2.5 text-center cursor-pointer hover:text-gray-700" onClick={() => handleSort('isActive')}>
+                  <th className="py-2.5 text-center cursor-pointer hover:text-gray-700 md:px-6 px-4" onClick={() => handleSort('isActive')}>
                     <div className="flex items-center justify-center gap-1">
                       Status
                       {sortField === 'isActive' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
@@ -270,7 +270,7 @@ export default function RoleManagement() {
                       />
                     </div>
                   </th>
-                  <th className="px-6 py-2.5 text-right">Actions</th>
+                  <th className="py-2.5 text-right md:px-6 px-4">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-xs">
@@ -293,13 +293,13 @@ export default function RoleManagement() {
                 ) : (
                   tableRoles.map((role) => (
                     <tr key={role.roleId} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-6 py-2.5 text-gray-500 font-medium">
+                      <td className="py-2.5 text-gray-500 font-medium md:px-6 px-4">
                         #{role.roleId}
                       </td>
-                      <td className="px-6 py-2.5 font-extrabold text-gray-900">
+                      <td className="py-2.5 font-extrabold text-gray-900 md:px-6 px-4">
                         {role.roleName}
                       </td>
-                      <td className="px-6 py-2.5 text-center">
+                      <td className="py-2.5 text-center md:px-6 px-4">
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${
                           role.isActive
                             ? "bg-emerald-50 text-emerald-700 border-emerald-100"
@@ -309,7 +309,7 @@ export default function RoleManagement() {
                           {role.isActive ? "Enable" : "Disable"}
                         </span>
                       </td>
-                      <td className="px-6 py-2.5 text-right whitespace-nowrap">
+                      <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
                         <div className="flex items-center justify-end gap-1.5">
                           {hasPermission('UPDATE_ROLE') && (
                             <button
@@ -374,7 +374,7 @@ export default function RoleManagement() {
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSubmitForm} className="flex-1 overflow-y-auto p-6 space-y-5">
+            <form onSubmit={handleSubmitForm} className="flex-1 overflow-y-auto space-y-5 p-4 md:p-6">
               
               {/* Name Row */}
               <div>

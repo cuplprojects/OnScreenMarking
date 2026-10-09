@@ -125,7 +125,7 @@ export default function QuestionTypeMaster() {
             </div>
           ) : (
             <div>
-              <div className="px-6 py-2.5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+              <div className="py-2.5 bg-gray-50 border-b border-gray-100 flex items-center justify-between md:px-6 px-4">
                 <span className="text-[10px] font-black text-gray-450 uppercase tracking-widest">Active Question Types</span>
                 <span className="bg-teal-100 text-teal-700 text-[9px] font-black px-2.5 py-1 rounded-md uppercase tracking-wider border border-teal-200">
                   {questionTypes.length} types
@@ -135,7 +135,7 @@ export default function QuestionTypeMaster() {
                 {questionTypes.map((qt) => (
                   <div
                     key={qt.questionTypeId}
-                    className="flex justify-between items-center px-6 py-2.5 hover:bg-gray-50/50 transition-colors group"
+                    className="flex justify-between items-center py-2.5 hover:bg-gray-50/50 transition-colors group md:px-6 px-4"
                   >
                     <div className="flex items-center gap-3">
                       <span className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-100 text-teal-700 font-extrabold text-xs flex items-center justify-center shadow-sm">
@@ -178,7 +178,7 @@ export default function QuestionTypeMaster() {
             </div>
 
             {/* Form */}
-            <form id="question-type-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+            <form id="question-type-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto space-y-5 p-4 md:p-6">
               <div>
                 <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Question Type Name *</label>
                 <input

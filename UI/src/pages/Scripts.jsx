@@ -185,7 +185,7 @@ const Scripts = () => {
           </div>
         ) : (
           <div className="flex-1 overflow-auto min-h-0 bg-white relative">
-            <table className="w-full text-left min-w-[900px] border-collapse">
+            <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left min-w-[900px] border-collapse">
               <thead className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none sticky top-0 z-10 shadow-sm">
                 <tr>
                   <SortHeader label="Barcode / Script ID" field="barcode" />

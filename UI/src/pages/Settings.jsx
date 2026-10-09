@@ -34,7 +34,7 @@ export default function Settings() {
         
 
         {/* Notifications */}
-        <div className="p-6">
+        <div className="p-4 md:p-6">
           <div className="flex items-center gap-3 mb-4">
             <Bell className="text-green-500" size={24} />
             <h2 className="text-xl font-bold text-gray-900">Notifications</h2>
@@ -69,7 +69,7 @@ export default function Settings() {
         </div>
 
         {/* Marking Preferences */}
-        <div className="p-6">
+        <div className="p-4 md:p-6">
           <div className="flex items-center gap-3 mb-4">
             <Zap className="text-yellow-500" size={24} />
             <h2 className="text-xl font-bold text-gray-900">Marking Preferences</h2>
@@ -118,7 +118,7 @@ export default function Settings() {
         </div>
 
         {/* Security */}
-        <div className="p-6">
+        <div className="p-4 md:p-6">
           <div className="flex items-center gap-3 mb-4">
             <Lock className="text-red-500" size={24} />
             <h2 className="text-xl font-bold text-gray-900">Security</h2>
@@ -140,7 +140,7 @@ export default function Settings() {
         </div>
 
         {/* Privacy & Access Control */}
-        <div className="p-6">
+        <div className="p-4 md:p-6">
           <div className="flex items-center gap-3 mb-4">
             <Shield className="text-teal-600" size={24} />
             <h2 className="text-xl font-bold text-gray-900">Privacy & Access</h2>
@@ -166,7 +166,7 @@ export default function Settings() {
         </div>
 
         {/* Display Settings */}
-        <div className="p-6">
+        <div className="p-4 md:p-6">
           <div className="flex items-center gap-3 mb-4">
             <Eye className="text-teal-600" size={24} />
             <h2 className="text-xl font-bold text-gray-900">Display Settings</h2>
@@ -190,7 +190,7 @@ export default function Settings() {
 
       <button
         onClick={handleSave}
-        className="flex items-center gap-2 bg-teal-700 hover:bg-teal-800 text-white font-medium py-2 px-6 rounded-md transition-colors shadow-lg"
+        className="flex items-center gap-2 bg-teal-700 hover:bg-teal-800 text-white font-medium py-2 rounded-md transition-colors shadow-lg md:px-6 px-4"
       >
         <Save size={20} />
         Save Changes

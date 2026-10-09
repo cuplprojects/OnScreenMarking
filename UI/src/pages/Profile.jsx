@@ -87,8 +87,8 @@ export default function Profile() {
 
   if (error || !profileData) {
     return (
-      <div className="min-h-screen bg-gray-50 px-6 py-4 flex items-center justify-center">
-        <div className="bg-white border border-red-100 rounded-xl p-6 shadow-sm max-w-md w-full text-center">
+      <div className="min-h-screen bg-gray-50 py-4 flex items-center justify-center md:px-6 px-4">
+        <div className="bg-white border border-red-100 rounded-xl shadow-sm max-w-md w-full text-center p-4 md:p-6">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
           <h3 className="text-sm font-bold text-gray-800 uppercase tracking-widest mb-1">Profile Resolution Error</h3>
           <p className="text-xs text-gray-500 mb-4">{error || 'User not found in system.'}</p>
@@ -115,7 +115,7 @@ export default function Profile() {
           {/* Main Profile Identity Card */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="h-28 bg-gradient-to-r from-teal-600 to-teal-600 relative">
-              <span className="absolute top-4 right-4 bg-white  text-white border border-white/10 text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider">
+              <span className="absolute top-4 right-4 bg-white text-white border border-white/10 text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider">
                 {profileData.userType || 'Examiner'}
               </span>
             </div>
@@ -191,7 +191,7 @@ export default function Profile() {
         <div className="col-span-12 lg:col-span-8 space-y-6">
           
           {/* Complete Profile Identity Details */}
-          <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 md:p-6">
             <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-100 pb-3 mb-5">
               Personal Information & Context
             </h3>
@@ -317,7 +317,7 @@ export default function Profile() {
 
           {/* Dynamic Action Metrics Card */}
           {isExaminer && (
-            <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 md:p-6">
               <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-100 pb-3 mb-5">
                 Examiner Evaluation Statistics
               </h3>

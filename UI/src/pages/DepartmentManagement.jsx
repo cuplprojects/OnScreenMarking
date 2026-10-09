@@ -175,11 +175,11 @@ export default function DepartmentManagement() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
                     <th 
-                      className="px-6 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group"
+                      className="py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4"
                       onClick={() => handleSort('name')}
                     >
                       <div className="flex items-center gap-1.5">
@@ -187,9 +187,9 @@ export default function DepartmentManagement() {
                         <ColumnFilter columnKey="name" currentFilter={filters.name} setFilter={setFilter} placeholder="Filter department..." />
                       </div>
                     </th>
-                    <th className="px-6 py-2.5">Courses</th>
+                    <th className="py-2.5 md:px-6 px-4">Courses</th>
                     <th 
-                      className="px-6 py-2.5 text-center cursor-pointer hover:bg-gray-100 transition-colors group"
+                      className="py-2.5 text-center cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4"
                       onClick={() => handleSort('isActive')}
                     >
                       <div className="flex items-center justify-center gap-1.5">
@@ -205,13 +205,13 @@ export default function DepartmentManagement() {
                         />
                       </div>
                     </th>
-                    <th className="px-6 py-2.5 text-right">Actions</th>
+                    <th className="py-2.5 text-right md:px-6 px-4">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-xs">
                   {departments.map((department) => (
                     <tr key={department.departmentId} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-6 py-2.5">
+                      <td className="py-2.5 md:px-6 px-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 bg-gray-50 rounded-xl flex items-center justify-center text-gray-600 font-extrabold shadow-sm">
                             <Building2 size={18} />
@@ -221,7 +221,7 @@ export default function DepartmentManagement() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-2.5 max-w-xs">
+                      <td className="py-2.5 max-w-xs md:px-6 px-4">
                         {department.courses && department.courses.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {department.courses.map((course) => (
@@ -237,7 +237,7 @@ export default function DepartmentManagement() {
                           <span className="text-gray-400 font-medium text-[10px]">No courses assigned</span>
                         )}
                       </td>
-                      <td className="px-6 py-2.5 text-center">
+                      <td className="py-2.5 text-center md:px-6 px-4">
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${
                           department.isActive 
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
@@ -247,7 +247,7 @@ export default function DepartmentManagement() {
                           {department.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </td>
-                      <td className="px-6 py-2.5 text-right whitespace-nowrap">
+                      <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleAddCourse(department)}

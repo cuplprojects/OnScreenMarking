@@ -85,41 +85,11 @@ export default function ProjectDashboard() {
     initialParams: { pageSize: 10 }
   });
 
-  const fetchExaminersFn = useCallback((params) => {
-    if (projectId) {
-      const searchVal = params.search || '';
-      const pageVal = params.page || 1;
-      const pageSizeVal = params.pageSize || 5;
-      const statusFilterVal = params.statusFilter || 'All';
-      return apiCall(`/users/project-examiners/${projectId}?page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&statusFilter=${statusFilterVal}`);
-    }
-    return Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 5, totalPages: 1 });
-  }, [projectId]);
 
-  const {
-    items: paginatedExaminersList,
-    totalCount: totalExaminers,
-    totalPages: totalExaminerPages,
-    page: examinerPage,
-    setPage: setExaminerPage,
-    search: examinerSearch,
-    setSearch: setExaminerSearch,
-    filters: examinerFilters,
-    setFilter: setExaminerFilter,
-    loading: examinersLoading
-  } = useTable({
-    fetchFn: fetchExaminersFn,
-    initialParams: { pageSize: 5 }
-  });
 
-  const examinerStatusFilter = examinerFilters.statusFilter || 'All';
-  const setExaminerStatusFilter = (val) => setExaminerFilter('statusFilter', val);
 
   // Bulk Actions State
   const [selectedPaperIds, setSelectedPaperIds] = useState([]);
-  const [isBulkAssignModalOpen, setIsBulkAssignModalOpen] = useState(false);
-  const [selectedExaminerIds, setSelectedExaminerIds] = useState([]);
-  const [isSubmittingBulkAssign, setIsSubmittingBulkAssign] = useState(false);
   const [isBulkAutoAllocating, setIsBulkAutoAllocating] = useState(false);
 
   const handleSelectAll = (e) => {
@@ -230,24 +200,13 @@ export default function ProjectDashboard() {
       setLoading(true);
       setError(null);
 
-      // 1. Get Current Coordinator's University & Projects
-      const uniData = await apiCall('/universities/current/my-university');
-      const foundProject = (uniData.projects || []).find(p => p.projectId.toString() === projectId.toString());
+      const projStats = await apiCall(`/stats/project-counts/${projectId}`);
       
-      if (!foundProject) {
-        throw new Error("Project not found or you do not have permission to view it.");
-      }
-      setProject(foundProject);
-
-      // 2. Fetch stats
-      const countsData = await apiCall(`/stats/counts?universityId=${uniData.universityId}`);
-      const projStats = (countsData.projects || []).find(p => p.projectId.toString() === projectId.toString()) || {
-        papersCount: 0,
-        totalScripts: 0,
-        pendingScripts: 0,
-        allocatedScripts: 0,
-        completedScripts: 0
-      };
+      setProject({
+        projectId: projStats.projectId,
+        projectName: projStats.projectName,
+        description: projStats.description
+      });
 
       setStats({
         papersCount: projStats.papersCount,
@@ -277,14 +236,14 @@ export default function ProjectDashboard() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-6 py-4">
-        <div className="bg-white rounded-xl p-8 shadow-xl max-w-md w-full border border-red-150 text-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center py-4 md:px-6 px-4">
+        <div className="bg-white rounded-xl shadow-xl max-w-md w-full border border-red-150 text-center p-4 md:p-8">
           <AlertCircle size={40} className="mx-auto text-red-500 mb-4 animate-bounce" />
           <h2 className="text-lg font-bold text-gray-900 mb-2">Error Loading Dashboard</h2>
           <p className="text-gray-500 text-sm mb-6">{error}</p>
           <Link 
             to="/coordinator/dashboard"
-            className="inline-flex items-center gap-2 bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-xs uppercase tracking-wider px-6 py-3 rounded-xl transition"
+            className="inline-flex items-center gap-2 bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-xs uppercase tracking-wider py-3 rounded-xl transition md:px-6 px-4"
           >
             <ArrowLeft size={14} /> Back to Dashboard
           </Link>
@@ -311,6 +270,7 @@ export default function ProjectDashboard() {
         <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
           <ProjectConfigHeader 
             completePercentage={stats?.completePercentage || 0}
+            initialProjectName={project?.projectName}
             titleBadge={activeTab === 'allocations' ? 'Allocation' : null}
             title={
               activeTab === 'papers' ? "Papers & Sections Management" :
@@ -340,7 +300,7 @@ export default function ProjectDashboard() {
             {activeTab === 'project-dashboard' && (
               <>
                 {/* Stats Banner */}
-                <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 w-full">
+                <div className="grid lg:grid-cols-6 gap-3 w-full grid-cols-1 md:grid-cols-2">
             
             {/* Total Papers */}
             <div 
@@ -357,16 +317,18 @@ export default function ProjectDashboard() {
             <div className="p-1.5 bg-teal-50 rounded-xl text-teal-700"><FileText size={14} /></div>
           </div>
           
-          <Link 
-            to={userType === 'admin' 
-              ? `/admin/papers?projectId=${encryptedProjectId}` 
-              : `/papers?projectId=${encryptedProjectId}`}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full flex items-center justify-center gap-1.5 px-2 py-1 mt-1 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors"
-          >
-            <Layers size={12} />
-            Configure Subject & Papers
-          </Link>
+          {(stats.papersCount === 0 || stats.unconfiguredPapersCount > 0) && (
+            <Link 
+              to={userType === 'admin' 
+                ? `/admin/papers?projectId=${encryptedProjectId}` 
+                : `/papers?projectId=${encryptedProjectId}`}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full flex items-center justify-center gap-1.5 px-2 py-1 mt-1 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors"
+            >
+              <Layers size={12} />
+              Configure Sections & Papers
+            </Link>
+          )}
         </div>
 
         {/* Total Scripts */}
@@ -481,14 +443,14 @@ export default function ProjectDashboard() {
               <div>
                 <h3 className="text-xs font-black uppercase text-gray-900 tracking-wider flex items-center gap-1.5">
                   <FileText size={15} className="text-teal-700" />
-                  <span> Subject Papers</span>
+                  <span> Sections & Papers</span>
                   {filters.statusFilter && (
                     <span className="ml-2 bg-teal-50 px-2.5 py-0.5 rounded-md text-[9px] font-black text-teal-700 uppercase tracking-wide border border-teal-200">
                       Filtered: {filters.statusFilter}
                     </span>
                   )}
                 </h3>
-                <p className="text-[10px] text-gray-500">Subject configurations, paper code, max marks, and map progress</p>
+                <p className="text-[10px] text-gray-500">Section configurations, paper code, max marks, and map progress</p>
               </div>
 
               <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
@@ -545,7 +507,7 @@ export default function ProjectDashboard() {
             ) : (
               <>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left">
+                  <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left">
                     <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
                       <tr>
                         <th className="px-3 py-3 w-8 text-center">
@@ -625,7 +587,7 @@ export default function ProjectDashboard() {
                             </td>
                             <td className="px-3 py-2.5">
                               <span className="text-gray-900 font-extrabold">{paper.paperCode}</span>
-                              <span className="text-[10px] text-gray-500 block font-medium mt-0.5 line-clamp-1">{paper.paperName}</span>
+                              <span className="text-sm text-gray-800 block font-semibold mt-0.5 line-clamp-1">{paper.paperName}</span>
                             </td>
                             <td className="px-3 py-2.5 text-gray-600 font-medium">
                               <span className="line-clamp-1">{paper.subjectName}</span>
@@ -685,7 +647,7 @@ export default function ProjectDashboard() {
                                 </Link>
                                 
                                 {/* Assign Examiner Button */}
-                                {!isAssignDisabled ? (
+                                {!isAssignDisabled && (
                                   <button
                                     onClick={(e) => {
                                       e.preventDefault();
@@ -695,15 +657,6 @@ export default function ProjectDashboard() {
                                     }}
                                     title="Assign Examiners"
                                     className="inline-flex items-center gap-1 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 font-extrabold text-[9px] uppercase tracking-wider px-2 py-1.5 rounded-md transition-all duration-200 shadow-sm"
-                                  >
-                                    <Users size={11} />
-                                    <span>Assign</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    disabled
-                                    className="inline-flex items-center gap-1 bg-gray-100 text-gray-400 font-extrabold text-[9px] uppercase tracking-wider px-2 py-1.5 rounded-md cursor-not-allowed border border-gray-200"
-                                    title="Configure sections first"
                                   >
                                     <Users size={11} />
                                     <span>Assign</span>
@@ -741,85 +694,6 @@ export default function ProjectDashboard() {
           </>
         )}
       </div>
-      
-  {/* Bulk Assign Modal */}
-      {isBulkAssignModalOpen && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-2.5 border-b border-gray-100 flex items-center justify-between bg-gray-50">
-              <h2 className="text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
-                <Users size={20} className="text-teal-700" />
-                Bulk Assign Examiners
-              </h2>
-              <button 
-                onClick={() => setIsBulkAssignModalOpen(false)}
-                className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-lg transition"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            
-            <div className="p-6 overflow-y-auto flex-1">
-              <p className="text-sm text-gray-600 font-medium mb-4">
-                Select examiners to assign to the <span className="font-bold text-gray-900">{selectedPaperIds.length}</span> selected papers.
-              </p>
-              
-              <div className="mb-4">
-                <input
-                  type="text"
-                  placeholder="Search examiners..."
-                  value={examinerSearch}
-                  onChange={(e) => setExaminerSearch(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition-all"
-                />
-              </div>
-
-              <div className="space-y-2 border border-gray-200 rounded-xl max-h-[300px] overflow-y-auto p-2">
-                {paginatedExaminersList.map(examiner => (
-                  <label key={examiner.examinerId} className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer select-none ${selectedExaminerIds.includes(examiner.examinerId) ? 'bg-teal-50 border-teal-200' : 'bg-white border-transparent hover:bg-gray-50'}`}>
-                    <input 
-                      type="checkbox"
-                      className="rounded border-gray-300 text-teal-700 focus:ring-teal-500"
-                      checked={selectedExaminerIds.includes(examiner.examinerId)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedExaminerIds(prev => [...prev, examiner.examinerId]);
-                        } else {
-                          setSelectedExaminerIds(prev => prev.filter(id => id !== examiner.examinerId));
-                        }
-                      }}
-                    />
-                    <div>
-                      <p className="text-sm font-bold text-gray-900">{examiner.examinerName || `Examiner ${examiner.examinerId}`}</p>
-                      <p className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">ID: {examiner.examinerId}</p>
-                    </div>
-                  </label>
-                ))}
-                
-                {paginatedExaminersList.length === 0 && (
-                  <p className="p-4 text-center text-sm font-medium text-gray-500">No examiners found.</p>
-                )}
-              </div>
-            </div>
-            
-            <div className="p-5 border-t border-gray-100 flex justify-end gap-3 bg-gray-50">
-              <button 
-                onClick={() => setIsBulkAssignModalOpen(false)}
-                className="px-5 py-2 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleBulkAssign}
-                disabled={isSubmittingBulkAssign || selectedExaminerIds.length === 0}
-                className="px-6 py-2 rounded-md text-sm font-bold bg-teal-700 hover:bg-teal-800 text-white shadow-sm transition-all disabled:opacity-50 flex items-center gap-2"
-              >
-                {isSubmittingBulkAssign ? 'Assigning...' : `Assign ${selectedExaminerIds.length} Examiners`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -726,7 +726,7 @@ const Register = () => {
   if (registered) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-xl shadow-2xl p-8 text-center animate-fade-in">
+        <div className="max-w-md w-full bg-white rounded-xl shadow-2xl text-center animate-fade-in p-4 md:p-8">
           <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-green-500 shadow-md">
             <CheckCircle className="text-green-600" size={48} />
           </div>
@@ -763,7 +763,7 @@ const Register = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-2xl w-full bg-white rounded-xl shadow-2xl p-8 sm:p-10">
+      <div className="max-w-2xl w-full bg-white rounded-xl shadow-2xl sm:p-10 p-4 md:p-8">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-gradient-to-br from-teal-600 to-teal-800 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg">
             <BookOpen className="text-white" size={32} />
@@ -1183,7 +1183,7 @@ const Register = () => {
                     <canvas ref={canvasRef} style={{ display: 'none' }} width="640" height="480" />
                     
                     {/* Smart Auto-Capture Status Overlay */}
-                    <div className="absolute top-3 left-3 right-3 bg-gray-900/90  text-white py-2 px-3 rounded-lg flex items-center justify-between text-xs border border-white/10 shadow-lg select-none z-10">
+                    <div className="absolute top-3 left-3 right-3 bg-gray-900/90 text-white py-2 px-3 rounded-lg flex items-center justify-between text-xs border border-white/10 shadow-lg select-none z-10">
                       <div className="flex items-center gap-2">
                         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
                           isLandmarkerLoaded 
@@ -1217,7 +1217,7 @@ const Register = () => {
 
                     {/* Multi-Face Block Overlay */}
                     {hasMultipleFaces && (
-                      <div className="absolute inset-0 bg-red-950/85  flex flex-col items-center justify-center p-4 text-center select-none animate-fade-in z-20">
+                      <div className="absolute inset-0 bg-red-950/85 flex flex-col items-center justify-center p-4 text-center select-none animate-fade-in z-20">
                         <span className="text-3xl mb-2">??</span>
                         <h4 className="font-extrabold text-red-200 text-sm">Multiple People Detected!</h4>
                         <p className="text-xs text-red-300 mt-1 max-w-[200px]">
@@ -1327,7 +1327,7 @@ const Register = () => {
                   <button
                     type="button"
                     onClick={stopCamera}
-                    className="px-6 bg-gray-200 hover:bg-gray-300 text-gray-800 py-2.5 rounded-md font-semibold transition flex items-center justify-center gap-2"
+                    className="bg-gray-200 hover:bg-gray-300 text-gray-800 py-2.5 rounded-md font-semibold transition flex items-center justify-center gap-2 md:px-6 px-4"
                   >
                     Cancel
                   </button>
@@ -1364,7 +1364,7 @@ const Register = () => {
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-8 bg-white hover:bg-gray-50 transition cursor-pointer">
+              <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl bg-white hover:bg-gray-50 transition cursor-pointer p-4 md:p-8">
                 <Camera className="text-gray-400 mb-3" size={36} />
                 <p className="text-sm text-gray-600 font-semibold mb-2">
                   Capture or upload verification picture
@@ -1414,7 +1414,7 @@ const Register = () => {
             <button
               type="button"
               onClick={() => navigate("/login")}
-              className="px-6 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl border border-gray-300 transition"
+              className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl border border-gray-300 transition md:px-6 px-4"
             >
               Cancel
             </button>

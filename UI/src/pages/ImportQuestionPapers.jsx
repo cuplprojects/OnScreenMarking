@@ -101,7 +101,7 @@ export default function ImportQuestionPapers() {
     <div className="min-h-screen bg-gray-50/50 pb-16">
       {/* Top Header & Breadcrumbs */}
       <div className="bg-white border-b border-gray-100 shadow-sm sticky top-0 z-20">
-        <div className="px-6 lg:px-10 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="lg:px-10 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 md:px-6 px-4">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(`${backPath}?projectId=${encryptedProjectId || ''}&universityId=${universityId || ''}`)}
@@ -130,11 +130,11 @@ export default function ImportQuestionPapers() {
         </div>
       </div>
 
-      <div className="px-6 lg:px-10 mt-6 space-y-6">
+      <div className="lg:px-10 mt-6 space-y-6 md:px-6 px-4">
         <ProjectConfigHeader />
 
         {/* Guideline Card */}
-        <div className="bg-gradient-to-r from-emerald-900 to-teal-800 text-white rounded-2xl p-6 shadow-md relative overflow-hidden">
+        <div className="bg-gradient-to-r from-emerald-900 to-teal-800 text-white rounded-2xl shadow-md relative overflow-hidden p-4 md:p-6">
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="space-y-2 max-w-3xl">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
@@ -153,11 +153,11 @@ export default function ImportQuestionPapers() {
         </div>
 
         {/* Main Upload Dropzone Area */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm space-y-6 p-4 md:p-6">
           <div
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDrop}
-            className="border-2 border-dashed border-emerald-200 hover:border-emerald-500 bg-emerald-50/20 hover:bg-emerald-50/40 rounded-2xl p-8 text-center transition-all cursor-pointer group"
+            className="border-2 border-dashed border-emerald-200 hover:border-emerald-500 bg-emerald-50/20 hover:bg-emerald-50/40 rounded-2xl text-center transition-all cursor-pointer group p-4 md:p-8"
           >
             <input
               type="file"
@@ -188,19 +188,38 @@ export default function ImportQuestionPapers() {
           {/* Selected Files Queue */}
           {selectedFiles.length > 0 && (
             <div className="space-y-4 animate-in fade-in duration-300">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
                 <div className="flex items-center gap-2">
                   <FileCheck size={16} className="text-emerald-600" />
-                  <span className="text-xs font-extrabold text-gray-900 uppercase tracking-wider">
+                  <span className="text-sm font-extrabold text-gray-900 uppercase tracking-wider">
                     Selected Files ({selectedFiles.length})
                   </span>
                 </div>
-                <button
-                  onClick={clearAllFiles}
-                  className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-1 rounded-lg transition-colors"
-                >
-                  Clear Queue
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={clearAllFiles}
+                    className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-2 rounded-xl transition-colors"
+                  >
+                    Clear Queue
+                  </button>
+                  <button
+                    onClick={handleBulkUpload}
+                    disabled={isUploading}
+                    className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider py-2.5 px-6 rounded-xl transition-all shadow-md flex items-center gap-2"
+                  >
+                    {isUploading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={15} />
+                        Upload & Auto-Allocate
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto pr-1">
@@ -221,32 +240,13 @@ export default function ImportQuestionPapers() {
                 ))}
               </div>
 
-              <div className="pt-2 flex justify-end">
-                <button
-                  onClick={handleBulkUpload}
-                  disabled={isUploading}
-                  className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider px-6 py-3 rounded-xl transition-all shadow-md flex items-center gap-2"
-                >
-                  {isUploading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Matching & Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <Upload size={15} />
-                      Upload & Auto-Allocate ({selectedFiles.length} Files)
-                    </>
-                  )}
-                </button>
-              </div>
             </div>
           )}
         </div>
 
         {/* Upload Results & Summary Report */}
         {uploadResult && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 p-4 md:p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
               <div>
                 <h3 className="text-base font-extrabold text-gray-900 flex items-center gap-2">
@@ -287,8 +287,8 @@ export default function ImportQuestionPapers() {
             </div>
 
             {/* Results Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
+            <div className="overflow-x-auto pb-2">
+              <table className="w-full text-left text-xs whitespace-nowrap min-w-[700px]">
                 <thead>
                   <tr className="bg-gray-50 text-[10px] uppercase font-bold text-gray-400 tracking-wider border-b border-gray-100">
                     <th className="px-5 py-3">File Name</th>
@@ -354,7 +354,7 @@ export default function ImportQuestionPapers() {
             <div className="pt-4 flex items-center justify-between border-t border-gray-100">
               <button
                 onClick={() => navigate(`${backPath}?projectId=${encryptedProjectId || ''}&universityId=${universityId || ''}`)}
-                className="bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-xs uppercase tracking-wider px-6 py-2.5 rounded-xl transition-all shadow-sm flex items-center gap-2"
+                className="bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-xs uppercase tracking-wider py-2.5 rounded-xl transition-all shadow-sm flex items-center gap-2 md:px-6 px-4"
               >
                 <ArrowLeft size={14} /> Return to Papers Management
               </button>

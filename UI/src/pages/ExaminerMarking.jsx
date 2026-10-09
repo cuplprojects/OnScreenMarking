@@ -990,7 +990,7 @@ const ExaminerMarking = () => {
         <p className="text-gray-600 font-bold text-center mb-6">{error}</p>
         <button
           onClick={() => navigate('/scripts')}
-          className="px-6 py-2 bg-teal-700 text-white rounded-lg hover:bg-teal-800 transition-colors"
+          className="py-2 bg-teal-700 text-white rounded-lg hover:bg-teal-800 transition-colors md:px-6 px-4"
         >
           Back to Scripts
         </button>
@@ -1002,7 +1002,7 @@ const ExaminerMarking = () => {
     <div className="bg-gray-50 min-h-screen flex flex-col overflow-hidden secure-marking-container relative">
       {/* SECURITY BLUR OVERLAY */}
       {isBlurred && (
-        <div className="absolute inset-0 bg-gray-900/90  z-[9999] flex flex-col items-center justify-center text-center p-6 select-none pointer-events-auto">
+        <div className="absolute inset-0 bg-gray-900/90 z-[9999] flex flex-col items-center justify-center text-center select-none pointer-events-auto p-4 md:p-6">
           <div className="w-20 h-20 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center justify-center text-red-500 mb-6 shadow-lg animate-pulse">
             <AlertCircle size={44} />
           </div>
@@ -1016,7 +1016,7 @@ const ExaminerMarking = () => {
       {/* SCREENSHOT KEY OPAQUE OVERLAY */}
       <div 
         id="secure-screenshot-mask" 
-        className="fixed inset-0 bg-gray-950 z-[99999] hidden flex-col items-center justify-center text-center p-6 select-none pointer-events-auto"
+        className="fixed inset-0 bg-gray-950 z-[99999] hidden flex-col items-center justify-center text-center select-none pointer-events-auto p-4 md:p-6"
       >
         <div className="w-20 h-20 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center justify-center text-red-500 mb-6 shadow-lg animate-pulse">
           <AlertCircle size={44} />
@@ -1028,7 +1028,7 @@ const ExaminerMarking = () => {
       </div>
 
       {/* HEADER */}
-      <header className="bg-white text-gray-900 shadow-md px-6 py-2.5 flex justify-between items-center z-50 border-b border-gray-200">
+      <header className="bg-white text-gray-900 shadow-md py-2.5 flex justify-between items-center z-50 border-b border-gray-200 md:px-6 px-4">
         <div className="flex items-center gap-6">
           <button
             onClick={() => navigate('/scripts')}
@@ -1059,7 +1059,7 @@ const ExaminerMarking = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="bg-teal-50 px-6 py-3 rounded-lg border border-teal-200 flex flex-col items-center">
+          <div className="bg-teal-50 py-3 rounded-lg border border-teal-200 flex flex-col items-center md:px-6 px-4">
             <p className="text-xs uppercase font-semibold text-teal-700 mb-1">Total Score</p>
             <p className="text-3xl font-bold text-teal-900">
               {totalObtained.toFixed(1)} <span className="text-sm font-normal text-teal-700">/ {paperInfo?.maxMarks || 100}</span>
@@ -1069,7 +1069,7 @@ const ExaminerMarking = () => {
           <button
             onClick={handleSubmitMarking}
             disabled={submitted || saving}
-            className="bg-teal-700 hover:bg-teal-800 disabled:bg-gray-400 text-white px-6 py-3 rounded-md font-semibold uppercase text-sm transition-colors shadow-md cursor-pointer disabled:cursor-not-allowed"
+            className="bg-teal-700 hover:bg-teal-800 disabled:bg-gray-400 text-white py-3 rounded-md font-semibold uppercase text-sm transition-colors shadow-md cursor-pointer disabled:cursor-not-allowed md:px-6 px-4"
             title="Submit evaluation"
           >
             {saving ? "Saving..." : "Submit"}
@@ -1079,7 +1079,7 @@ const ExaminerMarking = () => {
 
       {/* PROCTOR WARNING BANNER */}
       {proctorWarning && (
-        <div className="bg-red-600 text-white text-xs font-bold py-2.5 px-6 flex items-center justify-between border-b border-red-700 animate-pulse select-none z-50 shrink-0">
+        <div className="bg-red-600 text-white text-xs font-bold py-2.5 flex items-center justify-between border-b border-red-700 animate-pulse select-none z-50 shrink-0 md:px-6 px-4">
           <div className="flex items-center gap-2">
             <AlertCircle size={16} />
             <span>
@@ -1116,7 +1116,7 @@ const ExaminerMarking = () => {
         <aside className="col-span-3 flex flex-col gap-4 overflow-hidden">
           {/* CONTROL CENTER */}
           <div className="flex flex-col gap-2">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid gap-2 grid-cols-1 md:grid-cols-2">
               <button 
                 onClick={handleSaveMarks}
                 disabled={submitted}
@@ -1157,7 +1157,7 @@ const ExaminerMarking = () => {
             
             <div className="flex-1 overflow-y-auto p-3 bg-gray-50 space-y-3">
               {sections.length === 0 && (
-                <div className="h-full flex flex-col items-center justify-center p-6 text-center text-gray-400">
+                <div className="h-full flex flex-col items-center justify-center text-center text-gray-400 p-4 md:p-6">
                   <AlertCircle size={40} className="mb-2 opacity-30" />
                   <p className="text-xs font-medium uppercase">No sections loaded</p>
                 </div>
@@ -1295,7 +1295,7 @@ const ExaminerMarking = () => {
 
       {/* ERROR FEEDBACK */}
       {error && (
-        <div className="fixed bottom-6 right-6 bg-red-600 text-white px-6 py-2.5 rounded-lg shadow-lg font-semibold flex items-center gap-3 animate-in slide-in-from-bottom duration-300">
+        <div className="fixed bottom-6 right-6 bg-red-600 text-white py-2.5 rounded-lg shadow-lg font-semibold flex items-center gap-3 animate-in slide-in-from-bottom duration-300 md:px-6 px-4">
           <AlertCircle size={20} />
           <p>{error}</p>
         </div>
@@ -1339,7 +1339,7 @@ const ExaminerMarking = () => {
 
       {/* QUESTION PAPER MODAL */}
       {showQpModal && paperInfo?.questionPaperPdfUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60  p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-xl w-full max-w-4xl h-[85vh] overflow-hidden shadow-2xl flex flex-col">
             <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
               <div>

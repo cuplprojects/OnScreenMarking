@@ -223,11 +223,11 @@ export default function CourseManagement() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
                     <th 
-                      className="px-6 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group"
+                      className="py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4"
                       onClick={() => handleSort('name')}
                     >
                       <div className="flex items-center gap-1.5">
@@ -236,7 +236,7 @@ export default function CourseManagement() {
                       </div>
                     </th>
                     <th 
-                      className="px-6 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group"
+                      className="py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4"
                       onClick={() => handleSort('departmentId')}
                     >
                       <div className="flex items-center gap-1.5">
@@ -250,7 +250,7 @@ export default function CourseManagement() {
                       </div>
                     </th>
                     <th 
-                      className="px-6 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group"
+                      className="py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4"
                       onClick={() => handleSort('type')}
                     >
                       <div className="flex items-center gap-1.5">
@@ -267,9 +267,9 @@ export default function CourseManagement() {
                         />
                       </div>
                     </th>
-                    <th className="px-6 py-2.5">Subjects Mapping</th>
+                    <th className="py-2.5 md:px-6 px-4">Subjects Mapping</th>
                     <th 
-                      className="px-6 py-2.5 text-center cursor-pointer hover:bg-gray-100 transition-colors group"
+                      className="py-2.5 text-center cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4"
                       onClick={() => handleSort('status')}
                     >
                       <div className="flex items-center justify-center gap-1.5">
@@ -285,13 +285,13 @@ export default function CourseManagement() {
                         />
                       </div>
                     </th>
-                    <th className="px-6 py-2.5 text-right">Actions</th>
+                    <th className="py-2.5 text-right md:px-6 px-4">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-xs">
                   {courses.map((course) => (
                     <tr key={course.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-6 py-2.5">
+                      <td className="py-2.5 md:px-6 px-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 bg-gray-50 rounded-xl flex items-center justify-center text-gray-600 font-extrabold shadow-sm">
                             <GraduationCap size={18} />
@@ -301,12 +301,12 @@ export default function CourseManagement() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-2.5">
+                      <td className="py-2.5 md:px-6 px-4">
                         <span className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-md font-bold text-[10px] uppercase tracking-wide">
                           {course.department?.name || 'Unassigned'}
                         </span>
                       </td>
-                      <td className="px-6 py-2.5">
+                      <td className="py-2.5 md:px-6 px-4">
                         <span className={`px-2 py-1.5 rounded-lg font-extrabold text-[10px] uppercase ${
                           course.type === 'PG' 
                             ? 'bg-teal-50 text-teal-700 border border-teal-100' 
@@ -317,7 +317,7 @@ export default function CourseManagement() {
                           {course.type || 'UG'}
                         </span>
                       </td>
-                      <td className="px-6 py-2.5 max-w-xs">
+                      <td className="py-2.5 max-w-xs md:px-6 px-4">
                         {course.courseSubjects && course.courseSubjects.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {course.courseSubjects.map((cs, index) => (
@@ -333,7 +333,7 @@ export default function CourseManagement() {
                           <span className="text-gray-400 font-medium text-[10px]">No subjects mapped</span>
                         )}
                       </td>
-                      <td className="px-6 py-2.5 text-center">
+                      <td className="py-2.5 text-center md:px-6 px-4">
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${
                           course.isActive 
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
@@ -343,7 +343,7 @@ export default function CourseManagement() {
                           {course.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </td>
-                      <td className="px-6 py-2.5 text-right whitespace-nowrap">
+                      <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleOpenAddSubject(course)}

@@ -622,7 +622,7 @@ export default function ScriptAllocation({ isTab = false }) {
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse whitespace-nowrap">
+                    <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse whitespace-nowrap">
                       <thead>
                         <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-500 uppercase tracking-widest select-none">
                           <th className="px-4 py-2.5 text-center w-10">
@@ -763,7 +763,7 @@ export default function ScriptAllocation({ isTab = false }) {
                           <p className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider mb-2">
                             Select Distribution Strategy
                           </p>
-                          <div className="grid grid-cols-3 gap-2 p-1 bg-gray-100 rounded-xl border border-gray-200">
+                          <div className="grid gap-2 p-1 bg-gray-100 rounded-xl border border-gray-200 sm:grid-cols-2 grid-cols-1 lg:grid-cols-3">
                             <button
                               type="button"
                               onClick={() => setBulkMode('even')}
@@ -861,7 +861,7 @@ export default function ScriptAllocation({ isTab = false }) {
                           </div>
 
                           {examiners.length === 0 ? (
-                            <div className="p-8 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                            <div className="text-center bg-gray-50 rounded-xl border border-dashed border-gray-200 p-4 md:p-8">
                               <Users className="mx-auto text-gray-300 mb-2" size={28} />
                               <p className="text-xs font-bold text-gray-500">No examiners assigned for selected scope</p>
                             </div>
@@ -930,7 +930,7 @@ export default function ScriptAllocation({ isTab = false }) {
       {/* Reassign Modal */}
       {showReassignModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 relative space-y-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-100 relative space-y-4 p-4 md:p-6">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
                 <ArrowRightLeft size={16} className="text-teal-700" />

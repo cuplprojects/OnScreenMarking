@@ -151,7 +151,7 @@ function ManagePaperSectionsModal({ isOpen, onClose, paper, masterSections = [],
         </div>
 
         {/* Stats summary bar */}
-        <div className="grid grid-cols-3 gap-3 p-4 bg-teal-50/50 border-b border-teal-100/60 text-xs">
+        <div className="grid gap-3 p-4 bg-teal-50/50 border-b border-teal-100/60 text-xs sm:grid-cols-2 grid-cols-1 lg:grid-cols-3">
           <div className="bg-white p-2.5 rounded-xl border border-teal-100 shadow-2xs">
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Sections Mapped</div>
             <div className="text-base font-black text-teal-900 mt-0.5">{selectedIds.length}</div>
@@ -171,7 +171,7 @@ function ManagePaperSectionsModal({ isOpen, onClose, paper, masterSections = [],
         </div>
 
         {/* Content */}
-        <div className="p-6 flex-1 overflow-y-auto custom-scrollbar space-y-4">
+        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 p-4 md:p-6">
           <div className="flex items-center justify-between">
             <label className="text-xs font-black uppercase text-gray-500 tracking-wider">Available Section Masters</label>
             <button
@@ -184,9 +184,9 @@ function ManagePaperSectionsModal({ isOpen, onClose, paper, masterSections = [],
           </div>
 
           {loading ? (
-            <div className="p-8 text-center text-xs font-semibold text-gray-400">Loading master sections...</div>
+            <div className="text-center text-xs font-semibold text-gray-400 p-4 md:p-8">Loading master sections...</div>
           ) : masterSections.length === 0 ? (
-            <div className="p-8 text-center text-xs text-gray-500 bg-amber-50 border border-amber-200 rounded-xl">
+            <div className="text-center text-xs text-gray-500 bg-amber-50 border border-amber-200 rounded-xl p-4 md:p-8">
               No Section Masters created yet. Create section templates under <strong>Section Masters Management</strong> first.
             </div>
           ) : (
@@ -389,8 +389,8 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
         </div>
 
         {/* Modal Form */}
-        <form id="master-paper-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
-          <div className="grid grid-cols-3 gap-3">
+        <form id="master-paper-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto space-y-5 p-4 md:p-6">
+          <div className="grid gap-3 sm:grid-cols-2 grid-cols-1 lg:grid-cols-3">
             <div>
               <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Paper Code *</label>
               <input
@@ -425,7 +425,7 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2 grid-cols-1 lg:grid-cols-3">
             <div>
               <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Paper No.</label>
               <input
@@ -806,24 +806,24 @@ export default function MasterPapersManagement() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
                     <th
-                      className="px-6 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group"
+                      className="py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4"
                       onClick={() => handleSort('paperCode')}
                     >
                       <div className="flex items-center gap-1.5">Paper Code {getSortIcon('paperCode')}
                         <React.Suspense fallback={null}><ColumnFilter columnKey="paperCode" currentFilter={filters.paperCode} setFilter={setFilter} placeholder="Filter code..." /></React.Suspense>
                       </div>
                     </th>
-                    <th className="px-6 py-2.5">
+                    <th className="py-2.5 md:px-6 px-4">
                       <div className="flex items-center gap-1.5">Catch No.
                         <React.Suspense fallback={null}><ColumnFilter columnKey="catchNo" currentFilter={filters.catchNo} setFilter={setFilter} placeholder="Filter catch..." /></React.Suspense>
                       </div>
                     </th>
                     <th
-                      className="px-6 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group"
+                      className="py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4"
                       onClick={() => handleSort('paperName')}
                     >
                       <div className="flex items-center gap-1.5">Paper Name {getSortIcon('paperName')}
@@ -831,24 +831,24 @@ export default function MasterPapersManagement() {
                       </div>
                     </th>
                     <th
-                      className="px-6 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group"
+                      className="py-2.5 cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4"
                       onClick={() => handleSort('paperNumber')}
                     >
                       <div className="flex items-center gap-1.5">Paper Number {getSortIcon('paperNumber')}</div>
                     </th>
-                    <th className="px-6 py-2.5">Linked Subjects</th>
-                    <th className="px-6 py-2.5">Master Sections</th>
+                    <th className="py-2.5 md:px-6 px-4">Linked Subjects</th>
+                    <th className="py-2.5 md:px-6 px-4">Master Sections</th>
                    
-                    <th className="px-6 py-2.5 text-right">Actions</th>
+                    <th className="py-2.5 text-right md:px-6 px-4">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-xs">
                   {papers.map(paper => (
                     <tr key={paper.paperId} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-6 py-2.5">
+                      <td className="py-2.5 md:px-6 px-4">
                         <span className="font-extrabold text-gray-900">{paper.paperCode}</span>
                       </td>
-                      <td className="px-6 py-2.5">
+                      <td className="py-2.5 md:px-6 px-4">
                         {paper.catchNo ? (
                           <span className="font-mono bg-gray-100 text-gray-700 font-bold px-2 py-0.5 rounded text-[11px] uppercase tracking-wider">
                             {paper.catchNo}
@@ -857,11 +857,11 @@ export default function MasterPapersManagement() {
                           <span className="text-gray-400 font-medium">-</span>
                         )}
                       </td>
-                      <td className="px-6 py-2.5 font-bold text-gray-700">{paper.paperName}</td>
-                      <td className="px-6 py-2.5 text-gray-500 font-medium">
+                      <td className="py-2.5 font-bold text-gray-700 md:px-6 px-4">{paper.paperName}</td>
+                      <td className="py-2.5 text-gray-500 font-medium md:px-6 px-4">
                         {paper.paperNumber}
                       </td>
-                      <td className="px-6 py-2.5 text-gray-500 font-medium">
+                      <td className="py-2.5 text-gray-500 font-medium md:px-6 px-4">
                         {paper.subjectNames?.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {paper.subjectNames.map((name, i) => (
@@ -872,7 +872,7 @@ export default function MasterPapersManagement() {
                           </div>
                         ) : '-'}
                       </td>
-                      <td className="px-6 py-2.5">
+                      <td className="py-2.5 md:px-6 px-4">
                         <button
                           onClick={() => setSectionsPaperModal(paper)}
                           className="bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200/80 px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -885,7 +885,7 @@ export default function MasterPapersManagement() {
                         </button>
                       </td>
                      
-                      <td className="px-6 py-2.5 text-right">
+                      <td className="py-2.5 text-right md:px-6 px-4">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => handleEdit(paper)}

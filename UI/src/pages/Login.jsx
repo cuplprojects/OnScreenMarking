@@ -38,7 +38,7 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-2xl p-8">
+      <div className="max-w-md w-full bg-white rounded-xl shadow-2xl p-4 md:p-8">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-gradient-to-br from-teal-600 to-teal-800 rounded-lg flex items-center justify-center mx-auto mb-4 shadow-lg">     
             <BookOpen className="text-white" size={32} />
