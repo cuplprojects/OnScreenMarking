@@ -126,6 +126,7 @@ const markingService = {
           examinerId,
           draftData
         }),
+        hideErrorToast: true
       });
       return response;
     } catch (error) {
@@ -136,7 +137,7 @@ const markingService = {
   // Get draft marks from Redis
   getDraftMarks: async (scriptId, examinerId) => {
     try {
-      const response = await apiCall(`/marking/${scriptId}/draft/${examinerId}`);
+      const response = await apiCall(`/marking/${scriptId}/draft/${examinerId}`, { hideErrorToast: true });
       return response;
     } catch (error) {
       throw error.message || error;

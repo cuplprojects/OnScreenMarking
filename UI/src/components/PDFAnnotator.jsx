@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { RotateCcw, Copy, Type, ZoomIn, ZoomOut, Check, X, Undo, Move, Trash2, FileText } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -237,7 +237,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
   // Redraw everything whenever relevant state changes
   useEffect(() => {
     redrawCanvas();
-  }, [imageSource, zoom, canvasSize, pdfPages, currentPage, annotations, currentPath, selectedAnno]);
+  }, [imageSource, zoom, canvasSize, pdfPages, currentPage, annotations, currentPath, selectedAnno, showTextInput, showMarkPopup]);
 
   const redrawCanvas = () => {
     const canvas = canvasRef.current;
@@ -404,7 +404,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
         drawCross(ctx, anno.x * drawZoom, anno.y * drawZoom, (anno.lineWidth * 10) * drawZoom);
         break;
       case 'text':
-        ctx.font = `${anno.lineWidth * 5 * drawZoom}px Arial`;
+        ctx.font = `bold ${16 * drawZoom}px Arial`;
         ctx.fillText(anno.text, anno.x * drawZoom, anno.y * drawZoom);
         break;
       case 'blank_page':
@@ -430,30 +430,34 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       const themeColor = isSkipped ? '#FF6B6B' : (isCorrect ? '#008000' : '#FF0000');
       ctx.fillStyle = themeColor;
       
-      const markStr = anno.marks !== undefined ? `(${anno.marks})` : '(?)';
+      const showCircleBadge = anno.marks !== undefined && (anno.type === 'tick' || anno.type === 'cross');
+      const markStr = showCircleBadge ? '' : (anno.marks !== undefined ? `(${anno.marks}) ` : '(?) ');
       const qNo = !isNaN(anno.questionId) && Number(anno.questionId) < 10 ? '0' + anno.questionId : anno.questionId;
       const secLabel = anno.stepName ? ` | ${anno.stepName}` : '';
-      const label = `${markStr} Q${qNo}${secLabel}`;
+      const label = `${markStr}Q${qNo}${secLabel}`;
       const px = anno.x ? anno.x * drawZoom : (anno.points?.[0]?.x * drawZoom);
       const py = anno.y ? anno.y * drawZoom : (anno.points?.[0]?.y * drawZoom);
+      
+      const isTickCross = anno.type === 'tick' || anno.type === 'cross';
+      const offsetX = isTickCross ? 25 * drawZoom : 0;
       
       // Draw a small pill background
       const metrics = ctx.measureText(label);
       ctx.fillStyle = isSkipped ? 'rgba(255, 107, 107, 0.1)' : (isCorrect ? 'rgba(0, 128, 0, 0.1)' : 'rgba(255, 0, 0, 0.1)');
-      ctx.fillRect(px - 4, py - 20, metrics.width + 8, 16);
+      ctx.fillRect(px + offsetX - 4 * drawZoom, py - 24 * drawZoom, metrics.width + 8 * drawZoom, 18 * drawZoom);
       ctx.strokeStyle = themeColor;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(px - 4, py - 20, metrics.width + 8, 16);
+      ctx.lineWidth = 1 * drawZoom;
+      ctx.strokeRect(px + offsetX - 4 * drawZoom, py - 24 * drawZoom, metrics.width + 8 * drawZoom, 18 * drawZoom);
       
       ctx.fillStyle = themeColor;
-      ctx.fillText(label, px, py - 8);
+      ctx.fillText(label, px + offsetX, py - 10 * drawZoom);
 
       // Draw beautiful circle badge containing marks next to it
       if (anno.marks !== undefined && (anno.type === 'tick' || anno.type === 'cross')) {
         ctx.save();
-        const cx = px + 26 * drawZoom;
-        const cy = py - 6 * drawZoom;
-        const radius = 13 * drawZoom;
+        const cx = px + 42 * drawZoom;
+        const cy = py + 8 * drawZoom;
+        const radius = 12 * drawZoom;
         
         // Draw white backing
         ctx.beginPath();
@@ -890,8 +894,8 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
 
       {/* Text Input Modal */}
       {showTextInput && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 shadow-xl border border-gray-200 w-96">
+        <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 shadow-xl border border-gray-200 w-96 animate-in zoom-in duration-150">
             <h3 className="text-lg font-bold mb-4 text-gray-900">Add Feedback</h3>
             <input
               type="text"
@@ -914,8 +918,15 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       {showMarkPopup && (
         <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-[70]">
           <div className="bg-white rounded-lg border border-gray-300 shadow-xl w-80 animate-in zoom-in duration-150">
-            <div className="bg-gray-50 p-3 border-b border-gray-200">
-              <p className="text-xs font-semibold text-gray-600 mb-2">Section:</p>
+            <div className="bg-gray-50 p-3 border-b border-gray-200 rounded-t-lg">
+              <div className="flex justify-between items-center mb-2">
+                <p className="text-xs font-semibold text-gray-600">Section:</p>
+                {currentQuestionId && (
+                  <span className="text-xs font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 shadow-sm">
+                    Q. {currentQuestionId}
+                  </span>
+                )}
+              </div>
               <select 
                 value={stepName}
                 onChange={(e) => setStepName(e.target.value)}
@@ -1010,7 +1021,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
                     value={markInput}
                     onChange={(e) => setMarkInput(e.target.value)}
                     placeholder="Custom"
-                    className="flex-1 text-sm p-2 border border-gray-300 rounded-lg outline-none focus:border-teal-500"
+                    className="w-20 min-w-0 flex-1 text-sm p-2 border border-gray-300 rounded-lg outline-none focus:border-teal-500"
                     autoFocus
                     onKeyDown={(e) => e.key === 'Enter' && submitMark()}
                   />
@@ -1038,7 +1049,8 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
             onMouseUp={stopDrawing}
             onMouseLeave={stopDrawing}
             onContextMenu={handleContextMenu}
-            className={`bg-white shadow-md rounded-lg ${tool === 'move' ? 'cursor-move' : 'cursor-crosshair'}`}
+            style={{ width: canvasSize.width * zoom, height: canvasSize.height * zoom }}
+            className={`flex-shrink-0 max-w-none bg-white shadow-md rounded-lg ${tool === 'move' ? 'cursor-move' : 'cursor-crosshair'}`}
           />
         </div>
 

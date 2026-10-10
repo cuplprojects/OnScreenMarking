@@ -26,7 +26,9 @@ const handleResponse = async (response, options = {}) => {
         }
       } catch (textErr) {}
     }
-    message.error(errorMessage);
+    if (!options.hideErrorToast) {
+      message.error(errorMessage);
+    }
     throw new Error(errorMessage);
   }
   

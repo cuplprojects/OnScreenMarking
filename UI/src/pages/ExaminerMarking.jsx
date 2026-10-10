@@ -1000,7 +1000,7 @@ const ExaminerMarking = () => {
   }
 
   return (
-    <div className="bg-gray-50 min-h-screen flex flex-col overflow-hidden secure-marking-container relative">
+    <div className="bg-gray-50 h-[100dvh] flex flex-col overflow-hidden secure-marking-container relative">
       {/* SECURITY BLUR OVERLAY */}
       {isBlurred && (
         <div className="absolute inset-0 bg-gray-900/90 z-[9999] flex flex-col items-center justify-center text-center select-none pointer-events-auto p-4 md:p-6">

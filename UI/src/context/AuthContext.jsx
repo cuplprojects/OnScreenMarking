@@ -49,7 +49,7 @@ export function AuthProvider({ children }) {
   const fetchUserPermissions = async (userData) => {
     if (!userData || !userData.userType) return [];
     try {
-      const response = await apiCall('/role');
+      const response = await apiCall('/role', { hideErrorToast: true });
       if (response && response.success && response.data) {
         const matchingRole = response.data.find(
           r => r.roleName.toLowerCase() === userData.userType.toLowerCase()

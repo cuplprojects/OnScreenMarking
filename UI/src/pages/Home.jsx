@@ -147,12 +147,13 @@ const Home = () => {
         let subjectsData = [];
         if (expertiseIds.length > 0) {
           subjectsData = await Promise.all(
-            expertiseIds.map(id => apiCall(`/subject/${id}`))
+            expertiseIds.map(id => apiCall(`/subject/${id}`, { hideErrorToast: true }).catch(() => null))
           );
         }
 
         // Calculate subject workloads based on user's expertise subjects and group papers under them
-        const workloads = subjectsData.map(sub => {
+        const validSubjects = subjectsData.filter(sub => sub !== null && sub.subjectId);
+        const workloads = validSubjects.map(sub => {
           const subjectScripts = allScripts.filter(s => s.subjectId === sub.subjectId);
           
           const papersMap = {};

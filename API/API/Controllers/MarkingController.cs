@@ -203,7 +203,8 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                // Return success=true to ignore Redis timeouts/errors
+                return Ok(new { success = true, message = "Draft save skipped due to cache error", error = ex.Message });
             }
         }
 
@@ -226,7 +227,8 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                // Return success=true with null data to ignore Redis timeouts/errors
+                return Ok(new { success = true, draftData = (object)null, error = ex.Message });
             }
         }
 

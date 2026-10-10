@@ -902,11 +902,10 @@ export default function ScriptAllocation({ isTab = false }) {
                                 <div key={examiner.examinerId} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-xl hover:border-teal-300 transition-all">
                                   <div className="flex items-center gap-3">
                                     <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-xs uppercase">
-                                      {(examiner.examinerName || 'E').charAt(0)}
+                                      {(examiner.examiner?.name || 'E').charAt(0)}
                                     </div>
                                     <div>
-                                      <p className="text-xs font-bold text-gray-900">{examiner.examinerName || 'Examiner'}</p>
-                                      <p className="text-[10px] text-gray-400 font-medium">ID: {examiner.examinerId}</p>
+                                      <p className="text-xs font-bold text-gray-900">{examiner.examiner?.name || 'Examiner'}</p>
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-2">
