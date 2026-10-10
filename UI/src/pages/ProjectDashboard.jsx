@@ -549,8 +549,13 @@ export default function ProjectDashboard() {
                             stageText = "3. Allocate Scripts";
                             stageColor = "bg-teal-50 text-teal-700 border-teal-200";
                           } else if (paper.totalScripts > 0) {
-                            currentStage = 4;
-                            stageText = "4. In Progress/Done";
+                            if (paper.completedScripts === paper.totalScripts) {
+                              currentStage = 5;
+                              stageText = "5. Done";
+                            } else {
+                              currentStage = 4;
+                              stageText = "4. In Progress";
+                            }
                             stageColor = "bg-emerald-50 text-emerald-700 border-emerald-200";
                           } else {
                             currentStage = 3;

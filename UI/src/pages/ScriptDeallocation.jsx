@@ -14,7 +14,10 @@ import {
   Zap,
   BookOpen,
   ArrowLeft,
-  Sliders
+  Sliders,
+  Edit2,
+  Check,
+  X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBreadcrumb } from '../context/BreadcrumbContext';
@@ -46,6 +49,7 @@ export default function ScriptDeallocation() {
   });
   const [examinerList, setExaminerList] = useState([]);
   const [editedCounts, setEditedCounts] = useState({});
+  const [editingRowKey, setEditingRowKey] = useState(null);
 
   useEffect(() => {
     setBreadcrumb([
@@ -115,10 +119,16 @@ export default function ScriptDeallocation() {
       return;
     }
 
+    if (targetCount > item.totalAllocatedCount) {
+      message.error(`Allocation count cannot exceed total assigned scripts (${item.totalAllocatedCount})`);
+      return;
+    }
+
     setUpdatingId(key);
     try {
       const res = await allocationService.overwriteExaminerCount(item.paperId, item.examinerId, targetCount);
       message.success(res.message || "Examiner allocation count updated successfully");
+      setEditingRowKey(null);
       fetchDeallocationData();
     } catch (err) {
       message.error(err.message || "Failed to update examiner count");
@@ -158,41 +168,18 @@ export default function ScriptDeallocation() {
       <div className="w-full space-y-6">
         
         {/* Header Section */}
-        <div className="bg-white rounded-2xl border border-gray-200/80 p-5 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <Link 
-                to={userType === 'admin' ? `/admin/dashboard` : `/project-dashboard?projectId=${encryptedProjectId}`}
-                className="p-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-600 transition-colors"
-              >
-                <ArrowLeft size={18} />
-              </Link>
-              <div>
-                <h1 className="text-xl font-black text-gray-900 tracking-tight flex items-center gap-2">
-                  <Sliders className="text-teal-700" size={22} />
-                  <span>Script Deallocation & Overwrite Manager</span>
-                </h1>
-                <p className="text-xs text-gray-500 font-medium mt-0.5">
-                  View assigned examiner script stats and overwrite target allocation counts paper-wise
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={fetchDeallocationData}
-              disabled={loading}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-all"
-            >
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              Refresh Stats
-            </button>
-          </div>
+        <div className="bg-white rounded-2xl border border-gray-200/80 p-4 shadow-sm">
+          <ProjectConfigHeader 
+            title="Script Deallocation & Overwrite Manager"
+            titleIcon={<Sliders size={18} />}
+            subtitle="View assigned examiner script stats and overwrite target allocation counts paper-wise"
+          />
         </div>
 
         {/* Filter Bar & Controls */}
-        <div className="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col lg:flex-row items-center justify-between gap-4">
           
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
             {/* Paper Filter Dropdown */}
             <div className="w-full sm:w-64">
               <label className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 block mb-1">
@@ -213,23 +200,36 @@ export default function ScriptDeallocation() {
             </div>
           </div>
 
-          {/* Search Box */}
-          <div className="w-full md:w-72">
-            <label className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 block mb-1">
-              Search Examiners
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
-              <input
-                type="text"
-                placeholder="Search examiner name, code, email..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all"
-              />
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+            {/* Search Box */}
+            <div className="w-full sm:w-72">
+              <label className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 block mb-1">
+                Search Examiners
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
+                <input
+                  type="text"
+                  placeholder="Search examiner name, code, email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Refresh Button */}
+            <div className="w-full sm:w-auto mt-1 sm:mt-5">
+              <button
+                onClick={fetchDeallocationData}
+                disabled={loading}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-all h-[36px]"
+              >
+                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                Refresh Stats
+              </button>
             </div>
           </div>
-
         </div>
 
         {/* Assigned Examiners Table View */}
@@ -266,7 +266,8 @@ export default function ScriptDeallocation() {
                     <th className="px-4 py-3.5 text-center">Current Allocated</th>
                     <th className="px-4 py-3.5 text-center">Completed</th>
                     <th className="px-4 py-3.5 text-center">Total Assigned</th>
-                    <th className="px-4 py-3.5 text-right pr-6">Overwrite Allocation Count</th>
+                    <th className="px-4 py-3.5 text-center">Allocation Count</th>
+                    <th className="px-4 py-3.5 text-right pr-6">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-xs">
@@ -327,49 +328,70 @@ export default function ScriptDeallocation() {
                           {item.totalAllocatedCount}
                         </td>
 
-                        {/* Overwrite Input & Actions */}
-                        <td className="px-4 py-3 text-right pr-6">
-                          <div className="flex items-center justify-end gap-2">
+                        {/* Allocation Count */}
+                        <td className="px-4 py-3 text-center">
+                          {editingRowKey === key ? (
                             <input
                               type="number"
                               min="0"
+                              max={item.totalAllocatedCount}
                               value={currentInputVal}
                               onChange={(e) => handleCountChange(item.paperId, item.examinerId, e.target.value)}
-                              className={`w-20 px-2.5 py-1.5 text-center text-xs font-bold border rounded-lg outline-none transition-all ${
-                                isChanged 
-                                  ? 'border-amber-400 bg-amber-50/50 ring-2 ring-amber-400/30' 
-                                  : 'border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-teal-500'
-                              }`}
+                              className="w-20 px-2.5 py-1.5 text-center text-xs font-bold border border-teal-300 rounded-lg outline-none bg-white focus:ring-2 focus:ring-teal-500"
                             />
+                          ) : (
+                            <span className="inline-flex items-center justify-center min-w-[32px] h-8 bg-gray-50 text-gray-700 rounded-lg text-xs font-bold border border-gray-200">
+                              {item.allocatedCount}
+                            </span>
+                          )}
+                        </td>
 
-                            <button
-                              type="button"
-                              onClick={() => handleSaveCount(item)}
-                              disabled={isSaving}
-                              title="Save Overwritten Allocation Count"
-                              className={`px-3 py-1.5 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition-all shadow-sm ${
-                                isChanged 
-                                  ? 'bg-amber-600 hover:bg-amber-700 text-white' 
-                                  : 'bg-teal-700 hover:bg-teal-800 text-white'
-                              }`}
-                            >
-                              <Save size={13} />
-                              <span>{isSaving ? 'Updating...' : 'Save'}</span>
-                            </button>
-
-                            {item.allocatedCount > 0 && (
+                        {/* Action */}
+                        <td className="px-4 py-3 text-right pr-6">
+                          {editingRowKey === key ? (
+                            <div className="flex items-center justify-end gap-2">
                               <button
                                 type="button"
-                                onClick={() => handleResetToZero(item)}
+                                onClick={() => {
+                                  setEditingRowKey(null);
+                                  setEditedCounts(prev => {
+                                    const next = { ...prev };
+                                    delete next[key];
+                                    return next;
+                                  });
+                                }}
                                 disabled={isSaving}
-                                title="Deallocate All Active Scripts for this Examiner"
-                                className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition-colors border border-rose-200"
+                                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-colors inline-flex items-center gap-1 shadow-sm"
                               >
-                                <RotateCcw size={13} />
-                                <span>Reset (0)</span>
+                                <X size={13} />
+                                <span>Cancel</span>
                               </button>
-                            )}
-                          </div>
+                              <button
+                                type="button"
+                                onClick={() => handleSaveCount(item)}
+                                disabled={isSaving}
+                                className="px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1 shadow-sm"
+                              >
+                                <Check size={13} />
+                                <span>{isSaving ? 'Saving...' : 'Save'}</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingRowKey(key);
+                                setEditedCounts(prev => ({
+                                  ...prev,
+                                  [key]: item.allocatedCount
+                                }));
+                              }}
+                              className="px-4 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-xs font-bold transition-colors border border-teal-200 inline-flex items-center gap-1.5 shadow-sm"
+                            >
+                              <Edit2 size={13} />
+                              
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );

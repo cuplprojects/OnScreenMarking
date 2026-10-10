@@ -148,10 +148,11 @@ export default function ScriptAllocation({ isTab = false }) {
   // Selection Handlers
   // -------------------------------------------------------------
   const toggleSelectAllPapers = () => {
-    if (selectedPaperIds.length === papers.length) {
+    const allocatablePapers = papers.filter(p => p.pendingScripts > 0);
+    if (selectedPaperIds.length === allocatablePapers.length) {
       setSelectedPaperIds([]);
     } else {
-      setSelectedPaperIds(papers.map(p => p.paperId));
+      setSelectedPaperIds(allocatablePapers.map(p => p.paperId));
     }
   };
 
@@ -550,74 +551,103 @@ export default function ScriptAllocation({ isTab = false }) {
 
         {/* TAB 1: ALLOCATION WORKFLOW */}
         {activeMainTab === 'allocate' && (
-          <div className="w-full flex flex-col xl:flex-row gap-4 items-start">
+          <div className="w-full flex flex-col gap-4 items-start">
 
-            {/* Left Column: Papers List & Multi-Select */}
-            <div className={`w-full ${(activePaper || isMultiPaperMode) ? 'xl:w-[50%]' : 'xl:w-full'} flex flex-col transition-all duration-300`}>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
-                  <div className="w-6 h-6 bg-teal-100 text-teal-700 rounded-md flex items-center justify-center font-bold text-xs">
-                    1
-                  </div>
-                  Select Papers to Allocate
-                </h2>
-                <div className="flex items-center gap-2">
-                  {selectedPaperIds.length > 0 && (
-                    <button
-                      onClick={openMultiPaperPane}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] uppercase tracking-wider px-3.5 py-1.5 rounded-lg shadow-sm transition-all flex items-center gap-1.5"
-                    >
-                      <Zap size={13} />
-                      Allocate Selected ({selectedPaperIds.length})
-                    </button>
-                  )}
-                  {projectId && (
-                    <button
-                      onClick={handleAutoAllocateProject}
-                      disabled={autoProjectLoading}
-                      className="bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-[11px] uppercase tracking-wider px-3.5 py-1.5 rounded-lg shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50"
-                    >
-                      {autoProjectLoading ? <Loader size={13} className="animate-spin" /> : <Sparkles size={13} />}
-                      {autoProjectLoading ? "Allocating..." : "Auto-Allocate All"}
-                    </button>
-                  )}
-                </div>
-              </div>
-
+            {/* Papers List & Multi-Select */}
+            <div className="w-full flex flex-col transition-all duration-300">
               {tableLoading && papers.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-12 text-center flex flex-col items-center gap-3">
-                  <Loader className="animate-spin text-teal-700" size={32} />
-                  <span className="text-xs font-bold text-gray-400">Loading papers...</span>
+                <div className="space-y-3">
+                  <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
+                    <div className="w-6 h-6 bg-teal-100 text-teal-700 rounded-md flex items-center justify-center font-bold text-xs">1</div>
+                    Select Papers to Allocate
+                  </h2>
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-12 text-center flex flex-col items-center gap-3">
+                    <Loader className="animate-spin text-teal-700" size={32} />
+                    <span className="text-xs font-bold text-gray-400">Loading papers...</span>
+                  </div>
                 </div>
               ) : papers.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-16 text-center text-gray-500 font-medium leading-relaxed max-w-sm mx-auto space-y-3">
-                  <FileText className="mx-auto text-gray-400" size={32} />
-                  <div>
-                    <h3 className="font-extrabold text-gray-900 text-xs uppercase tracking-wider">No Papers Found</h3>
-                    <p className="text-[10px] text-gray-400 mt-1">There are no papers found for this project.</p>
+                <div className="space-y-3">
+                  <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
+                    <div className="w-6 h-6 bg-teal-100 text-teal-700 rounded-md flex items-center justify-center font-bold text-xs">1</div>
+                    Select Papers to Allocate
+                  </h2>
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-16 text-center text-gray-500 font-medium leading-relaxed max-w-sm mx-auto space-y-3">
+                    <FileText className="mx-auto text-gray-400" size={32} />
+                    <div>
+                      <h3 className="font-extrabold text-gray-900 text-xs uppercase tracking-wider">No Papers Found</h3>
+                      <p className="text-[10px] text-gray-400 mt-1">There are no papers found for this project.</p>
+                    </div>
                   </div>
                 </div>
               ) : (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col animate-fade-in">
-                  <div className="p-3.5 border-b border-gray-100 bg-white flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border border-gray-100 focus-within:ring-2 focus-within:ring-teal-500/20 focus-within:border-teal-500 transition-all w-full max-w-md">
-                      <Search size={13} className="text-gray-400 shrink-0" />
-                      <input 
-                        type="text" 
-                        placeholder="Search papers by code or name..." 
-                        className="w-full bg-transparent text-gray-800 placeholder-gray-400 font-semibold text-[11px] focus:outline-none"
-                        value={paperSearchQuery}
-                        onChange={(e) => setPaperSearchQuery(e.target.value)}
-                      />
-                      {paperSearchQuery && (
-                        <button onClick={() => setPaperSearchQuery('')} className="text-gray-300 hover:text-gray-500 transition">
-                          <X size={12} />
+                  <div className="p-3 border-b border-gray-100 bg-white flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                    {/* Left: Heading */}
+                    <h2 className="text-base font-black text-gray-900 flex items-center gap-2 whitespace-nowrap pl-1">
+                      <div className="w-6 h-6 bg-teal-100 text-teal-700 rounded-md flex items-center justify-center font-bold text-xs">
+                        1
+                      </div>
+                      Select Papers to Allocate
+                    </h2>
+
+                    {/* Right: Search, Count, Buttons */}
+                    <div className="flex flex-wrap items-center justify-end gap-3 w-full xl:w-auto">
+                      {/* Search Bar */}
+                      <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border border-gray-100 focus-within:ring-2 focus-within:ring-teal-500/20 focus-within:border-teal-500 transition-all min-w-[220px]">
+                        <Search size={13} className="text-gray-400 shrink-0" />
+                        <input 
+                          type="text" 
+                          placeholder="Search papers by code or name..." 
+                          className="w-full bg-transparent text-gray-800 placeholder-gray-400 font-semibold text-[11px] focus:outline-none"
+                          value={paperSearchQuery}
+                          onChange={(e) => setPaperSearchQuery(e.target.value)}
+                        />
+                        {paperSearchQuery && (
+                          <button onClick={() => setPaperSearchQuery('')} className="text-gray-300 hover:text-gray-500 transition">
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+
+                      {papers.filter(p => p.pendingScripts > 0).length > 0 && (
+                        <div className="text-[11px] font-bold text-gray-500 px-1 border-r border-gray-200 pr-4">
+                          {selectedPaperIds.length} of {papers.filter(p => p.pendingScripts > 0).length} selected
+                        </div>
+                      )}
+
+                      {/* Action buttons */}
+                      {selectedPaperIds.length > 0 && (
+                        <button
+                          onClick={openMultiPaperPane}
+                          className="bg-teal-700 hover:bg-teal-800 text-white font-extrabold text-[11px] uppercase tracking-wider px-3.5 py-2 rounded-xl shadow-sm transition-all flex items-center gap-1.5"
+                        >
+                          <Zap size={13} />
+                          Allocate Selected ({selectedPaperIds.length})
                         </button>
                       )}
-                    </div>
-
-                    <div className="text-[11px] font-bold text-gray-500">
-                      {selectedPaperIds.length} of {papers.length} selected
+                      {projectId && (
+                        <div className="relative group/tooltip inline-block">
+                          <button
+                            onClick={handleAutoAllocateProject}
+                            disabled={autoProjectLoading || !papers.some(p => p.pendingScripts > 0)}
+                            className={`font-extrabold text-[11px] uppercase tracking-wider px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 ${
+                              !papers.some(p => p.pendingScripts > 0)
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200 shadow-none'
+                                : 'bg-teal-700 hover:bg-teal-800 text-white shadow-sm disabled:opacity-50'
+                            }`}
+                          >
+                            {autoProjectLoading ? <Loader size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                            {autoProjectLoading ? "Allocating..." : "Auto-Allocate All"}
+                          </button>
+                          {!papers.some(p => p.pendingScripts > 0) && papers.length > 0 && (
+                            <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-bold rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50">
+                              All scripts are already allocated
+                              <div className="absolute top-full right-4 border-4 border-transparent border-t-gray-900"></div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -628,9 +658,10 @@ export default function ScriptAllocation({ isTab = false }) {
                           <th className="px-4 py-2.5 text-center w-10">
                             <input
                               type="checkbox"
-                              checked={selectedPaperIds.length > 0 && selectedPaperIds.length === papers.length}
+                              checked={selectedPaperIds.length > 0 && selectedPaperIds.length === papers.filter(p => p.pendingScripts > 0).length}
                               onChange={toggleSelectAllPapers}
-                              className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300 cursor-pointer"
+                              disabled={papers.filter(p => p.pendingScripts > 0).length === 0}
+                              className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                           </th>
                           <SortHeader label="Code" field="paperCode" hasFilter={true} />
@@ -657,7 +688,8 @@ export default function ScriptAllocation({ isTab = false }) {
                                   type="checkbox"
                                   checked={isSelected}
                                   onChange={() => toggleSelectPaper(paper.paperId)}
-                                  className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300 cursor-pointer"
+                                  disabled={paper.pendingScripts === 0}
+                                  className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                               </td>
                               <td className="px-4 py-2.5 font-extrabold text-gray-900">{paper.paperCode}</td>
@@ -684,16 +716,17 @@ export default function ScriptAllocation({ isTab = false }) {
                                 <div className="relative group/tooltip inline-block">
                                   <button
                                     onClick={() => openAllocationPane(paper)}
-                                    className={`p-1.5 rounded-lg transition-all block ${
-                                      isActive 
-                                        ? 'bg-teal-100 text-teal-700' 
-                                        : 'text-gray-400 hover:bg-teal-50 hover:text-teal-700'
+                                    disabled={paper.pendingScripts === 0}
+                                    className={`p-1.5 rounded-lg transition-all block border ${
+                                      paper.pendingScripts === 0
+                                        ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed opacity-60'
+                                        : 'bg-teal-50 text-teal-700 border-teal-100 hover:bg-teal-700 hover:text-white hover:border-teal-700'
                                     }`}
                                   >
-                                    {isActive ? <X size={14} /> : <Zap size={14} />}
+                                    <Zap size={14} />
                                   </button>
                                   <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-bold rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50">
-                                    {isActive ? "Close Allocation Pane" : "Allocate Scripts"}
+                                    {paper.pendingScripts === 0 ? "Already Fully Allocated" : "Allocate Scripts"}
                                     <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-900"></div>
                                   </div>
                                 </div>
@@ -716,10 +749,10 @@ export default function ScriptAllocation({ isTab = false }) {
               )}
             </div>
 
-            {/* Right Column: Allocation Configuration Pane (Single or Multi Paper) */}
+            {/* Modal: Allocation Configuration Pane (Single or Multi Paper) */}
             {(activePaper || isMultiPaperMode) && (
-              <div className="w-full xl:w-[50%] flex flex-col animate-in slide-in-from-right-4 duration-300">
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm flex-1 flex flex-col overflow-hidden">
+              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
                   
                   {/* Pane Header */}
                   <div className="p-5 bg-gray-50 border-b border-gray-100">
@@ -746,7 +779,7 @@ export default function ScriptAllocation({ isTab = false }) {
                     </div>
                   </div>
 
-                  <div className="p-5 overflow-y-auto max-h-[750px] space-y-5">
+                  <div className="p-5 overflow-y-auto flex-1 space-y-5">
                     {loading ? (
                       <div className="flex items-center justify-center py-12">
                         <Loader className="animate-spin text-teal-700" size={32} />
@@ -820,14 +853,14 @@ export default function ScriptAllocation({ isTab = false }) {
                         )}
 
                         {bulkMode === 'daily' && (
-                          <div className="p-4 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-3">
-                            <div className="flex items-center justify-between gap-4">
-                              <div>
-                                <h4 className="text-xs font-bold text-indigo-900">Daily Allotment Limit</h4>
-                                <p className="text-[11px] text-indigo-700 mt-0.5">
-                                  Set maximum scripts allotted per examiner per day.
-                                </p>
-                              </div>
+                          <div className="p-4 bg-teal-50/70 border border-teal-200 rounded-xl flex items-center justify-between gap-4">
+                            <div>
+                              <h4 className="text-xs font-bold text-teal-900">Daily Allotment Limit</h4>
+                              <p className="text-[11px] text-teal-700 mt-0.5">
+                                Set maximum scripts allotted per examiner per day.
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
                               <div className="flex items-center gap-2">
                                 <label className="text-xs font-bold text-gray-600">Quota:</label>
                                 <input
@@ -836,15 +869,13 @@ export default function ScriptAllocation({ isTab = false }) {
                                   max="200"
                                   value={dailyQuotaLimit}
                                   onChange={(e) => setDailyQuotaLimit(parseInt(e.target.value) || 10)}
-                                  className="w-16 px-2 py-1 border border-indigo-300 rounded-md text-xs font-bold text-center bg-white"
+                                  className="w-16 px-2 py-1 border border-teal-300 rounded-md text-xs font-bold text-center bg-white"
                                 />
                               </div>
-                            </div>
-                            <div className="flex justify-end">
                               <button
                                 type="button"
                                 onClick={calculateDailyQuotaDistribution}
-                                className="px-3.5 py-1.5 bg-indigo-700 text-white rounded-lg text-xs font-bold hover:bg-indigo-800 transition-all"
+                                className="px-3.5 py-1.5 bg-teal-700 text-white rounded-lg text-xs font-bold hover:bg-teal-800 transition-all shrink-0"
                               >
                                 Apply Daily Limit
                               </button>

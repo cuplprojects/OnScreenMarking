@@ -83,7 +83,7 @@ namespace API.Controllers
                             query = query.Where(p => !_context.Sections.Any(s => s.PaperId == p.PaperId) || _context.Sections.Where(s => s.PaperId == p.PaperId).Sum(s => (int?)s.TotalMarks) != p.MaxMarks);
                             break;
                         case "pdf_missing":
-                            query = query.Where(p => !(p.ProjectPapers.Any(pp => pp.ProjectId == projectId && !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl)) || p.ProjectPapers.Any(pp => !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl))));
+                            query = query.Where(p => !p.ProjectPapers.Any(pp => pp.ProjectId == projectId && !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl)));
                             break;
                         case "not_assigned":
                             query = query.Where(p => !_context.PaperExaminers.Any(pe => pe.PaperId == p.PaperId));
@@ -92,8 +92,9 @@ namespace API.Controllers
                             query = query.Where(p => 
                                 _context.Sections.Any(s => s.PaperId == p.PaperId) && 
                                 _context.Sections.Where(s => s.PaperId == p.PaperId).Sum(s => (int?)s.TotalMarks) == p.MaxMarks &&
-                                (p.ProjectPapers.Any(pp => pp.ProjectId == projectId && !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl)) || p.ProjectPapers.Any(pp => !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl))) &&
-                                _context.PaperExaminers.Any(pe => pe.PaperId == p.PaperId)
+                                p.ProjectPapers.Any(pp => pp.ProjectId == projectId && !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl)) &&
+                                _context.PaperExaminers.Any(pe => pe.PaperId == p.PaperId) &&
+                                _context.Scripts.Any(s => s.ProjectPaper.PaperId == p.PaperId && s.ProjectPaper.ProjectId == projectId && s.Status != "completed")
                             );
                             break;
                     }
@@ -159,10 +160,8 @@ namespace API.Controllers
                         paperId = p.PaperId,
                         paperCode = p.PaperCode,
                         paperName = p.PaperName,
-                        catchNo = p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.CatchNo).FirstOrDefault() 
-                            ?? p.ProjectPapers.Select(pp => pp.CatchNo).FirstOrDefault() ?? "",
-                        questionPaperPdfUrl = p.ProjectPapers.Where(pp => pp.ProjectId == projectId && !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl)).Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() 
-                            ?? p.ProjectPapers.Where(pp => !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl)).Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() ?? "",
+                        catchNo = p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.CatchNo).FirstOrDefault() ?? "",
+                        questionPaperPdfUrl = p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() ?? "",
                         projectId = projectId,
                         maxMarks = p.MaxMarks,
                         totalQuestions = p.TotalQuestions,
@@ -328,9 +327,9 @@ namespace API.Controllers
                     Description = p.Description,
                     IsActive = p.IsActive,
                     UniversityId = p.UniversityId,
-                    ProjectId = p.ProjectPapers.Select(pp => (int?)pp.ProjectId).FirstOrDefault(),
-                    CatchNo = p.ProjectPapers.Select(pp => pp.CatchNo).FirstOrDefault() ?? "",
-                    QuestionPaperPdfUrl = p.ProjectPapers.Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() ?? "",
+                    ProjectId = projectId ?? p.ProjectPapers.Select(pp => (int?)pp.ProjectId).FirstOrDefault(),
+                    CatchNo = projectId.HasValue ? p.ProjectPapers.Where(pp => pp.ProjectId == projectId.Value).Select(pp => pp.CatchNo).FirstOrDefault() ?? "" : p.ProjectPapers.Select(pp => pp.CatchNo).FirstOrDefault() ?? "",
+                    QuestionPaperPdfUrl = projectId.HasValue ? p.ProjectPapers.Where(pp => pp.ProjectId == projectId.Value).Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() ?? "" : p.ProjectPapers.Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() ?? "",
                     SubjectIds = p.SubjectPapers
                         .Select(sp => sp.SubjectId)
                         .ToList(),
