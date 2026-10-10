@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { RotateCcw, Copy, Type, ZoomIn, ZoomOut, Check, X, Undo, Move, Trash2, FileText } from 'lucide-react';
+import { RotateCcw, Copy, Type, ZoomIn, ZoomOut, Check, X, Undo, Move, Trash2, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import message from '../services/messageService';
@@ -9,6 +9,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNextQuestion, maxMarks, sections = [], pdfUrl, scriptId, readOnly }, ref) => {
   const canvasRef = useRef(null);
+  const canvasContainerRef = useRef(null);
+  const panStateRef = useRef({ isPanning: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
   const [isDrawing, setIsDrawing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedItem, setDraggedItem] = useState(null);
@@ -162,9 +164,11 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
     }
   }, [scriptId]);
 
-  // Backspace/Delete key listener for deleting selected annotations
+  // Global hotkeys
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedAnno) {
         const updated = annotations.filter(anno => anno.id !== selectedAnno.id);
         setAnnotations(updated);
@@ -172,10 +176,35 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
         onAnnotationsChange?.(updated);
         setSelectedAnno(null);
       }
+      
+      if (e.key === 'ArrowLeft') {
+        setCurrentPage(prev => Math.max(0, prev - 1));
+      } else if (e.key === 'ArrowRight') {
+        setCurrentPage(prev => Math.min(pdfPages.length - 1, prev + 1));
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedAnno, annotations]);
+  }, [selectedAnno, annotations, pdfPages.length]);
+
+  // Mouse Wheel Zooming
+  useEffect(() => {
+    const container = canvasContainerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e) => {
+      // Zoom unconditionally on wheel
+      e.preventDefault();
+      if (e.deltaY < 0) {
+        setZoom(prev => parseFloat(Math.min(prev + 0.1, 3.0).toFixed(1)));
+      } else {
+        setZoom(prev => parseFloat(Math.max(prev - 0.1, 0.2).toFixed(1)));
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, []);
 
   // Auto-load PDF from URL
   useEffect(() => {
@@ -534,6 +563,17 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
         setSelectedAnno(item);
       } else {
         setSelectedAnno(null);
+        // Pan the canvas
+        const container = canvasContainerRef.current;
+        if (container) {
+          panStateRef.current = {
+            isPanning: true,
+            startX: e.clientX,
+            startY: e.clientY,
+            scrollLeft: container.scrollLeft,
+            scrollTop: container.scrollTop
+          };
+        }
       }
       return;
     }
@@ -583,6 +623,17 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
   };
 
   const draw = (e) => {
+    if (panStateRef.current.isPanning) {
+      const container = canvasContainerRef.current;
+      if (container) {
+        const dx = e.clientX - panStateRef.current.startX;
+        const dy = e.clientY - panStateRef.current.startY;
+        container.scrollLeft = panStateRef.current.scrollLeft - dx;
+        container.scrollTop = panStateRef.current.scrollTop - dy;
+      }
+      return;
+    }
+
     if (!canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / zoom;
@@ -608,6 +659,11 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
   };
 
   const stopDrawing = () => {
+    if (panStateRef.current.isPanning) {
+      panStateRef.current.isPanning = false;
+      return;
+    }
+
     if (isDragging) {
       setIsDragging(false);
       setDraggedItem(null);
@@ -826,10 +882,19 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
           </div>
 
           {/* Zoom */}
-          <div className="flex gap-1 items-center border-r border-gray-300 pr-2">
-            <button onClick={() => setZoom(Math.max(0.5, zoom - 0.1))} className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600"><ZoomOut size={16} /></button>
-            <span className="w-10 text-center text-xs font-semibold">{Math.round(zoom * 100)}%</span>
-            <button onClick={() => setZoom(Math.min(2, zoom + 0.1))} className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600"><ZoomIn size={16} /></button>
+          <div className="flex gap-2 items-center border-r border-gray-300 pr-3 mr-1">
+            <button onClick={() => setZoom(Math.max(0.2, zoom - 0.1))} className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600"><ZoomOut size={16} /></button>
+            <input 
+              type="range" 
+              min="0.2" 
+              max="3.0" 
+              step="0.1" 
+              value={zoom} 
+              onChange={(e) => setZoom(parseFloat(e.target.value))}
+              className="w-24 accent-teal-600 cursor-pointer"
+            />
+            <span className="w-10 text-center text-xs font-semibold text-gray-700">{Math.round(zoom * 100)}%</span>
+            <button onClick={() => setZoom(Math.min(3.0, zoom + 0.1))} className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600"><ZoomIn size={16} /></button>
           </div>
 
           {/* Actions */}
@@ -1037,10 +1102,52 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       )}
 
       {/* Canvas Container */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-[400px]">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-[400px] relative">
+        {/* Absolute PDF Navigation Overlays */}
+        {pdfPages.length > 0 && (
+          <>
+            <button
+              onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+              disabled={currentPage === 0}
+              className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 text-white rounded-full transition-all disabled:opacity-0 z-10 shadow-lg backdrop-blur-sm"
+              title="Previous Page"
+            >
+              <ChevronLeft size={24} />
+            </button>
+            <button
+              onClick={() => setCurrentPage(Math.min(pdfPages.length - 1, currentPage + 1))}
+              disabled={currentPage === pdfPages.length - 1}
+              className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 text-white rounded-full transition-all disabled:opacity-0 z-10 shadow-lg backdrop-blur-sm"
+              title="Next Page"
+            >
+              <ChevronRight size={24} />
+            </button>
+            
+            {/* Page Indicator */}
+            <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-bold z-10 shadow-md">
+              Page {currentPage + 1} of {pdfPages.length}
+            </div>
+          </>
+        )}
+
         <div
-          className="bg-gray-100 overflow-auto flex-1 flex justify-center p-4"
+          ref={canvasContainerRef}
+          className="bg-gray-100 overflow-auto flex-1 flex justify-center p-4 relative select-none"
           onMouseUp={handleTextSelection}
+          onMouseMove={(e) => {
+            if (panStateRef.current.isPanning) {
+              const container = canvasContainerRef.current;
+              if (container) {
+                const dx = e.clientX - panStateRef.current.startX;
+                const dy = e.clientY - panStateRef.current.startY;
+                container.scrollLeft = panStateRef.current.scrollLeft - dx;
+                container.scrollTop = panStateRef.current.scrollTop - dy;
+              }
+            }
+          }}
+          onMouseLeave={() => {
+            panStateRef.current.isPanning = false;
+          }}
         >
           <canvas
             ref={canvasRef}
@@ -1054,28 +1161,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
           />
         </div>
 
-        {/* PDF Navigation */}
-        {pdfPages.length > 0 && (
-          <div className="flex items-center justify-center gap-4 p-3 bg-gray-50 border-t border-gray-200">
-            <button
-              onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-              disabled={currentPage === 0}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-semibold transition-colors"
-            >
-              Previous
-            </button>
-            <span className="text-sm font-semibold text-gray-700">
-              Page {currentPage + 1} of {pdfPages.length}
-            </span>
-            <button
-              onClick={() => setCurrentPage(Math.min(pdfPages.length - 1, currentPage + 1))}
-              disabled={currentPage === pdfPages.length - 1}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-semibold transition-colors"
-            >
-              Next
-            </button>
-          </div>
-        )}
+        {/* PDF Navigation (Removed in favor of overlay arrows) */}
       </div>
     </div>
   );

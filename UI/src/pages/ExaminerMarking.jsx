@@ -12,7 +12,8 @@ import {
   FileText,
   AlertCircle,
   ChevronLeft,
-  Barcode
+  Barcode,
+  Check
 } from "lucide-react";
 import PDFAnnotator from "../components/PDFAnnotator";
 import sectionService from "../services/sectionService";
@@ -1029,48 +1030,48 @@ const ExaminerMarking = () => {
       </div>
 
       {/* HEADER */}
-      <header className="bg-white text-gray-900 shadow-md py-2.5 flex justify-between items-center z-50 border-b border-gray-200 md:px-6 px-4">
+      <header className="bg-white text-gray-900 shadow-md py-1 flex justify-between items-center z-50 border-b border-gray-200 md:px-6 px-4">
         <div className="flex items-center gap-6">
           <button
             onClick={() => navigate('/scripts')}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
             title="Back to Scripts"
           >
             <ChevronLeft className="text-gray-600" size={24} />
           </button>
           
           <div className="border-r border-gray-300 pr-6">
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-gray-900 leading-tight">
               OSM <span className="text-teal-700">Marking</span>
             </h1>
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mt-1">Answer Sheet Evaluation</p>
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Answer Sheet Evaluation</p>
           </div>
 
-          <div className="hidden md:block bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
-            <p className="text-xs uppercase font-semibold text-gray-500 mb-1">Paper</p>
-            <p className="font-semibold text-sm text-gray-900">
+          <div className="hidden md:block bg-gray-50 px-3 py-1 rounded-lg border border-gray-200">
+            <p className="text-[10px] uppercase font-bold text-gray-500">Paper</p>
+            <p className="font-semibold text-xs text-gray-900">
               {paperInfo?.paperName || "Paper"} <span className="text-gray-400">({paperInfo?.paperCode || ""})</span>
             </p>
           </div>
 
-          <div className="hidden md:block bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
-            <p className="text-xs uppercase font-semibold text-gray-500 mb-1">Max Marks</p>
-            <p className="font-bold text-lg text-gray-900">{paperInfo?.maxMarks || "100"}</p>
+          <div className="hidden md:block bg-gray-50 px-3 py-1 rounded-lg border border-gray-200">
+            <p className="text-[10px] uppercase font-bold text-gray-500">Max Marks</p>
+            <p className="font-bold text-sm text-gray-900">{paperInfo?.maxMarks || "100"}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="bg-teal-50 py-3 rounded-lg border border-teal-200 flex flex-col items-center md:px-6 px-4">
-            <p className="text-xs uppercase font-semibold text-teal-700 mb-1">Total Score</p>
-            <p className="text-3xl font-bold text-teal-900">
-              {totalObtained.toFixed(1)} <span className="text-sm font-normal text-teal-700">/ {paperInfo?.maxMarks || 100}</span>
+          <div className="bg-teal-50 py-1.5 rounded-lg border border-teal-200 flex flex-col items-center md:px-4 px-3">
+            <p className="text-[10px] uppercase font-bold text-teal-700">Total Score</p>
+            <p className="text-2xl font-bold text-teal-900 leading-none">
+              {totalObtained.toFixed(1)} <span className="text-xs font-normal text-teal-700">/ {paperInfo?.maxMarks || 100}</span>
             </p>
           </div>
           
           <button
             onClick={handleSubmitMarking}
             disabled={submitted || saving}
-            className="bg-teal-700 hover:bg-teal-800 disabled:bg-gray-400 text-white py-3 rounded-md font-semibold uppercase text-sm transition-colors shadow-md cursor-pointer disabled:cursor-not-allowed md:px-6 px-4"
+            className="bg-teal-700 hover:bg-teal-800 disabled:bg-gray-400 text-white py-2 rounded-md font-bold uppercase text-xs transition-colors shadow-md cursor-pointer disabled:cursor-not-allowed md:px-5 px-4"
             title="Submit evaluation"
           >
             {saving ? "Saving..." : "Submit"}
@@ -1099,8 +1100,26 @@ const ExaminerMarking = () => {
 
       {/* MAIN LAYOUT */}
       <main className="flex-1 p-4 grid grid-cols-12 gap-4 overflow-hidden">
-        {/* LEFT: ANNOTATOR AREA */}
-        <section className="col-span-9 bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden flex flex-col">          <PDFAnnotator 
+        
+        {/* QUESTION PAPER (LEFT) */}
+        {qpPdfUrl && (
+          <section className="col-span-3 bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden flex flex-col">
+            <div className="bg-gray-900 text-white px-3 py-2 flex items-center gap-2 shrink-0">
+              <FileText size={14} className="text-teal-500" />
+              <h3 className="font-semibold text-xs uppercase tracking-wide">Question Paper</h3>
+            </div>
+            <div className="flex-1 bg-gray-100">
+              <iframe 
+                src={`${import.meta.env.VITE_API_URL.replace('/api', '')}/${qpPdfUrl.replace(/^\//, '')}`}
+                className="w-full h-full border-0"
+                title="Question Paper"
+              />
+            </div>
+          </section>
+        )}
+
+        {/* MID: ANNOTATOR AREA */}
+        <section className={`${qpPdfUrl ? 'col-span-7' : 'col-span-9'} bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden flex flex-col`}>          <PDFAnnotator 
             ref={annotatorRef}
             onAnnotationsChange={handleAnnotationsChange}
             currentQuestionId={selectedQuestion ? findQuestionById(selectedQuestion)?.questionNo : null}
@@ -1114,10 +1133,10 @@ const ExaminerMarking = () => {
         </section>
  
         {/* RIGHT: MARKING PANEL */}
-        <aside className="col-span-3 flex flex-col gap-4 overflow-hidden">
+        <aside className={`${qpPdfUrl ? 'col-span-2' : 'col-span-3'} flex flex-col gap-4 overflow-hidden`}>
           {/* CONTROL CENTER */}
           <div className="flex flex-col gap-2">
-            <div className="grid gap-2 grid-cols-1 md:grid-cols-2">
+            <div className="grid gap-2 grid-cols-2">
               <button 
                 onClick={handleSaveMarks}
                 disabled={submitted}
@@ -1133,18 +1152,10 @@ const ExaminerMarking = () => {
                 <RotateCcw size={16} /> Reset
               </button>
             </div>
-            {qpPdfUrl && (
-              <button 
-                onClick={() => setShowQpModal(true)}
-                className="flex items-center justify-center gap-2 bg-gradient-to-r from-teal-600 to-teal-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:from-teal-700 hover:to-teal-700 transition-all text-xs uppercase cursor-pointer"
-              >
-                <FileText size={16} /> View Question Paper
-              </button>
-            )}
           </div>
 
           {/* QUESTION PALETTE */}
-          <div className="bg-white rounded-lg border border-gray-200 flex-1 flex flex-col overflow-hidden shadow-md">
+          <div className="bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden shadow-md max-h-[50vh]">
             <div className="bg-gray-900 text-white px-4 py-3 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2">
                 <FileText size={16} className="text-teal-500" />
@@ -1155,6 +1166,48 @@ const ExaminerMarking = () => {
                 <span className="text-xs font-medium uppercase">Active</span>
               </div>
             </div>
+
+            {/* QUICK EDIT PANEL */}
+            {selectedQuestion && (() => {
+              const q = findQuestionById(selectedQuestion);
+              const sec = sections.find(s => s.questions?.some(sq => sq.questionId === selectedQuestion));
+              const m = questionMarks[selectedQuestion] || {};
+              if (!q) return null;
+              
+              return (
+                <div className="bg-blue-50 border-b border-blue-200 p-3 shrink-0 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-blue-900 text-sm">Q{q.questionNo}</span>
+                    <span className="text-xs text-blue-700 ml-2 tracking-wide font-medium">({sec?.name}) - Max: {q.marks}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={m.marksAwarded ?? ""}
+                      onChange={(e) => handleMarkChange(q.questionId, parseFloat(e.target.value))}
+                      disabled={submitted}
+                      className="w-16 text-center font-bold rounded shadow-sm border border-blue-300 py-1 text-sm outline-none focus:ring-2 ring-blue-400 bg-white"
+                      placeholder="0"
+                    />
+                    <button
+                      onClick={() => setSelectedQuestion(null)}
+                      className="p-1.5 rounded transition-colors border shadow-sm bg-teal-600 border-teal-700 text-white hover:bg-teal-700"
+                      title="Save & Close"
+                    >
+                      <Check size={16} />
+                    </button>
+                    <button
+                      onClick={() => setSelectedQuestion(null)}
+                      className="p-1.5 rounded transition-colors border shadow-sm bg-white border-gray-300 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                      title="Close"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
             
             <div className="flex-1 overflow-y-auto p-3 bg-gray-50 space-y-3">
               {sections.length === 0 && (
@@ -1193,67 +1246,33 @@ const ExaminerMarking = () => {
                   </div>
 
                   {expandedSections[sec.id] && (
-                    <div className="p-2 grid grid-cols-1 gap-2">
+                    <div className="p-3 grid grid-cols-5 gap-2 bg-white">
                       {sec.questions?.map((q) => {
                         const m = questionMarks[q.questionId] || {};
                         const isSelected = selectedQuestion === q.questionId;
-                        const isMarked = m.marksAwarded > 0 || m.isAttempted;
+                        const isMarked = m.marksAwarded !== undefined || m.isAttempted;
                         
                         return (
                           <div 
                             key={q.questionId}
                             onClick={() => setSelectedQuestion(q.questionId)}
-                            className={`group flex items-center justify-between p-2 rounded-lg border-2 cursor-pointer transition-all ${
+                            className={`relative aspect-square flex flex-col items-center justify-center rounded cursor-pointer transition-all shadow-sm border ${
                               isSelected 
-                                ? "bg-teal-50 border-teal-500 ring-2 ring-teal-100" 
-                                : "bg-white border-gray-200 hover:border-teal-300"
+                                ? "bg-green-800 text-white border-green-900 transform scale-105 z-10" 
+                                : isMarked
+                                  ? "bg-green-100 border-green-300 text-green-900 hover:bg-green-200"
+                                  : m.isSkipped
+                                    ? "bg-red-100 border-red-300 text-red-900 hover:bg-red-200"
+                                    : "bg-[#84cbf5] border-[#6ebbef] text-gray-900 hover:bg-[#6ebbef]"
                             }`}
                           >
-                            <div className="flex items-center gap-2">
-                              <div className={`w-8 h-8 flex items-center justify-center rounded-lg font-bold text-xs transition-colors ${
-                                isMarked 
-                                  ? "bg-green-100 text-green-700 border border-green-300" 
-                                  : isSelected ? "bg-teal-700 text-white" : "bg-gray-200 text-gray-600"
-                              }`}>
-                                {q.questionNo}
-                              </div>
-                              <div className="leading-tight">
-                                <p className={`text-xs font-semibold mb-0.5 ${isSelected ? "text-teal-900" : "text-gray-500"}`}>
-                                  Max: {q.marks}
-                                </p>
-                                {m.isSkipped && (
-                                  <span className="text-xs bg-red-100 text-red-700 px-1.5 rounded font-semibold">Skipped</span>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                step="0.5"
-                                value={m.marksAwarded || ""}
-                                onChange={(e) => handleMarkChange(q.questionId, parseFloat(e.target.value) || 0)}
-                                disabled={submitted}
-                                className={`w-16 text-center font-semibold rounded-lg border-2 py-1 text-sm outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                                  isSelected 
-                                    ? "bg-white text-teal-900 border-teal-400 focus:ring-2 ring-teal-300" 
-                                    : "bg-gray-50 text-gray-900 border-gray-300 focus:border-teal-400"
-                                } ${isMarked && !isSelected ? "border-green-300 bg-green-50" : ""}`}
-                                placeholder="0"
-                              />
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleSkipQuestion(q.questionId); }}
-                                disabled={submitted}
-                                className={`p-1.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
-                                  m.isSkipped 
-                                    ? "bg-red-100 text-red-600" 
-                                    : "text-gray-400 hover:text-red-500 hover:bg-red-50"
-                                }`}
-                                title="Skip question"
-                              >
-                                <X size={16} />
-                              </button>
-                            </div>
+                            <span className={`font-bold text-sm ${isSelected ? 'underline underline-offset-2' : ''}`}>{q.questionNo}</span>
+                            
+                            {(m.marksAwarded !== undefined || m.isAttempted || m.isSkipped) && (
+                              <span className={`text-[10px] font-bold leading-none mt-1 ${isSelected ? 'text-gray-300' : 'opacity-80'}`}>
+                                {m.isSkipped ? 'SKP' : (m.marksAwarded ?? '0')}
+                              </span>
+                            )}
                           </div>
                         );
                       })}
@@ -1337,35 +1356,6 @@ const ExaminerMarking = () => {
           </div>
         )}
       </div>
-
-      {/* QUESTION PAPER MODAL */}
-      {showQpModal && qpPdfUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-xl w-full max-w-4xl h-[85vh] overflow-hidden shadow-2xl flex flex-col">
-            <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                  <FileText className="text-teal-700" />
-                  Question Paper: {paperInfo?.paperName} ({paperInfo?.paperCode})
-                </h3>
-              </div>
-              <button 
-                onClick={() => setShowQpModal(false)}
-                className="p-2 hover:bg-gray-200 rounded-full transition-colors cursor-pointer"
-              >
-                <X size={20} className="text-gray-500" />
-              </button>
-            </div>
-            <div className="flex-1 bg-gray-100">
-              <iframe 
-                src={`${import.meta.env.VITE_API_URL.replace('/api', '')}/${qpPdfUrl.replace(/^\//, '')}`}
-                className="w-full h-full border-0"
-                title="Question Paper"
-              />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
