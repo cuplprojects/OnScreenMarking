@@ -64,7 +64,8 @@ const Home = () => {
       barCode: script.generatedBarcode || '',
       allocationId: script.allocationId || '',
       examinerId: user?.id || '',
-      cleanPdfUrl: script.cleanPdfUrl || script.answerSheetPdfUrl || ''
+      cleanPdfUrl: script.cleanPdfUrl || script.answerSheetPdfUrl || '',
+      questionPaperPdfUrl: script.questionPaperPdfUrl || ''
     }).toString();
 
     navigate(`/marking?${queryParams}`, {
@@ -73,7 +74,8 @@ const Home = () => {
         paperId: script.paperId,
         barCode: script.generatedBarcode,
         allocationId: script.allocationId,
-        cleanPdfUrl: script.cleanPdfUrl || script.answerSheetPdfUrl || ''
+        cleanPdfUrl: script.cleanPdfUrl || script.answerSheetPdfUrl || '',
+        questionPaperPdfUrl: script.questionPaperPdfUrl || ''
       }
     });
   };

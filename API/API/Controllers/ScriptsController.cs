@@ -67,7 +67,8 @@ namespace API.Controllers
                         PaperName = s.ProjectPaper?.Paper?.PaperName,
                         PaperCode = s.ProjectPaper?.Paper?.PaperCode,
                         SubjectId = subjectPaper?.SubjectId,
-                        SubjectName = subjectPaper?.Subject?.SubName
+                        SubjectName = subjectPaper?.Subject?.SubName,
+                        QuestionPaperPdfUrl = s.ProjectPaper?.QuestionPaperPdfUrl
                     };
                 }).ToList();
 
@@ -115,7 +116,8 @@ namespace API.Controllers
                     PaperName = script.ProjectPaper?.Paper?.PaperName,
                     PaperCode = script.ProjectPaper?.Paper?.PaperCode,
                     SubjectId = subjectPaper?.SubjectId,
-                    SubjectName = subjectPaper?.Subject?.SubName
+                    SubjectName = subjectPaper?.Subject?.SubName,
+                    QuestionPaperPdfUrl = script.ProjectPaper?.QuestionPaperPdfUrl
                 };
 
                 return Ok(scriptDto);
@@ -397,7 +399,8 @@ namespace API.Controllers
                         PaperName = s.ProjectPaper?.Paper?.PaperName,
                         PaperCode = s.ProjectPaper?.Paper?.PaperCode,
                         SubjectId = subjectPaper?.SubjectId,
-                        SubjectName = subjectPaper?.Subject?.SubName
+                        SubjectName = subjectPaper?.Subject?.SubName,
+                        QuestionPaperPdfUrl = s.ProjectPaper?.QuestionPaperPdfUrl
                     };
                 }).ToList();
 
@@ -442,7 +445,8 @@ namespace API.Controllers
                     TotalMarks = s.TotalMarks,
                     Percentage = s.Percentage,
                     Remarks = s.Remarks,
-                    SubmittedAt = s.SubmittedAt
+                    SubmittedAt = s.SubmittedAt,
+                    QuestionPaperPdfUrl = s.ProjectPaper?.QuestionPaperPdfUrl
                 }).ToList();
 
                 return Ok(scriptDtos);

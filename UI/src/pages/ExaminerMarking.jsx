@@ -114,6 +114,7 @@ const ExaminerMarking = () => {
   const rollNo = location.state?.rollNo || queryParams.get('rollNo');
   const subject = location.state?.subject || queryParams.get('subject');
   const cleanPdfUrl = location.state?.cleanPdfUrl || queryParams.get('cleanPdfUrl');
+  const qpPdfUrl = location.state?.questionPaperPdfUrl || queryParams.get('questionPaperPdfUrl');
   const apiBaseUrl = import.meta.env.VITE_API_URL;
   const pdfUrl = scriptId ? `${apiBaseUrl}/Scripts/${scriptId}/pdf` : null;
 
@@ -1132,7 +1133,7 @@ const ExaminerMarking = () => {
                 <RotateCcw size={16} /> Reset
               </button>
             </div>
-            {paperInfo?.questionPaperPdfUrl && (
+            {qpPdfUrl && (
               <button 
                 onClick={() => setShowQpModal(true)}
                 className="flex items-center justify-center gap-2 bg-gradient-to-r from-teal-600 to-teal-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:from-teal-700 hover:to-teal-700 transition-all text-xs uppercase cursor-pointer"
@@ -1338,14 +1339,14 @@ const ExaminerMarking = () => {
       </div>
 
       {/* QUESTION PAPER MODAL */}
-      {showQpModal && paperInfo?.questionPaperPdfUrl && (
+      {showQpModal && qpPdfUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-xl w-full max-w-4xl h-[85vh] overflow-hidden shadow-2xl flex flex-col">
             <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                   <FileText className="text-teal-700" />
-                  Question Paper: {paperInfo.paperName} ({paperInfo.paperCode})
+                  Question Paper: {paperInfo?.paperName} ({paperInfo?.paperCode})
                 </h3>
               </div>
               <button 
@@ -1357,7 +1358,7 @@ const ExaminerMarking = () => {
             </div>
             <div className="flex-1 bg-gray-100">
               <iframe 
-                src={`${import.meta.env.VITE_API_URL.replace('/api', '')}/${paperInfo.questionPaperPdfUrl.replace(/^\//, '')}`}
+                src={`${import.meta.env.VITE_API_URL.replace('/api', '')}/${qpPdfUrl.replace(/^\//, '')}`}
                 className="w-full h-full border-0"
                 title="Question Paper"
               />

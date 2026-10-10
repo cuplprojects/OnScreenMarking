@@ -19,6 +19,7 @@ namespace API.Models.DTOs
         public string? PaperCode { get; set; }
         public string? SubjectName { get; set; }
         public int? SubjectId { get; set; }
+        public string? QuestionPaperPdfUrl { get; set; }
     }
 
     public class AssignScriptRequest
