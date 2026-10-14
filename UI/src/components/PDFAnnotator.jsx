@@ -7,7 +7,7 @@ import message from '../services/messageService';
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNextQuestion, maxMarks, sections = [], pdfUrl, scriptId, readOnly, onToggleQp, isQpOpen, onTotalPagesChange, canAttemptQuestion }, ref) => {
+const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNextQuestion, maxMarks, sections = [], pdfUrl, scriptId, readOnly, onToggleQp, isQpOpen, onTotalPagesChange, canAttemptQuestion, questionMarks = {} }, ref) => {
   const canvasRef = useRef(null);
   const canvasContainerRef = useRef(null);
   const panStateRef = useRef({ isPanning: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
@@ -46,6 +46,51 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
   }, [pdfPages.length, onTotalPagesChange]);
 
   // Expose PDF generation and uploading to the parent component
+  // Helper function to check if a position overlaps with existing annotations
+  const findNonOverlappingPosition = (initialX, initialY, pageNum, minDistance = 100) => {
+    let x = initialX;
+    let y = initialY;
+    const maxAttempts = 20;
+    let attempt = 0;
+
+    // Get all annotations on the same page that have coordinates
+    const pageAnnotations = annotations.filter(a => 
+      a.page === pageNum && a.x !== undefined && a.y !== undefined
+    );
+
+    while (attempt < maxAttempts) {
+      let hasOverlap = false;
+
+      // Check distance to all existing annotations
+      for (const anno of pageAnnotations) {
+        const distance = Math.sqrt(Math.pow(anno.x - x, 2) + Math.pow(anno.y - y, 2));
+        if (distance < minDistance) {
+          hasOverlap = true;
+          break;
+        }
+      }
+
+      if (!hasOverlap) {
+        return { x, y }; // Found a good position
+      }
+
+      // Try a new position in a spiral pattern
+      attempt++;
+      const angle = (attempt * 137.5) * (Math.PI / 180); // Golden angle for better distribution
+      const radius = 30 * attempt;
+      x = initialX + radius * Math.cos(angle);
+      y = initialY + radius * Math.sin(angle);
+
+      // Keep within canvas bounds
+      const maxWidth = canvasSize.width || 800;
+      const maxHeight = canvasSize.height || 600;
+      x = Math.max(50, Math.min(maxWidth - 50, x));
+      y = Math.max(50, Math.min(maxHeight - 50, y));
+    }
+
+    return { x, y }; // Return last attempt if all fail
+  };
+
   useImperativeHandle(ref, () => ({
     generateEvaluatedPdf: async (mId) => {
       try {
@@ -125,10 +170,32 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
         sec.questions?.some(q => q.questionNo === qNo)
       )?.name || (sections[0]?.name || '');
 
+      // Check if an annotation for this question already exists
+      const existing = annotations.find(a => 
+        String(a.questionId) === String(qNo) && (a.marks !== undefined || a.isSkipped)
+      );
+
+      if (existing) {
+        if (existing.page !== undefined && existing.page !== currentPage) {
+          setCurrentPage(existing.page);
+        }
+        setPendingAnno(existing);
+        setMarkInput(existing.marks !== undefined ? String(existing.marks) : '');
+        setStepName(existing.stepName || activeSectionName);
+        setIsSkipped(!!existing.isSkipped);
+        setShowMarkPopup(true);
+        return;
+      }
+
+      // Calculate a good position that doesn't overlap with existing annotations
+      const initialX = (canvasSize.width || 800) / 2;
+      const initialY = (canvasSize.height || 600) / 3;
+      const { x, y } = findNonOverlappingPosition(initialX, initialY, currentPage);
+
       const centerAnno = {
         type: 'tick',
-        x: (canvasSize.width || 800) / 2,
-        y: (canvasSize.height || 600) / 3,
+        x,
+        y,
         color: '#00AA00',
         lineWidth: 2,
         questionId: qNo,
@@ -149,7 +216,9 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
         const saved = sessionStorage.getItem(`annotations_${scriptId}`);
         if (saved) {
           try {
-            setAnnotations(JSON.parse(saved));
+            const parsed = JSON.parse(saved);
+            const cleaned = cleanAndDeduplicateAnnotations(parsed);
+            setAnnotations(cleaned);
           } catch (e) {}
         }
       }
@@ -170,6 +239,34 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
     }, 150);
   };
 
+  // Ensure non-mark annotations (pen/text) never carry questionId badges,
+  // and ensure only ONE allocated marks annotation exists per question.
+  const cleanAndDeduplicateAnnotations = (annos) => {
+    if (!Array.isArray(annos)) return [];
+    const seenQuestionIds = new Set();
+    const result = [];
+    // Process backwards to keep only the latest mark annotation for each questionId
+    for (let i = annos.length - 1; i >= 0; i--) {
+      const item = { ...annos[i] };
+      if (item.type === 'pen' || item.type === 'text') {
+        delete item.questionId;
+        delete item.stepName;
+        result.push(item);
+      } else if (item.questionId !== undefined) {
+        // ANY annotation with a questionId should be deduplicated (whether it has marks or not)
+        const qKey = String(item.questionId);
+        if (!seenQuestionIds.has(qKey)) {
+          seenQuestionIds.add(qKey);
+          result.push(item);
+        }
+        // Older duplicates of this question mark are omitted
+      } else {
+        result.push(item);
+      }
+    }
+    return result.reverse();
+  };
+
   // Helper to save annotations to storage
   const saveAnnotationsToStorage = (updatedAnnos) => {
     if (scriptId) {
@@ -184,8 +281,10 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          setAnnotations(parsed);
-          onAnnotationsChange?.(parsed);
+          const cleaned = cleanAndDeduplicateAnnotations(parsed);
+          setAnnotations(cleaned);
+          saveAnnotationsToStorage(cleaned);
+          onAnnotationsChange?.(cleaned);
         } catch (e) {
           console.error("Failed to parse annotations from sessionStorage:", e);
         }
@@ -366,20 +465,35 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
   };
 
   const drawSummaryStamp = (ctx, drawZoom) => {
-    // Aggregate section-wise marks from current annotations
+    // Aggregate section-wise marks using questionMarks (capped per-question values)
+    // This ensures Section A (multi-annotation questions) shows correct totals
     const secTotals = {};
     sections.forEach(sec => {
       secTotals[sec.name] = 0;
     });
-    
-    annotations.forEach(anno => {
-      if (anno.marks !== undefined && !anno.isSkipped) {
-        const sName = anno.stepName || (sections[0]?.name || '');
-        if (sName) {
-          secTotals[sName] = (secTotals[sName] || 0) + (anno.marks || 0);
+
+    const hasQuestionMarks = questionMarks && Object.keys(questionMarks).length > 0;
+
+    if (hasQuestionMarks) {
+      // Use the authoritative questionMarks state (same source as right-hand panel)
+      sections.forEach(sec => {
+        const sectionTotal = (sec.questions || []).reduce((sum, q) => {
+          const mark = questionMarks[q.questionId];
+          return sum + (mark && !mark.isSkipped ? mark.marksAwarded || 0 : 0);
+        }, 0);
+        secTotals[sec.name] = sectionTotal;
+      });
+    } else {
+      // Fallback: aggregate from annotations (may over-count for multi-annotation questions)
+      annotations.forEach(anno => {
+        if (anno.marks !== undefined && !anno.isSkipped) {
+          const sName = anno.stepName || (sections[0]?.name || '');
+          if (sName) {
+            secTotals[sName] = (secTotals[sName] || 0) + (anno.marks || 0);
+          }
         }
-      }
-    });
+      });
+    }
 
     const grandTotal = Object.values(secTotals).reduce((sum, v) => sum + v, 0);
 
@@ -483,8 +597,8 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
         break;
     }
  
-    // Draw question tag label for ANY annotation that has a questionId
-    if (anno.questionId) {
+    // Draw question tag label ONLY for annotations that represent allocated marks / evaluation
+    if (anno.questionId && (anno.marks !== undefined || anno.isSkipped)) {
       ctx.save();
       ctx.font = `bold ${11 * drawZoom}px Arial`;
       ctx.textBaseline = 'alphabetic';
@@ -584,13 +698,6 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
   const startDrawing = (e) => {
     if (!canvasRef.current || readOnly) return;
     if (e.button !== 0) return; // Ignore right-clicks and middle-clicks
-    
-    // Determine active question (only required for pen mode)
-    const activeQId = currentQuestionId || sections[0]?.questions?.[0]?.questionNo;
-    if (!activeQId && tool === 'pen') {
-      message.warning("Please select a question from the right panel before you begin marking or annotating!");
-      return;
-    }
 
     const rect = canvasRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / zoom;
@@ -723,7 +830,6 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
         points: currentPath,
         color,
         lineWidth,
-        questionId: currentQuestionId,
         page: currentPage,
         id: Date.now()
       };
@@ -773,7 +879,18 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       sec.questions?.some(q => q.questionNo === activeQId)
     )?.name || (sections[0]?.name || '');
 
-    const newAnno = {
+    // Check if an annotation already exists for this question
+    const existing = annotations.find(a => 
+      String(a.questionId) === String(activeQId) && (a.marks !== undefined || a.isSkipped)
+    );
+
+    // If already exists, update its position to right-click location and open to edit
+    const targetAnno = existing ? {
+      ...existing,
+      x, y,
+      page: currentPage,
+      stepName: activeSectionName
+    } : {
       type: 'tick',
       x, y,
       color: '#00AA00',
@@ -784,11 +901,67 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       id: Date.now()
     };
     
-    setPendingAnno(newAnno);
+    setPendingAnno(targetAnno);
     setShowMarkPopup(true);
-    setMarkInput('');
+    setMarkInput(existing && existing.marks !== undefined ? String(existing.marks) : '');
     setStepName(activeSectionName);
+    setIsSkipped(existing ? !!existing.isSkipped : false);
+  };
+
+  const handleDoubleClick = (e) => {
+    if (!canvasRef.current || readOnly) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / zoom;
+    const y = (e.clientY - rect.top) / zoom;
+
+    const item = [...annotations].reverse().find(anno => {
+      if (anno.page !== undefined && anno.page !== currentPage) return false;
+      if (anno.x !== undefined && anno.questionId && (anno.marks !== undefined || anno.isSkipped)) {
+        const dist = Math.sqrt(Math.pow(anno.x - x, 2) + Math.pow(anno.y - y, 2));
+        return dist < 40;
+      }
+      return false;
+    });
+
+    if (item) {
+      setPendingAnno(item);
+      setMarkInput(item.marks !== undefined ? String(item.marks) : '');
+      setIsSkipped(!!item.isSkipped);
+      setStepName(item.stepName || sections[0]?.name || '');
+      setShowMarkPopup(true);
+    }
+  };
+
+  const commitQuestionAnnotation = (finalAnno) => {
+    if (!finalAnno) return;
+
+    // Check if an annotation for this question already exists
+    const existingIdx = annotations.findIndex(a => 
+      a.id === finalAnno.id || 
+      (a.questionId !== undefined && String(a.questionId) === String(finalAnno.questionId) && (a.marks !== undefined || a.isSkipped))
+    );
+
+    let updated;
+    if (existingIdx !== -1) {
+      updated = [...annotations];
+      updated[existingIdx] = finalAnno;
+    } else {
+      updated = [...annotations, finalAnno];
+    }
+
+    const cleaned = cleanAndDeduplicateAnnotations(updated);
+    setAnnotations(cleaned);
+    saveAnnotationsToStorage(cleaned);
+    onAnnotationsChange?.(cleaned);
+    setPendingAnno(null);
+    setShowMarkPopup(false);
+    setMarkInput('');
     setIsSkipped(false);
+
+    // Auto advance to next question if successful
+    if (onNextQuestion) {
+      onNextQuestion();
+    }
   };
 
   const getMarkOptions = () => {
@@ -815,19 +988,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
         type: isSkipped ? 'cross' : (finalMark > 0 ? 'tick' : 'cross'),
         color: isSkipped ? '#FF6B6B' : (finalMark > 0 ? '#00AA00' : '#FF0000')
       };
-      const updated = [...annotations, finalAnno];
-      setAnnotations(updated);
-      saveAnnotationsToStorage(updated);
-      onAnnotationsChange?.(updated);
-      setPendingAnno(null);
-      setShowMarkPopup(false);
-      setMarkInput('');
-      setIsSkipped(false);
-      
-      // Auto advance to next question if successful
-      if (onNextQuestion) {
-        onNextQuestion();
-      }
+      commitQuestionAnnotation(finalAnno);
     }
   };
 
@@ -848,7 +1009,6 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       y: textPosition.y,
       color,
       lineWidth,
-      questionId: currentQuestionId,
       page: currentPage,
       id: Date.now()
     };
@@ -1180,13 +1340,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
                             type: m > 0 ? 'tick' : 'cross',
                             color: m > 0 ? '#00AA00' : '#FF0000'
                           };
-                          const updated = [...annotations, finalAnno];
-                          setAnnotations(updated);
-                          saveAnnotationsToStorage(updated);
-                          onAnnotationsChange?.(updated);
-                          setPendingAnno(null);
-                          setShowMarkPopup(false);
-                          if (onNextQuestion) onNextQuestion();
+                          commitQuestionAnnotation(finalAnno);
                         }}
                         className={`text-center py-2 text-sm font-semibold border rounded transition-colors ${
                           isBlocked
@@ -1214,14 +1368,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
                       type: 'cross',
                       color: '#FF6B6B'
                     };
-                    const updated = [...annotations, finalAnno];
-                    setAnnotations(updated);
-                    saveAnnotationsToStorage(updated);
-                    onAnnotationsChange?.(updated);
-                    setPendingAnno(null);
-                    setShowMarkPopup(false);
-                    setIsSkipped(false);
-                    if (onNextQuestion) onNextQuestion();
+                    commitQuestionAnnotation(finalAnno);
                   }}
                   className="flex-1 text-sm bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-lg font-semibold transition-colors"
                 >
@@ -1232,8 +1379,25 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
                   <input
                     type="number"
                     value={markInput}
-                    onChange={(e) => setMarkInput(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Allow empty string for clearing
+                      if (value === '') {
+                        setMarkInput('');
+                        return;
+                      }
+                      // Parse and validate against maxMarks
+                      const numValue = parseFloat(value);
+                      if (!isNaN(numValue)) {
+                        // Cap at maxMarks
+                        const cappedValue = Math.min(numValue, maxMarks);
+                        setMarkInput(cappedValue.toString());
+                      }
+                    }}
                     placeholder="Custom"
+                    min="0"
+                    max={maxMarks}
+                    step="0.5"
                     className="w-20 min-w-0 flex-1 text-sm p-2 border border-gray-300 rounded-lg outline-none focus:border-teal-500"
                     autoFocus
                     onKeyDown={(e) => e.key === 'Enter' && submitMark()}
@@ -1306,6 +1470,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
             onMouseUp={stopDrawing}
             onMouseLeave={stopDrawing}
             onContextMenu={handleContextMenu}
+            onDoubleClick={handleDoubleClick}
             style={{ width: canvasSize.width * zoom, height: canvasSize.height * zoom }}
             className={`flex-shrink-0 max-w-none bg-white shadow-md rounded-lg ${tool === 'move' ? 'cursor-move' : 'cursor-crosshair'}`}
           />
