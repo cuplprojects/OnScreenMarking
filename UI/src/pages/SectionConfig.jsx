@@ -298,9 +298,18 @@ export default function SectionConfig() {
 
   const handleSaveSection = async () => {
     if (questions.some(q => !q.type)) {
-      message.warning('Please select a type for all questions');
+      message.warning('Please select a type for all questions', 8000);
+      const firstMissingIdx = questions.findIndex(q => !q.type);
+      if (firstMissingIdx !== -1) {
+        const el = document.getElementById(`question-type-select-${firstMissingIdx}`);
+        if (el) {
+          el.focus();
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
       return;
     }
+
 
     const expectedTotalMarks = parseFloat(sectionForm.totalMarks) || 0;
 
@@ -852,6 +861,7 @@ export default function SectionConfig() {
                                 </td>
                                 <td className="px-4 py-2">
                                   <select
+                                    id={`question-type-select-${idx}`}
                                     value={q.type}
                                     onChange={(e) => handleQuestionChange(idx, 'type', e.target.value)}
                                     className={`w-full bg-gray-50 px-2 py-1.5 rounded-lg border text-sm outline-none ${!q.type ? 'border-red-200' : 'border-gray-200 focus:ring-1 focus:ring-teal-500'

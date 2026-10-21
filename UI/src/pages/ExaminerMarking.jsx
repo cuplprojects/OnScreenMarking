@@ -140,18 +140,18 @@ const ExaminerMarking = () => {
   const consecutiveMismatchesRef = useRef(0);
   const [sectionAttemptCounts, setSectionAttemptCounts] = useState({}); // Track attempted questions per section
   const [submitted, setSubmitted] = useState(false);
-  const [scriptStatus, setScriptStatus] = useState(null); // Track script status from API
-  const isScriptCompleted = scriptStatus === 'completed'; // Script is locked if status is completed
-  // Only lock interface if explicitly read-only OR script is completed (not just submitted)
-  const isEffectiveReadOnly = isReadOnly || isScriptCompleted; 
+  const [markingStatus, setMarkingStatus] = useState(null); // Track status from markings table
+  // Marking is locked/submitted if status in markings table is 'submitted'
+  const isMarkingSubmitted = markingStatus === 'submitted' || submitted; 
+  const isEffectiveReadOnly = isReadOnly || isMarkingSubmitted; 
   const [saving, setSaving] = useState(false);
 
-  // Debug log for script status
+  // Debug log for marking status
   useEffect(() => {
-    console.log('Script Status Changed:', scriptStatus);
-    console.log('Is Script Completed:', isScriptCompleted);
+    console.log('Marking Status Changed:', markingStatus);
+    console.log('Is Marking Submitted:', isMarkingSubmitted);
     console.log('Is Effective ReadOnly:', isEffectiveReadOnly);
-  }, [scriptStatus, isScriptCompleted, isEffectiveReadOnly]);
+  }, [markingStatus, isMarkingSubmitted, isEffectiveReadOnly]);
   const [annotations, setAnnotations] = useState([]);
   const [selectedQuestion, setSelectedQuestion] = useState(null);
   const [showRemarksModal, setShowRemarksModal] = useState(false);
@@ -607,34 +607,25 @@ const ExaminerMarking = () => {
         return;
       }
 
-      // First, check the script status
+      // Fetch marking status from markings table
       if (scriptId) {
-        console.log('Fetching script status for scriptId:', scriptId); // Debug log
+        console.log('Fetching marking status for scriptId from markings table:', scriptId);
         try {
-          // Use apiCall helper which handles auth and base URL correctly
-          const scriptData = await apiCall(`/scripts/${scriptId}`, { 
-            hideErrorToast: true // Don't show error toast, we'll handle it
-          });
-          
-          console.log('Script Data:', scriptData); // Debug log
-          console.log('Script Status:', scriptData.status); // Debug log
-          
-          const status = scriptData.status?.toLowerCase(); // Handle case insensitivity
-          setScriptStatus(status);
-          
-          // Log if script is completed (for debugging)
-          if (status === "completed") {
-            console.log('Script is completed - interface will be locked'); // Debug log
+          const existingMarking = await markingService.getMarkingByScript(scriptId);
+          console.log('Marking Data from Markings Table:', existingMarking);
+          if (existingMarking?.status) {
+            const mStatus = existingMarking.status?.toLowerCase();
+            setMarkingStatus(mStatus);
+            if (mStatus === "submitted") {
+              setSubmitted(true);
+            }
           }
         } catch (err) {
-          console.error('Failed to fetch script status:', err);
-          // Don't fail the whole process if we can't get script status
+          console.log('No prior marking found by scriptId or failed to fetch:', err);
         }
-      } else {
-        console.error('No scriptId available to fetch status');
       }
 
-      // Create a new marking session (or retrieve existing)
+      // Create a new marking session (or retrieve existing) from markings table
       const markingResponse = await markingService.createMarking(
         allocationId,
         examinerId,
@@ -647,9 +638,13 @@ const ExaminerMarking = () => {
         if (markingResponse.remarks) {
           setRemarks(markingResponse.remarks);
         }
-        // Only set submitted to true if marking is submitted
-        if (markingResponse.status === "submitted") {
-          setSubmitted(true);
+        const mStatus = markingResponse.status?.toLowerCase();
+        if (mStatus) {
+          setMarkingStatus(mStatus);
+          if (mStatus === "submitted") {
+            setSubmitted(true);
+            console.log('Marking is submitted - buttons and annotation tools will not be rendered');
+          }
         }
         return markingResponse.id;
       }
@@ -1045,7 +1040,7 @@ const ExaminerMarking = () => {
 
   // Auto-save draft marks
   useEffect(() => {
-    if (!loading && !submitted && Object.keys(questionMarks).length > 0) {
+    if (!loading && !isMarkingSubmitted && Object.keys(questionMarks).length > 0) {
       const timer = setTimeout(async () => {
         try {
           await markingService.saveDraftMarks(scriptId, examinerId, questionMarks);
@@ -1182,19 +1177,18 @@ const ExaminerMarking = () => {
       // Submit the marking
       await markingService.submitMarking(markingId);
       setSubmitted(true);
+      setMarkingStatus('submitted');
       
-      // Fetch updated script status to show "Submitted (Locked)" badge
-      if (scriptId) {
-        try {
-          const scriptData = await apiCall(`/scripts/${scriptId}`, { 
-            hideErrorToast: true 
-          });
-          const status = scriptData.status?.toLowerCase();
-          setScriptStatus(status);
-          console.log('Script status after submit:', status);
-        } catch (err) {
-          console.error('Failed to refresh script status after submit:', err);
+      // Refresh updated marking status from markings table
+      try {
+        const updatedMarking = await markingService.getMarking(markingId);
+        if (updatedMarking?.status) {
+          const status = updatedMarking.status?.toLowerCase();
+          setMarkingStatus(status);
+          console.log('Marking status after submit:', status);
         }
+      } catch (err) {
+        console.error('Failed to refresh marking status after submit:', err);
       }
       
       showStatus('success', `Submitted! Total: ${totalObtained} / ${paperInfo?.maxMarks || 100}`);
@@ -1269,7 +1263,7 @@ const ExaminerMarking = () => {
   const allSectionsSatisfied = pendingSectionRequirements.length === 0;
 
   // Build tooltip reason — show the most blocking reason first
-  const submitDisabledReason = isScriptCompleted
+  const submitDisabledReason = isMarkingSubmitted
     ? 'This script has been submitted and is locked'
     : !allSectionsSatisfied
     ? `Section requirements pending before submitting: ${pendingSectionRequirements.join('; ')}`
@@ -1281,7 +1275,7 @@ const ExaminerMarking = () => {
     ? 'This submission is read-only'
     : '';
 
-  const isSubmitDisabled = isScriptCompleted || isEffectiveReadOnly || saving || !allPagesAnnotated || !allSectionsSatisfied;
+  const isSubmitDisabled = isMarkingSubmitted || isEffectiveReadOnly || saving || !allPagesAnnotated || !allSectionsSatisfied;
 
 
   if (loading) {
@@ -1369,7 +1363,7 @@ const ExaminerMarking = () => {
             </p>
           </div>
 
-          {isScriptCompleted && (
+          {isMarkingSubmitted && (
             <div className="flex items-center gap-1.5 bg-amber-100 border-2 border-amber-400 text-amber-900 px-3 py-1.5 rounded-lg text-xs font-extrabold shadow-sm">
               <Lock size={14} className="text-amber-700" />
               <span>Submitted (Locked)</span>
@@ -1385,7 +1379,7 @@ const ExaminerMarking = () => {
             </p>
           </div>
           
-          {!isScriptCompleted && (
+          {!isMarkingSubmitted && (
             <button
               onClick={!isSubmitDisabled ? handleSubmitMarking : undefined}
               disabled={isSubmitDisabled}
@@ -1488,7 +1482,7 @@ const ExaminerMarking = () => {
             pdfUrl={pdfUrl}
             scriptId={scriptId}
             readOnly={isEffectiveReadOnly}
-            showAnnotationTools={!isScriptCompleted}
+            showAnnotationTools={!isMarkingSubmitted}
             canAttemptQuestion={canAttemptQuestion}
             questionMarks={questionMarks}
             onToggleQp={() => {
@@ -1504,8 +1498,8 @@ const ExaminerMarking = () => {
 
         {/* RIGHT: MARKING PANEL */}
         <aside className="w-56 shrink-0 flex flex-col gap-2.5 max-h-full self-start overflow-hidden">
-          {/* CONTROL CENTER - Only show if script is not completed */}
-          {!isScriptCompleted && (
+          {/* CONTROL CENTER - Only show if marking is not submitted */}
+          {!isMarkingSubmitted && (
             <div className="flex flex-col gap-2 shrink-0">
               <div className="grid gap-2 grid-cols-2">
                 <button 
@@ -1601,8 +1595,8 @@ const ExaminerMarking = () => {
                             key={q.questionId}
                             onClick={() => {
                               setSelectedQuestion(q.questionId);
-                              if (isCompleted) {
-                                // Already completed question: jump to page without opening marks allotment modal
+                              if (isCompleted || isEffectiveReadOnly) {
+                                // Already completed question or read-only: jump to page without opening marks allotment modal
                                 annotatorRef.current?.navigateToQuestionPage?.(q.questionNo);
                               } else {
                                 // Unattempted question: open annotator mark allotment popup
