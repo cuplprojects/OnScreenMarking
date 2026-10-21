@@ -423,5 +423,164 @@ namespace API.Controllers
             var hashOfInput = HashPassword(password);
             return hashOfInput == hash;
         }
+
+        // OTP Storage - In production, use Redis or database
+        private static Dictionary<string, (string Otp, DateTime Expiry)> _emailOtps = new Dictionary<string, (string, DateTime)>();
+        private static Dictionary<string, (string Otp, DateTime Expiry)> _phoneOtps = new Dictionary<string, (string, DateTime)>();
+
+        [HttpPost("send-email-otp")]
+        public async Task<ActionResult> SendEmailOtp([FromBody] SendOtpRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.Email))
+                {
+                    return BadRequest(new { success = false, message = "Email is required" });
+                }
+
+                // Check if email already exists
+                if (_context.Users.Any(u => u.Email == request.Email))
+                {
+                    return BadRequest(new { success = false, message = "Email already registered" });
+                }
+
+                // Generate 6-digit OTP
+                var otp = new Random().Next(100000, 999999).ToString();
+                var expiry = DateTime.UtcNow.AddMinutes(10);
+
+                // Store OTP
+                _emailOtps[request.Email] = (otp, expiry);
+
+                // Send OTP via email
+                try
+                {
+                    await _emailService.SendOtpEmailAsync(request.Email, otp);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to send OTP email: {ex.Message}");
+                    return StatusCode(500, new { success = false, message = "Failed to send OTP email" });
+                }
+
+                return Ok(new { success = true, message = "OTP sent to email successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("verify-email-otp")]
+        public ActionResult VerifyEmailOtp([FromBody] VerifyOtpRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Otp))
+                {
+                    return BadRequest(new { success = false, message = "Email and OTP are required" });
+                }
+
+                if (!_emailOtps.ContainsKey(request.Email))
+                {
+                    return BadRequest(new { success = false, message = "No OTP found for this email" });
+                }
+
+                var (storedOtp, expiry) = _emailOtps[request.Email];
+
+                if (DateTime.UtcNow > expiry)
+                {
+                    _emailOtps.Remove(request.Email);
+                    return BadRequest(new { success = false, message = "OTP has expired" });
+                }
+
+                if (storedOtp != request.Otp)
+                {
+                    return BadRequest(new { success = false, message = "Invalid OTP" });
+                }
+
+                // Remove OTP after successful verification
+                _emailOtps.Remove(request.Email);
+
+                return Ok(new { success = true, message = "Email verified successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("send-phone-otp")]
+        public async Task<ActionResult> SendPhoneOtp([FromBody] SendPhoneOtpRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.Phone))
+                {
+                    return BadRequest(new { success = false, message = "Phone number is required" });
+                }
+
+                // Check if phone already exists
+                if (_context.Users.Any(u => u.Phone == request.Phone))
+                {
+                    return BadRequest(new { success = false, message = "Phone number already registered" });
+                }
+
+                // Generate 6-digit OTP
+                var otp = new Random().Next(100000, 999999).ToString();
+                var expiry = DateTime.UtcNow.AddMinutes(10);
+
+                // Store OTP
+                _phoneOtps[request.Phone] = (otp, expiry);
+
+                // TODO: Integrate SMS service (Twilio, AWS SNS, etc.)
+                // For now, just log the OTP
+                Console.WriteLine($"Phone OTP for {request.Phone}: {otp}");
+
+                return Ok(new { success = true, message = "OTP sent to phone successfully", otp = otp }); // Remove otp in production
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("verify-phone-otp")]
+        public ActionResult VerifyPhoneOtp([FromBody] VerifyPhoneOtpRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.Phone) || string.IsNullOrWhiteSpace(request.Otp))
+                {
+                    return BadRequest(new { success = false, message = "Phone and OTP are required" });
+                }
+
+                if (!_phoneOtps.ContainsKey(request.Phone))
+                {
+                    return BadRequest(new { success = false, message = "No OTP found for this phone number" });
+                }
+
+                var (storedOtp, expiry) = _phoneOtps[request.Phone];
+
+                if (DateTime.UtcNow > expiry)
+                {
+                    _phoneOtps.Remove(request.Phone);
+                    return BadRequest(new { success = false, message = "OTP has expired" });
+                }
+
+                if (storedOtp != request.Otp)
+                {
+                    return BadRequest(new { success = false, message = "Invalid OTP" });
+                }
+
+                // Remove OTP after successful verification
+                _phoneOtps.Remove(request.Phone);
+
+                return Ok(new { success = true, message = "Phone verified successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
     }
 }

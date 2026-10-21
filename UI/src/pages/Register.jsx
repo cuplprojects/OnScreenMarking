@@ -13,6 +13,8 @@ import {
   BookOpen,
   AlertCircle,
   Loader,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import authService from "../services/authService";
 import universityService from "../services/universityService";
@@ -87,6 +89,17 @@ const Register = () => {
   const [registered, setRegistered] = useState(false);
 
   const [universities, setUniversities] = useState([]);
+
+  // OTP verification states
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [emailOtp, setEmailOtp] = useState("");
+  const [phoneOtp, setPhoneOtp] = useState("");
+  const [showEmailOtp, setShowEmailOtp] = useState(false);
+  const [showPhoneOtp, setShowPhoneOtp] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -631,6 +644,104 @@ const Register = () => {
     }
   };
 
+  // OTP Functions
+  const handleSendEmailOtp = async () => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!formData.email || !emailRegex.test(formData.email)) {
+      message.error("Please enter a valid email address first");
+      return;
+    }
+
+    try {
+      setOtpLoading(true);
+      const response = await authService.sendEmailOtp(formData.email);
+      message.success("OTP sent to your email successfully");
+      setShowEmailOtp(true);
+      setResendTimer(60);
+    } catch (err) {
+      message.error(err.message || "Failed to send OTP");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleVerifyEmailOtp = async () => {
+    if (!emailOtp || emailOtp.length !== 6) {
+      message.error("Please enter a valid 6-digit OTP");
+      return;
+    }
+
+    try {
+      setOtpLoading(true);
+      await authService.verifyEmailOtp(formData.email, emailOtp);
+      message.success("Email verified successfully!");
+      setEmailVerified(true);
+      setShowEmailOtp(false);
+      setEmailOtp("");
+    } catch (err) {
+      message.error(err.message || "Invalid OTP");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleSendPhoneOtp = async () => {
+    const phoneRegex = /^[0-9]{10}$/;
+    if (!formData.phone || !phoneRegex.test(formData.phone)) {
+      message.error("Please enter a valid 10-digit phone number first");
+      return;
+    }
+
+    try {
+      setOtpLoading(true);
+      const response = await authService.sendPhoneOtp(formData.phone);
+      setShowPhoneOtp(true);
+      setResendTimer(60);
+      
+      // For development - show OTP since SMS is not configured
+      if (response.otp) {
+        console.log("Phone OTP:", response.otp);
+        message.success(`OTP sent! (Dev Mode: ${response.otp})`);
+        // Also show an alert for easier testing
+        alert(`Phone OTP for testing: ${response.otp}\n\nNote: In production, this will be sent via SMS.`);
+      } else {
+        message.success("OTP sent to your phone successfully");
+      }
+    } catch (err) {
+      message.error(err.message || "Failed to send OTP");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleVerifyPhoneOtp = async () => {
+    if (!phoneOtp || phoneOtp.length !== 6) {
+      message.error("Please enter a valid 6-digit OTP");
+      return;
+    }
+
+    try {
+      setOtpLoading(true);
+      await authService.verifyPhoneOtp(formData.phone, phoneOtp);
+      message.success("Phone verified successfully!");
+      setPhoneVerified(true);
+      setShowPhoneOtp(false);
+      setPhoneOtp("");
+    } catch (err) {
+      message.error(err.message || "Invalid OTP");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  // Resend timer
+  useEffect(() => {
+    if (resendTimer > 0) {
+      const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendTimer]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -672,6 +783,18 @@ const Register = () => {
       );
       return;
     }
+
+    // Check email and phone verification
+    if (!emailVerified) {
+      setError("Please verify your email address before submitting.");
+      return;
+    }
+
+    if (!phoneVerified) {
+      setError("Please verify your phone number before submitting.");
+      return;
+    }
+
     if (!formData.profileImage) {
       setError("Please capture or upload a profile picture.");
       return;
@@ -726,8 +849,8 @@ const Register = () => {
   if (registered) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-xl shadow-2xl text-center animate-fade-in p-4 md:p-8">
-          <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-green-500 shadow-md">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-2xl text-center animate-fade-in p-4 md:p-8">
+          <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-green-500 shadow-md">
             <CheckCircle className="text-green-600" size={48} />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -762,41 +885,41 @@ const Register = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-2xl w-full bg-white rounded-xl shadow-2xl sm:p-10 p-4 md:p-8">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-teal-600 to-teal-800 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <BookOpen className="text-white" size={32} />
+    <div className="min-h-screen bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center py-4 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl w-full bg-white rounded-lg shadow-2xl sm:p-6 p-4 md:p-5 my-4">
+        <div className="text-center mb-4">
+          <div className="w-12 h-12 bg-gradient-to-br from-teal-600 to-teal-800 rounded-lg flex items-center justify-center mx-auto mb-2 shadow-lg">
+            <BookOpen className="text-white" size={24} />
           </div>
-          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
+          <h1 className="text-xl font-extrabold text-gray-900 tracking-tight">
             Examiner Self Registration
           </h1>
-          <p className="text-gray-600 mt-2">
+          <p className="text-gray-600 mt-0.5 text-xs">
             Join as an On-Screen Marking Examiner
           </p>
         </div>
 
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-3 text-sm">
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-2.5 rounded-lg flex items-center gap-2.5 text-sm">
             <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-500" />
             <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* University Selection */}
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {/* University Selection - Full Width */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
               University *
             </label>
             <div className="relative">
               <Building
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                size={18}
+                size={16}
               />
               <select
                 required
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none"
+                className="w-full pl-10 pr-4 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none text-sm"
                 value={formData.universityId}
                 onChange={(e) =>
                   setFormData({
@@ -819,20 +942,21 @@ const Register = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          {/* Employee ID, College ID, Aadhar - 3 columns */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             {/* Employee ID */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Employee ID
               </label>
               <div className="relative">
                 <Building
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={18}
+                  size={16}
                 />
                 <input
                   type="number"
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
+                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
                   placeholder="12345"
                   value={formData.empId}
                   onChange={(e) =>
@@ -845,17 +969,17 @@ const Register = () => {
 
             {/* College ID */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
                 College ID
               </label>
               <div className="relative">
                 <Building
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={18}
+                  size={16}
                 />
                 <input
                   type="number"
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
+                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
                   placeholder="67890"
                   value={formData.collegeId}
                   onChange={(e) =>
@@ -865,23 +989,21 @@ const Register = () => {
                 />
               </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {/* Aadhar Number */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Aadhar Number (12 Digits)
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Aadhar (12 Digits)
               </label>
               <div className="relative">
                 <User
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={18}
+                  size={16}
                 />
                 <input
                   type="text"
                   maxLength={12}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
+                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
                   placeholder="123456789012"
                   value={formData.aadharNo}
                   onChange={(e) => {
@@ -892,46 +1014,23 @@ const Register = () => {
                 />
               </div>
             </div>
-
-            {/* PAN Number */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                PAN Number
-              </label>
-              <div className="relative">
-                <User
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={18}
-                />
-                <input
-                  type="text"
-                  maxLength={10}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all uppercase"
-                  placeholder="ABCDE1234F"
-                  value={formData.panNo}
-                  onChange={(e) =>
-                    setFormData({ ...formData, panNo: e.target.value.toUpperCase() })
-                  }
-                  disabled={loading}
-                />
-              </div>
-            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          {/* Experience and Primary Subject - 2 columns */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {/* Experience */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Evaluation Experience (Years)
               </label>
               <div className="relative">
                 <BookOpen
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={18}
+                  size={16}
                 />
                 <input
                   type="text"
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
+                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
                   placeholder="e.g. 5 Years"
                   value={formData.experience}
                   onChange={(e) =>
@@ -944,17 +1043,17 @@ const Register = () => {
 
             {/* Primary Subject */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Primary Subject Area *
               </label>
               <div className="relative">
                 <BookOpen
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={18}
+                  size={16}
                 />
                 <select
                   required
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none disabled:bg-gray-50 disabled:cursor-not-allowed"
+                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none text-sm disabled:bg-gray-50 disabled:cursor-not-allowed"
                   value={formData.subjectId1}
                   onChange={(e) =>
                     setFormData({ ...formData, subjectId1: e.target.value })
@@ -972,26 +1071,27 @@ const Register = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          {/* Secondary Subject, Tertiary Subject - 2 columns */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {/* Secondary Subject */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Secondary Subject Area (Optional)
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Secondary Subject (Optional)
               </label>
               <div className="relative">
                 <BookOpen
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={18}
+                  size={16}
                 />
                 <select
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none disabled:bg-gray-50 disabled:cursor-not-allowed"
+                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none text-sm disabled:bg-gray-50 disabled:cursor-not-allowed text-sm"
                   value={formData.subjectId2}
                   onChange={(e) =>
                     setFormData({ ...formData, subjectId2: e.target.value })
                   }
                   disabled={loading || !formData.universityId}
                 >
-                  <option value="">Select Secondary Subject</option>
+                  <option value="">Select Secondary</option>
                   {subjects
                     .filter((sub) => sub.subjectId.toString() !== formData.subjectId1)
                     .map((sub) => (
@@ -1005,23 +1105,23 @@ const Register = () => {
 
             {/* Tertiary Subject */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Tertiary Subject Area (Optional)
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Tertiary Subject (Optional)
               </label>
               <div className="relative">
                 <BookOpen
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={18}
+                  size={16}
                 />
                 <select
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none disabled:bg-gray-50 disabled:cursor-not-allowed"
+                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none text-sm disabled:bg-gray-50 disabled:cursor-not-allowed text-sm"
                   value={formData.subjectId3}
                   onChange={(e) =>
                     setFormData({ ...formData, subjectId3: e.target.value })
                   }
                   disabled={loading || !formData.universityId}
                 >
-                  <option value="">Select Tertiary Subject</option>
+                  <option value="">Select Tertiary</option>
                   {subjects
                     .filter(
                       (sub) =>
@@ -1038,21 +1138,22 @@ const Register = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          {/* Name and Email in one row - 2 columns */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {/* Name */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Full Name *
               </label>
               <div className="relative">
                 <User
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={18}
+                  size={16}
                 />
                 <input
                   type="text"
                   required
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
+                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
                   placeholder="Prof. John Doe"
                   value={formData.name}
                   onChange={(e) =>
@@ -1065,44 +1166,87 @@ const Register = () => {
 
             {/* Email */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Email Address *
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Email * {emailVerified && <span className="text-green-600 text-sm">✓ Verified</span>}
               </label>
-              <div className="relative">
-                <Mail
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={18}
-                />
-                <input
-                  type="email"
-                  required
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
-                  placeholder="john.doe@university.edu"
-                  value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                  disabled={loading}
-                />
+              <div className="flex gap-1.5">
+                <div className="relative flex-1">
+                  <Mail
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                    size={16}
+                  />
+                  <input
+                    type="email"
+                    required
+                    className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all disabled:bg-gray-50 text-sm"
+                    placeholder="john.doe@uni.edu"
+                    value={formData.email}
+                    onChange={(e) => {
+                      setFormData({ ...formData, email: e.target.value });
+                      setEmailVerified(false);
+                      setShowEmailOtp(false);
+                    }}
+                    disabled={loading || emailVerified}
+                  />
+                </div>
+                {!emailVerified && !showEmailOtp && (
+                  <button
+                    type="button"
+                    onClick={handleSendEmailOtp}
+                    disabled={otpLoading || !formData.email}
+                    className="bg-teal-600 hover:bg-teal-700 text-white py-1.5 px-3 rounded-lg text-xs font-semibold transition disabled:opacity-50 whitespace-nowrap"
+                  >
+                    Verify
+                  </button>
+                )}
               </div>
+              {showEmailOtp && !emailVerified && (
+                <div className="flex gap-1.5 mt-1.5">
+                  <input
+                    type="text"
+                    maxLength={6}
+                    placeholder="OTP"
+                    value={emailOtp}
+                    onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ""))}
+                    className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm font-bold"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleVerifyEmailOtp}
+                    disabled={otpLoading || emailOtp.length !== 6}
+                    className="bg-green-600 hover:bg-green-700 text-white py-1 px-2 rounded text-xs font-semibold transition disabled:opacity-50"
+                  >
+                    OK
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendEmailOtp}
+                    disabled={otpLoading || resendTimer > 0}
+                    className="bg-gray-600 hover:bg-gray-700 text-white py-1 px-2 rounded text-xs font-semibold transition disabled:opacity-50"
+                  >
+                    {resendTimer > 0 ? `${resendTimer}s` : "Resend"}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          {/* Password and Phone in one row - 2 columns */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {/* Password */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Create Password *
               </label>
               <div className="relative">
                 <Lock
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={18}
+                  size={16}
                 />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
+                  className="w-full pl-10 pr-12 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
                   placeholder="��������"
                   value={formData.password}
                   onChange={(e) =>
@@ -1110,47 +1254,98 @@ const Register = () => {
                   }
                   disabled={loading}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition cursor-pointer"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
 
             {/* Phone */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Phone Number *
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Phone * {phoneVerified && <span className="text-green-600 text-sm">✓ Verified</span>}
               </label>
-              <div className="relative">
-                <Phone
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={18}
-                />
-                <input
-                  type="tel"
-                  maxLength={10}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
-                  placeholder="9876543210"
-                  value={formData.phone}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, "");
-                    setFormData({ ...formData, phone: value });
-                  }}
-                  disabled={loading}
-                />
+              <div className="flex gap-1.5">
+                <div className="relative flex-1">
+                  <Phone
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                    size={16}
+                  />
+                  <input
+                    type="tel"
+                    maxLength={10}
+                    required
+                    className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all disabled:bg-gray-50 text-sm"
+                    placeholder="9876543210"
+                    value={formData.phone}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "");
+                      setFormData({ ...formData, phone: value });
+                      setPhoneVerified(false);
+                      setShowPhoneOtp(false);
+                    }}
+                    disabled={loading || phoneVerified}
+                  />
+                </div>
+                {!phoneVerified && !showPhoneOtp && (
+                  <button
+                    type="button"
+                    onClick={handleSendPhoneOtp}
+                    disabled={otpLoading || !formData.phone || formData.phone.length !== 10}
+                    className="bg-teal-600 hover:bg-teal-700 text-white py-1.5 px-3 rounded-lg text-xs font-semibold transition disabled:opacity-50 whitespace-nowrap"
+                  >
+                    Verify
+                  </button>
+                )}
               </div>
+              {showPhoneOtp && !phoneVerified && (
+                <div className="flex gap-1.5 mt-1.5">
+                  <input
+                    type="text"
+                    maxLength={6}
+                    placeholder="OTP"
+                    value={phoneOtp}
+                    onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, ""))}
+                    className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm font-bold"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleVerifyPhoneOtp}
+                    disabled={otpLoading || phoneOtp.length !== 6}
+                    className="bg-green-600 hover:bg-green-700 text-white py-1 px-2 rounded text-xs font-semibold transition disabled:opacity-50"
+                  >
+                    OK
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendPhoneOtp}
+                    disabled={otpLoading || resendTimer > 0}
+                    className="bg-gray-600 hover:bg-gray-700 text-white py-1 px-2 rounded text-xs font-semibold transition disabled:opacity-50"
+                  >
+                    {resendTimer > 0 ? `${resendTimer}s` : "Resend"}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
               Address
             </label>
             <div className="relative">
               <MapPin
                 className="absolute left-3 top-3 text-gray-400"
-                size={18}
+                size={16}
               />
               <textarea
                 rows={2}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all"
+                className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
                 placeholder="Department of CS, Building 3, CBC Campus"
                 value={formData.address}
                 onChange={(e) =>
@@ -1162,16 +1357,16 @@ const Register = () => {
           </div>
 
           {/* Profile Picture Camera Module */}
-          <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
-            <label className="block text-gray-800 font-bold mb-3">
+          <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
               Profile Verification Photo *
             </label>
 
             {showCamera ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-2.5">
                   {/* Camera view screen */}
-                  <div className="md:col-span-3 relative rounded-xl overflow-hidden bg-black shadow-inner border border-gray-300 flex items-center justify-center" style={{ minHeight: '260px' }}>
+                  <div className="md:col-span-3 relative rounded-lg overflow-hidden bg-black shadow-inner border border-gray-300 flex items-center justify-center" style={{ minHeight: '260px' }}>
                     <video
                       ref={videoRef}
                       autoPlay
@@ -1228,9 +1423,9 @@ const Register = () => {
                   </div>
 
                   {/* Quality Checklist Panel */}
-                  <div className="md:col-span-2 bg-white border border-gray-200 rounded-xl p-4 flex flex-col justify-between shadow-sm">
+                  <div className="md:col-span-2 bg-white border border-gray-200 rounded-lg p-4 flex flex-col justify-between shadow-sm">
                     <div>
-                      <h5 className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-3 flex items-center gap-1.5">
+                      <h5 className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 bg-teal-700 rounded-full" />
                         Quality Checklist
                       </h5>
@@ -1315,13 +1510,13 @@ const Register = () => {
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
                   <button
                     type="button"
                     onClick={() => capturePhoto(true)}
-                    className="flex-1 bg-teal-700 hover:bg-teal-800 text-white py-2.5 rounded-xl font-semibold shadow-md transition flex items-center justify-center gap-2"
+                    className="flex-1 bg-teal-700 hover:bg-teal-800 text-white py-2.5 rounded-lg font-semibold shadow-md transition flex items-center justify-center gap-2"
                   >
-                    <Camera size={18} />
+                    <Camera size={16} />
                     Take Snapshot
                   </button>
                   <button
@@ -1334,12 +1529,12 @@ const Register = () => {
                 </div>
               </div>
             ) : formData.profileImage ? (
-              <div className="space-y-4">
-                <div className="relative rounded-xl overflow-hidden border border-gray-300 shadow-md max-w-sm mx-auto">
+              <div className="space-y-3">
+                <div className="relative rounded-lg overflow-hidden border border-gray-300 shadow-md max-w-sm mx-auto">
                   <img
                     src={formData.profileImage}
                     alt="Captured Profile"
-                    className="w-full object-cover rounded-xl"
+                    className="w-full object-cover rounded-lg"
                     style={{ maxHeight: "200px" }}
                   />
                   <button
@@ -1352,20 +1547,20 @@ const Register = () => {
                     <X size={16} />
                   </button>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex flex-col sm:flex-row gap-2.5">
                   <button
                     type="button"
                     onClick={startCamera}
                     className="flex-1 bg-teal-700 hover:bg-teal-800 text-white py-2 rounded-md font-semibold transition flex items-center justify-center gap-2"
                   >
-                    <Camera size={18} />
+                    <Camera size={16} />
                     Retake photo
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl bg-white hover:bg-gray-50 transition cursor-pointer p-4 md:p-8">
-                <Camera className="text-gray-400 mb-3" size={36} />
+              <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg bg-white hover:bg-gray-50 transition cursor-pointer p-4 md:p-8">
+                <Camera className="text-gray-400 mb-2" size={36} />
                 <p className="text-sm text-gray-600 font-semibold mb-2">
                   Capture or upload verification picture
                 </p>
@@ -1373,7 +1568,7 @@ const Register = () => {
                   Required for coordinator validation
                 </p>
 
-                <div className="flex gap-3">
+                <div className="flex gap-2.5">
                   <button
                     type="button"
                     onClick={startCamera}
@@ -1396,16 +1591,16 @@ const Register = () => {
             )}
           </div>
 
-          <div className="pt-4 flex gap-4">
+          <div className="pt-4 flex gap-2.5">
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 disabled:from-gray-400 disabled:to-gray-500 text-white font-bold py-3 rounded-md transition-all duration-200 shadow-lg flex items-center justify-center gap-2"
+              className="flex-1 bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-2 rounded-lg transition-all duration-200 shadow-md flex items-center justify-center gap-2 text-sm"
             >
               {loading ? (
                 <>
-                  <Loader className="animate-spin" size={20} />
-                  Submitting Registration...
+                  <Loader className="animate-spin" size={16} />
+                  Submitting...
                 </>
               ) : (
                 "Register Account"
@@ -1414,7 +1609,7 @@ const Register = () => {
             <button
               type="button"
               onClick={() => navigate("/login")}
-              className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl border border-gray-300 transition md:px-6 px-4"
+              className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg border border-gray-300 transition px-4 text-sm"
             >
               Cancel
             </button>
@@ -1426,3 +1621,7 @@ const Register = () => {
 };
 
 export default Register;
+
+
+
+

@@ -31,7 +31,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
     name: '',
     email: '',
     password: '',
-    userType: 'examiner',
+    userType: 'coordinator',
     departmentId: '',
     subjectId1: '',
     experience: '',
@@ -49,7 +49,7 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
         name: '',
         email: '',
         password: '',
-        userType: 'examiner',
+        userType: 'coordinator',
         departmentId: '',
         subjectId1: '',
         experience: '',
@@ -121,8 +121,8 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
       return;
     }
 
-    if (!formData.profileImage) {
-      setError('Please upload a profile photo for the user.');
+    if (formData.userType === 'examiner' && !formData.profileImage) {
+      setError('Profile picture is required for Examiners.');
       return;
     }
 
@@ -266,18 +266,22 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
                   className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition cursor-pointer appearance-none"
                 >
                   {roles.filter(r => r.isActive).map((role) => {
-                    if (role.roleName.toLowerCase() === 'admin' && userType !== 'admin') {
+                    const roleLower = role.roleName.toLowerCase();
+                    // Hide admin role for non-admin users, hide examiner role for everyone (use invite feature)
+                    if (roleLower === 'admin' && userType !== 'admin') {
+                      return null;
+                    }
+                    if (roleLower === 'examiner') {
                       return null;
                     }
                     return (
-                      <option key={role.roleId} value={role.roleName.toLowerCase()}>
+                      <option key={role.roleId} value={roleLower}>
                         {role.roleName}
                       </option>
                     );
                   })}
                   {roles.length === 0 && (
                     <>
-                      <option value="examiner">Examiner</option>
                       <option value="coordinator">University Coordinator</option>
                       {userType === 'admin' && <option value="admin">System Administrator</option>}
                     </>
@@ -286,24 +290,26 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
               </div>
             </div>
 
-            <div>
-              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Department Mapped</label>
-              <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <select
-                  value={formData.departmentId}
-                  onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
-                  className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition cursor-pointer appearance-none"
-                >
-                  <option value="">Select Department (Optional)</option>
-                  {departments.map((dept) => (
-                    <option key={dept.departmentId} value={dept.departmentId}>
-                      {dept.name}
-                    </option>
-                  ))}
-                </select>
+            {formData.userType !== 'coordinator' && (
+              <div>
+                <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Department Mapped</label>
+                <div className="relative">
+                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <select
+                    value={formData.departmentId}
+                    onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
+                    className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 pl-10 pr-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition cursor-pointer appearance-none"
+                  >
+                    <option value="">Select Department (Optional)</option>
+                    {departments.map((dept) => (
+                      <option key={dept.departmentId} value={dept.departmentId}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Examiner Specifics */}
@@ -346,7 +352,9 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
 
           {/* Image Upload Area */}
           <div>
-            <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Profile Picture *</label>
+            <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">
+              Profile Picture {formData.userType === 'examiner' && '*'}
+            </label>
             <div className="flex items-center gap-4">
               {formData.profileImage ? (
                 <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 shrink-0">
@@ -373,7 +381,10 @@ export default function AddUserModal({ isOpen, onClose, onSuccess, activeUnivers
               )}
 
               <div className="text-gray-400 text-[10px] leading-relaxed">
-                <p className="font-extrabold text-gray-600">Select official onboarding face picture</p>
+                <p className="font-extrabold text-gray-600">
+                  Select official onboarding face picture
+                  {formData.userType === 'examiner' && ' (Required for Examiners)'}
+                </p>
                 <p>Format supported: JPG, PNG. Recommended square proportions. Max size 2MB.</p>
               </div>
             </div>
