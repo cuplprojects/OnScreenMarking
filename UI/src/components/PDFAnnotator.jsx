@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { RotateCcw, Copy, Type, ZoomIn, ZoomOut, Check, X, Undo, Move, Trash2, FileText, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Edit3 } from 'lucide-react';
+import { RotateCcw, Copy, Type, ZoomIn, ZoomOut, Check, X, Undo, Move, Trash2, FileText, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Edit3, Pencil, Minus, Plus } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import message from '../services/messageService';
@@ -7,7 +7,7 @@ import message from '../services/messageService';
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNextQuestion, maxMarks, sections = [], pdfUrl, scriptId, readOnly, onToggleQp, isQpOpen, onTotalPagesChange, canAttemptQuestion }, ref) => {
+const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNextQuestion, maxMarks, sections = [], pdfUrl, scriptId, readOnly, showAnnotationTools = true, onToggleQp, isQpOpen, onTotalPagesChange, canAttemptQuestion, questionMarks = {} }, ref) => {
   const canvasRef = useRef(null);
   const canvasContainerRef = useRef(null);
   const panStateRef = useRef({ isPanning: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
@@ -35,7 +35,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
   const [stepName, setStepName] = useState('');
   const [pendingAnno, setPendingAnno] = useState(null);
   const [isSkipped, setIsSkipped] = useState(false);
-  const [loadingPdf, setLoadingLoadingPdf] = useState(false);
+  const [loadingPdf, setLoadingPdf] = useState(false);
   const [isToolbarOpen, setIsToolbarOpen] = useState(true);
 
   // Notify parent of total pages
@@ -45,7 +45,61 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
     }
   }, [pdfPages.length, onTotalPagesChange]);
 
+  // Clean up drag and selection state when leaving move tool
+  useEffect(() => {
+    if (tool !== 'move') {
+      setIsDragging(false);
+      setDraggedItem(null);
+      setSelectedAnno(null);
+    }
+  }, [tool]);
+
   // Expose PDF generation and uploading to the parent component
+  // Helper function to check if a position overlaps with existing annotations
+  const findNonOverlappingPosition = (initialX, initialY, pageNum, minDistance = 100) => {
+    let x = initialX;
+    let y = initialY;
+    const maxAttempts = 20;
+    let attempt = 0;
+
+    // Get all annotations on the same page that have coordinates
+    const pageAnnotations = annotations.filter(a => 
+      a.page === pageNum && a.x !== undefined && a.y !== undefined
+    );
+
+    while (attempt < maxAttempts) {
+      let hasOverlap = false;
+
+      // Check distance to all existing annotations
+      for (const anno of pageAnnotations) {
+        const distance = Math.sqrt(Math.pow(anno.x - x, 2) + Math.pow(anno.y - y, 2));
+        if (distance < minDistance) {
+          hasOverlap = true;
+          break;
+        }
+      }
+
+      if (!hasOverlap) {
+        return { x, y }; // Found a good position
+      }
+
+      // Try a new position in a spiral pattern
+      attempt++;
+      const angle = (attempt * 137.5) * (Math.PI / 180); // Golden angle for better distribution
+      const radius = 30 * attempt;
+      x = initialX + radius * Math.cos(angle);
+      y = initialY + radius * Math.sin(angle);
+
+      // Keep within canvas bounds
+      const maxWidth = canvasSize.width || 800;
+      const maxHeight = canvasSize.height || 600;
+      x = Math.max(50, Math.min(maxWidth - 50, x));
+      y = Math.max(50, Math.min(maxHeight - 50, y));
+    }
+
+    return { x, y }; // Return last attempt if all fail
+  };
+
   useImperativeHandle(ref, () => ({
     generateEvaluatedPdf: async (mId) => {
       try {
@@ -120,15 +174,46 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       }
     },
     getTotalPages: () => pdfPages.length,
+    navigateToQuestionPage: (qNo) => {
+      setShowMarkPopup(false);
+      setPendingAnno(null);
+      const existing = annotations.find(a => 
+        String(a.questionId) === String(qNo) && (a.marks !== undefined || a.isSkipped)
+      );
+      if (existing && existing.page !== undefined && existing.page !== currentPage) {
+        setCurrentPage(existing.page);
+      }
+    },
     openMarkModalForQuestion: (qNo) => {
       const activeSectionName = sections.find(sec => 
         sec.questions?.some(q => q.questionNo === qNo)
       )?.name || (sections[0]?.name || '');
 
+      // Check if an annotation for this question already exists
+      const existing = annotations.find(a => 
+        String(a.questionId) === String(qNo) && (a.marks !== undefined || a.isSkipped)
+      );
+
+      if (existing) {
+        // Question is already completed (marks allocated or skipped):
+        // Navigate to the page of the annotation, but DO NOT open the marks allocation modal
+        setShowMarkPopup(false);
+        setPendingAnno(null);
+        if (existing.page !== undefined && existing.page !== currentPage) {
+          setCurrentPage(existing.page);
+        }
+        return;
+      }
+
+      // Calculate a good position that doesn't overlap with existing annotations
+      const initialX = (canvasSize.width || 800) / 2;
+      const initialY = (canvasSize.height || 600) / 3;
+      const { x, y } = findNonOverlappingPosition(initialX, initialY, currentPage);
+
       const centerAnno = {
         type: 'tick',
-        x: (canvasSize.width || 800) / 2,
-        y: (canvasSize.height || 600) / 3,
+        x,
+        y,
         color: '#00AA00',
         lineWidth: 2,
         questionId: qNo,
@@ -149,7 +234,9 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
         const saved = sessionStorage.getItem(`annotations_${scriptId}`);
         if (saved) {
           try {
-            setAnnotations(JSON.parse(saved));
+            const parsed = JSON.parse(saved);
+            const cleaned = cleanAndDeduplicateAnnotations(parsed);
+            setAnnotations(cleaned);
           } catch (e) {}
         }
       }
@@ -170,6 +257,34 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
     }, 150);
   };
 
+  // Ensure non-mark annotations (pen/text) never carry questionId badges,
+  // and ensure only ONE allocated marks annotation exists per question.
+  const cleanAndDeduplicateAnnotations = (annos) => {
+    if (!Array.isArray(annos)) return [];
+    const seenQuestionIds = new Set();
+    const result = [];
+    // Process backwards to keep only the latest mark annotation for each questionId
+    for (let i = annos.length - 1; i >= 0; i--) {
+      const item = { ...annos[i] };
+      if (item.type === 'pen' || item.type === 'text') {
+        delete item.questionId;
+        delete item.stepName;
+        result.push(item);
+      } else if (item.questionId !== undefined) {
+        // ANY annotation with a questionId should be deduplicated (whether it has marks or not)
+        const qKey = String(item.questionId);
+        if (!seenQuestionIds.has(qKey)) {
+          seenQuestionIds.add(qKey);
+          result.push(item);
+        }
+        // Older duplicates of this question mark are omitted
+      } else {
+        result.push(item);
+      }
+    }
+    return result.reverse();
+  };
+
   // Helper to save annotations to storage
   const saveAnnotationsToStorage = (updatedAnnos) => {
     if (scriptId) {
@@ -184,8 +299,10 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          setAnnotations(parsed);
-          onAnnotationsChange?.(parsed);
+          const cleaned = cleanAndDeduplicateAnnotations(parsed);
+          setAnnotations(cleaned);
+          saveAnnotationsToStorage(cleaned);
+          onAnnotationsChange?.(cleaned);
         } catch (e) {
           console.error("Failed to parse annotations from sessionStorage:", e);
         }
@@ -248,7 +365,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
 
   const loadPdfFromUrl = async (url) => {
     try {
-      setLoadingLoadingPdf(true);
+      setLoadingPdf(true);
       const token = sessionStorage.getItem('token');
       const response = await fetch(url, {
         headers: {
@@ -285,7 +402,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
     } catch (err) {
       console.error("Failed to load PDF:", err);
     } finally {
-      setLoadingLoadingPdf(false);
+      setLoadingPdf(false);
     }
   };
 
@@ -366,20 +483,35 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
   };
 
   const drawSummaryStamp = (ctx, drawZoom) => {
-    // Aggregate section-wise marks from current annotations
+    // Aggregate section-wise marks using questionMarks (capped per-question values)
+    // This ensures Section A (multi-annotation questions) shows correct totals
     const secTotals = {};
     sections.forEach(sec => {
       secTotals[sec.name] = 0;
     });
-    
-    annotations.forEach(anno => {
-      if (anno.marks !== undefined && !anno.isSkipped) {
-        const sName = anno.stepName || (sections[0]?.name || '');
-        if (sName) {
-          secTotals[sName] = (secTotals[sName] || 0) + (anno.marks || 0);
+
+    const hasQuestionMarks = questionMarks && Object.keys(questionMarks).length > 0;
+
+    if (hasQuestionMarks) {
+      // Use the authoritative questionMarks state (same source as right-hand panel)
+      sections.forEach(sec => {
+        const sectionTotal = (sec.questions || []).reduce((sum, q) => {
+          const mark = questionMarks[q.questionId];
+          return sum + (mark && !mark.isSkipped ? mark.marksAwarded || 0 : 0);
+        }, 0);
+        secTotals[sec.name] = sectionTotal;
+      });
+    } else {
+      // Fallback: aggregate from annotations (may over-count for multi-annotation questions)
+      annotations.forEach(anno => {
+        if (anno.marks !== undefined && !anno.isSkipped) {
+          const sName = anno.stepName || (sections[0]?.name || '');
+          if (sName) {
+            secTotals[sName] = (secTotals[sName] || 0) + (anno.marks || 0);
+          }
         }
-      }
-    });
+      });
+    }
 
     const grandTotal = Object.values(secTotals).reduce((sum, v) => sum + v, 0);
 
@@ -481,84 +613,113 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
         ctx.textAlign = 'center';
         ctx.fillText('BLANK PAGE', ctx.canvas.width / 2, ctx.canvas.height / 2);
         break;
+      case 'pen': {
+        if (!anno.points || anno.points.length < 2) break;
+        ctx.beginPath();
+        ctx.moveTo(anno.points[0].x * drawZoom, anno.points[0].y * drawZoom);
+        // Smooth bezier curve through points
+        for (let i = 1; i < anno.points.length - 1; i++) {
+          const midX = ((anno.points[i].x + anno.points[i + 1].x) / 2) * drawZoom;
+          const midY = ((anno.points[i].y + anno.points[i + 1].y) / 2) * drawZoom;
+          ctx.quadraticCurveTo(
+            anno.points[i].x * drawZoom,
+            anno.points[i].y * drawZoom,
+            midX,
+            midY
+          );
+        }
+        // Draw to last point
+        const last = anno.points[anno.points.length - 1];
+        ctx.lineTo(last.x * drawZoom, last.y * drawZoom);
+        ctx.stroke();
+        break;
+      }
     }
  
-    // Draw question tag label for ANY annotation that has a questionId
-    if (anno.questionId) {
+    // Draw question tag label ONLY for annotations that represent allocated marks / evaluation
+    if (anno.questionId && (anno.marks !== undefined || anno.isSkipped)) {
       ctx.save();
-      ctx.font = `bold ${11 * drawZoom}px Arial`;
-      ctx.textBaseline = 'alphabetic';
+
+      // --- Fixed screen-pixel constants (NOT scaled by drawZoom) ---
+      const FONT_SIZE = 11;          // px — readable but compact
+      const PILL_PAD_X = 6;          // horizontal padding inside pill
+      const PILL_PAD_Y = 4;          // vertical padding
+      const BADGE_R = 9;             // circle badge radius px
+      const BADGE_GAP = 4;           // gap between badge and pill text
+      const CORNER_R = 4;            // pill corner radius
+      const BORDER_W = 1.5;
+
+      ctx.font = `bold ${FONT_SIZE}px Arial`;
+      ctx.textBaseline = 'middle';
+
       const isCorrect = anno.marks > 0;
       const isSkipped = anno.isSkipped;
-      const themeColor = isSkipped ? '#FF8C00' : (isCorrect ? '#008000' : '#FF0000');
+      const themeColor = isSkipped ? '#FF8C00' : (isCorrect ? '#008000' : '#CC0000');
 
-      const markStr = anno.marks !== undefined
-        ? (isSkipped ? '(Skip) ' : `(${anno.marks}) `)
-        : '';
+      // Compact label: (5)|S:A|Q:13
+      const markPart = anno.marks !== undefined ? (isSkipped ? 'Skip' : String(anno.marks)) : '';
       const qNo = !isNaN(anno.questionId) && Number(anno.questionId) < 10 ? '0' + anno.questionId : anno.questionId;
-      const secLabel = anno.stepName ? ` | ${anno.stepName}` : '';
-      const label = `${markStr}Q${qNo}${secLabel}`;
+      const secAbbr = anno.stepName
+        ? (anno.stepName.match(/section\s*(\w+)/i)?.[1] || anno.stepName.substring(0, 2)).toUpperCase()
+        : '';
+      const label = secAbbr ? `(${markPart})|S:${secAbbr}|Q:${qNo}` : `(${markPart})|Q:${qNo}`;
 
+      // Annotation screen position
       const px = anno.x ? anno.x * drawZoom : (anno.points?.[0]?.x * drawZoom);
       const py = anno.y ? anno.y * drawZoom : (anno.points?.[0]?.y * drawZoom);
 
-      // For tick/cross, draw the label BELOW the symbol so it never overlaps the mark
-      const isTickOrCross = anno.type === 'tick' || anno.type === 'cross';
-      const labelY = isTickOrCross ? py + 26 * drawZoom : py - 10 * drawZoom;
-      const pillY  = isTickOrCross ? py + 8  * drawZoom : py - 24 * drawZoom;
+      const textW = ctx.measureText(label).width;
+      // Total pill width = badge circle diameter + gap + text + padding
+      const totalW = BADGE_R * 2 + BADGE_GAP + textW + PILL_PAD_X * 2;
+      const totalH = Math.max(BADGE_R * 2, FONT_SIZE) + PILL_PAD_Y * 2;
 
-      const metrics = ctx.measureText(label);
-      const pillW = metrics.width + 8 * drawZoom;
-      const pillH = 18 * drawZoom;
+      // RIGHT-ALIGNED: pill right edge anchors at px, pill grows leftward
+      const pillRight = px + 4;
+      const pillLeft  = pillRight - totalW;
+      const pillTop   = py - totalH - 6;  // always above the symbol
+      const pillCenterY = pillTop + totalH / 2;
 
       // Pill background
       ctx.fillStyle = isSkipped
-        ? 'rgba(255,140,0,0.12)'
-        : (isCorrect ? 'rgba(0,128,0,0.1)' : 'rgba(255,0,0,0.1)');
-      ctx.fillRect(px - 4 * drawZoom, pillY, pillW, pillH);
+        ? 'rgba(255,140,0,0.18)'
+        : (isCorrect ? 'rgba(0,128,0,0.14)' : 'rgba(204,0,0,0.12)');
+      ctx.beginPath();
+      ctx.moveTo(pillLeft + CORNER_R, pillTop);
+      ctx.lineTo(pillRight - CORNER_R, pillTop);
+      ctx.quadraticCurveTo(pillRight, pillTop, pillRight, pillTop + CORNER_R);
+      ctx.lineTo(pillRight, pillTop + totalH - CORNER_R);
+      ctx.quadraticCurveTo(pillRight, pillTop + totalH, pillRight - CORNER_R, pillTop + totalH);
+      ctx.lineTo(pillLeft + CORNER_R, pillTop + totalH);
+      ctx.quadraticCurveTo(pillLeft, pillTop + totalH, pillLeft, pillTop + totalH - CORNER_R);
+      ctx.lineTo(pillLeft, pillTop + CORNER_R);
+      ctx.quadraticCurveTo(pillLeft, pillTop, pillLeft + CORNER_R, pillTop);
+      ctx.closePath();
+      ctx.fill();
 
       // Pill border
       ctx.strokeStyle = themeColor;
-      ctx.lineWidth = 1 * drawZoom;
-      ctx.strokeRect(px - 4 * drawZoom, pillY, pillW, pillH);
-
-      // Label text
-      ctx.fillStyle = themeColor;
-      ctx.fillText(label, px, labelY);
-      ctx.restore();
-    }
-
-    // For tick and cross: draw a circle badge showing the marks number (top-right of the symbol)
-    if ((anno.type === 'tick' || anno.type === 'cross') && anno.marks !== undefined) {
-      ctx.save();
-      const px = anno.x ? anno.x * drawZoom : (anno.points?.[0]?.x * drawZoom);
-      const py = anno.y ? anno.y * drawZoom : (anno.points?.[0]?.y * drawZoom);
-      const isCorrect = anno.type === 'tick' || (anno.marks > 0);
-      const themeColor = anno.isSkipped ? '#FF8C00' : (isCorrect ? '#008000' : '#FF0000');
-
-      const cx = px + 26 * drawZoom;
-      const cy = py - 4 * drawZoom;
-      const radius = 11 * drawZoom;
-
-      // White backing
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fill();
-
-      // Circle border
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
-      ctx.strokeStyle = themeColor;
-      ctx.lineWidth = 1.8 * drawZoom;
+      ctx.lineWidth = BORDER_W;
       ctx.stroke();
 
-      // Marks number or "S" for skipped
-      ctx.font = `bold ${10 * drawZoom}px Arial`;
+      // Badge circle (left side of pill, marks number)
+      const badgeCX = pillLeft + PILL_PAD_X + BADGE_R;
+      ctx.beginPath();
+      ctx.arc(badgeCX, pillCenterY, BADGE_R, 0, 2 * Math.PI);
       ctx.fillStyle = themeColor;
+      ctx.fill();
+
+      ctx.font = `bold ${FONT_SIZE - 2}px Arial`;
+      ctx.fillStyle = '#FFFFFF';
       ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(anno.isSkipped ? 'S' : String(anno.marks), cx, cy);
+      ctx.fillText(isSkipped ? 'S' : String(anno.marks ?? ''), badgeCX, pillCenterY);
+
+      // Label text (right of badge)
+      const textX = badgeCX + BADGE_R + BADGE_GAP;
+      ctx.font = `bold ${FONT_SIZE}px Arial`;
+      ctx.fillStyle = themeColor;
+      ctx.textAlign = 'left';
+      ctx.fillText(label, textX, pillCenterY);
+
       ctx.restore();
     }
   };
@@ -584,25 +745,44 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
   const startDrawing = (e) => {
     if (!canvasRef.current || readOnly) return;
     if (e.button !== 0) return; // Ignore right-clicks and middle-clicks
-    
-    // Determine active question (only required for pen mode)
-    const activeQId = currentQuestionId || sections[0]?.questions?.[0]?.questionNo;
-    if (!activeQId && tool === 'pen') {
-      message.warning("Please select a question from the right panel before you begin marking or annotating!");
-      return;
-    }
 
     const rect = canvasRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / zoom;
     const y = (e.clientY - rect.top) / zoom;
 
     if (tool === 'move') {
+      // Screen-pixel click position (for fixed-pixel pill hit testing)
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+
       // Find item to drag
       const item = [...annotations].reverse().find(anno => {
         if (anno.page !== undefined && anno.page !== currentPage) return false;
         if (anno.x !== undefined) {
+          // 1. Standard radius hit around the symbol itself
           const dist = Math.sqrt(Math.pow(anno.x - x, 2) + Math.pow(anno.y - y, 2));
-          return dist < 30;
+          if (dist < 30) return true;
+
+          // 2. Also hit-test the pill label (fixed screen pixels, extends LEFT of annotation)
+          if (anno.questionId && (anno.marks !== undefined || anno.isSkipped)) {
+            // Mirror the constants from drawAnnotation
+            const FONT_SIZE = 11, PILL_PAD_X = 6, PILL_PAD_Y = 4, BADGE_R = 9, BADGE_GAP = 4;
+            // Estimate pill width (text ~10px/char for bold 11px, label avg ~15 chars)
+            const estimatedTextW = 150;
+            const totalW = BADGE_R * 2 + BADGE_GAP + estimatedTextW + PILL_PAD_X * 2;
+            const totalH = Math.max(BADGE_R * 2, FONT_SIZE) + PILL_PAD_Y * 2;
+
+            const px = anno.x * zoom;
+            const py = anno.y * zoom;
+            const pillRight = px + 4;
+            const pillLeft  = pillRight - totalW;
+            const pillTop   = py - totalH - 6;
+            const pillBot   = pillTop + totalH;
+
+            return screenX >= pillLeft - 4 && screenX <= pillRight + 4 &&
+                   screenY >= pillTop - 4  && screenY <= pillBot  + 4;
+          }
+          return false;
         }
         if (anno.points) {
           return anno.points.some(p => Math.sqrt(Math.pow(p.x - x, 2) + Math.pow(p.y - y, 2)) < 20);
@@ -646,11 +826,13 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
 
     // Direct Tick and Cross tools: DO NOT attach question no or section with them!
     if (tool === 'tick' || tool === 'cross') {
+      // Snap X to right edge with enough room for badge+label growing leftward
+      const snapX = (canvasSize.width || 800) - 50;
       const directAnno = {
         type: tool,
-        x, y,
+        x: snapX, y,
         color: tool === 'tick' ? '#00AA00' : '#FF0000',
-        lineWidth: 2,
+        lineWidth: 3,
         page: currentPage,
         id: Date.now()
       };
@@ -723,7 +905,6 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
         points: currentPath,
         color,
         lineWidth,
-        questionId: currentQuestionId,
         page: currentPage,
         id: Date.now()
       };
@@ -764,16 +945,27 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
     }
 
     const rect = canvasRef.current.getBoundingClientRect();
-    const rawX = (e.clientX - rect.left) / zoom;
     const rawY = (e.clientY - rect.top) / zoom;
-    const x = Math.max(10, Math.min((canvasSize.width || 800) - 20, rawX));
+    // Snap X to right edge; label pill grows leftward so it always stays visible
+    const x = (canvasSize.width || 800) - 50;
     const y = Math.max(10, Math.min((canvasSize.height || 600) - 20, rawY));
 
     const activeSectionName = sections.find(sec => 
       sec.questions?.some(q => q.questionNo === activeQId)
     )?.name || (sections[0]?.name || '');
 
-    const newAnno = {
+    // Check if an annotation already exists for this question
+    const existing = annotations.find(a => 
+      String(a.questionId) === String(activeQId) && (a.marks !== undefined || a.isSkipped)
+    );
+
+    // If already exists, update its position to right-click location and open to edit
+    const targetAnno = existing ? {
+      ...existing,
+      x, y,
+      page: currentPage,
+      stepName: activeSectionName
+    } : {
       type: 'tick',
       x, y,
       color: '#00AA00',
@@ -784,11 +976,67 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       id: Date.now()
     };
     
-    setPendingAnno(newAnno);
+    setPendingAnno(targetAnno);
     setShowMarkPopup(true);
-    setMarkInput('');
+    setMarkInput(existing && existing.marks !== undefined ? String(existing.marks) : '');
     setStepName(activeSectionName);
+    setIsSkipped(existing ? !!existing.isSkipped : false);
+  };
+
+  const handleDoubleClick = (e) => {
+    if (!canvasRef.current || readOnly) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / zoom;
+    const y = (e.clientY - rect.top) / zoom;
+
+    const item = [...annotations].reverse().find(anno => {
+      if (anno.page !== undefined && anno.page !== currentPage) return false;
+      if (anno.x !== undefined && anno.questionId && (anno.marks !== undefined || anno.isSkipped)) {
+        const dist = Math.sqrt(Math.pow(anno.x - x, 2) + Math.pow(anno.y - y, 2));
+        return dist < 40;
+      }
+      return false;
+    });
+
+    if (item) {
+      setPendingAnno(item);
+      setMarkInput(item.marks !== undefined ? String(item.marks) : '');
+      setIsSkipped(!!item.isSkipped);
+      setStepName(item.stepName || sections[0]?.name || '');
+      setShowMarkPopup(true);
+    }
+  };
+
+  const commitQuestionAnnotation = (finalAnno) => {
+    if (!finalAnno) return;
+
+    // Check if an annotation for this question already exists
+    const existingIdx = annotations.findIndex(a => 
+      a.id === finalAnno.id || 
+      (a.questionId !== undefined && String(a.questionId) === String(finalAnno.questionId) && (a.marks !== undefined || a.isSkipped))
+    );
+
+    let updated;
+    if (existingIdx !== -1) {
+      updated = [...annotations];
+      updated[existingIdx] = finalAnno;
+    } else {
+      updated = [...annotations, finalAnno];
+    }
+
+    const cleaned = cleanAndDeduplicateAnnotations(updated);
+    setAnnotations(cleaned);
+    saveAnnotationsToStorage(cleaned);
+    onAnnotationsChange?.(cleaned);
+    setPendingAnno(null);
+    setShowMarkPopup(false);
+    setMarkInput('');
     setIsSkipped(false);
+
+    // Auto advance to next question if successful
+    if (onNextQuestion) {
+      onNextQuestion();
+    }
   };
 
   const getMarkOptions = () => {
@@ -815,19 +1063,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
         type: isSkipped ? 'cross' : (finalMark > 0 ? 'tick' : 'cross'),
         color: isSkipped ? '#FF6B6B' : (finalMark > 0 ? '#00AA00' : '#FF0000')
       };
-      const updated = [...annotations, finalAnno];
-      setAnnotations(updated);
-      saveAnnotationsToStorage(updated);
-      onAnnotationsChange?.(updated);
-      setPendingAnno(null);
-      setShowMarkPopup(false);
-      setMarkInput('');
-      setIsSkipped(false);
-      
-      // Auto advance to next question if successful
-      if (onNextQuestion) {
-        onNextQuestion();
-      }
+      commitQuestionAnnotation(finalAnno);
     }
   };
 
@@ -848,7 +1084,6 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       y: textPosition.y,
       color,
       lineWidth,
-      questionId: currentQuestionId,
       page: currentPage,
       id: Date.now()
     };
@@ -883,19 +1118,21 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       {/* Top minimal status bar */}
       <div className="bg-white px-3 py-1.5 border-b border-gray-200 flex justify-between items-center text-xs shrink-0 shadow-sm z-10">
         <div className="flex gap-2 items-center">
-          <button
-            onClick={() => setIsToolbarOpen(!isToolbarOpen)}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded font-semibold transition-all border cursor-pointer ${
-              isToolbarOpen 
-                ? 'bg-teal-50 text-teal-800 border-teal-200 hover:bg-teal-100' 
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
-            }`}
-            title={isToolbarOpen ? "Collapse Tools Panel" : "Open Tools Panel"}
-          >
-            <Edit3 size={13} className="text-teal-600" />
-            <span className="text-[11px]">Annotation Tools</span>
-            {isToolbarOpen ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
-          </button>
+          {showAnnotationTools && (
+            <button
+              onClick={() => setIsToolbarOpen(!isToolbarOpen)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded font-semibold transition-all border cursor-pointer ${
+                isToolbarOpen 
+                  ? 'bg-teal-50 text-teal-800 border-teal-200 hover:bg-teal-100' 
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+              }`}
+              title={isToolbarOpen ? "Collapse Tools Panel" : "Open Tools Panel"}
+            >
+              <Edit3 size={13} className="text-teal-600" />
+              <span className="text-[11px]">Annotation Tools</span>
+              {isToolbarOpen ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
+            </button>
+          )}
 
           {onToggleQp && (
             <button
@@ -951,22 +1188,122 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
 
       {/* Main Workspace Area: Left Tools Panel + Canvas */}
       <div className="flex-1 flex overflow-hidden relative">
+
+        {/* PAINT OPTIONS PANEL — slides in when pen tool is active */}
+        {tool === 'pen' && !readOnly && (
+          <div className="absolute left-0 top-0 h-full z-20 flex items-start pt-2 pointer-events-none">
+            <div
+              className="pointer-events-auto ml-[60px] bg-white border border-purple-200 rounded-xl shadow-xl p-3 flex flex-col gap-3 animate-in slide-in-from-left duration-200"
+              style={{ minWidth: '130px' }}
+            >
+              {/* Header */}
+              <div className="flex items-center gap-1.5 border-b border-purple-100 pb-2">
+                <Pencil size={12} className="text-purple-600" />
+                <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Paint</span>
+                <button
+                  onClick={() => setTool(null)}
+                  className="ml-auto text-gray-400 hover:text-gray-600 transition-colors"
+                  title="Close paint mode"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+
+              {/* Color swatches */}
+              <div>
+                <p className="text-[9px] font-semibold text-gray-500 uppercase mb-1.5">Color</p>
+                <div className="grid grid-cols-4 gap-1">
+                  {['#EF4444','#F97316','#EAB308','#22C55E','#14B8A6','#3B82F6','#8B5CF6','#EC4899','#000000','#6B7280','#FFFFFF','#7C3AED'].map(c => (
+                    <button
+                      key={c}
+                      onClick={() => setColor(c)}
+                      className={`w-6 h-6 rounded-md border-2 transition-transform hover:scale-110 ${
+                        color === c ? 'border-purple-600 scale-110 shadow-md' : 'border-transparent'
+                      }`}
+                      style={{ backgroundColor: c, boxShadow: c === '#FFFFFF' ? 'inset 0 0 0 1px #d1d5db' : undefined }}
+                      title={c}
+                    />
+                  ))}
+                </div>
+                {/* Custom color input */}
+                <div className="flex items-center gap-1.5 mt-2">
+                  <input
+                    type="color"
+                    value={color}
+                    onChange={e => setColor(e.target.value)}
+                    className="w-7 h-7 rounded cursor-pointer border border-gray-200 p-0.5"
+                    title="Custom color"
+                  />
+                  <span className="text-[9px] text-gray-500 font-mono">{color}</span>
+                </div>
+              </div>
+
+              {/* Brush size */}
+              <div>
+                <p className="text-[9px] font-semibold text-gray-500 uppercase mb-1.5">Brush Size</p>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setLineWidth(w => Math.max(1, w - 1))}
+                    className="w-5 h-5 flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+                  ><Minus size={10} /></button>
+                  <div className="flex-1 text-center">
+                    <span className="text-xs font-bold text-purple-700">{lineWidth}px</span>
+                  </div>
+                  <button
+                    onClick={() => setLineWidth(w => Math.min(20, w + 1))}
+                    className="w-5 h-5 flex items-center justify-center rounded bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+                  ><Plus size={10} /></button>
+                </div>
+                <input
+                  type="range"
+                  min="1" max="20"
+                  value={lineWidth}
+                  onChange={e => setLineWidth(Number(e.target.value))}
+                  className="w-full mt-1 accent-purple-600 h-1.5 cursor-pointer"
+                />
+                {/* Brush preview */}
+                <div className="flex justify-center mt-2">
+                  <div
+                    className="rounded-full"
+                    style={{ width: Math.max(4, lineWidth * 2), height: Math.max(4, lineWidth * 2), backgroundColor: color, transition: 'all 0.15s' }}
+                  />
+                </div>
+              </div>
+
+              {/* Quick actions */}
+              <div className="border-t border-gray-100 pt-2 flex flex-col gap-1">
+                <button
+                  onClick={handleUndo}
+                  disabled={annotations.length === 0}
+                  className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-40 transition-colors"
+                >
+                  <Undo size={10} /> Undo Stroke
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* LEFT SIDE DROPDOWN / DRAWER PANEL */}
-        <div 
-          className={`bg-white border-r border-gray-200 flex flex-col justify-between p-2 z-20 shadow-md transition-all duration-200 ease-in-out shrink-0 select-none ${
-            isToolbarOpen ? 'w-14 sm:w-16' : 'w-0 p-0 border-r-0 overflow-hidden'
-          }`}
-        >
-          {isToolbarOpen && (
-            <div className="flex flex-col items-center gap-2 w-full">
+        {showAnnotationTools && (
+          <div 
+            className={`bg-white border-r border-gray-200 flex flex-col justify-between p-2 z-20 shadow-md transition-all duration-200 ease-in-out shrink-0 select-none ${
+              isToolbarOpen ? 'w-14 sm:w-16' : 'w-0 p-0 border-r-0 overflow-hidden'
+            }`}
+          >
+            {isToolbarOpen && (
+              <div className="flex flex-col items-center gap-2 w-full">
               {/* Tool: Move / Select */}
               <button
-                onClick={() => setTool('move')}
+                onClick={() => {
+                  setTool(prev => prev === 'move' ? null : 'move');
+                  setSelectedAnno(null);
+                }}
                 disabled={isToolDisabled}
                 className={`w-10 h-10 flex flex-col items-center justify-center rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                   tool === 'move' ? 'bg-teal-700 text-white shadow-sm ring-2 ring-teal-400' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
-                title="Select & Move"
+                title={tool === 'move' ? "Move active (click to disable)" : "Select & Move"}
               >
                 <Move size={17} />
                 <span className="text-[9px] font-bold mt-0.5">Move</span>
@@ -974,7 +1311,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
 
               {/* Tool: Tick */}
               <button
-                onClick={() => setTool('tick')}
+                onClick={() => setTool(prev => prev === 'tick' ? null : 'tick')}
                 disabled={isToolDisabled}
                 className={`w-10 h-10 flex flex-col items-center justify-center rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                   tool === 'tick' ? 'bg-green-700 text-white shadow-sm ring-2 ring-green-400' : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
@@ -987,7 +1324,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
 
               {/* Tool: Cross */}
               <button
-                onClick={() => setTool('cross')}
+                onClick={() => setTool(prev => prev === 'cross' ? null : 'cross')}
                 disabled={isToolDisabled}
                 className={`w-10 h-10 flex flex-col items-center justify-center rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                   tool === 'cross' ? 'bg-red-700 text-white shadow-sm ring-2 ring-red-400' : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
@@ -1000,7 +1337,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
 
               {/* Tool: Text */}
               <button
-                onClick={() => setTool('text')}
+                onClick={() => setTool(prev => prev === 'text' ? null : 'text')}
                 disabled={isToolDisabled}
                 className={`w-10 h-10 flex flex-col items-center justify-center rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                   tool === 'text' ? 'bg-teal-700 text-white shadow-sm ring-2 ring-teal-400' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -1009,6 +1346,19 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
               >
                 <Type size={17} />
                 <span className="text-[9px] font-bold mt-0.5">Text</span>
+              </button>
+
+              {/* Tool: Paint / Pen */}
+              <button
+                onClick={() => setTool(prev => prev === 'pen' ? null : 'pen')}
+                disabled={isToolDisabled}
+                className={`w-10 h-10 flex flex-col items-center justify-center rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                  tool === 'pen' ? 'bg-purple-700 text-white shadow-sm ring-2 ring-purple-400' : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200'
+                }`}
+                title="Paint / Freehand Draw"
+              >
+                <Pencil size={16} />
+                <span className="text-[9px] font-bold mt-0.5">Paint</span>
               </button>
 
               <div className="w-8 h-px bg-gray-200 my-1" />
@@ -1087,6 +1437,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
             </div>
           )}
         </div>
+        )}
 
       {/* Text Input Modal */}
       {showTextInput && (
@@ -1180,13 +1531,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
                             type: m > 0 ? 'tick' : 'cross',
                             color: m > 0 ? '#00AA00' : '#FF0000'
                           };
-                          const updated = [...annotations, finalAnno];
-                          setAnnotations(updated);
-                          saveAnnotationsToStorage(updated);
-                          onAnnotationsChange?.(updated);
-                          setPendingAnno(null);
-                          setShowMarkPopup(false);
-                          if (onNextQuestion) onNextQuestion();
+                          commitQuestionAnnotation(finalAnno);
                         }}
                         className={`text-center py-2 text-sm font-semibold border rounded transition-colors ${
                           isBlocked
@@ -1214,14 +1559,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
                       type: 'cross',
                       color: '#FF6B6B'
                     };
-                    const updated = [...annotations, finalAnno];
-                    setAnnotations(updated);
-                    saveAnnotationsToStorage(updated);
-                    onAnnotationsChange?.(updated);
-                    setPendingAnno(null);
-                    setShowMarkPopup(false);
-                    setIsSkipped(false);
-                    if (onNextQuestion) onNextQuestion();
+                    commitQuestionAnnotation(finalAnno);
                   }}
                   className="flex-1 text-sm bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-lg font-semibold transition-colors"
                 >
@@ -1232,8 +1570,25 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
                   <input
                     type="number"
                     value={markInput}
-                    onChange={(e) => setMarkInput(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Allow empty string for clearing
+                      if (value === '') {
+                        setMarkInput('');
+                        return;
+                      }
+                      // Parse and validate against maxMarks
+                      const numValue = parseFloat(value);
+                      if (!isNaN(numValue)) {
+                        // Cap at maxMarks
+                        const cappedValue = Math.min(numValue, maxMarks);
+                        setMarkInput(cappedValue.toString());
+                      }
+                    }}
                     placeholder="Custom"
+                    min="0"
+                    max={maxMarks}
+                    step="0.5"
                     className="w-20 min-w-0 flex-1 text-sm p-2 border border-gray-300 rounded-lg outline-none focus:border-teal-500"
                     autoFocus
                     onKeyDown={(e) => e.key === 'Enter' && submitMark()}
@@ -1251,6 +1606,36 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
 
       {/* Canvas Container */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-[400px] relative">
+
+        {/* PDF Loading Overlay */}
+        {loadingPdf && (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm">
+            {/* Spinner */}
+            <div className="relative flex items-center justify-center mb-5">
+              <div className="w-16 h-16 rounded-full border-4 border-teal-100 border-t-teal-600 animate-spin" />
+              <div className="absolute w-10 h-10 rounded-full border-4 border-transparent border-b-teal-400 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.75s' }} />
+              <div className="absolute">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0d9488" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-pulse">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
+              </div>
+            </div>
+            {/* Label */}
+            <p className="text-sm font-semibold text-teal-700 tracking-wide">Loading PDF…</p>
+            <p className="text-xs text-gray-400 mt-1">Please wait while the document is being prepared</p>
+            {/* Progress dots */}
+            <div className="flex gap-1.5 mt-4">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-300 animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+          </div>
+        )}
+
         {/* Absolute PDF Navigation Overlays */}
         {pdfPages.length > 0 && (
           <>
@@ -1306,8 +1691,9 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
             onMouseUp={stopDrawing}
             onMouseLeave={stopDrawing}
             onContextMenu={handleContextMenu}
+            onDoubleClick={handleDoubleClick}
             style={{ width: canvasSize.width * zoom, height: canvasSize.height * zoom }}
-            className={`flex-shrink-0 max-w-none bg-white shadow-md rounded-lg ${tool === 'move' ? 'cursor-move' : 'cursor-crosshair'}`}
+            className={`flex-shrink-0 max-w-none bg-white shadow-md rounded-lg ${tool === 'move' ? 'cursor-move' : tool ? 'cursor-crosshair' : 'cursor-default'}`}
           />
         </div>
 

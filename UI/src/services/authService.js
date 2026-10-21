@@ -26,6 +26,34 @@ const authService = {
     });
   },
 
+  sendEmailOtp: async (email) => {
+    return apiCall('/Auth/send-email-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+  },
+
+  verifyEmailOtp: async (email, otp) => {
+    return apiCall('/Auth/verify-email-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp })
+    });
+  },
+
+  sendPhoneOtp: async (phone) => {
+    return apiCall('/Auth/send-phone-otp', {
+      method: 'POST',
+      body: JSON.stringify({ phone })
+    });
+  },
+
+  verifyPhoneOtp: async (phone, otp) => {
+    return apiCall('/Auth/verify-phone-otp', {
+      method: 'POST',
+      body: JSON.stringify({ phone, otp })
+    });
+  },
+
   logout: () => {
     sessionStorage.removeItem('token');
     sessionStorage.removeItem('userType');

@@ -14,13 +14,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Barcode,
-  Check
+  Check,
+  Lock
 } from "lucide-react";
 import PDFAnnotator from "../components/PDFAnnotator";
 import sectionService from "../services/sectionService";
 import markingService from "../services/markingService";
 import paperService from "../services/paperService";
 import userService from "../services/userService";
+import apiCall from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import message from "../services/messageService";
 
@@ -138,7 +140,18 @@ const ExaminerMarking = () => {
   const consecutiveMismatchesRef = useRef(0);
   const [sectionAttemptCounts, setSectionAttemptCounts] = useState({}); // Track attempted questions per section
   const [submitted, setSubmitted] = useState(false);
+  const [scriptStatus, setScriptStatus] = useState(null); // Track script status from API
+  const isScriptCompleted = scriptStatus === 'completed'; // Script is locked if status is completed
+  // Only lock interface if explicitly read-only OR script is completed (not just submitted)
+  const isEffectiveReadOnly = isReadOnly || isScriptCompleted; 
   const [saving, setSaving] = useState(false);
+
+  // Debug log for script status
+  useEffect(() => {
+    console.log('Script Status Changed:', scriptStatus);
+    console.log('Is Script Completed:', isScriptCompleted);
+    console.log('Is Effective ReadOnly:', isEffectiveReadOnly);
+  }, [scriptStatus, isScriptCompleted, isEffectiveReadOnly]);
   const [annotations, setAnnotations] = useState([]);
   const [selectedQuestion, setSelectedQuestion] = useState(null);
   const [showRemarksModal, setShowRemarksModal] = useState(false);
@@ -148,10 +161,37 @@ const ExaminerMarking = () => {
   const [saveStatus, setSaveStatus] = useState(null); 
   const [showQpModal, setShowQpModal] = useState(false);
   const [isQpCollapsed, setIsQpCollapsed] = useState(true);
+  const [qpWidth, setQpWidth] = useState(320);
+  const qpDragRef = useRef(null);
   const [stream, setStream] = useState(null);
   const videoRef = useRef(null);
   const [isBlurred, setIsBlurred] = useState(false);
   const annotatorRef = useRef(null);
+
+  // QP panel drag-to-resize handlers
+  const handleQpDragStart = (e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = qpWidth;
+
+    const onMouseMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      const newWidth = Math.min(600, Math.max(200, startWidth + delta));
+      setQpWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
 
   // Security Print & Screenshot Prevention
   useEffect(() => {
@@ -243,12 +283,33 @@ const ExaminerMarking = () => {
       message.warning("Copying text is disabled for security reasons.");
     };
 
+    const handleVisibilityChange = () => {
+      // Only trigger blur protection if the page is actually hidden (tab switch, minimize, etc.)
+      if (document.hidden) {
+        setIsBlurred(true);
+      } else {
+        setIsBlurred(false);
+        // Wipe clipboard on refocus
+        try {
+          navigator.clipboard.writeText("");
+        } catch (err) {}
+      }
+    };
+
+    // Keep blur/focus for legacy support but make them less aggressive
     const handleBlur = () => {
-      setIsBlurred(true);
+      // Use a longer timeout and only trigger if page is actually hidden
+      setTimeout(() => {
+        if (document.hidden) {
+          setIsBlurred(true);
+        }
+      }, 300);
     };
 
     const handleFocus = () => {
-      setIsBlurred(false);
+      if (!document.hidden) {
+        setIsBlurred(false);
+      }
       // Immediately wipe clipboard on refocus (in case an OS screenshot utility was opened)
       try {
         navigator.clipboard.writeText("");
@@ -282,6 +343,7 @@ const ExaminerMarking = () => {
     window.addEventListener("cut", handleCopy);
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       const printStyle = document.getElementById("secure-marking-print-block");
@@ -293,6 +355,7 @@ const ExaminerMarking = () => {
       window.removeEventListener("cut", handleCopy);
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
@@ -544,6 +607,33 @@ const ExaminerMarking = () => {
         return;
       }
 
+      // First, check the script status
+      if (scriptId) {
+        console.log('Fetching script status for scriptId:', scriptId); // Debug log
+        try {
+          // Use apiCall helper which handles auth and base URL correctly
+          const scriptData = await apiCall(`/scripts/${scriptId}`, { 
+            hideErrorToast: true // Don't show error toast, we'll handle it
+          });
+          
+          console.log('Script Data:', scriptData); // Debug log
+          console.log('Script Status:', scriptData.status); // Debug log
+          
+          const status = scriptData.status?.toLowerCase(); // Handle case insensitivity
+          setScriptStatus(status);
+          
+          // Log if script is completed (for debugging)
+          if (status === "completed") {
+            console.log('Script is completed - interface will be locked'); // Debug log
+          }
+        } catch (err) {
+          console.error('Failed to fetch script status:', err);
+          // Don't fail the whole process if we can't get script status
+        }
+      } else {
+        console.error('No scriptId available to fetch status');
+      }
+
       // Create a new marking session (or retrieve existing)
       const markingResponse = await markingService.createMarking(
         allocationId,
@@ -557,6 +647,7 @@ const ExaminerMarking = () => {
         if (markingResponse.remarks) {
           setRemarks(markingResponse.remarks);
         }
+        // Only set submitted to true if marking is submitted
         if (markingResponse.status === "submitted") {
           setSubmitted(true);
         }
@@ -863,10 +954,11 @@ const ExaminerMarking = () => {
           try {
             const parsed = JSON.parse(saved);
             const updatedAnnos = parsed.map(anno => {
-              if (anno.questionId === question.questionNo) {
+              if (String(anno.questionId) === String(question.questionNo) && (anno.marks !== undefined || anno.isSkipped)) {
                 return {
                   ...anno,
                   marks: numValue,
+                  isSkipped: false,
                   type: numValue > 0 ? 'tick' : 'cross',
                   color: numValue > 0 ? '#00AA00' : '#FF0000'
                 };
@@ -1090,6 +1182,21 @@ const ExaminerMarking = () => {
       // Submit the marking
       await markingService.submitMarking(markingId);
       setSubmitted(true);
+      
+      // Fetch updated script status to show "Submitted (Locked)" badge
+      if (scriptId) {
+        try {
+          const scriptData = await apiCall(`/scripts/${scriptId}`, { 
+            hideErrorToast: true 
+          });
+          const status = scriptData.status?.toLowerCase();
+          setScriptStatus(status);
+          console.log('Script status after submit:', status);
+        } catch (err) {
+          console.error('Failed to refresh script status after submit:', err);
+        }
+      }
+      
       showStatus('success', `Submitted! Total: ${totalObtained} / ${paperInfo?.maxMarks || 100}`);
     } catch (err) {
       showStatus('error', 'Submission failed: ' + (err?.message || err));
@@ -1162,17 +1269,19 @@ const ExaminerMarking = () => {
   const allSectionsSatisfied = pendingSectionRequirements.length === 0;
 
   // Build tooltip reason — show the most blocking reason first
-  const submitDisabledReason = !allSectionsSatisfied
+  const submitDisabledReason = isScriptCompleted
+    ? 'This script has been submitted and is locked'
+    : !allSectionsSatisfied
     ? `Section requirements pending before submitting: ${pendingSectionRequirements.join('; ')}`
     : !allPagesAnnotated
     ? `All pages (except Page 1) must have at least one annotation before submitting. Unannotated page(s): ${unmarkedPageNumbers.map(n => `Page ${n}`).join(', ')}`
     : saving
     ? 'Saving in progress...'
-    : isReadOnly
+    : isEffectiveReadOnly
     ? 'This submission is read-only'
     : '';
 
-  const isSubmitDisabled = isReadOnly || saving || !allPagesAnnotated || !allSectionsSatisfied;
+  const isSubmitDisabled = isScriptCompleted || isEffectiveReadOnly || saving || !allPagesAnnotated || !allSectionsSatisfied;
 
 
   if (loading) {
@@ -1253,33 +1362,22 @@ const ExaminerMarking = () => {
             </p>
           </div>
 
-          <div className="hidden md:block bg-gray-50 px-3 py-1 rounded-lg border border-gray-200">
+          <div className="bg-gray-50 px-3 py-1 rounded-lg border border-gray-200">
             <p className="text-[10px] uppercase font-bold text-gray-500">Max Marks</p>
-            <p className="font-bold text-sm text-gray-900">{paperInfo?.maxMarks || "100"}</p>
+            <p className="font-bold text-sm text-gray-900">
+              {paperInfo?.maxMarks || "100"}
+            </p>
           </div>
+
+          {isScriptCompleted && (
+            <div className="flex items-center gap-1.5 bg-amber-100 border-2 border-amber-400 text-amber-900 px-3 py-1.5 rounded-lg text-xs font-extrabold shadow-sm">
+              <Lock size={14} className="text-amber-700" />
+              <span>Submitted (Locked)</span>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              if (!effectiveQpPdfUrl) {
-                message.info("Question paper PDF is not available for this paper.");
-                return;
-              }
-              setIsQpCollapsed(!isQpCollapsed);
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border transition-all shadow-sm cursor-pointer ${
-              !isQpCollapsed && effectiveQpPdfUrl
-                ? 'bg-teal-700 text-white border-teal-800 hover:bg-teal-800' 
-                : 'bg-teal-50 text-teal-800 border-teal-300 hover:bg-teal-100'
-            }`}
-            title={!isQpCollapsed && effectiveQpPdfUrl ? "Hide Question Paper" : "Show Question Paper"}
-          >
-            <FileText size={14} className={!isQpCollapsed && effectiveQpPdfUrl ? "text-white" : "text-teal-600"} />
-            <span>{!isQpCollapsed && effectiveQpPdfUrl ? "Hide QP" : "Show QP"}</span>
-          </button>
-
           <div className="bg-teal-50 py-1.5 rounded-lg border border-teal-200 flex flex-col items-center md:px-4 px-3">
             <p className="text-[10px] uppercase font-bold text-teal-700">Total Score</p>
             <p className="text-2xl font-bold text-teal-900 leading-none">
@@ -1287,18 +1385,20 @@ const ExaminerMarking = () => {
             </p>
           </div>
           
-          <button
-            onClick={!isSubmitDisabled ? handleSubmitMarking : undefined}
-            disabled={isSubmitDisabled}
-            className={`py-2 rounded-md font-bold uppercase text-xs transition-colors shadow-md md:px-5 px-4 ${
-              isSubmitDisabled
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-teal-700 hover:bg-teal-800 text-white cursor-pointer'
-            }`}
-            title={submitDisabledReason || 'Submit evaluation'}
-          >
-            {saving ? 'Saving...' : (submitted ? 'Re-submit' : 'Submit')}
-          </button>
+          {!isScriptCompleted && (
+            <button
+              onClick={!isSubmitDisabled ? handleSubmitMarking : undefined}
+              disabled={isSubmitDisabled}
+              className={`py-2 rounded-md font-bold uppercase text-xs transition-colors shadow-md md:px-5 px-4 flex items-center gap-1.5 ${
+                isSubmitDisabled
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-teal-700 hover:bg-teal-800 text-white cursor-pointer'
+              }`}
+              title={submitDisabledReason || 'Submit evaluation'}
+            >
+              {saving ? 'Saving...' : 'Submit'}
+            </button>
+          )}
         </div>
       </header>
 
@@ -1326,34 +1426,54 @@ const ExaminerMarking = () => {
         
         {/* QUESTION PAPER (LEFT) */}
         {effectiveQpPdfUrl && !isQpCollapsed && (
-          <section className="w-80 shrink-0 bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden flex flex-col transition-all">
-            <div className="bg-gray-900 text-white px-3 py-2 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <FileText size={14} className="text-teal-400" />
-                <h3 className="font-semibold text-xs uppercase tracking-wide">Question Paper</h3>
+          <>
+            <section
+              className="shrink-0 bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden flex flex-col transition-none"
+              style={{ width: qpWidth }}
+            >
+              <div className="bg-gray-900 text-white px-3 py-2 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <FileText size={14} className="text-teal-400" />
+                  <h3 className="font-semibold text-xs uppercase tracking-wide">Question Paper</h3>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setIsQpCollapsed(true)}
+                  className="p-1 hover:bg-gray-800 text-gray-300 hover:text-white rounded transition-colors flex items-center gap-1 text-[11px] cursor-pointer"
+                  title="Collapse Question Paper"
+                >
+                  <ChevronLeft size={16} />
+                  <span className="hidden sm:inline">Collapse</span>
+                </button>
               </div>
-              <button 
-                type="button"
-                onClick={() => setIsQpCollapsed(true)}
-                className="p-1 hover:bg-gray-800 text-gray-300 hover:text-white rounded transition-colors flex items-center gap-1 text-[11px] cursor-pointer"
-                title="Collapse Question Paper"
-              >
-                <ChevronLeft size={16} />
-                <span className="hidden sm:inline">Collapse</span>
-              </button>
+              <div className="flex-1 bg-gray-100">
+                <iframe 
+                  src={
+                    effectiveQpPdfUrl.startsWith('http')
+                      ? effectiveQpPdfUrl
+                      : `${import.meta.env.VITE_API_URL.replace('/api', '')}/${effectiveQpPdfUrl.replace(/^\//, '')}`
+                  }
+                  className="w-full h-full border-0"
+                  title="Question Paper"
+                />
+              </div>
+            </section>
+
+            {/* Drag handle to resize QP panel */}
+            <div
+              ref={qpDragRef}
+              onMouseDown={handleQpDragStart}
+              className="w-1.5 shrink-0 rounded-full cursor-col-resize bg-gray-200 hover:bg-teal-400 active:bg-teal-500 transition-colors self-stretch relative group"
+              title="Drag to resize Question Paper panel"
+            >
+              {/* Visual grip dots */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="w-1 h-1 rounded-full bg-teal-600" />
+                <span className="w-1 h-1 rounded-full bg-teal-600" />
+                <span className="w-1 h-1 rounded-full bg-teal-600" />
+              </div>
             </div>
-            <div className="flex-1 bg-gray-100">
-              <iframe 
-                src={
-                  effectiveQpPdfUrl.startsWith('http')
-                    ? effectiveQpPdfUrl
-                    : `${import.meta.env.VITE_API_URL.replace('/api', '')}/${effectiveQpPdfUrl.replace(/^\//, '')}`
-                }
-                className="w-full h-full border-0"
-                title="Question Paper"
-              />
-            </div>
-          </section>
+          </>
         )}
 
         {/* MID: ANNOTATOR AREA */}
@@ -1367,8 +1487,10 @@ const ExaminerMarking = () => {
             sections={sections}
             pdfUrl={pdfUrl}
             scriptId={scriptId}
-            readOnly={isReadOnly}
+            readOnly={isEffectiveReadOnly}
+            showAnnotationTools={!isScriptCompleted}
             canAttemptQuestion={canAttemptQuestion}
+            questionMarks={questionMarks}
             onToggleQp={() => {
               if (!effectiveQpPdfUrl) {
                 message.info("Question paper PDF is not available for this paper.");
@@ -1382,25 +1504,27 @@ const ExaminerMarking = () => {
 
         {/* RIGHT: MARKING PANEL */}
         <aside className="w-56 shrink-0 flex flex-col gap-2.5 max-h-full self-start overflow-hidden">
-          {/* CONTROL CENTER */}
-          <div className="flex flex-col gap-2 shrink-0">
-            <div className="grid gap-2 grid-cols-2">
-              <button 
-                onClick={handleSaveMarks}
-                disabled={isReadOnly}
-                className="flex items-center justify-center gap-1.5 bg-white border border-teal-200 text-teal-700 hover:bg-teal-50 disabled:bg-gray-100 disabled:text-gray-400 font-semibold py-2 rounded-md shadow-sm transition-colors text-xs uppercase disabled:cursor-not-allowed cursor-pointer"
-              >
-                <Save size={15} /> Save
-              </button>
-              <button 
-                onClick={() => {if(window.confirm("Reset all marks?")) window.location.reload();}}
-                disabled={isReadOnly}
-                className="flex items-center justify-center gap-1.5 bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400 font-semibold py-2 rounded-md shadow-sm transition-colors text-xs uppercase disabled:cursor-not-allowed cursor-pointer"
-              >
-                <RotateCcw size={15} /> Reset
-              </button>
+          {/* CONTROL CENTER - Only show if script is not completed */}
+          {!isScriptCompleted && (
+            <div className="flex flex-col gap-2 shrink-0">
+              <div className="grid gap-2 grid-cols-2">
+                <button 
+                  onClick={handleSaveMarks}
+                  disabled={isEffectiveReadOnly}
+                  className="flex items-center justify-center gap-1.5 bg-white border border-teal-200 text-teal-700 hover:bg-teal-50 disabled:bg-gray-100 disabled:text-gray-400 font-semibold py-2 rounded-md shadow-sm transition-colors text-xs uppercase disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <Save size={15} /> Save
+                </button>
+                <button 
+                  onClick={() => {if(window.confirm("Reset all marks?")) window.location.reload();}}
+                  disabled={isEffectiveReadOnly}
+                  className="flex items-center justify-center gap-1.5 bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400 font-semibold py-2 rounded-md shadow-sm transition-colors text-xs uppercase disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <RotateCcw size={15} /> Reset
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* QUESTION PALETTE - FULL HEIGHT */}
           <div className="bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden shadow-md flex-1 min-h-0">
@@ -1470,14 +1594,20 @@ const ExaminerMarking = () => {
                         const hasMarks = Number(m.marksAwarded) > 0 || isSkipped;
                         const displayMark = m.marksAwarded !== undefined ? m.marksAwarded : 0;
                         const isSectionMaxMet = sec.maxQuestionsToAttempt > 0 && attemptedCount >= sec.maxQuestionsToAttempt && !hasMarks;
+                        const isCompleted = hasMarks || m.isAttempted || isSkipped;
                         
                         return (
                           <div 
                             key={q.questionId}
                             onClick={() => {
                               setSelectedQuestion(q.questionId);
-                              // Open annotator mark allotment popup (same as right click)
-                              annotatorRef.current?.openMarkModalForQuestion?.(q.questionNo);
+                              if (isCompleted) {
+                                // Already completed question: jump to page without opening marks allotment modal
+                                annotatorRef.current?.navigateToQuestionPage?.(q.questionNo);
+                              } else {
+                                // Unattempted question: open annotator mark allotment popup
+                                annotatorRef.current?.openMarkModalForQuestion?.(q.questionNo);
+                              }
                             }}
                             className={`relative h-11 flex flex-col items-center justify-center rounded cursor-pointer transition-all border ${
                               isSelected 
@@ -1498,7 +1628,7 @@ const ExaminerMarking = () => {
                                 : isSectionMaxMet
                                 ? `Optional (Section limit ${sec.maxQuestionsToAttempt} reached)`
                                 : '0 marks'
-                            } (Click to open mark allotment box)`}
+                            } ${isCompleted ? '(Click to view)' : '(Click to open mark allotment box)'}`}
                           >
                             <span className="font-bold text-[11px] leading-tight">{q.questionNo}</span>
                             <span className={`text-[8.5px] font-bold leading-tight mt-0.5 ${

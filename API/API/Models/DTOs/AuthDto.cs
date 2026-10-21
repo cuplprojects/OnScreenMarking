@@ -132,4 +132,26 @@ namespace API.Models.DTOs
         public string? Experience { get; set; }
         public bool? IsActive { get; set; }
     }
+
+    public class SendOtpRequest
+    {
+        public string Email { get; set; }
+    }
+
+    public class VerifyOtpRequest
+    {
+        public string Email { get; set; }
+        public string Otp { get; set; }
+    }
+
+    public class SendPhoneOtpRequest
+    {
+        public string Phone { get; set; }
+    }
+
+    public class VerifyPhoneOtpRequest
+    {
+        public string Phone { get; set; }
+        public string Otp { get; set; }
+    }
 }
