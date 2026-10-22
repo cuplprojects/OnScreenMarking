@@ -587,9 +587,10 @@ namespace API.Controllers
             {
                 var marking = await _context.Markings
                     .Include(m => m.Script)
+                        .ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.ProjectPaperSections)
+                            .ThenInclude(pps => pps.Questions)
+                    .Include(m => m.Script)
                         .ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
-                            .ThenInclude(p => p.Sections)
-                                .ThenInclude(sec => sec.Questions)
                     .Include(m => m.Examiner)
                     .Include(m => m.Allocation)
                     .Include(m => m.QuestionMarks)
@@ -610,33 +611,37 @@ namespace API.Controllers
                     }
                 }
 
-                var sections = marking.Script.ProjectPaper.Paper.Sections.Select(s => new
-                {
-                    id = s.Id,
-                    name = s.Name,
-                    description = s.Description,
-                    totalQuestions = s.TotalQuestions,
-                    totalMarks = s.TotalMarks,
-                    startQuestion = s.StartQuestion,
-                    endQuestion = s.EndQuestion,
-                    questions = s.Questions.Select(q => new
+                var sections = marking.Script.ProjectPaper.ProjectPaperSections
+                    .OrderBy(pps => pps.Id)
+                    .Select(pps => new
                     {
-                        questionId = q.QuestionId,
-                        questionNo = q.QuestionNo,
-                        marks = q.Marks,
-                        type = q.Type,
-                        isOptional = q.IsOptional,
-                        optionalGroupCode = q.OptionalGroupCode,
-                        marksAwarded = marking.QuestionMarks
-                            .FirstOrDefault(qm => qm.QuestionId == q.QuestionId)?.MarksAwarded ?? 0,
-                        isSkipped = marking.QuestionMarks
-                            .FirstOrDefault(qm => qm.QuestionId == q.QuestionId)?.IsSkipped ?? false,
-                        remarks = marking.QuestionMarks
-                            .FirstOrDefault(qm => qm.QuestionId == q.QuestionId)?.Remarks ?? "",
-                        isAttempted = marking.QuestionMarks
-                            .FirstOrDefault(qm => qm.QuestionId == q.QuestionId)?.IsAttempted ?? false
-                    }).ToList()
-                }).ToList();
+                        id = pps.Id,
+                        name = pps.Name,
+                        description = pps.Description,
+                        totalQuestions = pps.TotalQuestions,
+                        totalMarks = pps.TotalMarks,
+                        startQuestion = pps.StartQuestion,
+                        endQuestion = pps.EndQuestion,
+                        maxQuestionsToAttempt = pps.MaxQuestionsToAttempt,
+                        questions = pps.Questions.Select(q => new
+                        {
+                            questionId = q.QuestionId,
+                            questionNo = q.QuestionNo,
+                            marks = q.Marks,
+                            type = q.Type,
+                            isOptional = q.IsOptional,
+                            optionalGroupCode = q.OptionalGroupCode,
+                            sectionId = pps.Id, // pass projectPaperSectionId as sectionId for frontend compatibility
+                            marksAwarded = marking.QuestionMarks
+                                .FirstOrDefault(qm => qm.QuestionId == q.QuestionId)?.MarksAwarded ?? 0,
+                            isSkipped = marking.QuestionMarks
+                                .FirstOrDefault(qm => qm.QuestionId == q.QuestionId)?.IsSkipped ?? false,
+                            remarks = marking.QuestionMarks
+                                .FirstOrDefault(qm => qm.QuestionId == q.QuestionId)?.Remarks ?? "",
+                            isAttempted = marking.QuestionMarks
+                                .FirstOrDefault(qm => qm.QuestionId == q.QuestionId)?.IsAttempted ?? false
+                        }).ToList()
+                    }).ToList();
 
                 return Ok(new
                 {
@@ -658,6 +663,7 @@ namespace API.Controllers
                     {
                         id = marking.Script.Id,
                         paperId = marking.Script.ProjectPaper.PaperId,
+                        projectPaperId = marking.Script.ProjectPaperId,
                         cleanPdfUrl = marking.Script.CleanPdfUrl,
                         status = marking.Script.Status,
                     },
@@ -706,6 +712,7 @@ namespace API.Controllers
                 var questionIds = questionMarks.Select(qm => qm.QuestionId).ToList();
                 var questions = await _context.Questions
                     .Include(q => q.Section)
+                    .Include(q => q.ProjectPaperSection)
                     .Where(q => questionIds.Contains(q.QuestionId))
                     .ToListAsync();
 
@@ -736,23 +743,28 @@ namespace API.Controllers
                     var question = questions.FirstOrDefault(q => q.QuestionId == qm.QuestionId);
                     if (question != null)
                     {
-                        if (!marksBySection.ContainsKey(question.SectionId))
+                        var secId = question.SectionId ?? question.ProjectPaperSectionId ?? 0;
+                        if (!marksBySection.ContainsKey(secId))
                         {
-                            marksBySection[question.SectionId] = 0;
+                            marksBySection[secId] = 0;
                         }
-                        marksBySection[question.SectionId] += qm.MarksAwarded;
+                        marksBySection[secId] += qm.MarksAwarded;
                     }
                 }
 
                 foreach (var entry in marksBySection)
                 {
-                    var firstQuestionInSection = questions.First(q => q.SectionId == entry.Key);
+                    var firstQuestionInSection = questions.First(q => (q.SectionId ?? q.ProjectPaperSectionId ?? 0) == entry.Key);
                     var section = firstQuestionInSection.Section;
-                    if (section != null && entry.Value > section.TotalMarks)
+                    var projectPaperSection = firstQuestionInSection.ProjectPaperSection;
+                    var sectionName = section?.Name ?? projectPaperSection?.Name ?? "Section";
+                    var maxSectionMarks = section?.TotalMarks ?? projectPaperSection?.TotalMarks ?? 0;
+
+                    if (maxSectionMarks > 0 && entry.Value > maxSectionMarks)
                     {
                         return BadRequest(new { 
                             success = false, 
-                            message = $"Total marks in Section '{section.Name}' ({entry.Value}) cannot exceed the maximum section marks ({section.TotalMarks})" 
+                            message = $"Total marks in Section '{sectionName}' ({entry.Value}) cannot exceed the maximum section marks ({maxSectionMarks})" 
                         });
                     }
                 }
@@ -769,25 +781,56 @@ namespace API.Controllers
                         var isAttempted = qm.IsAttempted || qm.MarksAwarded > 0;
                         if (isAttempted)
                         {
-                            if (!attemptedCountBySection.ContainsKey(question.SectionId))
+                            var secId = question.SectionId ?? question.ProjectPaperSectionId ?? 0;
+                            if (!attemptedCountBySection.ContainsKey(secId))
                             {
-                                attemptedCountBySection[question.SectionId] = 0;
+                                attemptedCountBySection[secId] = 0;
                             }
-                            attemptedCountBySection[question.SectionId]++;
+                            attemptedCountBySection[secId]++;
                         }
                     }
                 }
 
                 foreach (var entry in attemptedCountBySection)
                 {
-                    var firstQuestionInSection = questions.First(q => q.SectionId == entry.Key);
+                    var firstQuestionInSection = questions.First(q => (q.SectionId ?? q.ProjectPaperSectionId ?? 0) == entry.Key);
                     var section = firstQuestionInSection.Section;
-                    if (section != null && section.MaxQuestionsToAttempt > 0 && entry.Value > section.MaxQuestionsToAttempt)
+                    var projectPaperSection = firstQuestionInSection.ProjectPaperSection;
+                    var sectionName = section?.Name ?? projectPaperSection?.Name ?? "Section";
+                    var maxAttempts = section?.MaxQuestionsToAttempt ?? projectPaperSection?.MaxQuestionsToAttempt ?? 0;
+
+                    if (maxAttempts > 0 && entry.Value > maxAttempts)
                     {
                         return BadRequest(new { 
                             success = false, 
-                            message = $"You have attempted {entry.Value} questions in Section '{section.Name}', which exceeds the maximum allowed attempts of {section.MaxQuestionsToAttempt}." 
+                            message = $"You have attempted {entry.Value} questions in Section '{sectionName}', which exceeds the maximum allowed attempts of {maxAttempts}." 
                         });
+                    }
+                }
+
+                // 4. Optional group mutual exclusivity validation (at most 1 attempted question per group)
+                var groupsAttempted = new Dictionary<string, string>();
+                foreach (var qm in questionMarks)
+                {
+                    if (qm.IsSkipped) continue;
+
+                    var isAttempted = qm.IsAttempted || qm.MarksAwarded > 0;
+                    if (!isAttempted) continue;
+
+                    var question = questions.FirstOrDefault(q => q.QuestionId == qm.QuestionId);
+                    if (question != null && !string.IsNullOrWhiteSpace(question.OptionalGroupCode))
+                    {
+                        var secId = question.SectionId ?? question.ProjectPaperSectionId ?? 0;
+                        var groupCode = question.OptionalGroupCode.Trim().ToUpper();
+                        var groupKey = $"{secId}_{groupCode}";
+                        if (groupsAttempted.TryGetValue(groupKey, out var existingQNo))
+                        {
+                            return BadRequest(new { 
+                                success = false, 
+                                message = $"Question {question.QuestionNo} and Question {existingQNo} both belong to Optional Group '{groupCode}'. Only one question from this group can be awarded marks." 
+                            });
+                        }
+                        groupsAttempted[groupKey] = question.QuestionNo;
                     }
                 }
 

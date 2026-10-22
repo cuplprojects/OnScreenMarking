@@ -53,6 +53,7 @@ namespace API.Data
         public DbSet<GeneratedPdf> GeneratedPdfs { get; set; }
         public DbSet<UploadQueue> UploadQueues { get; set; }
         public DbSet<PaperSectionMaster> PaperSectionMasters { get; set; }
+        public DbSet<ProjectPaperSection> ProjectPaperSections { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -232,6 +233,25 @@ namespace API.Data
                 .WithOne(s => s.ProjectPaper)
                 .HasForeignKey(s => s.ProjectPaperId)
                 .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ProjectPaper>()
+                .HasMany(pp => pp.ProjectPaperSections)
+                .WithOne(pps => pps.ProjectPaper)
+                .HasForeignKey(pps => pps.ProjectPaperId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // ProjectPaperSection configuration
+            modelBuilder.Entity<ProjectPaperSection>()
+                .HasKey(pps => pps.Id);
+            modelBuilder.Entity<ProjectPaperSection>()
+                .HasOne(pps => pps.SectionMaster)
+                .WithMany()
+                .HasForeignKey(pps => pps.SectionMasterId)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<ProjectPaperSection>()
+                .HasMany(pps => pps.Questions)
+                .WithOne(q => q.ProjectPaperSection)
+                .HasForeignKey(q => q.ProjectPaperSectionId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // Section configuration
             modelBuilder.Entity<Section>()
@@ -245,6 +265,7 @@ namespace API.Data
                 .HasMany(s => s.Questions)
                 .WithOne(q => q.Section)
                 .HasForeignKey(q => q.SectionId)
+                .IsRequired(false)
                 .OnDelete(DeleteBehavior.Cascade);
 
             // SectionMaster configuration
@@ -257,6 +278,18 @@ namespace API.Data
             // Question configuration
             modelBuilder.Entity<Question>()
                 .HasKey(q => q.QuestionId);
+            modelBuilder.Entity<Question>()
+                .HasOne(q => q.Section)
+                .WithMany(s => s.Questions)
+                .HasForeignKey(q => q.SectionId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<Question>()
+                .HasOne(q => q.ProjectPaperSection)
+                .WithMany(pps => pps.Questions)
+                .HasForeignKey(q => q.ProjectPaperSectionId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<Question>()
                 .HasMany(q => q.QuestionMarks)
                 .WithOne(qm => qm.Question)

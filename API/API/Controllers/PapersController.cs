@@ -77,10 +77,14 @@ namespace API.Controllers
                             query = query.Where(p => _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.Status == "completed") > 0);
                             break;
                         case "unconfigured":
-                            query = query.Where(p => !_context.Sections.Any(s => s.PaperId == p.PaperId));
+                            query = query.Where(p => !_context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId) && !_context.Sections.Any(s => s.PaperId == p.PaperId));
                             break;
                         case "sections_missing":
-                            query = query.Where(p => !_context.Sections.Any(s => s.PaperId == p.PaperId) || _context.Sections.Where(s => s.PaperId == p.PaperId).Sum(s => (int?)s.TotalMarks) != p.MaxMarks);
+                            query = query.Where(p => 
+                                (!_context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId) && !_context.Sections.Any(s => s.PaperId == p.PaperId)) ||
+                                ((_context.ProjectPaperSections.Where(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId).Sum(pps => (int?)pps.TotalMarks) ?? 0) != p.MaxMarks &&
+                                 _context.Sections.Where(s => s.PaperId == p.PaperId).Sum(s => (int?)s.TotalMarks) != p.MaxMarks)
+                            );
                             break;
                         case "pdf_missing":
                             query = query.Where(p => !p.ProjectPapers.Any(pp => pp.ProjectId == projectId && !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl)));
@@ -90,8 +94,9 @@ namespace API.Controllers
                             break;
                         case "ready_for_allocation":
                             query = query.Where(p => 
-                                _context.Sections.Any(s => s.PaperId == p.PaperId) && 
-                                _context.Sections.Where(s => s.PaperId == p.PaperId).Sum(s => (int?)s.TotalMarks) == p.MaxMarks &&
+                                (_context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId) || _context.Sections.Any(s => s.PaperId == p.PaperId)) && 
+                                ((_context.ProjectPaperSections.Where(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId).Sum(pps => (int?)pps.TotalMarks) ?? 0) == p.MaxMarks || 
+                                 _context.Sections.Where(s => s.PaperId == p.PaperId).Sum(s => (int?)s.TotalMarks) == p.MaxMarks) &&
                                 p.ProjectPapers.Any(pp => pp.ProjectId == projectId && !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl)) &&
                                 _context.PaperExaminers.Any(pe => pe.PaperId == p.PaperId) &&
                                 _context.Scripts.Any(s => s.ProjectPaper.PaperId == p.PaperId && s.ProjectPaper.ProjectId == projectId && s.Status != "completed")
@@ -158,6 +163,7 @@ namespace API.Controllers
                     .Select(p => new
                     {
                         paperId = p.PaperId,
+                        projectPaperId = p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.Id).FirstOrDefault(),
                         paperCode = p.PaperCode,
                         paperName = p.PaperName,
                         catchNo = p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.CatchNo).FirstOrDefault() ?? "",
@@ -172,9 +178,13 @@ namespace API.Controllers
                         completedScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.ProjectPaper.ProjectId == projectId && s.Status == "completed"),
                         allocatedScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.ProjectPaper.ProjectId == projectId && (s.Status == "allocated" || s.Status == "marking")),
                         pendingScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.ProjectPaper.ProjectId == projectId && (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any()))),
-                        isSectionsConfigured = _context.Sections.Any(s => s.PaperId == p.PaperId),
-                        sectionsCount = _context.Sections.Count(s => s.PaperId == p.PaperId),
-                        configuredMarks = _context.Sections.Where(s => s.PaperId == p.PaperId).Sum(s => (int?)s.TotalMarks) ?? 0,
+                        isSectionsConfigured = _context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId) || _context.Sections.Any(s => s.PaperId == p.PaperId),
+                        sectionsCount = _context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId) 
+                            ? _context.ProjectPaperSections.Count(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId) 
+                            : _context.Sections.Count(s => s.PaperId == p.PaperId),
+                        configuredMarks = _context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId)
+                            ? (_context.ProjectPaperSections.Where(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId).Sum(pps => (int?)pps.TotalMarks) ?? 0)
+                            : (_context.Sections.Where(s => s.PaperId == p.PaperId).Sum(s => (int?)s.TotalMarks) ?? 0),
                         expertsCount = _context.PaperExaminers.Count(pe => pe.PaperId == p.PaperId)
                     })
                     .ToListAsync();

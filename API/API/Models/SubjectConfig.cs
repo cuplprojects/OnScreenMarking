@@ -34,8 +34,13 @@ namespace API.Models
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int QuestionId { get; set; }
-        public int SectionId { get; set; }
-        public Section Section { get; set; }
+        public int? SectionId { get; set; }
+        [ForeignKey("SectionId")]
+        public Section? Section { get; set; }
+
+        public int? ProjectPaperSectionId { get; set; }
+        [ForeignKey("ProjectPaperSectionId")]
+        public ProjectPaperSection? ProjectPaperSection { get; set; }
         public string QuestionNo { get; set; }
         public decimal Marks { get; set; }
         public string Type { get; set; } // MCQ, SA, LA, CS, NP, EXP, RC, WS, LIT, GV

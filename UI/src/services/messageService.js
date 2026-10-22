@@ -8,9 +8,25 @@ const subscribe = (listener) => {
   };
 };
 
-const notify = (text, type = 'info', duration = 3000) => {
+const getDefaultDuration = (type, text) => {
+  const len = text ? text.length : 0;
+  switch (type) {
+    case 'error':
+      return Math.max(6500, Math.min(15000, len * 60));
+    case 'warning':
+      return Math.max(6000, Math.min(15000, len * 60));
+    case 'info':
+      return Math.max(5000, Math.min(10000, len * 50));
+    case 'success':
+    default:
+      return Math.max(4000, Math.min(8000, len * 40));
+  }
+};
+
+const notify = (text, type = 'info', duration = null) => {
   if (!text) return;
   const strText = String(text).trim();
+  const effectiveDuration = duration && duration > 0 ? duration : getDefaultDuration(type, strText);
   const key = `${type}:${strText.toLowerCase()}`;
   const now = Date.now();
 
@@ -28,7 +44,7 @@ const notify = (text, type = 'info', duration = 3000) => {
   }
 
   const id = Date.now() + Math.random().toString(36).substring(2, 9);
-  listeners.forEach((listener) => listener({ id, text: strText, type, duration }));
+  listeners.forEach((listener) => listener({ id, text: strText, type, duration: effectiveDuration }));
 };
 
 const message = {
@@ -40,3 +56,4 @@ const message = {
 };
 
 export default message;
+

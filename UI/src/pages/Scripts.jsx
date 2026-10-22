@@ -77,6 +77,7 @@ const Scripts = () => {
     const queryParams = new URLSearchParams({
       scriptId: script.id,
       paperId: script.paperId || '',
+      projectPaperId: script.projectPaperId || '',
       barCode: script.generatedBarcode || '',
       allocationId: script.allocationId || '',
       examinerId: user?.id || '',
@@ -88,6 +89,7 @@ const Scripts = () => {
       state: {
         scriptId: script.id,
         paperId: script.paperId,
+        projectPaperId: script.projectPaperId,
         barCode: script.generatedBarcode,
         allocationId: script.allocationId,
         cleanPdfUrl: script.cleanPdfUrl || script.answerSheetPdfUrl || '',

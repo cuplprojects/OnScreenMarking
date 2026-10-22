@@ -25,5 +25,6 @@ namespace API.Models
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
         public ICollection<Script> Scripts { get; set; } = new List<Script>();
+        public ICollection<ProjectPaperSection> ProjectPaperSections { get; set; } = new List<ProjectPaperSection>();
     }
 }
