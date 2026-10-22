@@ -112,6 +112,7 @@ const ExaminerMarking = () => {
   // Get parameters from location state or URL params (fallback to URL params on refresh)
   const queryParams = new URLSearchParams(location.search);
   const paperId = location.state?.paperId || queryParams.get('paperId');
+  const projectPaperId = location.state?.projectPaperId || queryParams.get('projectPaperId');
   const scriptId = location.state?.scriptId || queryParams.get('scriptId');
   const allocationId = location.state?.allocationId || queryParams.get('allocationId');
   const examinerId = location.state?.examinerId || queryParams.get('examinerId') || user?.id;
@@ -145,6 +146,7 @@ const ExaminerMarking = () => {
   const isMarkingSubmitted = markingStatus === 'submitted' || submitted; 
   const isEffectiveReadOnly = isReadOnly || isMarkingSubmitted; 
   const [saving, setSaving] = useState(false);
+  const [groupSwitchModal, setGroupSwitchModal] = useState(null);
 
   // Debug log for marking status
   useEffect(() => {
@@ -672,24 +674,59 @@ const ExaminerMarking = () => {
         }
       }
 
-      // Use dynamic paperId instead of hardcoded 2
-      const data = await sectionService.getAllSections(paperId);
-      
+      // Fetch ProjectPaperSections using projectPaperId (from query/state or script)
+      let data = null;
+      let effectiveProjectPaperId = projectPaperId;
+
+      if (!effectiveProjectPaperId && scriptId) {
+        try {
+          const scriptData = await apiCall(`/scripts/${scriptId}`);
+          effectiveProjectPaperId = scriptData?.projectPaperId;
+        } catch (scriptErr) {
+          console.warn("Failed to fetch script to get projectPaperId:", scriptErr);
+        }
+      }
+
+      if (effectiveProjectPaperId) {
+        try {
+          data = await sectionService.getProjectPaperSections({ projectPaperId: effectiveProjectPaperId });
+        } catch (secErr) {
+          console.warn("Failed to fetch sections by projectPaperId:", secErr);
+        }
+      }
+
+      // Fallback: filter by paperId if we still have no data
+      if (!data || data.length === 0) {
+        try {
+          data = await sectionService.getProjectPaperSections({ paperId });
+        } catch (fallbackErr) {
+          console.warn("Fallback section fetch also failed:", fallbackErr);
+        }
+      }
+
+      // Normalize data shape: ensure each question has a sectionId equal to its parent section id
       if (data && data.length > 0) {
-        setSections(data);
-        // Extract paper info from the first section's paper object if not already loaded
-        if (data[0].paper) {
-          setPaperInfo(prev => ({ ...(prev || {}), ...data[0].paper }));
-          if (data[0].paper.questionPaperPdfUrl) {
-            setFetchedQpUrl(data[0].paper.questionPaperPdfUrl);
-          }
+        const normalizedData = data.map(section => ({
+          ...section,
+          questions: (section.questions || []).map(q => ({
+            ...q,
+            sectionId: section.id // ensure sectionId links back to the section
+          }))
+        }));
+
+        setSections(normalizedData);
+
+        // Extract paper info from ProjectPaper if available
+        if (data[0]?.projectPaper) {
+          const pp = data[0].projectPaper;
+          setPaperInfo(prev => ({ ...(prev || {}), ...pp }));
         }
 
         const expanded = {};
         const marks = {};
         const attemptCounts = {};
-        
-        data.forEach((section) => {
+
+        normalizedData.forEach((section) => {
           expanded[section.id] = true; // All sections open by default
           attemptCounts[section.id] = 0; // Initialize attempt count for section
           section.questions?.forEach((q) => {
@@ -703,13 +740,13 @@ const ExaminerMarking = () => {
             };
           });
         });
-        
+
         setExpandedSections(expanded);
         setQuestionMarks(marks);
         setSectionAttemptCounts(attemptCounts);
 
         // Auto-select first question so annotation tool is immediately enabled
-        const firstQ = data[0]?.questions?.[0];
+        const firstQ = normalizedData[0]?.questions?.[0];
         if (firstQ) {
           setSelectedQuestion((prev) => prev || firstQ.questionId);
         }
@@ -755,6 +792,23 @@ const ExaminerMarking = () => {
               updated[q.questionId].marksAwarded = 0;
               updated[q.questionId].isAttempted = false;
             } else {
+              // Enforce optional group mutual exclusivity restriction
+              if (anno.marks > 0 && q.optionalGroupCode && q.optionalGroupCode.trim()) {
+                const grp = q.optionalGroupCode.trim().toUpperCase();
+                const conflicting = (section?.questions || []).find(sq => 
+                  String(sq.questionId) !== String(q.questionId) &&
+                  sq.optionalGroupCode &&
+                  sq.optionalGroupCode.trim().toUpperCase() === grp &&
+                  ((Number(updated[sq.questionId]?.marksAwarded) > 0) || updated[sq.questionId]?.isAttempted) &&
+                  !updated[sq.questionId]?.isSkipped
+                );
+                if (conflicting) {
+                  setError(`Cannot award marks to Question ${q.questionNo}: Question ${conflicting.questionNo} in Group '${grp}' already has marks.`);
+                  setTimeout(() => setError(''), 4000);
+                  return;
+                }
+              }
+
               // Enforce maxQuestionsToAttempt restriction
               const currentMarks = updated[q.questionId];
               const isCurrentlyAttempted = currentMarks?.isAttempted || currentMarks?.marksAwarded > 0;
@@ -842,24 +896,92 @@ const ExaminerMarking = () => {
     return null;
   };
 
-  const canAttemptQuestion = (qNo) => {
+  const getConflictingGroupQuestion = (targetQ) => {
+    if (!targetQ || !targetQ.optionalGroupCode || !targetQ.optionalGroupCode.trim()) return null;
+    const targetGroup = targetQ.optionalGroupCode.trim().toUpperCase();
+    
+    // Find the section this question belongs to
+    const sec = sections.find(s => s.id === targetQ.sectionId);
+    if (!sec || !sec.questions) return null;
+
+    for (const sq of sec.questions) {
+      if (String(sq.questionId) === String(targetQ.questionId)) continue;
+      if (sq.optionalGroupCode && sq.optionalGroupCode.trim().toUpperCase() === targetGroup) {
+        const sm = questionMarks[sq.questionId];
+        const isAttemptedWithMarks = ((Number(sm?.marksAwarded) > 0) || sm?.isAttempted) && !sm?.isSkipped;
+        if (isAttemptedWithMarks) {
+          return sq;
+        }
+      }
+    }
+    return null;
+  };
+
+  const getQuestionBlockedReason = (qNo) => {
     const q = findQuestionByNo(qNo);
-    if (!q) return true;
-    const sec = sections.find(s => s.id === q.sectionId);
-    if (!sec || !sec.maxQuestionsToAttempt || sec.maxQuestionsToAttempt <= 0) return true;
-    
-    // Check if question is already attempted
+    if (!q) return null;
+
+    // A question that already has marks or is attempted can always be edited or cleared
     const m = questionMarks[q.questionId];
-    const isAlreadyAttempted = (m?.isAttempted || (m?.marksAwarded && m.marksAwarded > 0)) && !m?.isSkipped;
-    if (isAlreadyAttempted) return true; // Can re-edit or update existing attempted question
-    
-    // Count currently attempted questions in this section
-    const attemptedCount = (sec.questions || []).filter(sq => {
-      const sm = questionMarks[sq.questionId];
-      return (sm?.isAttempted || (sm?.marksAwarded && sm.marksAwarded > 0)) && !sm?.isSkipped;
-    }).length;
-    
-    return attemptedCount < sec.maxQuestionsToAttempt;
+    const isAlreadyAttempted = ((Number(m?.marksAwarded) > 0) || m?.isAttempted) && !m?.isSkipped;
+    if (isAlreadyAttempted) {
+      return null;
+    }
+
+    // 1. Check optional group mutual exclusivity conflict
+    const conflictingQ = getConflictingGroupQuestion(q);
+    if (conflictingQ) {
+      const groupCode = q.optionalGroupCode.trim().toUpperCase();
+      return `Question ${q.questionNo} belongs to Optional Group '${groupCode}'. Question ${conflictingQ.questionNo} is already awarded marks in this group. Only 1 question can be attempted in Group '${groupCode}'.`;
+    }
+
+    // 2. Check section attempt limit
+    const sec = sections.find(s => s.id === q.sectionId);
+    if (sec && sec.maxQuestionsToAttempt && sec.maxQuestionsToAttempt > 0) {
+      const attemptedCount = (sec.questions || []).filter(sq => {
+        const sm = questionMarks[sq.questionId];
+        return (sm?.isAttempted || (Number(sm?.marksAwarded) > 0)) && !sm?.isSkipped;
+      }).length;
+      if (attemptedCount >= sec.maxQuestionsToAttempt) {
+        return `Section '${sec.name}' maximum attempt limit (${sec.maxQuestionsToAttempt} questions) reached.`;
+      }
+    }
+
+    return null;
+  };
+
+  const canAttemptQuestion = (qNo) => {
+    return !getQuestionBlockedReason(qNo);
+  };
+
+  const handleConfirmGroupSwitch = (targetQ, conflictingQ) => {
+    // 1. Clear marks for conflicting question from questionMarks state
+    setQuestionMarks(prev => {
+      const updated = {
+        ...prev,
+        [conflictingQ.questionId]: {
+          ...prev[conflictingQ.questionId],
+          marksAwarded: 0,
+          isAttempted: false,
+          isSkipped: false
+        }
+      };
+      calculateTotal(updated);
+      return updated;
+    });
+
+    // 2. Remove conflicting question annotation from annotator canvas and storage
+    annotatorRef.current?.clearQuestionMarks?.(conflictingQ.questionNo);
+
+    // 3. Select target question
+    setSelectedQuestion(targetQ.questionId);
+
+    // 4. Open mark allotment modal for target question
+    setTimeout(() => {
+      annotatorRef.current?.openMarkModalForQuestion?.(targetQ.questionNo);
+    }, 120);
+
+    message.success(`Cleared marks from Question ${conflictingQ.questionNo}. Now evaluating Question ${targetQ.questionNo}.`);
   };
 
   const calculateTotal = (marks) => {
@@ -910,6 +1032,23 @@ const ExaminerMarking = () => {
       numValue = Math.max(0, section.totalMarks - sectionOtherQuestionsTotal);
       setError(`Marks in ${section.name} cannot exceed section total of ${section.totalMarks}. Capped marks at ${numValue}.`);
       setTimeout(() => setError(''), 4000);
+    }
+
+    // Check optional group mutual exclusivity
+    if (question.optionalGroupCode && question.optionalGroupCode.trim() && numValue > 0) {
+      const grp = question.optionalGroupCode.trim().toUpperCase();
+      const conflicting = section.questions?.find(sq => 
+        String(sq.questionId) !== String(question.questionId) &&
+        sq.optionalGroupCode &&
+        sq.optionalGroupCode.trim().toUpperCase() === grp &&
+        ((Number(questionMarks[sq.questionId]?.marksAwarded) > 0) || questionMarks[sq.questionId]?.isAttempted) &&
+        !questionMarks[sq.questionId]?.isSkipped
+      );
+      if (conflicting) {
+        setError(`Cannot award marks to Question ${question.questionNo}: Question ${conflicting.questionNo} in Group '${grp}' already has marks.`);
+        setTimeout(() => setError(''), 4000);
+        return;
+      }
     }
 
     // Check if marking this question would exceed maxQuestionsToAttempt
@@ -1484,6 +1623,7 @@ const ExaminerMarking = () => {
             readOnly={isEffectiveReadOnly}
             showAnnotationTools={!isMarkingSubmitted}
             canAttemptQuestion={canAttemptQuestion}
+            getQuestionBlockedReason={getQuestionBlockedReason}
             questionMarks={questionMarks}
             onToggleQp={() => {
               if (!effectiveQpPdfUrl) {
@@ -1562,7 +1702,7 @@ const ExaminerMarking = () => {
                         <p className={`text-[9px] font-semibold leading-none mt-0.5 ${
                           attemptedCount >= sec.maxQuestionsToAttempt ? 'text-green-700' : 'text-gray-500'
                         }`}>
-                          Attempts: {attemptedCount}/{sec.maxQuestionsToAttempt} {attemptedCount >= sec.maxQuestionsToAttempt ? '✓ (Max Reached)' : ''}
+                          Attempts: {attemptedCount}/{sec.maxQuestionsToAttempt}
                         </p>
                       ) : (
                         <p className="text-[9px] text-gray-500 leading-none mt-0.5">
@@ -1579,60 +1719,128 @@ const ExaminerMarking = () => {
                   </div>
 
                   {expandedSections[sec.id] && (
-                    <div className="p-1.5 grid grid-cols-5 gap-1 bg-white">
-                      {sec.questions?.map((q) => {
-                        const m = questionMarks[q.questionId] || {};
-                        const isSelected = selectedQuestion === q.questionId;
-                        const isSkipped = m.isSkipped === true;
-                        // Green (visited) = has marks OR is skipped
-                        const hasMarks = Number(m.marksAwarded) > 0 || isSkipped;
-                        const displayMark = m.marksAwarded !== undefined ? m.marksAwarded : 0;
-                        const isSectionMaxMet = sec.maxQuestionsToAttempt > 0 && attemptedCount >= sec.maxQuestionsToAttempt && !hasMarks;
-                        const isCompleted = hasMarks || m.isAttempted || isSkipped;
-                        
-                        return (
-                          <div 
-                            key={q.questionId}
-                            onClick={() => {
-                              setSelectedQuestion(q.questionId);
-                              if (isCompleted || isEffectiveReadOnly) {
-                                // Already completed question or read-only: jump to page without opening marks allotment modal
-                                annotatorRef.current?.navigateToQuestionPage?.(q.questionNo);
-                              } else {
-                                // Unattempted question: open annotator mark allotment popup
-                                annotatorRef.current?.openMarkModalForQuestion?.(q.questionNo);
+                    <div className="bg-white">
+                      {sec.questions?.some(sq => {
+                        const sm = questionMarks[sq.questionId] || {};
+                        const hasSm = ((Number(sm.marksAwarded) > 0) || sm.isAttempted) && !sm.isSkipped;
+                        const cq = getConflictingGroupQuestion(sq);
+                        return hasSm && cq;
+                      }) && (
+                        <div className="bg-amber-50 border-b border-amber-200 p-2 text-[10px] text-amber-800 font-semibold leading-tight">
+                          ⚠️ Group conflict detected! Multiple questions in an optional group have marks. Click either question to edit or clear marks.
+                        </div>
+                      )}
+
+                      <div className="p-1.5 grid grid-cols-5 gap-1">
+                        {sec.questions?.map((q) => {
+                          const m = questionMarks[q.questionId] || {};
+                          const isSelected = selectedQuestion === q.questionId;
+                          const isSkipped = m.isSkipped === true;
+                          const thisQuestionHasMarks = ((Number(m.marksAwarded) > 0) || m.isAttempted) && !isSkipped;
+                          const hasMarks = Number(m.marksAwarded) > 0 || isSkipped;
+                          const displayMark = m.marksAwarded !== undefined ? m.marksAwarded : 0;
+                          const isSectionMaxMet = sec.maxQuestionsToAttempt > 0 && attemptedCount >= sec.maxQuestionsToAttempt && !hasMarks;
+                          const isCompleted = hasMarks || m.isAttempted || isSkipped;
+                          
+                          // Optional group checks
+                          const conflictingGroupQ = getConflictingGroupQuestion(q);
+                          const otherQuestionHasMarks = Boolean(conflictingGroupQ);
+                          const groupCode = q.optionalGroupCode?.trim();
+
+                          // If BOTH this question and another question have marks -> group conflict! Neither is disabled
+                          const isGroupConflict = thisQuestionHasMarks && otherQuestionHasMarks;
+                          // A question is ONLY disabled if it has NO marks and another question in the group DOES have marks
+                          const isGroupDisabled = !thisQuestionHasMarks && otherQuestionHasMarks;
+
+                          return (
+                            <div 
+                              key={q.questionId}
+                              onClick={() => {
+                                if (isGroupDisabled) {
+                                  if (isEffectiveReadOnly) {
+                                    message.warning(`Question ${q.questionNo} is optional and Question ${conflictingGroupQ.questionNo} in Group '${groupCode}' was attempted.`);
+                                    return;
+                                  }
+                                  // Open switch modal so examiner can switch from conflictingGroupQ to this question
+                                  setGroupSwitchModal({
+                                    targetQuestion: q,
+                                    conflictingQuestion: conflictingGroupQ,
+                                    groupCode
+                                  });
+                                  return;
+                                }
+                                setSelectedQuestion(q.questionId);
+                                if (isEffectiveReadOnly) {
+                                  annotatorRef.current?.navigateToQuestionPage?.(q.questionNo);
+                                } else {
+                                  // Open mark allotment popup in edit mode (loads existing marks and shows Clear button)
+                                  annotatorRef.current?.openMarkModalForQuestion?.(q.questionNo);
+                                }
+                              }}
+                              className={`relative h-11 flex flex-col items-center justify-center rounded transition-all border ${
+                                isGroupConflict
+                                  ? "bg-amber-100 border-amber-500 text-amber-950 ring-2 ring-amber-400 font-bold z-10 scale-105 shadow-sm cursor-pointer"
+                                  : isGroupDisabled
+                                  ? "bg-gray-100 border-gray-200 text-gray-400 cursor-pointer opacity-60 shadow-none hover:bg-amber-50 hover:border-amber-300 hover:text-amber-800"
+                                  : isSelected 
+                                  ? (hasMarks 
+                                      ? "bg-green-700 text-white border-green-800 ring-2 ring-green-400 font-bold z-10 scale-105 shadow-sm cursor-pointer" 
+                                      : "bg-red-700 text-white border-red-800 ring-2 ring-red-400 font-bold z-10 scale-105 shadow-sm cursor-pointer")
+                                  : (hasMarks
+                                      ? "bg-green-50 border-green-300 text-green-900 hover:bg-green-100 font-semibold cursor-pointer"
+                                      : isSectionMaxMet
+                                      ? "bg-gray-100 border-gray-300 text-gray-500 hover:bg-gray-200 font-normal opacity-75 cursor-pointer"
+                                      : "bg-red-50 border-red-300 text-red-900 hover:bg-red-100 font-semibold cursor-pointer")
+                              }`}
+                              title={
+                                isGroupConflict
+                                  ? `Q${q.questionNo} (Group ${groupCode}): CONFLICT - Both Q${q.questionNo} and Q${conflictingGroupQ.questionNo} have marks. Click to edit or clear marks.`
+                                  : isGroupDisabled
+                                  ? `Q${q.questionNo} (Group ${groupCode}): Locked - Q${conflictingGroupQ.questionNo} has marks. Click to switch to Q${q.questionNo}.`
+                                  : `Q${q.questionNo}${groupCode ? ` (Group ${groupCode})` : ''}: ${
+                                      isSkipped
+                                        ? 'Marked as Skipped'
+                                        : hasMarks
+                                        ? `${displayMark} marks`
+                                        : isSectionMaxMet
+                                        ? `Optional (Section limit ${sec.maxQuestionsToAttempt} reached)`
+                                        : '0 marks'
+                                    } (Click to ${isCompleted ? 'edit/clear marks' : 'award marks'})`
                               }
-                            }}
-                            className={`relative h-11 flex flex-col items-center justify-center rounded cursor-pointer transition-all border ${
-                              isSelected 
-                                ? (hasMarks 
-                                    ? "bg-green-700 text-white border-green-800 ring-2 ring-green-400 font-bold z-10 scale-105 shadow-sm" 
-                                    : "bg-red-700 text-white border-red-800 ring-2 ring-red-400 font-bold z-10 scale-105 shadow-sm")
-                                : (hasMarks
-                                    ? "bg-green-50 border-green-300 text-green-900 hover:bg-green-100 font-semibold"
-                                    : isSectionMaxMet
-                                    ? "bg-gray-100 border-gray-300 text-gray-500 hover:bg-gray-200 font-normal opacity-75"
-                                    : "bg-red-50 border-red-300 text-red-900 hover:bg-red-100 font-semibold")
-                            }`}
-                            title={`Q${q.questionNo}: ${
-                              isSkipped
-                                ? 'Marked as Skipped'
-                                : hasMarks
-                                ? `${displayMark} marks`
-                                : isSectionMaxMet
-                                ? `Optional (Section limit ${sec.maxQuestionsToAttempt} reached)`
-                                : '0 marks'
-                            } ${isCompleted ? '(Click to view)' : '(Click to open mark allotment box)'}`}
-                          >
-                            <span className="font-bold text-[11px] leading-tight">{q.questionNo}</span>
-                            <span className={`text-[8.5px] font-bold leading-tight mt-0.5 ${
-                              isSelected ? 'text-white' : (hasMarks ? 'text-green-800' : isSectionMaxMet ? 'text-gray-500' : 'text-red-700')
-                            }`}>
-                              {isSkipped ? 'Skip' : isSectionMaxMet ? 'Opt' : `${displayMark}m`}
-                            </span>
-                          </div>
-                        );
-                      })}
+                            >
+                              {/* Group badge at top-right corner if question has a group code */}
+                              {groupCode && (
+                                <span 
+                                  className={`absolute -top-1 -right-1 text-[7.5px] font-extrabold px-1 py-0.2 rounded-full border shadow-xs leading-none z-10 ${
+                                    isGroupConflict
+                                      ? 'bg-amber-400 text-amber-950 border-amber-600'
+                                      : isGroupDisabled
+                                      ? 'bg-gray-200 text-gray-500 border-gray-300'
+                                      : isSelected
+                                      ? 'bg-white text-teal-800 border-teal-300'
+                                      : 'bg-amber-100 text-amber-800 border-amber-300'
+                                  }`}
+                                  title={`Optional Group ${groupCode}`}
+                                >
+                                  {groupCode}
+                                </span>
+                              )}
+                              <span className="font-bold text-[11px] leading-tight">{q.questionNo}</span>
+                              <span className={`text-[8.5px] font-bold leading-tight mt-0.5 ${
+                                isGroupConflict
+                                  ? 'text-amber-950 font-extrabold'
+                                  : isGroupDisabled 
+                                  ? 'text-gray-400 font-normal' 
+                                  : isSelected 
+                                  ? 'text-white' 
+                                  : (hasMarks ? 'text-green-800' : isSectionMaxMet ? 'text-gray-500' : 'text-red-700')
+                              }`}>
+                                {isGroupConflict ? '⚠️Conf' : isGroupDisabled ? 'Lock' : isSkipped ? 'Skip' : isSectionMaxMet ? 'Opt' : `${displayMark}m`}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1754,6 +1962,55 @@ const ExaminerMarking = () => {
           </div>
         )}
       </div>
+
+      {/* OPTIONAL GROUP SWITCH MODAL */}
+      {groupSwitchModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-[80] p-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full p-5 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
+                <AlertCircle size={22} className="text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900 text-sm">Switch to Question {groupSwitchModal.targetQuestion.questionNo}?</h3>
+                <p className="text-xs text-gray-500">Optional Group {groupSwitchModal.groupCode} allows only 1 question to be evaluated</p>
+              </div>
+            </div>
+
+            <div className="bg-amber-50/80 border border-amber-200 rounded-lg p-3 text-xs text-gray-700 mb-4 space-y-1.5">
+              <p>
+                <strong>Question {groupSwitchModal.conflictingQuestion.questionNo}</strong> currently holds{' '}
+                <span className="font-bold text-teal-800">
+                  {questionMarks[groupSwitchModal.conflictingQuestion.questionId]?.marksAwarded || 0} marks
+                </span> in Optional Group {groupSwitchModal.groupCode}.
+              </p>
+              <p className="text-gray-600">
+                To evaluate <strong>Question {groupSwitchModal.targetQuestion.questionNo}</strong> instead, the marks and annotation for Question {groupSwitchModal.conflictingQuestion.questionNo} will be cleared.
+              </p>
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setGroupSwitchModal(null)}
+                className="px-3.5 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleConfirmGroupSwitch(groupSwitchModal.targetQuestion, groupSwitchModal.conflictingQuestion);
+                  setGroupSwitchModal(null);
+                }}
+                className="px-3.5 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <span>Clear Q{groupSwitchModal.conflictingQuestion.questionNo} & Mark Q{groupSwitchModal.targetQuestion.questionNo}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

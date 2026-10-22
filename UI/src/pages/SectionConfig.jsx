@@ -35,6 +35,7 @@ export default function SectionConfig() {
   const projectId = encryptedProjectId ? decryptId(encryptedProjectId) : null;
   const urlSubjectId = searchParams.get('subjectId') ? parseInt(decryptId(searchParams.get('subjectId')), 10) : null;
   const urlPaperId = searchParams.get('paperId') ? parseInt(decryptId(searchParams.get('paperId')), 10) : null;
+  const isProjectMode = Boolean(projectId && urlPaperId);
   const { userType } = useAuth();
   const { setBreadcrumb } = useBreadcrumb();
   const navigate = useNavigate();
@@ -158,8 +159,13 @@ export default function SectionConfig() {
   const fetchSections = async () => {
     try {
       setLoading(true);
-      const data = await sectionService.getAllSections(urlPaperId);
-      setSections(data);
+      if (isProjectMode) {
+        const data = await sectionService.getProjectPaperSections({ projectId, paperId: urlPaperId });
+        setSections(data || []);
+      } else {
+        const data = await sectionService.getAllSections(urlPaperId);
+        setSections(data || []);
+      }
     } catch (err) {
       message.error('Failed to fetch sections');
       console.error(err);
@@ -199,16 +205,19 @@ export default function SectionConfig() {
   const generateQuestions = () => {
     const { startQuestion, endQuestion, totalMarks } = sectionForm;
     const totalQuestions = endQuestion - startQuestion + 1;
-    const marksPerQuestion = totalMarks / totalQuestions;
+    const marksPerQuestion = totalQuestions > 0 ? totalMarks / totalQuestions : 0;
 
     const generatedQuestions = [];
     for (let i = startQuestion; i <= endQuestion; i++) {
+      const qNoStr = i.toString();
+      const existingQ = questions.find(q => String(q.questionNo) === qNoStr);
       generatedQuestions.push({
-        questionNo: i.toString(),
-        marks: parseFloat(marksPerQuestion.toFixed(2)),
-        type: '',
-        isOptional: false,
-        optionalGroupCode: '',
+        questionId: existingQ?.questionId || 0,
+        questionNo: qNoStr,
+        marks: existingQ?.marks !== undefined ? existingQ.marks : parseFloat(marksPerQuestion.toFixed(2)),
+        type: existingQ?.type || '',
+        isOptional: existingQ?.isOptional !== undefined ? existingQ.isOptional : false,
+        optionalGroupCode: existingQ?.optionalGroupCode || '',
       });
     }
     setQuestions(generatedQuestions);
@@ -265,11 +274,20 @@ export default function SectionConfig() {
 
     setImportingMasters(true);
     try {
-      await sectionService.importMasterSections({
-        paperId: urlPaperId,
-        masterSectionIds: selectedMasterSectionIds,
-        overwriteExisting: overwriteExistingMasters
-      });
+      if (isProjectMode) {
+        await sectionService.importMastersToProjectPaper({
+          projectId: parseInt(projectId, 10),
+          paperId: urlPaperId,
+          masterSectionIds: selectedMasterSectionIds,
+          overwriteExisting: overwriteExistingMasters
+        });
+      } else {
+        await sectionService.importMasterSections({
+          paperId: urlPaperId,
+          masterSectionIds: selectedMasterSectionIds,
+          overwriteExisting: overwriteExistingMasters
+        });
+      }
       message.success("Master sections imported successfully!");
       setShowImportMasterModal(false);
       await fetchSections();
@@ -290,7 +308,15 @@ export default function SectionConfig() {
       totalMarks: section.totalMarks,
       maxQuestionsToAttempt: section.maxQuestionsToAttempt,
     });
-    setQuestions(section.questions || []);
+    setQuestions((section.questions || []).map(q => ({
+      ...q,
+      questionId: q.questionId || q.id || 0,
+      questionNo: q.questionNo?.toString() || '',
+      marks: q.marks !== undefined ? q.marks : 0,
+      type: q.type || '',
+      isOptional: Boolean(q.isOptional),
+      optionalGroupCode: q.optionalGroupCode || ''
+    })));
     setEditingSectionId(section.id);
     setShowSectionForm(true);
     setShowQuestionPreview(true);
@@ -380,22 +406,45 @@ export default function SectionConfig() {
 
     try {
       setLoading(true);
-      const sectionData = {
-        ...sectionForm,
-        totalQuestions: questions.length,
-        paperId: selectedPaper.paperId,
-        questions: questions.map(q => ({
-          ...q,
-          marks: parseFloat(q.marks)
-        }))
-      };
+      if (isProjectMode) {
+        const projectPaperSectionData = {
+          ...sectionForm,
+          totalQuestions: questions.length,
+          projectId: parseInt(projectId, 10),
+          paperId: selectedPaper.paperId,
+          questions: questions.map(q => ({
+            ...q,
+            questionId: q.questionId || 0,
+            marks: parseFloat(q.marks)
+          }))
+        };
 
-      if (editingSectionId) {
-        await sectionService.updateSection(editingSectionId, sectionData);
-        message.success('Section updated successfully');
+        if (editingSectionId) {
+          await sectionService.updateProjectPaperSection(editingSectionId, projectPaperSectionData);
+          message.success('Project paper section updated successfully');
+        } else {
+          await sectionService.createProjectPaperSection(projectPaperSectionData);
+          message.success('Project paper section created successfully');
+        }
       } else {
-        await sectionService.createSection(sectionData);
-        message.success('Section created successfully');
+        const sectionData = {
+          ...sectionForm,
+          totalQuestions: questions.length,
+          paperId: selectedPaper.paperId,
+          questions: questions.map(q => ({
+            ...q,
+            questionId: q.questionId || 0,
+            marks: parseFloat(q.marks)
+          }))
+        };
+
+        if (editingSectionId) {
+          await sectionService.updateSection(editingSectionId, sectionData);
+          message.success('Section updated successfully');
+        } else {
+          await sectionService.createSection(sectionData);
+          message.success('Section created successfully');
+        }
       }
 
       setShowSectionForm(false);
@@ -427,8 +476,13 @@ export default function SectionConfig() {
     if (!sectionToDelete) return;
     try {
       setLoading(true);
-      await sectionService.deleteSection(sectionToDelete);
-      message.success('Section deleted successfully!');
+      if (isProjectMode) {
+        await sectionService.deleteProjectPaperSection(sectionToDelete);
+        message.success('Project paper section deleted successfully!');
+      } else {
+        await sectionService.deleteSection(sectionToDelete);
+        message.success('Section deleted successfully!');
+      }
       await fetchSections();
     } catch (err) {
       message.error('Failed to delete section');
@@ -541,7 +595,14 @@ export default function SectionConfig() {
                   <ArrowLeft className="w-5 h-5" />
                 </button>
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900 leading-tight">Section Management</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-bold text-gray-900 leading-tight">Section Management</h2>
+                    {isProjectMode && (
+                      <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider bg-teal-50 text-teal-700 border border-teal-200 rounded-md">
+                        Project Specific
+                      </span>
+                    )}
+                  </div>
                   <p className="text-gray-500 text-xs font-medium">{selectedSubject?.subjectName} <ChevronRight className="inline w-3 h-3 mx-1" /> {selectedPaper?.paperName}</p>
                 </div>
               </div>

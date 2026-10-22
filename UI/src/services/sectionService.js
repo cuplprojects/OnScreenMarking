@@ -112,6 +112,54 @@ const sectionService = {
       body: JSON.stringify({ paperId, masterSectionIds }),
     });
   },
+
+  // Project Paper Sections
+  getProjectPaperSections: async ({ projectPaperId = null, projectId = null, paperId = null } = {}) => {
+    const params = new URLSearchParams();
+    if (projectPaperId) params.append('projectPaperId', projectPaperId);
+    if (projectId) params.append('projectId', projectId);
+    if (paperId) params.append('paperId', paperId);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return apiCall(`/projectpapersection${qs}`);
+  },
+
+  getProjectPaperSectionById: async (id) => {
+    return apiCall(`/projectpapersection/${id}`);
+  },
+
+  createProjectPaperSection: async (data) => {
+    return apiCall('/projectpapersection', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateProjectPaperSection: async (id, data) => {
+    return apiCall(`/projectpapersection/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteProjectPaperSection: async (id) => {
+    return apiCall(`/projectpapersection/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  importMasterSectionsToProjectPaper: async (projectPaperId, overwriteExisting = false) => {
+    return apiCall('/projectpapersection/import-from-paper', {
+      method: 'POST',
+      body: JSON.stringify({ projectPaperId, overwriteExisting }),
+    });
+  },
+
+  importMastersToProjectPaper: async ({ projectPaperId = null, projectId = null, paperId = null, masterSectionIds = [], overwriteExisting = false } = {}) => {
+    return apiCall('/projectpapersection/import-masters', {
+      method: 'POST',
+      body: JSON.stringify({ projectPaperId, projectId, paperId, masterSectionIds, overwriteExisting }),
+    });
+  },
 };
 
 export default sectionService;

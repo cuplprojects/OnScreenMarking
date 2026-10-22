@@ -54,12 +54,13 @@ namespace API.Models.DTOs
     public class QuestionDto
     {
         public int QuestionId { get; set; }
-        public int SectionId { get; set; }
+        public int? SectionId { get; set; }
+        public int? ProjectPaperSectionId { get; set; }
         public string QuestionNo { get; set; }
         public decimal Marks { get; set; }
         public string Type { get; set; }
         public bool IsOptional { get; set; }
-        public string OptionalGroupCode { get; set; }
+        public string? OptionalGroupCode { get; set; }
     }
 
     public class QuestionMarksDto

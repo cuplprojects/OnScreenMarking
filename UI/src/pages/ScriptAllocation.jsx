@@ -183,7 +183,18 @@ export default function ScriptAllocation({ isTab = false }) {
     setActivePaper(paper);
     setLoading(true);
     try {
-      const sectionsData = await sectionService.getAllSections(paper.paperId);
+      // Check ProjectPaperSections first, falling back to master sections
+      let sectionsData = null;
+      if (paper.projectPaperId) {
+        sectionsData = await sectionService.getProjectPaperSections({ projectPaperId: paper.projectPaperId });
+      }
+      if (!sectionsData || sectionsData.length === 0) {
+        sectionsData = await sectionService.getProjectPaperSections({ projectId, paperId: paper.paperId });
+      }
+      if (!sectionsData || sectionsData.length === 0) {
+        sectionsData = await sectionService.getAllSections(paper.paperId);
+      }
+
       if (!sectionsData || sectionsData.length === 0) {
         message.warning(`Paper "${paper.paperName}" does not have sections configured yet.`);
         setActivePaper(null);
