@@ -1493,27 +1493,15 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       {showMarkPopup && (
         <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-[70]">
           <div className="bg-white rounded-lg border border-gray-300 shadow-xl w-80 animate-in zoom-in duration-150">
-            <div className="bg-gray-50 p-3 border-b border-gray-200 rounded-t-lg">
-              <div className="flex justify-between items-center mb-2">
-                <p className="text-xs font-semibold text-gray-600">Section:</p>
-                {currentQuestionId && (
-                  <span className="text-xs font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 shadow-sm">
-                    Q. {currentQuestionId}
-                  </span>
-                )}
-              </div>
-              <select 
-                value={stepName}
-                onChange={(e) => setStepName(e.target.value)}
-                className="w-full text-sm font-semibold p-2 border border-gray-300 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-              >
-                {sections.length > 0
-                  ? sections.map((sec) => (
-                      <option key={sec.id} value={sec.name}>{sec.name}</option>
-                    ))
-                  : <option value="">No sections</option>
-                }
-              </select>
+            <div className="bg-gray-50 px-3.5 py-2.5 border-b border-gray-200 rounded-t-lg flex justify-between items-center">
+              <span className="text-[14px] font-bold text-gray-800">
+                {sections.find(sec => sec.questions?.some(q => String(q.questionNo) === String(pendingAnno?.questionId || currentQuestionId)))?.name || stepName || 'Section A'}
+              </span>
+              {(pendingAnno?.questionId || currentQuestionId) && (
+                <span className="text-[13px] font-bold text-teal-800 bg-teal-50 px-2.5 py-1 rounded-md border border-teal-200 shadow-xs">
+                  Question {pendingAnno?.questionId || currentQuestionId}
+                </span>
+              )}
             </div>
             
             {/* Skip Question Checkbox */}
