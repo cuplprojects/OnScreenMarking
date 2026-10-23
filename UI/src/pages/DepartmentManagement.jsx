@@ -6,13 +6,12 @@ import departmentService from '../services/departmentService';
 import { useTable } from '../services/tableService';
 import TablePagination from '../components/TablePagination';
 import AddDepartmentModal from '../components/AddDepartmentModal';
-import AddCourseModal from '../components/AddCourseModal';
 import ColumnFilter from '../components/ColumnFilter';
 import { 
   Building2, 
   Plus, 
   Edit2,
-  PlusCircle, 
+  Trash2, 
   ArrowUpDown,
   ArrowUp,
   ArrowDown
@@ -105,8 +104,6 @@ export default function DepartmentManagement() {
     return () => setConfigHeader(null);
   }, [search, setSearch, setConfigHeader]);
 
-  const [showCourseModal, setShowCourseModal] = useState(false);
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState(null);
 
   const handleEdit = (department) => {
     setFormData({
@@ -131,9 +128,19 @@ export default function DepartmentManagement() {
     
   };
 
-  const handleAddCourse = (department) => {
-    setSelectedDepartmentId(department.departmentId);
-    setShowCourseModal(true);
+  const handleDelete = async (departmentId) => {
+    if (!window.confirm('Are you sure you want to delete this department? It will be marked as inactive.')) {
+      return;
+    }
+
+    try {
+      await departmentService.deleteDepartment(departmentId);
+      message.success('Department deactivated successfully!');
+      refresh();
+    } catch (err) {
+      console.error(err);
+      message.error(err.message || 'Failed to deactivate department.');
+    }
   };
 
   return (
@@ -250,19 +257,18 @@ export default function DepartmentManagement() {
                       <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => handleAddCourse(department)}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 hover:text-teal-800 rounded-xl font-bold text-[10px] uppercase tracking-wider border border-teal-100 transition cursor-pointer text-teal-700"
-                            title="Add Course"
-                          >
-                            <PlusCircle size={12} />
-                            <span>Add Course</span>
-                          </button>
-                          <button
                             onClick={() => handleEdit(department)}
                             className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl border border-gray-200 transition cursor-pointer"
                             title="Edit Department"
                           >
                             <Edit2 size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(department.departmentId)}
+                            className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-100 transition cursor-pointer"
+                            title="Delete Department"
+                          >
+                            <Trash2 size={13} />
                           </button>
                         </div>
                       </td>
@@ -283,16 +289,6 @@ export default function DepartmentManagement() {
             </div>
           )}
         </div>
-
-        {/* Modal for adding/linking courses */}
-        <AddCourseModal
-          isOpen={showCourseModal}
-          onClose={() => setShowCourseModal(false)}
-          onSuccess={handleSuccess}
-          activeUniversityId={activeUniversityId}
-          departments={departments}
-          initialData={{ departmentId: selectedDepartmentId }}
-        />
     </div>
   );
 }

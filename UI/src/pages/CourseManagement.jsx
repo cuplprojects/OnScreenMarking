@@ -8,7 +8,6 @@ import subjectService from '../services/subjectService';
 import { useTable } from '../services/tableService';
 import TablePagination from '../components/TablePagination';
 import AddCourseModal from '../components/AddCourseModal';
-import AddSubjectModal from '../components/AddSubjectModal';
 import ColumnFilter from '../components/ColumnFilter';
 import { 
   GraduationCap, 
@@ -45,15 +44,6 @@ export default function CourseManagement() {
     isActive: true
   });
 
-  // Subject Mapping State
-  const [showSubjectModal, setShowSubjectModal] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState(null);
-  const [assignedSubjects, setAssignedSubjects] = useState([]);
-  
-  // Add Subject Modal State
-  const [showAddSubjectModal, setShowAddSubjectModal] = useState(false);
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState(null);
-  const [selectedCourseId, setSelectedCourseId] = useState(null);
 
   // Define fetch function for paginated courses
   const fetchFn = useCallback((params) => {
@@ -165,12 +155,6 @@ export default function CourseManagement() {
     }
   };
 
-  const handleOpenAddSubject = (course) => {
-    setSelectedDepartmentId(course.departmentId);
-    setSelectedCourseId(course.id);
-    setShowAddSubjectModal(true);
-  };
-
   // Register into the unified header bar
   const { setConfigHeader } = useConfigHeader();
   useEffect(() => {
@@ -267,7 +251,7 @@ export default function CourseManagement() {
                         />
                       </div>
                     </th>
-                    <th className="py-2.5 md:px-6 px-4">Subjects Mapping</th>
+                    <th className="py-2.5 md:px-6 px-4">Subjects</th>
                     <th 
                       className="py-2.5 text-center cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4"
                       onClick={() => handleSort('status')}
@@ -346,14 +330,6 @@ export default function CourseManagement() {
                       <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => handleOpenAddSubject(course)}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 hover:text-teal-800 rounded-xl font-bold text-[10px] uppercase tracking-wider border border-teal-100 transition cursor-pointer text-teal-700"
-                            title="Add Subject to Course"
-                          >
-                            <BookOpen size={12} />
-                            <span>Add Subject</span>
-                          </button>
-                          <button
                             onClick={() => handleEdit(course)}
                             className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl border border-gray-200 transition cursor-pointer"
                             title="Edit Course"
@@ -399,22 +375,9 @@ export default function CourseManagement() {
         editingId={editingId}
         initialData={formData}
         activeUniversityId={activeUniversityId}
-        departments={departments}
       />
 
-      {/* Add Subject Modal */}
-      <AddSubjectModal
-        isOpen={showAddSubjectModal}
-        onClose={() => setShowAddSubjectModal(false)}
-        onSuccess={(msg) => {
-          message.success(msg);
-          refresh();
-          
-        }}
-        activeUniversityId={activeUniversityId}
-        departments={departments}
-        initialData={{ departmentId: selectedDepartmentId, courseId: selectedCourseId }}
-      />
+    
     </div>
   );
 }

@@ -214,9 +214,10 @@ namespace API.Controllers
                     .Select(d => d.DepartmentId)
                     .ToListAsync();
 
-                // Get subjects mapped to those departments
+                // Get subjects mapped to those departments or directly to university
                 var query = _context.Subjects
                     .Where(s =>
+                        s.UniversityId == universityId ||
                         s.DepartmentSubjects.Any(ds =>
                             departmentIds.Contains(ds.DepartmentId)))
                     .AsQueryable();
@@ -364,30 +365,6 @@ namespace API.Controllers
                     });
                 }
 
-                if (subjectDto.DepartmentId <= 0)
-                {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Department ID is required"
-                    });
-                }
-
-                // Verify department exists
-                var department = await _context.Departments
-                    .FirstOrDefaultAsync(d =>
-                        d.DepartmentId == subjectDto.DepartmentId &&
-                        d.IsActive);
-
-                if (department == null)
-                {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Department not found"
-                    });
-                }
-
                 // Optional duplicate check
                 var existingSubject = await _context.Subjects
                     .FirstOrDefaultAsync(s =>
@@ -398,6 +375,11 @@ namespace API.Controllers
                 if (existingSubject != null)
                 {
                     subject = existingSubject;
+                    if (subjectDto.UniversityId.HasValue && subjectDto.UniversityId.Value > 0 && subject.UniversityId == 0)
+                    {
+                        subject.UniversityId = subjectDto.UniversityId.Value;
+                        await _context.SaveChangesAsync();
+                    }
                 }
                 else
                 {
@@ -405,33 +387,44 @@ namespace API.Controllers
                     {
                         SubName = subjectDto.SubjectName,
                         SubCode = subjectDto.SubjectCode,
+                        UniversityId = subjectDto.UniversityId ?? 0,
                         Status = true,
                         created_at = DateTime.UtcNow,
                         updated_at = DateTime.UtcNow
                     };
 
-                    _context.Subjects.Add(subject);
+                    if (subjectDto.DepartmentId.HasValue && subjectDto.DepartmentId.Value > 0 && subject.UniversityId == 0)
+                    {
+                        var dept = await _context.Departments.FindAsync(subjectDto.DepartmentId.Value);
+                        if (dept != null)
+                        {
+                            subject.UniversityId = dept.UniversityId;
+                        }
+                    }
 
+                    _context.Subjects.Add(subject);
                     await _context.SaveChangesAsync();
                 }
 
-                // Check mapping already exists
-                var mappingExists = await _context.DepartmentSubjects
-                    .AnyAsync(ds =>
-                        ds.DepartmentId == subjectDto.DepartmentId &&
-                        ds.SubjectId == subject.SubjectId);
-
-                if (!mappingExists)
+                // Check mapping if department ID is provided
+                if (subjectDto.DepartmentId.HasValue && subjectDto.DepartmentId.Value > 0)
                 {
-                    var departmentSubject = new DepartmentSubject
+                    var mappingExists = await _context.DepartmentSubjects
+                        .AnyAsync(ds =>
+                            ds.DepartmentId == subjectDto.DepartmentId.Value &&
+                            ds.SubjectId == subject.SubjectId);
+
+                    if (!mappingExists)
                     {
-                        DepartmentId = subjectDto.DepartmentId,
-                        SubjectId = subject.SubjectId
-                    };
+                        var departmentSubject = new DepartmentSubject
+                        {
+                            DepartmentId = subjectDto.DepartmentId.Value,
+                            SubjectId = subject.SubjectId
+                        };
 
-                    _context.DepartmentSubjects.Add(departmentSubject);
-
-                    await _context.SaveChangesAsync();
+                        _context.DepartmentSubjects.Add(departmentSubject);
+                        await _context.SaveChangesAsync();
+                    }
                 }
 
                 return CreatedAtAction(
@@ -601,6 +594,30 @@ namespace API.Controllers
                 await _context.SaveChangesAsync();
 
                 return Ok(new { success = true, message = "Department removed from subject successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpDelete("{id}")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> DeleteSubject(int id)
+        {
+            try
+            {
+                var subject = await _context.Subjects.FindAsync(id);
+                if (subject == null)
+                    return NotFound(new { success = false, message = "Subject not found" });
+
+                subject.Status = false;
+                subject.updated_at = DateTime.UtcNow;
+
+                _context.Subjects.Update(subject);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "Subject deactivated successfully" });
             }
             catch (Exception ex)
             {

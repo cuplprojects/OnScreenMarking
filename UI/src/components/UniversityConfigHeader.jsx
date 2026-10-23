@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Building2, BookOpen, Calendar, School,
-  GraduationCap, FileText, ChevronDown, Loader2, Plus, Search, X, Layers
+  GraduationCap, FileText, ChevronDown, Loader2, Plus, Search, X, Layers, ClipboardList
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useConfigHeader } from '../context/ConfigHeaderContext';
@@ -25,6 +25,8 @@ const SECTION_MAP = {
   '/papers':            'master-papers',
   '/admin/section-masters': 'section-masters',
   '/section-masters':       'section-masters',
+  '/admin/projects': 'projects',
+  '/projects': 'projects',
 };
 
 const SECTIONS = [
@@ -34,6 +36,7 @@ const SECTIONS = [
   { id: 'sessions',        label: 'Sessions',        icon: Calendar },
   { id: 'master-papers',   label: 'Papers',          icon: FileText },
   { id: 'section-masters', label: 'Section Masters', icon: Layers },
+  { id: 'projects',        label: 'Projects',        icon: ClipboardList },
 ];
 
 export default function UniversityConfigHeader() {

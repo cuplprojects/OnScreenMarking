@@ -281,5 +281,29 @@ namespace API.Controllers
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
+
+        [HttpDelete("{id}")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> DeleteDepartment(int id)
+        {
+            try
+            {
+                var department = await _context.Departments.FindAsync(id);
+                if (department == null)
+                    return NotFound(new { success = false, message = "Department not found" });
+
+                department.IsActive = false;
+                department.UpdatedAt = DateTime.UtcNow;
+
+                _context.Departments.Update(department);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "Department deactivated successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
     }
 }
