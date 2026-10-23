@@ -1,3 +1,5 @@
+using API.Models;
+
 namespace API.Models.DTOs
 {
     public class SubjectDto
@@ -34,7 +36,7 @@ namespace API.Models.DTOs
         public DateTime? StartedAt { get; set; }
         public DateTime? SubmittedAt { get; set; }
         public int TimeTakenSeconds { get; set; }
-        public string Status { get; set; }
+        public AllocationStatus Status { get; set; }
     }
 
     public class SectionDto

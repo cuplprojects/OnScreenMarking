@@ -27,6 +27,7 @@ import { useTable } from '../services/tableService';
 import TablePagination from '../components/TablePagination';
 import ColumnFilter from '../components/ColumnFilter';
 import RequestScriptsModal from '../components/RequestScriptsModal';
+import { ScriptStatus } from '../constants/enums';
 
 const Home = () => {
   const { user } = useAuth();
@@ -130,10 +131,10 @@ const Home = () => {
         const allScripts = allScriptsResponse.items || (Array.isArray(allScriptsResponse) ? allScriptsResponse : []);
 
         const total = allScripts.length;
-        const evaluatedCount = allScripts.filter(s => s.status === 'completed').length;
-        const markingCount = allScripts.filter(s => s.status === 'marking').length;
-        const pendingCount = allScripts.filter(s => s.status === 'allocated' || s.status === 'pending').length;
-        const completedScripts = allScripts.filter(s => s.status === 'completed' && s.totalMarks !== null);
+        const evaluatedCount = allScripts.filter(s => s.status === ScriptStatus.COMPLETED).length;
+        const markingCount = allScripts.filter(s => s.status === ScriptStatus.MARKING || s.status === ScriptStatus.IN_PROGRESS).length;
+        const pendingCount = allScripts.filter(s => s.status === ScriptStatus.ALLOCATED || s.status === ScriptStatus.PENDING).length;
+        const completedScripts = allScripts.filter(s => s.status === ScriptStatus.COMPLETED && s.totalMarks !== null);
         const sumMarks = completedScripts.reduce((sum, s) => sum + parseFloat(s.totalMarks), 0);
         const avgScore = completedScripts.length > 0 ? (sumMarks / completedScripts.length) : 0;
 
@@ -456,17 +457,17 @@ const Home = () => {
                     <td className="px-5 py-2.5">
                       <span
                         className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${
-                          script.status === 'completed'
+                          script.status === ScriptStatus.COMPLETED
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                            : script.status === 'marking'
+                            : (script.status === ScriptStatus.MARKING || script.status === ScriptStatus.IN_PROGRESS)
                             ? 'bg-amber-50 text-amber-705 border-amber-100 animate-pulse'
                             : 'bg-rose-50 text-rose-700 border-rose-100'
                         }`}
                       >
                         <span className={`w-1 h-1 rounded-full ${
-                          script.status === 'completed' ? 'bg-emerald-500' : script.status === 'marking' ? 'bg-amber-500' : 'bg-rose-500'
+                          script.status === ScriptStatus.COMPLETED ? 'bg-emerald-500' : (script.status === ScriptStatus.MARKING || script.status === ScriptStatus.IN_PROGRESS) ? 'bg-amber-500' : 'bg-rose-500'
                         }`}></span>
-                        {script.status === 'completed' ? 'Completed' : script.status === 'marking' ? 'In Progress' : 'Pending'}
+                        {script.status === ScriptStatus.COMPLETED ? 'Completed' : (script.status === ScriptStatus.MARKING || script.status === ScriptStatus.IN_PROGRESS) ? 'In Progress' : 'Pending'}
                       </span>
                     </td>
                     <td className="px-5 py-2.5 font-black text-xs text-gray-900">
@@ -484,7 +485,7 @@ const Home = () => {
                     <td className="px-5 py-2.5 text-right">
                       <div className="flex justify-end">
                         <div className="relative group/tooltip">
-                          {script.status === 'completed' ? (
+                          {script.status === ScriptStatus.COMPLETED ? (
                             <button
                               onClick={() => handleStartMarking(script)}
                               className="p-1.5 bg-blue-50/50 hover:bg-blue-100/70 text-blue-600 rounded-lg transition-all cursor-pointer border border-blue-200/50 hover:border-blue-300"
@@ -500,7 +501,7 @@ const Home = () => {
                             </button>
                           )}
                           <div className="absolute bottom-full right-0 mb-2 px-3 py-1.5 bg-gray-900 text-white text-[10px] font-bold rounded-lg opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 whitespace-nowrap z-50 shadow-lg">
-                            {script.status === 'completed' ? 'Review Marks' : 'Evaluate Script'}
+                            {script.status === ScriptStatus.COMPLETED ? 'Review Marks' : 'Evaluate Script'}
                             <div className="absolute top-full right-4 transform -mt-1">
                               <div className="border-4 border-transparent border-t-gray-900"></div>
                             </div>

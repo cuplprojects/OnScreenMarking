@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
-  Upload, FileText, CheckCircle2, AlertCircle, ArrowLeft, RefreshCw, X, Folder, HelpCircle, FileCheck, Search, Info, Loader, ChevronDown
+  Upload, FileText, CheckCircle2, AlertCircle, ArrowLeft, X, Folder, FileCheck, Search, Info, Loader, ChevronDown
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBreadcrumb } from '../context/BreadcrumbContext';

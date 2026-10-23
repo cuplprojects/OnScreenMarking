@@ -38,13 +38,13 @@ namespace API.Controllers
                         .ThenInclude(p => p.SubjectPapers)
                             .ThenInclude(sp => sp.Subject)
                     .Include(s => s.Markings)
-                    .Where(s => s.RollNumber == rollNumber && s.Status == "completed")
+                    .Where(s => s.RollNumber == rollNumber && s.Status == ScriptStatus.completed)
                     .OrderByDescending(s => s.SubmittedAt)
                     .ToListAsync();
 
                 var results = scripts.Select(s => {
                     var subjectPaper = s.ProjectPaper?.Paper?.SubjectPapers?.FirstOrDefault();
-                    var submittedMarking = s.Markings?.FirstOrDefault(m => m.Status == "submitted");
+                    var submittedMarking = s.Markings?.FirstOrDefault(m => m.Status == MarkingStatus.submitted);
                     return new
                     {
                         ScriptId = s.Id,
@@ -79,7 +79,7 @@ namespace API.Controllers
                     return NotFound(new { success = false, message = "Answer copy/script not found" });
                 }
 
-                if (script.Status != "completed")
+                if (script.Status != ScriptStatus.completed)
                 {
                     return BadRequest(new { success = false, message = "Only fully evaluated scripts can be marked for re-evaluation" });
                 }
@@ -91,7 +91,7 @@ namespace API.Controllers
 
                 // Reset status to pending and flag it for re-evaluation
                 script.IsReEvaluationRequested = true;
-                script.Status = "pending"; 
+                script.Status = ScriptStatus.pending; 
                 script.UpdatedAt = DateTime.UtcNow;
 
                 _context.Scripts.Update(script);

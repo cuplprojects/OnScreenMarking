@@ -17,6 +17,7 @@ import { useAuth } from '../context/AuthContext';
 import apiCall from '../services/api';
 import { useTable } from '../services/tableService';
 import TablePagination from '../components/TablePagination';
+import { ScriptStatus } from '../constants/enums';
 
 const Scripts = () => {
   const navigate = useNavigate();
@@ -216,17 +217,17 @@ const Scripts = () => {
                     <td className="px-5 py-3">
                       <span
                         className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${
-                          script.status === 'completed'
+                          script.status === ScriptStatus.COMPLETED
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                            : script.status === 'marking'
+                            : (script.status === ScriptStatus.MARKING || script.status === ScriptStatus.IN_PROGRESS)
                             ? 'bg-amber-50 text-amber-705 border-amber-100 animate-pulse'
                             : 'bg-rose-50 text-rose-700 border-rose-100'
                         }`}
                       >
                         <span className={`w-1 h-1 rounded-full ${
-                          script.status === 'completed' ? 'bg-emerald-500' : script.status === 'marking' ? 'bg-amber-500' : 'bg-rose-500'
+                          script.status === ScriptStatus.COMPLETED ? 'bg-emerald-500' : (script.status === ScriptStatus.MARKING || script.status === ScriptStatus.IN_PROGRESS) ? 'bg-amber-500' : 'bg-rose-500'
                         }`}></span>
-                        {script.status === 'completed' ? 'Completed' : script.status === 'marking' ? 'In Progress' : 'Pending'}
+                        {script.status === ScriptStatus.COMPLETED ? 'Completed' : (script.status === ScriptStatus.MARKING || script.status === ScriptStatus.IN_PROGRESS) ? 'In Progress' : 'Pending'}
                       </span>
                     </td>
                     <td className="px-5 py-3 font-black text-xs text-gray-900">
@@ -242,7 +243,7 @@ const Scripts = () => {
                       {new Date(script.submittedAt || script.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      {script.status === 'completed' ? (
+                      {script.status === ScriptStatus.COMPLETED ? (
                         <button
                           onClick={() => handleStartMarking(script)}
                           className="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold text-xs transition-all cursor-pointer shadow-sm border border-gray-200"

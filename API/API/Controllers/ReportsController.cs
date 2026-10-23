@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using API.Data;
+using API.Models;
 
 namespace API.Controllers
 {
@@ -23,12 +24,12 @@ namespace API.Controllers
             try
             {
                 var totalScripts = await _context.Scripts.CountAsync();
-                var evaluatedScripts = await _context.Scripts.CountAsync(s => s.Status == "completed");
-                var pendingScripts = await _context.Scripts.CountAsync(s => s.Status == "pending");
-                var inProgressScripts = await _context.Scripts.CountAsync(s => s.Status == "in_progress");
+                var evaluatedScripts = await _context.Scripts.CountAsync(s => s.Status == ScriptStatus.completed);
+                var pendingScripts = await _context.Scripts.CountAsync(s => s.Status == ScriptStatus.pending);
+                var inProgressScripts = await _context.Scripts.CountAsync(s => s.Status == ScriptStatus.in_progress || s.Status == ScriptStatus.marking);
 
                 var completedMarkings = await _context.Markings
-                    .Where(m => m.Status == "submitted")
+                    .Where(m => m.Status == MarkingStatus.submitted)
                     .ToListAsync();
 
                 decimal totalMarks = completedMarkings.Sum(m => m.TotalMarks);
@@ -93,7 +94,7 @@ namespace API.Controllers
                     var markings = await _context.Markings
                         .Where(m =>
                             scriptIds.Contains(m.ScriptId) &&
-                            m.Status == "submitted")
+                            m.Status == MarkingStatus.submitted)
                         .ToListAsync();
 
                     decimal totalMarks = markings.Sum(m => m.TotalMarks);
@@ -153,7 +154,7 @@ namespace API.Controllers
                 foreach (var examiner in examiners)
                 {
                     var markings = await _context.Markings
-                        .Where(m => m.ExaminerId == examiner.Id && m.Status == "submitted")
+                        .Where(m => m.ExaminerId == examiner.Id && m.Status == MarkingStatus.submitted)
                         .ToListAsync();
 
                     decimal totalMarks = markings.Sum(m => m.TotalMarks);
@@ -185,7 +186,7 @@ namespace API.Controllers
             {
                 var markings = await _context.Markings
                     .Where(m => m.ExaminerId == examinerId &&
-                                m.Status == "submitted")
+                                m.Status == MarkingStatus.submitted)
                     .Include(m => m.Script)
                         .ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                             .ThenInclude(p => p.SubjectPapers)

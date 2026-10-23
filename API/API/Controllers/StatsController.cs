@@ -1,4 +1,5 @@
 using API.Data;
+using API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -61,10 +62,10 @@ namespace API.Controllers
                     .CountAsync(s => s.ProjectPaper.Project.UniversityId == targetUniversityId);
 
                 var completedMarking = await _context.Scripts
-                    .CountAsync(s => s.ProjectPaper.Project.UniversityId == targetUniversityId && s.Status == "completed");
+                    .CountAsync(s => s.ProjectPaper.Project.UniversityId == targetUniversityId && s.Status == ScriptStatus.completed);
 
                 var unassignedScriptsCount = await _context.Scripts
-                    .CountAsync(s => s.ProjectPaper.Project.UniversityId == targetUniversityId && (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any())));
+                    .CountAsync(s => s.ProjectPaper.Project.UniversityId == targetUniversityId && (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any())));
 
                 var unconfiguredPapersCount = await _context.ProjectPapers
                     .CountAsync(pp => pp.Project.UniversityId == targetUniversityId && !pp.Paper.Sections.Any());
@@ -77,9 +78,9 @@ namespace API.Controllers
                         projectId = p.ProjectId,
                         papersCount = p.ProjectPapers.Count(),
                         totalScripts = p.ProjectPapers.SelectMany(pp => pp.Scripts).Count(),
-                        pendingScripts = p.ProjectPapers.SelectMany(pp => pp.Scripts).Count(s => s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any())),
-                        allocatedScripts = p.ProjectPapers.SelectMany(pp => pp.Scripts).Count(s => s.Status == "allocated" || s.Status == "marking"),
-                        completedScripts = p.ProjectPapers.SelectMany(pp => pp.Scripts).Count(s => s.Status == "completed"),
+                        pendingScripts = p.ProjectPapers.SelectMany(pp => pp.Scripts).Count(s => s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any())),
+                        allocatedScripts = p.ProjectPapers.SelectMany(pp => pp.Scripts).Count(s => s.Status == ScriptStatus.allocated || s.Status == ScriptStatus.marking),
+                        completedScripts = p.ProjectPapers.SelectMany(pp => pp.Scripts).Count(s => s.Status == ScriptStatus.completed),
                         unconfiguredPapersCount = p.ProjectPapers.Count(pp => !pp.Paper.Sections.Any())
                     })
                     .ToListAsync();
@@ -118,9 +119,9 @@ namespace API.Controllers
 
                 var papersCount = await _context.ProjectPapers.CountAsync(pp => pp.ProjectId == projectId);
                 var totalScripts = await _context.Scripts.CountAsync(s => s.ProjectPaper.ProjectId == projectId);
-                var pendingScripts = await _context.Scripts.CountAsync(s => s.ProjectPaper.ProjectId == projectId && (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any())));
-                var allocatedScripts = await _context.Scripts.CountAsync(s => s.ProjectPaper.ProjectId == projectId && (s.Status == "allocated" || s.Status == "marking"));
-                var completedScripts = await _context.Scripts.CountAsync(s => s.ProjectPaper.ProjectId == projectId && s.Status == "completed");
+                var pendingScripts = await _context.Scripts.CountAsync(s => s.ProjectPaper.ProjectId == projectId && (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any())));
+                var allocatedScripts = await _context.Scripts.CountAsync(s => s.ProjectPaper.ProjectId == projectId && (s.Status == ScriptStatus.allocated || s.Status == ScriptStatus.marking));
+                var completedScripts = await _context.Scripts.CountAsync(s => s.ProjectPaper.ProjectId == projectId && s.Status == ScriptStatus.completed);
                 var unconfiguredPapersCount = await _context.ProjectPapers.CountAsync(pp => pp.ProjectId == projectId && !pp.Paper.Sections.Any());
 
                 return Ok(new
@@ -148,8 +149,8 @@ namespace API.Controllers
             {
                 var totalUsers = await _context.Users.CountAsync();
                 var totalScripts = await _context.Scripts.CountAsync();
-                var completedScripts = await _context.Scripts.CountAsync(s => s.Status == "completed");
-                var pendingScripts = await _context.Scripts.CountAsync(s => s.Status == "pending");
+                var completedScripts = await _context.Scripts.CountAsync(s => s.Status == ScriptStatus.completed);
+                var pendingScripts = await _context.Scripts.CountAsync(s => s.Status == ScriptStatus.pending);
 
                 return Ok(new
                 {

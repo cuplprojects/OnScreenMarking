@@ -120,12 +120,12 @@ namespace API.Controllers
                     .ThenInclude(s => s.ProjectPaper)
                     .Where(a => a.ExaminerId == assignment.ExaminerId 
                              && a.Script.ProjectPaper.PaperId == assignment.PaperId 
-                             && a.Status == "allocated")
+                             && a.Status == AllocationStatus.allocated)
                     .ToListAsync();
 
                 foreach (var allocation in allocationsToRemove)
                 {
-                    allocation.Script.Status = "pending";
+                    allocation.Script.Status = ScriptStatus.pending;
                 }
                 
                 _context.Allocations.RemoveRange(allocationsToRemove);
