@@ -25,6 +25,7 @@ import userService from "../services/userService";
 import apiCall from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import message from "../services/messageService";
+import { MarkingStatus } from "../constants/enums";
 
 // Helper to extract landmarks from an image URL or base64
 const extractImageLandmarks = async (imageSrc, landmarker) => {
@@ -143,7 +144,7 @@ const ExaminerMarking = () => {
   const [submitted, setSubmitted] = useState(false);
   const [markingStatus, setMarkingStatus] = useState(null); // Track status from markings table
   // Marking is locked/submitted if status in markings table is 'submitted'
-  const isMarkingSubmitted = markingStatus === 'submitted' || submitted; 
+  const isMarkingSubmitted = markingStatus === MarkingStatus.SUBMITTED || submitted; 
   const isEffectiveReadOnly = isReadOnly || isMarkingSubmitted; 
   const [saving, setSaving] = useState(false);
   const [groupSwitchModal, setGroupSwitchModal] = useState(null);
@@ -618,7 +619,7 @@ const ExaminerMarking = () => {
           if (existingMarking?.status) {
             const mStatus = existingMarking.status?.toLowerCase();
             setMarkingStatus(mStatus);
-            if (mStatus === "submitted") {
+            if (mStatus === MarkingStatus.SUBMITTED) {
               setSubmitted(true);
             }
           }
@@ -643,7 +644,7 @@ const ExaminerMarking = () => {
         const mStatus = markingResponse.status?.toLowerCase();
         if (mStatus) {
           setMarkingStatus(mStatus);
-          if (mStatus === "submitted") {
+          if (mStatus === MarkingStatus.SUBMITTED) {
             setSubmitted(true);
             console.log('Marking is submitted - buttons and annotation tools will not be rendered');
           }
@@ -1316,7 +1317,7 @@ const ExaminerMarking = () => {
       // Submit the marking
       await markingService.submitMarking(markingId);
       setSubmitted(true);
-      setMarkingStatus('submitted');
+      setMarkingStatus(MarkingStatus.SUBMITTED);
       
       // Refresh updated marking status from markings table
       try {

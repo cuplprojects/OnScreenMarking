@@ -342,7 +342,7 @@ namespace API.Controllers
                     .RuleFor(s => s.InBuiltBarcode, f => f.Random.AlphaNumeric(10))
                     .RuleFor(s => s.GeneratedBarcode, f => f.Random.AlphaNumeric(10))
                     .RuleFor(s => s.CleanPdfUrl, f => "https://example.com/sample.pdf")
-                    .RuleFor(s => s.Status, f => f.PickRandom(new[] { "pending", "in_progress", "completed" }))
+                    .RuleFor(s => s.Status, f => f.PickRandom(new[] { ScriptStatus.pending, ScriptStatus.marking, ScriptStatus.completed }))
                     .RuleFor(s => s.RollNumber, f => f.Random.Number(100000, 999999).ToString());
 
                 var scripts = new List<Script>();

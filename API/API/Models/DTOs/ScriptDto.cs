@@ -1,3 +1,5 @@
+using API.Models;
+
 namespace API.Models.DTOs
 {
     public class ScriptDto
@@ -8,7 +10,7 @@ namespace API.Models.DTOs
         public int PaperId { get; set; }
         public int? ProjectPaperId { get; set; }
         public string CleanPdfUrl { get; set; }
-        public string Status { get; set; }
+        public ScriptStatus Status { get; set; }
         public bool? IsReEvaluationRequested { get; set; }
         public string? RollNumber { get; set; }
         public decimal? TotalMarks { get; set; }
@@ -30,7 +32,7 @@ namespace API.Models.DTOs
 
     public class ScriptStatusUpdateRequest
     {
-        public string Status { get; set; }
+        public ScriptStatus Status { get; set; }
         public string Remarks { get; set; }
     }
 }

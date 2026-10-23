@@ -19,7 +19,7 @@ namespace API.Models
         public decimal TotalMarks { get; set; }
         public decimal Percentage { get; set; }
         public string Remarks { get; set; }
-        public string Status { get; set; }
+        public MarkingStatus Status { get; set; } = MarkingStatus.draft;
         public DateTime StartedAt { get; set; }
         public string EvaluatedPdfUrl { get; set; }
         public DateTime SubmittedAt { get; set; }

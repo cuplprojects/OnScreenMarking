@@ -32,8 +32,8 @@ namespace API.Controllers
             {
                 var query = _context.Scripts.AsQueryable();
 
-                if (!string.IsNullOrEmpty(status))
-                    query = query.Where(s => s.Status == status);
+                if (!string.IsNullOrEmpty(status) && Enum.TryParse<ScriptStatus>(status.Replace("-", "_"), true, out var parsedStatus))
+                    query = query.Where(s => s.Status == parsedStatus);
 
                 if (paperId.HasValue)
                     query = query.Where(s => s.ProjectPaper.PaperId == paperId.Value);
@@ -171,13 +171,13 @@ namespace API.Controllers
                     .CountAsync(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId);
 
                 var allocatedScripts = await _context.Scripts
-                    .CountAsync(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId && s.Status == "allocated");
+                    .CountAsync(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId && s.Status == ScriptStatus.allocated);
 
                 var completedScripts = await _context.Scripts
-                    .CountAsync(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId && s.Status == "completed");
+                    .CountAsync(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId && s.Status == ScriptStatus.completed);
 
                 var pendingScripts = await _context.Scripts
-                    .CountAsync(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId && (s.Status == "pending" || s.Status == null || s.Status == ""));
+                    .CountAsync(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId && s.Status == ScriptStatus.pending);
 
                 var expertsCount = await _context.PaperExaminers
                     .CountAsync(pe => pe.PaperId == paperId);
@@ -216,7 +216,7 @@ namespace API.Controllers
                     ProjectPaperId = scriptDto.PaperId,
                     CleanPdfUrl = scriptDto.CleanPdfUrl,
                     RollNumber = scriptDto.RollNumber,
-                    Status = "pending",
+                    Status = ScriptStatus.pending,
                 };
 
                 _context.Scripts.Add(script);
@@ -243,7 +243,7 @@ namespace API.Controllers
                 existingScript.Remarks = request.Remarks;
                 existingScript.UpdatedAt = DateTime.UtcNow;
 
-                if (request.Status == "completed")
+                if (request.Status == ScriptStatus.completed)
                     existingScript.SubmittedAt = DateTime.UtcNow;
 
                 _context.Scripts.Update(existingScript);
@@ -281,11 +281,11 @@ namespace API.Controllers
                     ScriptId = id,
                     ExaminerId = request.ExaminerId,
                     AllocatedAt = DateTime.UtcNow,
-                    Status = "allocated"
+                    Status = AllocationStatus.allocated
                 };
 
                 _context.Allocations.Add(allocation);
-                script.Status = "allocated";
+                script.Status = ScriptStatus.allocated;
                 script.UpdatedAt = DateTime.UtcNow;
 
                 _context.Scripts.Update(script);
@@ -325,9 +325,9 @@ namespace API.Controllers
                             .ThenInclude(sp => sp.Subject)
                     .AsQueryable();
 
-                if (!string.IsNullOrEmpty(statusFilter) && statusFilter != "all")
+                if (!string.IsNullOrEmpty(statusFilter) && statusFilter != "all" && Enum.TryParse<ScriptStatus>(statusFilter.Replace("-", "_"), true, out var parsedFilter))
                 {
-                    query = query.Where(s => s.Status == statusFilter);
+                    query = query.Where(s => s.Status == parsedFilter);
                 }
 
                 if (subjectFilter.HasValue)

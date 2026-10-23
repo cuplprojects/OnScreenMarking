@@ -72,7 +72,7 @@ namespace API.Controllers
                     TotalMarks = request.TotalMarks,
                     Percentage = (request.TotalMarks / maxMarks) * 100,
                     Remarks = request.Remarks ?? "",
-                    Status = "draft",
+                    Status = MarkingStatus.draft,
                     StartedAt = DateTime.UtcNow,
                     EvaluatedPdfUrl = "" // Avoid Column 'EvaluatedPdfUrl' cannot be null error
                 };
@@ -178,12 +178,12 @@ namespace API.Controllers
                 existingMarking.UpdatedAt = DateTime.UtcNow;
 
                 // If previously submitted, allow examiner to re-evaluate/update marks and transition to in_progress
-                if (existingMarking.Status == "submitted")
+                if (existingMarking.Status == MarkingStatus.submitted)
                 {
-                    existingMarking.Status = "in_progress";
-                    if (existingMarking.Script != null && existingMarking.Script.Status == "completed")
+                    existingMarking.Status = MarkingStatus.in_progress;
+                    if (existingMarking.Script != null && existingMarking.Script.Status == ScriptStatus.completed)
                     {
-                        existingMarking.Script.Status = "marking";
+                        existingMarking.Script.Status = ScriptStatus.marking;
                     }
                 }
 
@@ -243,7 +243,7 @@ namespace API.Controllers
                                 TotalMarks = 0,
                                 Percentage = 0,
                                 Remarks = "",
-                                Status = "draft",
+                                Status = MarkingStatus.draft,
                                 StartedAt = DateTime.UtcNow,
                                 EvaluatedPdfUrl = ""
                             };
@@ -421,7 +421,7 @@ namespace API.Controllers
                     return BadRequest(new { success = false, message = "Script not found for this marking" });
 
                 // Allow re-submission if script status is not completed (means previous submit failed)
-                bool isResubmission = marking.Status == "submitted" && marking.Script.Status != "completed";
+                bool isResubmission = marking.Status == MarkingStatus.submitted && marking.Script.Status != ScriptStatus.completed;
 
                 // Recalculate total marks from question marks to ensure accuracy
                 decimal totalMarks = marking.QuestionMarks
@@ -435,12 +435,12 @@ namespace API.Controllers
                 if (maxMarks <= 0) maxMarks = 100;
                 marking.Percentage = (totalMarks / maxMarks) * 100;
 
-                marking.Status = "submitted";
+                marking.Status = MarkingStatus.submitted;
                 marking.SubmittedAt = DateTime.UtcNow;
                 marking.UpdatedAt = DateTime.UtcNow;
 
                 // Update script status
-                marking.Script.Status = "completed";
+                marking.Script.Status = ScriptStatus.completed;
                 marking.Script.TotalMarks = totalMarks;
                 marking.Script.Percentage = marking.Percentage;
                 marking.Script.Remarks = marking.Remarks;
@@ -496,8 +496,8 @@ namespace API.Controllers
                     .Where(m => m.ExaminerId == examinerId)
                     .AsQueryable();
 
-                if (!string.IsNullOrEmpty(status))
-                    query = query.Where(m => m.Status == status);
+                if (!string.IsNullOrEmpty(status) && Enum.TryParse<MarkingStatus>(status.Replace("-", "_"), true, out var parsedStatus))
+                    query = query.Where(m => m.Status == parsedStatus);
 
                 var total = await query.CountAsync();
                 var markings = await query
@@ -698,12 +698,12 @@ namespace API.Controllers
                 }
 
                 // If previously submitted, allow re-evaluation — reset status so marks can be updated
-                if (marking.Status == "submitted")
+                if (marking.Status == MarkingStatus.submitted)
                 {
-                    marking.Status = "in_progress";
-                    if (marking.Script != null && marking.Script.Status == "completed")
+                    marking.Status = MarkingStatus.in_progress;
+                    if (marking.Script != null && marking.Script.Status == ScriptStatus.completed)
                     {
-                        marking.Script.Status = "marking";
+                        marking.Script.Status = ScriptStatus.marking;
                         marking.Script.UpdatedAt = DateTime.UtcNow;
                     }
                     marking.UpdatedAt = DateTime.UtcNow;

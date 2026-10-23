@@ -1,4 +1,5 @@
 using System.Text.Json;
+using API.Models;
 
 namespace API.Models.DTOs
 {
@@ -11,7 +12,7 @@ namespace API.Models.DTOs
         public decimal TotalMarks { get; set; }
         public decimal Percentage { get; set; }
         public string Remarks { get; set; }
-        public string Status { get; set; }
+        public MarkingStatus Status { get; set; }
         public DateTime StartedAt { get; set; }
         public DateTime? SubmittedAt { get; set; }
     }

@@ -307,6 +307,11 @@ namespace API.Data
             modelBuilder.Entity<Script>()
                 .HasKey(s => s.Id);
             modelBuilder.Entity<Script>()
+                .Property(s => s.Status)
+                .HasConversion(
+                    v => v.ToString(),
+                    v => (ScriptStatus)Enum.Parse(typeof(ScriptStatus), v.Replace("-", "_"), true));
+            modelBuilder.Entity<Script>()
                 .HasIndex(s => s.GeneratedBarcode)
                 .IsUnique();
             modelBuilder.Entity<Script>()
@@ -324,6 +329,11 @@ namespace API.Data
             modelBuilder.Entity<Allocation>()
                 .HasKey(a => a.AllocationId);
             modelBuilder.Entity<Allocation>()
+                .Property(a => a.Status)
+                .HasConversion(
+                    v => v.ToString(),
+                    v => (AllocationStatus)Enum.Parse(typeof(AllocationStatus), v.Replace("-", "_"), true));
+            modelBuilder.Entity<Allocation>()
                 .HasOne(a => a.Script)
                 .WithMany(s => s.Allocations)
                 .HasForeignKey(a => a.ScriptId)
@@ -337,6 +347,11 @@ namespace API.Data
             // Marking configuration
             modelBuilder.Entity<Marking>()
                 .HasKey(m => m.Id);
+            modelBuilder.Entity<Marking>()
+                .Property(m => m.Status)
+                .HasConversion(
+                    v => v.ToString(),
+                    v => (MarkingStatus)Enum.Parse(typeof(MarkingStatus), v.Replace("-", "_"), true));
             modelBuilder.Entity<Marking>()
                 .HasOne(m => m.Script)
                 .WithMany(s => s.Markings)

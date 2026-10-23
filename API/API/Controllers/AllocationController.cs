@@ -50,8 +50,8 @@ namespace API.Controllers
                 if (scriptId.HasValue)
                     query = query.Where(a => a.ScriptId == scriptId.Value);
 
-                if (!string.IsNullOrEmpty(status))
-                    query = query.Where(a => a.Status == status);
+                if (!string.IsNullOrEmpty(status) && Enum.TryParse<AllocationStatus>(status.Replace("-", "_"), true, out var parsedStatus))
+                    query = query.Where(a => a.Status == parsedStatus);
 
                 var total = await query.CountAsync();
                 
@@ -137,7 +137,7 @@ namespace API.Controllers
 
                 // Check if allocation already exists for this script
                 var existingAllocation = await _context.Allocations
-                    .FirstOrDefaultAsync(a => a.ScriptId == allocationDto.ScriptId && a.Status != "cancelled");
+                    .FirstOrDefaultAsync(a => a.ScriptId == allocationDto.ScriptId && a.Status != AllocationStatus.cancelled);
 
                 if (existingAllocation != null)
                     return BadRequest(new { success = false, message = "Script already allocated" });
@@ -147,13 +147,13 @@ namespace API.Controllers
                     ScriptId = allocationDto.ScriptId,
                     ExaminerId = allocationDto.ExaminerId,
                     AllocatedAt = DateTime.UtcNow,
-                    Status = "allocated"
+                    Status = AllocationStatus.allocated
                 };
 
                 _context.Allocations.Add(allocation);
                 
                 // Update script status
-                script.Status = "allocated";
+                script.Status = ScriptStatus.allocated;
                 script.UpdatedAt = DateTime.UtcNow;
                 _context.Scripts.Update(script);
 
@@ -183,11 +183,11 @@ namespace API.Controllers
                     return StatusCode(403, new { success = false, message = "You can only start marking your own allocations." });
                 }
 
-                if (allocation.Status != "allocated")
+                if (allocation.Status != AllocationStatus.allocated)
                     return BadRequest(new { success = false, message = "Allocation is not in allocated status" });
 
                 allocation.StartedAt = DateTime.UtcNow;
-                allocation.Status = "in_progress";
+                allocation.Status = AllocationStatus.in_progress;
 
                 _context.Allocations.Update(allocation);
                 await _context.SaveChangesAsync();
@@ -219,11 +219,11 @@ namespace API.Controllers
                     return StatusCode(403, new { success = false, message = "You can only submit marking for your own allocations." });
                 }
 
-                if (allocation.Status != "in_progress")
+                if (allocation.Status != AllocationStatus.in_progress)
                     return BadRequest(new { success = false, message = "Allocation is not in progress" });
 
                 allocation.SubmittedAt = DateTime.UtcNow;
-                allocation.Status = "submitted";
+                allocation.Status = AllocationStatus.submitted;
 
                 if (allocation.StartedAt.HasValue)
                 {
@@ -235,7 +235,7 @@ namespace API.Controllers
                 // Update script status
                 if (allocation.Script != null)
                 {
-                    allocation.Script.Status = "completed";
+                    allocation.Script.Status = ScriptStatus.completed;
                     allocation.Script.UpdatedAt = DateTime.UtcNow;
                     _context.Scripts.Update(allocation.Script);
                 }
@@ -263,14 +263,14 @@ namespace API.Controllers
                 if (allocation == null)
                     return NotFound(new { success = false, message = "Allocation not found" });
 
-                allocation.Status = "cancelled";
+                allocation.Status = AllocationStatus.cancelled;
 
                 _context.Allocations.Update(allocation);
 
                 // Reset script status
                 if (allocation.Script != null)
                 {
-                    allocation.Script.Status = "pending";
+                    allocation.Script.Status = ScriptStatus.pending;
                     allocation.Script.UpdatedAt = DateTime.UtcNow;
                     _context.Scripts.Update(allocation.Script);
                 }
@@ -324,7 +324,7 @@ namespace API.Controllers
                 var allocation = await _context.Allocations
                     .Include(a => a.Script)
                     .Include(a => a.Examiner)
-                    .FirstOrDefaultAsync(a => a.ScriptId == scriptId && a.Status != "cancelled");
+                    .FirstOrDefaultAsync(a => a.ScriptId == scriptId && a.Status != AllocationStatus.cancelled);
 
                 if (allocation == null)
                     return NotFound(new { success = false, message = "No active allocation found for this script" });
@@ -371,7 +371,7 @@ namespace API.Controllers
 
                 // Get pending scripts for this paper
                 var scripts = await _context.Scripts
-                    .Where(s => s.ProjectPaper.PaperId == paperId && s.Status == "pending")
+                    .Where(s => s.ProjectPaper.PaperId == paperId && s.Status == ScriptStatus.pending)
                     .OrderBy(s => s.Id)
                     .ToListAsync();
 
@@ -388,7 +388,7 @@ namespace API.Controllers
                         Email = g.First().Examiner.Email,
                         Expertise = g.Select(ee => ee.Subject.SubName).Distinct().ToList(),
                         AllocatedCount = _context.Allocations
-                            .Where(a => a.ExaminerId == g.Key && a.Status != "cancelled")
+                            .Where(a => a.ExaminerId == g.Key && a.Status != AllocationStatus.cancelled)
                             .Count()
                     })
                     .ToListAsync();
@@ -448,7 +448,7 @@ namespace API.Controllers
                 // Get pending scripts for this paper
                 var pendingScripts = await _context.Scripts
                     .Where(s => s.ProjectPaper.PaperId == request.PaperId && 
-                               (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any())))
+                               (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any())))
                     .ToListAsync();
 
                 var totalRequested = request.Allocations.Sum(a => a.Count);
@@ -485,7 +485,7 @@ namespace API.Controllers
 
                             // Check if allocation already exists
                             var existingAllocation = await _context.Allocations
-                                .FirstOrDefaultAsync(a => a.ScriptId == script.Id && a.Status != "cancelled");
+                                .FirstOrDefaultAsync(a => a.ScriptId == script.Id && a.Status != AllocationStatus.cancelled);
 
                             if (existingAllocation != null)
                             {
@@ -498,11 +498,11 @@ namespace API.Controllers
                                 ScriptId = script.Id,
                                 ExaminerId = alloc.ExaminerId,
                                 AllocatedAt = DateTime.UtcNow,
-                                Status = "allocated"
+                                Status = AllocationStatus.allocated
                             };
 
                             _context.Allocations.Add(allocation);
-                            script.Status = "allocated";
+                            script.Status = ScriptStatus.allocated;
                             script.UpdatedAt = DateTime.UtcNow;
                             _context.Scripts.Update(script);
 
@@ -554,7 +554,7 @@ namespace API.Controllers
                 var scripts = allocations.Select(a => a.Script).ToList();
                 foreach (var script in scripts)
                 {
-                    script.Status = "pending";
+                    script.Status = ScriptStatus.pending;
                 }
                 
                 _context.Allocations.RemoveRange(allocations);
@@ -586,7 +586,7 @@ namespace API.Controllers
                 
                 foreach (var script in scripts)
                 {
-                    script.Status = "pending";
+                    script.Status = ScriptStatus.pending;
                 }
                 
                 _context.Allocations.RemoveRange(allocations);
@@ -664,7 +664,7 @@ namespace API.Controllers
                     
                     var pendingScripts = await _context.Scripts
                         .Where(s => s.ProjectPaper.PaperId == paper.PaperId && 
-                                   (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any())))
+                                   (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any())))
                         .ToListAsync();
                         
                     if (!pendingScripts.Any()) continue;
@@ -690,11 +690,11 @@ namespace API.Controllers
                                 ExaminerId = examinerId,
                                 AllocatedAt = DateTime.UtcNow,
                                 Deadline = DateTime.UtcNow.AddDays(7),
-                                Status = "allocated"
+                                Status = AllocationStatus.allocated
                             };
                             
                             _context.Allocations.Add(allocation);
-                            script.Status = "allocated";
+                            script.Status = ScriptStatus.allocated;
                             _context.Scripts.Update(script);
                             totalAllocated++;
                         }
@@ -717,7 +717,7 @@ namespace API.Controllers
             {
                 var expiredAllocations = await _context.Allocations
                     .Include(a => a.Script)
-                    .Where(a => a.Status != "submitted" && a.Deadline.HasValue && a.Deadline.Value < DateTime.UtcNow)
+                    .Where(a => a.Status != AllocationStatus.submitted && a.Deadline.HasValue && a.Deadline.Value < DateTime.UtcNow)
                     .ToListAsync();
                     
                 if (!expiredAllocations.Any())
@@ -726,7 +726,7 @@ namespace API.Controllers
                 var scriptsToReset = expiredAllocations.Select(a => a.Script).ToList();
                 foreach(var s in scriptsToReset)
                 {
-                    s.Status = "pending";
+                    s.Status = ScriptStatus.pending;
                 }
                 
                 _context.Allocations.RemoveRange(expiredAllocations);
@@ -759,13 +759,13 @@ namespace API.Controllers
                 // Cleanup expired ones first to be safe
                 var expiredAllocations = await _context.Allocations
                     .Include(a => a.Script)
-                    .Where(a => a.ExaminerId == examinerId && a.Status != "submitted" && a.Deadline.HasValue && a.Deadline.Value < DateTime.UtcNow)
+                    .Where(a => a.ExaminerId == examinerId && a.Status != AllocationStatus.submitted && a.Deadline.HasValue && a.Deadline.Value < DateTime.UtcNow)
                     .ToListAsync();
                 
                 if (expiredAllocations.Any())
                 {
                     var scriptsToReset = expiredAllocations.Select(a => a.Script).ToList();
-                    foreach(var s in scriptsToReset) s.Status = "pending";
+                    foreach(var s in scriptsToReset) s.Status = ScriptStatus.pending;
                     _context.Allocations.RemoveRange(expiredAllocations);
                     _context.Scripts.UpdateRange(scriptsToReset);
                     await _context.SaveChangesAsync();
@@ -773,7 +773,7 @@ namespace API.Controllers
 
                 // Check active allocations count
                 var activeCount = await _context.Allocations
-                    .CountAsync(a => a.ExaminerId == examinerId && a.Status != "submitted");
+                    .CountAsync(a => a.ExaminerId == examinerId && a.Status != AllocationStatus.submitted);
                 
                 if (activeCount + request.RequestCount > 50)
                 {
@@ -782,7 +782,7 @@ namespace API.Controllers
 
                 var pendingScripts = await _context.Scripts
                     .Where(s => s.ProjectPaper.PaperId == request.PaperId && 
-                               (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any())))
+                               (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any())))
                     .Take(request.RequestCount)
                     .ToListAsync();
 
@@ -794,14 +794,14 @@ namespace API.Controllers
                 var newAllocations = new List<Allocation>();
                 foreach (var script in pendingScripts)
                 {
-                    script.Status = "allocated";
+                    script.Status = ScriptStatus.allocated;
                     newAllocations.Add(new Allocation
                     {
                         ScriptId = script.Id,
                         ExaminerId = examinerId,
                         AllocatedAt = DateTime.UtcNow,
                         Deadline = endOfDay,
-                        Status = "assigned"
+                        Status = AllocationStatus.allocated
                     });
                 }
 
@@ -843,13 +843,13 @@ namespace API.Controllers
                 var targetPaperIds = paperId.HasValue && paperId.Value > 0 ? new List<int> { paperId.Value } : projectPapers;
 
                 var pendingScriptsCount = await _context.Scripts
-                    .CountAsync(s => targetPaperIds.Contains(s.ProjectPaper.PaperId) && (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any())));
+                    .CountAsync(s => targetPaperIds.Contains(s.ProjectPaper.PaperId) && (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any())));
 
                 var allocatedScriptsCount = await _context.Allocations
-                    .CountAsync(a => targetPaperIds.Contains(a.Script.ProjectPaper.PaperId) && a.Status != "submitted" && a.Status != "cancelled");
+                    .CountAsync(a => targetPaperIds.Contains(a.Script.ProjectPaper.PaperId) && a.Status != AllocationStatus.submitted && a.Status != AllocationStatus.cancelled);
 
                 var completedScriptsCount = await _context.Allocations
-                    .CountAsync(a => targetPaperIds.Contains(a.Script.ProjectPaper.PaperId) && (a.Status == "submitted" || a.Script.Status == "completed"));
+                    .CountAsync(a => targetPaperIds.Contains(a.Script.ProjectPaper.PaperId) && (a.Status == AllocationStatus.submitted || a.Script.Status == ScriptStatus.completed));
 
                 var paperExaminersList = await _context.PaperExaminers
                     .Where(pe => targetPaperIds.Contains(pe.PaperId))
@@ -866,13 +866,13 @@ namespace API.Controllers
 
                     var activeAllocations = await _context.Allocations
                         .Include(a => a.Script)
-                        .Where(a => a.ExaminerId == exId && a.Script.ProjectPaper.PaperId == pId && a.Status != "cancelled")
+                        .Where(a => a.ExaminerId == exId && a.Script.ProjectPaper.PaperId == pId && a.Status != AllocationStatus.cancelled)
                         .ToListAsync();
 
-                    int allocatedCount = activeAllocations.Count(a => a.Status != "submitted" && a.Script.Status != "completed");
-                    int completedCount = activeAllocations.Count(a => a.Status == "submitted" || a.Script.Status == "completed");
+                    int allocatedCount = activeAllocations.Count(a => a.Status != AllocationStatus.submitted && a.Script.Status != ScriptStatus.completed);
+                    int completedCount = activeAllocations.Count(a => a.Status == AllocationStatus.submitted || a.Script.Status == ScriptStatus.completed);
                     int paperPending = await _context.Scripts
-                        .CountAsync(s => s.ProjectPaper.PaperId == pId && (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any())));
+                        .CountAsync(s => s.ProjectPaper.PaperId == pId && (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any())));
 
                     resultList.Add(new
                     {
@@ -923,8 +923,8 @@ namespace API.Controllers
                     .Include(a => a.Script)
                     .Where(a => a.ExaminerId == request.ExaminerId && 
                                 a.Script.ProjectPaper.PaperId == request.PaperId && 
-                                a.Status != "submitted" && 
-                                a.Script.Status != "completed")
+                                a.Status != AllocationStatus.submitted && 
+                                a.Script.Status != ScriptStatus.completed)
                     .ToListAsync();
 
                 int currentCount = currentAllocations.Count;
@@ -942,7 +942,7 @@ namespace API.Controllers
                     var scriptsToReset = allocationsToRemove.Select(a => a.Script).Where(s => s != null).ToList();
                     foreach (var s in scriptsToReset)
                     {
-                        s.Status = "pending";
+                        s.Status = ScriptStatus.pending;
                         s.UpdatedAt = DateTime.UtcNow;
                     }
 
@@ -958,7 +958,7 @@ namespace API.Controllers
 
                     var pendingScripts = await _context.Scripts
                         .Where(s => s.ProjectPaper.PaperId == request.PaperId && 
-                                   (s.Status == "pending" || (s.Status != "completed" && !s.Allocations.Any())))
+                                   (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any())))
                         .Take(numToAdd)
                         .ToListAsync();
 
@@ -969,7 +969,7 @@ namespace API.Controllers
 
                     foreach (var script in pendingScripts)
                     {
-                        script.Status = "allocated";
+                        script.Status = ScriptStatus.allocated;
                         script.UpdatedAt = DateTime.UtcNow;
 
                         _context.Allocations.Add(new Allocation
@@ -977,7 +977,7 @@ namespace API.Controllers
                             ScriptId = script.Id,
                             ExaminerId = request.ExaminerId,
                             AllocatedAt = DateTime.UtcNow,
-                            Status = "allocated"
+                            Status = AllocationStatus.allocated
                         });
                     }
 

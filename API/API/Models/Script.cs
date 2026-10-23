@@ -15,7 +15,7 @@ namespace API.Models
         public int ProjectPaperId { get; set; }
         public ProjectPaper ProjectPaper { get; set; }
         public string CleanPdfUrl { get; set; }
-        public string Status { get; set; } = "pending"; // pending, in_progress, completed
+        public ScriptStatus Status { get; set; } = ScriptStatus.pending;
         public bool? IsReEvaluationRequested { get; set; }
         public string? RollNumber { get; set; }
         public decimal? TotalMarks { get; set; } = 0;
