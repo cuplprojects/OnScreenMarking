@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
   Upload, FileText, CheckCircle2, AlertCircle, ArrowLeft, RefreshCw, X, Folder, HelpCircle, FileCheck, Search, Info, Loader, ChevronDown
@@ -9,6 +9,22 @@ import { decryptId, encryptId } from '../utils/encryption';
 import paperService from '../services/paperService';
 import projectService from '../services/projectService';
 import message from '../services/messageService';
+
+const formatBytes = (bytes, decimals = 1) => {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+};
+
+const detectCatchHint = (filename) => {
+  if (!filename) return '—';
+  const withoutExt = filename.replace(/\.[^/.]+$/, '').trim();
+  const cleaned = withoutExt.replace(/^(catch|paper|qp)[_\-\s]*/i, '').trim();
+  return cleaned || withoutExt;
+};
 
 export default function ImportQuestionPapers() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -30,6 +46,17 @@ export default function ImportQuestionPapers() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
   const [searchFilter, setSearchFilter] = useState('');
+  const [queueSearch, setQueueSearch] = useState('');
+
+  const totalQueueSize = useMemo(() => {
+    return selectedFiles.reduce((acc, f) => acc + (f.size || 0), 0);
+  }, [selectedFiles]);
+
+  const filteredQueue = useMemo(() => {
+    if (!queueSearch.trim()) return selectedFiles;
+    const term = queueSearch.toLowerCase().trim();
+    return selectedFiles.filter(f => f.name.toLowerCase().includes(term));
+  }, [selectedFiles, queueSearch]);
 
   const effectiveEncryptedProjectId = selectedProjectId ? encryptId(selectedProjectId) : '';
 
@@ -101,8 +128,13 @@ export default function ImportQuestionPapers() {
       message.error('Please select valid PDF files');
       return;
     }
-    setSelectedFiles(files);
+    setSelectedFiles(prev => {
+      const existingNames = new Set(prev.map(f => f.name));
+      const newFiles = files.filter(f => !existingNames.has(f.name));
+      return [...prev, ...newFiles];
+    });
     setUploadResult(null);
+    if (e.target) e.target.value = '';
   };
 
   const handleDrop = (e) => {
@@ -112,16 +144,21 @@ export default function ImportQuestionPapers() {
       message.error('Please drop valid PDF files');
       return;
     }
-    setSelectedFiles(files);
+    setSelectedFiles(prev => {
+      const existingNames = new Set(prev.map(f => f.name));
+      const newFiles = files.filter(f => !existingNames.has(f.name));
+      return [...prev, ...newFiles];
+    });
     setUploadResult(null);
   };
 
-  const removeFile = (index) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  const removeFile = (fileToRemove) => {
+    setSelectedFiles(prev => prev.filter(f => f !== fileToRemove));
   };
 
   const clearAllFiles = () => {
     setSelectedFiles([]);
+    setQueueSearch('');
     setUploadResult(null);
   };
 
@@ -138,6 +175,8 @@ export default function ImportQuestionPapers() {
     try {
       const res = await paperService.bulkUploadQuestionPapers(selectedProjectId, selectedFiles);
       setUploadResult(res);
+      setSelectedFiles([]);
+      setQueueSearch('');
       if (res.matchedCount > 0) {
         message.success(`Successfully matched and allocated ${res.matchedCount} Question Paper(s)!`);
       } else {
@@ -268,57 +307,162 @@ export default function ImportQuestionPapers() {
 
           {/* Selected Files Queue */}
           {selectedFiles.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-4 sm:p-5 space-y-4 animate-in fade-in duration-200">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <FileCheck size={16} className="text-teal-700" />
-                  <span className="text-xs font-extrabold text-gray-900 uppercase tracking-wider">
-                    Selected Files Queue ({selectedFiles.length})
-                  </span>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-200">
+              {/* Queue Header */}
+              <div className="p-4 sm:p-5 bg-gradient-to-r from-teal-50/40 via-white to-gray-50/30 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-teal-100/80 text-teal-800 flex items-center justify-center font-bold">
+                    <FileCheck size={18} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                        Selected Files Queue
+                      </h4>
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-teal-700 text-white shadow-2xs">
+                        {selectedFiles.length} {selectedFiles.length === 1 ? 'file' : 'files'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                        {formatBytes(totalQueueSize)}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 font-medium mt-0.5">
+                      PDF files staged for automatic matching with paper Catch Numbers / Codes
+                    </p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2.5">
+
+                <div className="flex items-center gap-2.5 self-end md:self-auto">
                   <button
                     onClick={clearAllFiles}
-                    className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                    disabled={isUploading}
+                    className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-transparent hover:border-rose-200 px-3 py-1.5 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
                   >
                     Clear Queue
                   </button>
                   <button
                     onClick={handleBulkUpload}
                     disabled={isUploading}
-                    className="bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider py-2 px-5 rounded-lg transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+                    className="bg-teal-700 hover:bg-teal-800 active:scale-[0.98] disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider py-2 px-5 rounded-lg transition-all shadow-sm flex items-center gap-2 cursor-pointer"
                   >
                     {isUploading ? (
                       <>
                         <Loader size={14} className="animate-spin" />
-                        <span>Uploading...</span>
+                        <span>Uploading {selectedFiles.length} PDFs...</span>
                       </>
                     ) : (
                       <>
                         <Upload size={14} />
-                        <span>Upload & Auto-Allocate</span>
+                        <span>Upload & Auto-Allocate ({selectedFiles.length})</span>
                       </>
                     )}
                   </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto pr-1">
-                {selectedFiles.map((f, i) => (
-                  <div key={i} className="flex items-center justify-between p-2.5 bg-gray-50 hover:bg-teal-50/40 border border-gray-200 rounded-lg text-xs transition-colors">
-                    <div className="flex items-center gap-2 truncate pr-2">
-                      <FileText size={14} className="text-teal-700 shrink-0" />
-                      <span className="font-bold text-gray-800 truncate" title={f.name}>{f.name}</span>
-                    </div>
+              {/* Search/Filter within Queue (handles 50-300+ files easily) */}
+              <div className="px-4 py-2.5 bg-gray-50/80 border-b border-gray-200 flex items-center justify-between gap-3 text-xs">
+                <div className="relative w-full max-w-sm">
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder={`Search within ${selectedFiles.length} staged file(s)...`}
+                    value={queueSearch}
+                    onChange={(e) => setQueueSearch(e.target.value)}
+                    className="w-full pl-8 pr-7 py-1.5 text-xs font-semibold bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 placeholder-gray-400 transition-all"
+                  />
+                  {queueSearch && (
                     <button
-                      onClick={() => removeFile(i)}
-                      className="text-gray-400 hover:text-rose-600 transition-colors p-1 cursor-pointer"
-                      title="Remove file"
+                      onClick={() => setQueueSearch('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
                     >
-                      <X size={13} />
+                      <X size={12} />
                     </button>
-                  </div>
-                ))}
+                  )}
+                </div>
+                <div className="text-gray-500 font-medium shrink-0 text-[11px]">
+                  Showing <span className="font-bold text-gray-800">{filteredQueue.length}</span> of {selectedFiles.length} file(s)
+                </div>
+              </div>
+
+              {/* High-density, scalable table view */}
+              <div className="max-h-80 overflow-y-auto custom-scrollbar overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-gray-100/90 backdrop-blur-xs sticky top-0 z-10 text-[10px] uppercase font-bold text-gray-500 tracking-wider border-b border-gray-200">
+                    <tr>
+                      <th className="px-3.5 py-2.5 text-center w-12">#</th>
+                      <th className="px-4 py-2.5">File Name</th>
+                      <th className="px-4 py-2.5">Detected Catch / Code Key</th>
+                      <th className="px-4 py-2.5 text-right w-24">Size</th>
+                      <th className="px-4 py-2.5 text-center w-28">Status</th>
+                      <th className="px-3 py-2.5 text-center w-14">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 font-medium text-gray-700 bg-white">
+                    {filteredQueue.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-gray-400 font-medium">
+                          No staged files match &quot;{queueSearch}&quot;.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredQueue.map((file, idx) => {
+                        const catchHint = detectCatchHint(file.name);
+                        return (
+                          <tr
+                            key={file.name + idx}
+                            className="hover:bg-teal-50/40 transition-colors group"
+                          >
+                            <td className="px-3.5 py-2 text-center text-gray-400 font-mono text-[11px]">
+                              {idx + 1}
+                            </td>
+                            <td className="px-4 py-2 font-bold text-gray-900">
+                              <div className="flex items-center gap-2 max-w-md sm:max-w-lg md:max-w-xl">
+                                <FileText size={15} className="text-teal-700 shrink-0" />
+                                <span className="truncate" title={file.name}>
+                                  {file.name}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-2">
+                              <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-gray-100 text-teal-900 border border-gray-200">
+                                {catchHint}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 text-right font-mono text-[11px] text-gray-500 whitespace-nowrap">
+                              {formatBytes(file.size)}
+                            </td>
+                            <td className="px-4 py-2 text-center whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200/60">
+                                <CheckCircle2 size={11} className="text-teal-600" />
+                                Ready
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <button
+                                onClick={() => removeFile(file)}
+                                className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                title={`Remove ${file.name}`}
+                              >
+                                <X size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Queue Footer Stats */}
+              <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-200 flex items-center justify-between text-[11px] text-gray-500 font-medium">
+                <span>
+                  {selectedFiles.length} file(s) staged &bull; Total batch size: <span className="font-bold text-gray-700">{formatBytes(totalQueueSize)}</span>
+                </span>
+                <span className="text-gray-400 hidden sm:inline">
+                  Tip: Files are matched against paper Catch No or Paper Code
+                </span>
               </div>
             </div>
           )}
@@ -346,7 +490,7 @@ export default function ImportQuestionPapers() {
                     </div>
                   )}
                   <button
-                    onClick={() => { setSelectedFiles([]); setUploadResult(null); }}
+                    onClick={() => { setSelectedFiles([]); setUploadResult(null); setQueueSearch(''); }}
                     className="px-3 py-1 text-xs font-bold text-gray-600 hover:text-gray-900 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors shadow-2xs cursor-pointer"
                   >
                     Upload More

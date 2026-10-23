@@ -7,7 +7,9 @@ import {
   Loader, 
   Sparkles,
   Check,
-  Copy
+  Copy,
+  AlertTriangle,
+  CheckCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import userService from '../services/userService';
@@ -261,8 +263,18 @@ export default function InviteUserModal({
                 : "bg-amber-50/40 border-amber-100"
               }`}>
                 <div>
-                  <h4 className={`font-extrabold ${emailStatus?.sent ? "text-emerald-800" : "text-amber-800"}`}>
-                    {emailStatus?.sent ? "✓ Link Dispatched Successfully" : "⚠ Secure Link Ready (Delivery Issue)"}
+                  <h4 className={`font-extrabold flex items-center gap-1.5 ${emailStatus?.sent ? "text-emerald-800" : "text-amber-800"}`}>
+                    {emailStatus?.sent ? (
+                      <>
+                        <CheckCircle size={14} className="text-emerald-600 shrink-0" />
+                        <span>Link Dispatched Successfully</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+                        <span>Secure Link Ready (Delivery Issue)</span>
+                      </>
+                    )}
                   </h4>
                   <p className={`text-[10px] mt-0.5 leading-relaxed ${emailStatus?.sent ? "text-emerald-600" : "text-amber-600"}`}>
                     {emailStatus?.sent

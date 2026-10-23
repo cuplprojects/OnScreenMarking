@@ -15,7 +15,8 @@ import {
   ChevronRight,
   Barcode,
   Check,
-  Lock
+  Lock,
+  AlertTriangle
 } from "lucide-react";
 import PDFAnnotator from "../components/PDFAnnotator";
 import sectionService from "../services/sectionService";
@@ -1726,8 +1727,9 @@ const ExaminerMarking = () => {
                         const cq = getConflictingGroupQuestion(sq);
                         return hasSm && cq;
                       }) && (
-                        <div className="bg-amber-50 border-b border-amber-200 p-2 text-[10px] text-amber-800 font-semibold leading-tight">
-                          ⚠️ Group conflict detected! Multiple questions in an optional group have marks. Click either question to edit or clear marks.
+                        <div className="bg-amber-50 border-b border-amber-200 p-2 text-[10px] text-amber-800 font-semibold leading-tight flex items-start gap-1.5">
+                          <AlertTriangle size={13} className="text-amber-600 shrink-0 mt-0.5" />
+                          <span>Group conflict detected! Multiple questions in an optional group have marks. Click either question to edit or clear marks.</span>
                         </div>
                       )}
 
@@ -1835,7 +1837,12 @@ const ExaminerMarking = () => {
                                   ? 'text-white' 
                                   : (hasMarks ? 'text-green-800' : isSectionMaxMet ? 'text-gray-500' : 'text-red-700')
                               }`}>
-                                {isGroupConflict ? '⚠️Conf' : isGroupDisabled ? 'Lock' : isSkipped ? 'Skip' : isSectionMaxMet ? 'Opt' : `${displayMark}m`}
+                                {isGroupConflict ? (
+                                  <span className="inline-flex items-center gap-0.5">
+                                    <AlertTriangle size={9} className="text-amber-800 shrink-0" />
+                                    <span>Conf</span>
+                                  </span>
+                                ) : isGroupDisabled ? 'Lock' : isSkipped ? 'Skip' : isSectionMaxMet ? 'Opt' : `${displayMark}m`}
                               </span>
                             </div>
                           );
@@ -1944,7 +1951,7 @@ const ExaminerMarking = () => {
         {/* Semi-transparent Backdrop Warning on PIP Window */}
         {proctorWarning && (
           <div className="absolute inset-0 bg-red-950/90 backdrop-blur-[2px] flex flex-col items-center justify-center p-2 text-center select-none animate-fade-in z-20">
-            <span className="text-lg">⚠️</span>
+            <AlertTriangle size={20} className="text-red-300" />
             <h4 className="font-extrabold text-red-200 text-[10px] leading-tight mt-1 uppercase tracking-wider">
               {proctorWarning === "No Face" 
                 ? "No Face" 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Camera, X, CheckCircle, Mail, Lock, User, Phone, MapPin, Building, BookOpen, AlertCircle, Loader } from 'lucide-react';
+import { Camera, X, CheckCircle, Mail, Lock, User, Phone, MapPin, Building, BookOpen, AlertCircle, Loader, AlertTriangle } from 'lucide-react';
 import authService from '../services/authService';
 import message from '../services/messageService';
 
@@ -73,6 +73,7 @@ const AcceptInvitation = () => {
   const [invitationDetails, setInvitationDetails] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -631,7 +632,8 @@ const AcceptInvitation = () => {
         sessionStorage.setItem('subjectId1', data.user.subjectId1);
       }
 
-      message.success(true);
+      setSuccess(true);
+      message.success('Account setup completed successfully!');
       
       // Redirect to dashboard after a delay
       setTimeout(() => {
@@ -867,7 +869,7 @@ const AcceptInvitation = () => {
                     {/* Multi-Face Block Overlay */}
                     {hasMultipleFaces && (
                       <div className="absolute inset-0 bg-red-950/85 flex flex-col items-center justify-center p-4 text-center select-none animate-fade-in z-20">
-                        <span className="text-3xl mb-2">⚠️</span>
+                        <AlertTriangle size={36} className="text-red-400 mb-2" />
                         <h4 className="font-extrabold text-red-200 text-sm">Multiple People Detected!</h4>
                         <p className="text-xs text-red-300 mt-1 max-w-[200px]">
                           Please ensure only one person is in the camera frame to proceed.

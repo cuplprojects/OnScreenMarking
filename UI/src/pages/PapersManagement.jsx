@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { 
   FileText, Plus, Edit2, UserPlus, X, Search, CheckCircle2, Trash2, 
-  ChevronRight, ChevronDown, Filter, Users, BookOpen, Layers, Folder, AlertCircle, Copy, Upload, Info, Settings, Loader, FileCheck, Eye
+  ChevronRight, ChevronDown, Filter, Users, BookOpen, Layers, Folder, AlertCircle, Copy, Upload, Info, Settings, Loader, FileCheck, Eye, UserCheck, Check, Download, AlertTriangle, Flag
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { useAuth } from "../context/AuthContext";
 import { useBreadcrumb } from "../context/BreadcrumbContext";
 import { decryptId, encryptId } from "../utils/encryption";
@@ -69,6 +70,22 @@ const SubjectMultiSelect = ({ subjects, selectedSubjects, toggleSubject }) => {
   );
 };
 
+const formatBytes = (bytes, decimals = 1) => {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+};
+
+const detectCatchHint = (filename) => {
+  if (!filename) return '—';
+  const withoutExt = filename.replace(/\.[^/.]+$/, '').trim();
+  const cleaned = withoutExt.replace(/^(catch|paper|qp)[_\-\s]*/i, '').trim();
+  return cleaned || withoutExt;
+};
+
 export default function PapersManagement({ isTab = false }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const encryptedProjectId = searchParams.get("projectId");
@@ -106,14 +123,22 @@ export default function PapersManagement({ isTab = false }) {
       const statusFilterVal = params.statusFilter || '';
       // We will use the dashboard stats endpoint if projectId exists, otherwise we fallback to getAllPapers
       if (projectId) {
-         let url = `/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}&statusFilter=${statusFilterVal}`;
+         let url = `/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${encodeURIComponent(searchVal)}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}&statusFilter=${statusFilterVal}`;
+         const codeFilterVal = params.paperCode || '';
+         if (codeFilterVal) url += `&paperCode=${encodeURIComponent(codeFilterVal)}`;
          const subjectFilterVal = params.subjectName || '';
-      if (subjectFilterVal) url += `&subjectId=${subjectFilterVal}`;
+         if (subjectFilterVal) {
+           if (/^\d+$/.test(subjectFilterVal.trim())) {
+             url += `&subjectId=${subjectFilterVal.trim()}`;
+           } else {
+             url += `&subjectName=${encodeURIComponent(subjectFilterVal.trim())}`;
+           }
+         }
          return apiCall(url);
       }
     }
     return Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 10, totalPages: 1 });
-  }, [projectId, activeUniversityId, subjectFilter]);
+  }, [projectId, activeUniversityId]);
 
   const {
     items: papers,
@@ -160,8 +185,34 @@ export default function PapersManagement({ isTab = false }) {
   // Bulk import state
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState(null);
-  const [searchFilter, setSearchFilter] = useState('');
+
+  const totalQueueSize = useMemo(() => {
+    return selectedFiles.reduce((acc, f) => acc + (f.size || 0), 0);
+  }, [selectedFiles]);
+
+  // Bulk Assign Examiner state
+  const [bulkPapers, setBulkPapers] = useState([]);
+  const [bulkExaminers, setBulkExaminers] = useState([]);
+  const [assignedExaminersMap, setAssignedExaminersMap] = useState({}); // { [paperId]: [examinerId, ...] }
+  const [bulkPaperSearch, setBulkPaperSearch] = useState('');
+  const [bulkSubjectFilter, setBulkSubjectFilter] = useState('');
+  const [bulkPage, setBulkPage] = useState(1);
+  const [bulkPageSize, setBulkPageSize] = useState(10);
+  const [loadingBulkData, setLoadingBulkData] = useState(false);
+  const [isBulkAssigning, setIsBulkAssigning] = useState(false);
+  const [openDropdownPaperId, setOpenDropdownPaperId] = useState(null);
+  const [dropdownSearch, setDropdownSearch] = useState('');
+  const [quickAssignExaminerId, setQuickAssignExaminerId] = useState('');
+
+  // Excel bulk assignment state
+  const [excelPreviewData, setExcelPreviewData] = useState(null);
+  const [excelPreviewFilter, setExcelPreviewFilter] = useState('all'); // 'all' | 'matched' | 'multiple' | 'not_found'
+  const [excelFileName, setExcelFileName] = useState('');
+  const [isUploadingExcel, setIsUploadingExcel] = useState(false);
+  const [openPreviewDropdownKey, setOpenPreviewDropdownKey] = useState(null);
+  const [previewDropdownSearch, setPreviewDropdownSearch] = useState('');
+  const excelFileInputRef = useRef(null);
+  const [previewSubjectFilter, setPreviewSubjectFilter] = useState('');
 
 
   // Modals state
@@ -686,8 +737,12 @@ export default function PapersManagement({ isTab = false }) {
       message.error('Please select valid PDF files');
       return;
     }
-    setSelectedFiles(files);
-    setUploadResult(null);
+    setSelectedFiles(prev => {
+      const existingNames = new Set(prev.map(f => f.name));
+      const newFiles = files.filter(f => !existingNames.has(f.name));
+      return [...prev, ...newFiles];
+    });
+    if (e.target) e.target.value = '';
   };
 
   const handleDrop = (e) => {
@@ -697,17 +752,19 @@ export default function PapersManagement({ isTab = false }) {
       message.error('Please drop valid PDF files');
       return;
     }
-    setSelectedFiles(files);
-    setUploadResult(null);
+    setSelectedFiles(prev => {
+      const existingNames = new Set(prev.map(f => f.name));
+      const newFiles = files.filter(f => !existingNames.has(f.name));
+      return [...prev, ...newFiles];
+    });
   };
 
-  const removeFile = (index) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  const removeFile = (fileToRemove) => {
+    setSelectedFiles(prev => prev.filter(f => f !== fileToRemove));
   };
 
   const clearAllFiles = () => {
     setSelectedFiles([]);
-    setUploadResult(null);
   };
 
   const handleBulkUpload = async () => {
@@ -722,12 +779,48 @@ export default function PapersManagement({ isTab = false }) {
     setIsUploading(true);
     try {
       const res = await paperService.bulkUploadQuestionPapers(projectId, selectedFiles);
-      setUploadResult(res);
+      
+      // Download failed QPs as Excel if there are any unmatched
+      if (res.unmatchedCount > 0 && res.results) {
+        const failedQPs = res.results.filter(r => r.status !== 'Success');
+        if (failedQPs.length > 0) {
+          const exportRows = failedQPs.map((qp, idx) => ({
+            "S.No": idx + 1,
+            "File Name": qp.fileName || '',
+            "Detected Catch No": qp.catchNo || 'Not detected',
+            "Status": qp.status || 'Failed',
+            "Reason": qp.message || 'No matching paper found with this catch number'
+          }));
+
+          const ws = XLSX.utils.json_to_sheet(exportRows);
+          ws['!cols'] = [
+            { wch: 6 },   // S.No
+            { wch: 35 },  // File Name
+            { wch: 18 },  // Detected Catch No
+            { wch: 12 },  // Status
+            { wch: 45 }   // Reason
+          ];
+
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "Failed_QP_Upload");
+
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+          const fileName = `Failed_QP_Upload_${timestamp}.xlsx`;
+          XLSX.writeFile(wb, fileName);
+          
+          message.warning(`${res.unmatchedCount} QP(s) failed to upload. Check downloaded Excel for details.`);
+        }
+      }
+      
+      // Clear everything after upload
+      setSelectedFiles([]);
+      
       if (res.matchedCount > 0) {
         message.success(`Successfully matched and allocated ${res.matchedCount} Question Paper(s)!`);
       } else {
         message.warning(`Uploaded ${res.totalFiles} files, but no paper Catch Number matches were found.`);
       }
+      
       // Refresh the main papers table in case some PDFs were matched
       refreshTable();
     } catch (err) {
@@ -737,18 +830,544 @@ export default function PapersManagement({ isTab = false }) {
     }
   };
 
-  // Filter bulk upload results
-  const filteredResults = uploadResult?.results?.filter(r => {
-    if (!searchFilter) return true;
-    const term = searchFilter.toLowerCase();
-    return (
-      r.fileName.toLowerCase().includes(term) ||
-      (r.paperCode && r.paperCode.toLowerCase().includes(term)) ||
-      (r.paperName && r.paperName.toLowerCase().includes(term)) ||
-      (r.catchNo && r.catchNo.toLowerCase().includes(term)) ||
-      r.status.toLowerCase().includes(term)
-    );
-  }) || [];
+  // Bulk Assign Examiner loaders and handlers
+  const loadBulkAssignData = useCallback(async () => {
+    if (!projectId && !activeUniversityId) return;
+    setLoadingBulkData(true);
+    try {
+      const proj = projects.find(p => p.projectId === parseInt(projectId));
+      const targetUnivId = proj?.universityId || activeUniversityId;
+
+      const [papersRes, examinersRes] = await Promise.all([
+        projectId 
+          ? apiCall(`/papers/dashboard-stats?projectId=${projectId}&page=1&pageSize=1000`)
+          : Promise.resolve({ items: [] }),
+        apiCall(`/users/examiners${targetUnivId ? `?universityId=${targetUnivId}` : ''}`)
+      ]);
+
+      const loadedPapers = papersRes?.items || [];
+      const loadedExaminers = Array.isArray(examinersRes) ? examinersRes : (examinersRes?.items || []);
+      
+      console.log('loadBulkAssignData - Loaded Papers:', loadedPapers.length);
+      console.log('loadBulkAssignData - Loaded Examiners count:', loadedExaminers.length);
+      console.log('loadBulkAssignData - Loaded Examiners sample:', loadedExaminers.slice(0, 3));
+      
+      setBulkPapers(loadedPapers);
+      setBulkExaminers(loadedExaminers);
+    } catch (err) {
+      console.error("Failed to load bulk assign data:", err);
+      message.error("Failed to load papers or examiners");
+    } finally {
+      setLoadingBulkData(false);
+    }
+  }, [projectId, activeUniversityId, projects]);
+
+  useEffect(() => {
+    if (activeInnerTab === 'bulk-assign') {
+      loadBulkAssignData();
+    }
+  }, [activeInnerTab, loadBulkAssignData]);
+
+  // Click outside to close any open examiner dropdown
+  useEffect(() => {
+    const handleGlobalClick = (e) => {
+      if (openDropdownPaperId && !e.target.closest('.examiner-dropdown-container')) {
+        setOpenDropdownPaperId(null);
+        setDropdownSearch('');
+      }
+      if (openPreviewDropdownKey && !e.target.closest('.preview-dropdown-container')) {
+        setOpenPreviewDropdownKey(null);
+        setPreviewDropdownSearch('');
+      }
+    };
+    document.addEventListener('mousedown', handleGlobalClick);
+    return () => document.removeEventListener('mousedown', handleGlobalClick);
+  }, [openDropdownPaperId, openPreviewDropdownKey]);
+
+  // Handle selecting / toggling examiner for a particular paper row
+  const handleSelectExaminerForPaper = (paperId, examinerId) => {
+    setAssignedExaminersMap(prev => {
+      const current = prev[paperId] || [];
+      const isAlreadySelected = current.includes(examinerId);
+      const updated = isAlreadySelected 
+        ? current.filter(id => id !== examinerId)
+        : [...current, examinerId];
+      
+      if (updated.length === 0) {
+        const next = { ...prev };
+        delete next[paperId];
+        return next;
+      }
+      return { ...prev, [paperId]: updated };
+    });
+  };
+
+  const handleClearPaperExaminer = (paperId) => {
+    setAssignedExaminersMap(prev => {
+      const next = { ...prev };
+      delete next[paperId];
+      return next;
+    });
+  };
+
+  // Quick apply an examiner to all visible unassigned papers
+  const handleApplyToAllFiltered = (examinerId) => {
+    if (!examinerId) return;
+    const targetPapers = filteredBulkPapers.filter(p => (p.expertsCount || 0) === 0);
+    if (targetPapers.length === 0) {
+      message.info("No unassigned papers in current view.");
+      return;
+    }
+    const newMap = { ...assignedExaminersMap };
+    targetPapers.forEach(p => {
+      newMap[p.paperId] = [parseInt(examinerId)];
+    });
+    setAssignedExaminersMap(newMap);
+    message.info(`Assigned examiner to ${targetPapers.length} unassigned paper(s)`);
+    setQuickAssignExaminerId('');
+  };
+
+  const handleCancelBulkAssignments = () => {
+    setAssignedExaminersMap({});
+    setOpenDropdownPaperId(null);
+    setDropdownSearch('');
+    message.info("Pending assignments reset.");
+  };
+
+  const handleSaveBulkAssignments = async () => {
+    const entries = Object.entries(assignedExaminersMap).filter(([_, ids]) => ids && ids.length > 0);
+    if (entries.length === 0) {
+      message.warning("Please select an examiner for at least one paper before saving.");
+      return;
+    }
+
+    setIsBulkAssigning(true);
+    try {
+      const examinerToPapers = {};
+      entries.forEach(([paperIdStr, exIds]) => {
+        const pId = parseInt(paperIdStr);
+        exIds.forEach(exId => {
+          if (!examinerToPapers[exId]) examinerToPapers[exId] = [];
+          examinerToPapers[exId].push(pId);
+        });
+      });
+
+      await Promise.all(
+        Object.entries(examinerToPapers).map(([exIdStr, pIds]) =>
+          apiCall('/paperexaminers/bulk-assign', {
+            method: 'POST',
+            body: {
+              paperIds: pIds,
+              examinerIds: [parseInt(exIdStr)]
+            }
+          })
+        )
+      );
+
+      message.success(`Successfully assigned examiners to ${entries.length} paper(s)!`);
+      setAssignedExaminersMap({});
+      setOpenDropdownPaperId(null);
+      await loadBulkAssignData();
+      refreshTable();
+    } catch (err) {
+      console.error(err);
+      message.error("Error: " + (err.message || "Failed to save examiner assignments"));
+    } finally {
+      setIsBulkAssigning(false);
+    }
+  };
+
+  // ── EXCEL TEMPLATE DOWNLOAD HANDLER ─────────────────────────────────────────
+  const handleDownloadExcelTemplate = () => {
+    try {
+      if (!bulkPapers || bulkPapers.length === 0) {
+        message.error("No papers found in this project to export.");
+        return;
+      }
+
+      // Always export only unassigned papers (filter by subject if active)
+      const unassigned = bulkPapers.filter(p => (p.expertsCount || 0) === 0);
+      const list = bulkSubjectFilter
+        ? unassigned.filter(p => String(p.subjectId) === bulkSubjectFilter)
+        : unassigned;
+
+      const exportRows = list.map((p, idx) => ({
+        "S.No": idx + 1,
+        "Paper ID": p.paperId,
+        "Paper Code": p.paperCode || '',
+        "Paper Name": p.paperName || '',
+        "Subject": p.subjectName || '',
+        "Catch No": p.catchNo || '',
+        "Max Marks": p.maxMarks || '',
+        "Current Status": (p.expertsCount || 0) > 0 ? `Assigned (${p.expertsCount})` : "Unassigned",
+        "Examiner Name": "" // To be filled manually by user
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportRows);
+      ws['!cols'] = [
+        { wch: 6 },   // S.No
+        { wch: 10 },  // Paper ID
+        { wch: 16 },  // Paper Code
+        { wch: 32 },  // Paper Name
+        { wch: 22 },  // Subject
+        { wch: 14 },  // Catch No
+        { wch: 12 },  // Max Marks
+        { wch: 18 },  // Current Status
+        { wch: 30 }   // Examiner Name
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Examiner_Allocation");
+
+      const currProj = projects.find(p => String(p.projectId) === String(projectId));
+      const projName = (currProj?.projectName || 'Project').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const fileName = `${projName}_Examiner_Allocation_Template.xlsx`;
+
+      XLSX.writeFile(wb, fileName);
+      message.success(`Downloaded template: ${fileName}`);
+    } catch (err) {
+      console.error("Failed to generate Excel template:", err);
+      message.error("Failed to generate Excel template: " + (err.message || ''));
+    }
+  };
+
+  // ── EXCEL UPLOAD & PARSER HANDLER ───────────────────────────────────────────
+  const handleExcelUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const fileExt = file.name.split('.').pop().toLowerCase();
+    if (!['xlsx', 'xls', 'csv'].includes(fileExt)) {
+      message.error("Please upload a valid Excel file (.xlsx, .xls) or CSV.");
+      if (excelFileInputRef.current) excelFileInputRef.current.value = '';
+      return;
+    }
+
+    // Check if examiners are loaded
+    if (!bulkExaminers || bulkExaminers.length === 0) {
+      message.error("Examiners data not loaded yet. Please wait a moment and try again.");
+      if (excelFileInputRef.current) excelFileInputRef.current.value = '';
+      return;
+    }
+
+    console.log('Excel Upload - bulkExaminers count:', bulkExaminers.length);
+    console.log('Excel Upload - bulkExaminers sample:', bulkExaminers.slice(0, 3));
+
+    setExcelFileName(file.name);
+    const reader = new FileReader();
+
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const rawJson = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+        if (!rawJson || rawJson.length === 0) {
+          message.error("The uploaded Excel sheet contains no data rows.");
+          if (excelFileInputRef.current) excelFileInputRef.current.value = '';
+          return;
+        }
+
+        const firstRow = rawJson[0];
+        const keys = Object.keys(firstRow);
+
+        const idKey = keys.find(k => /paper\s*id/i.test(k) || /^id$/i.test(k));
+        const codeKey = keys.find(k => /paper\s*code/i.test(k) || /^code$/i.test(k));
+        const catchKey = keys.find(k => /catch/i.test(k));
+        const examinerKey = keys.find(k => /examiner(\s*name)?/i.test(k) || /evaluator/i.test(k) || /expert/i.test(k));
+
+        if (!examinerKey) {
+          message.error("Could not find 'Examiner Name' column in Excel. Please use the downloaded template.");
+          if (excelFileInputRef.current) excelFileInputRef.current.value = '';
+          return;
+        }
+
+        const previewRows = [];
+
+        rawJson.forEach((row, rowIndex) => {
+          const rowId = idKey ? row[idKey] : null;
+          const rowCode = codeKey ? String(row[codeKey]).trim() : '';
+          const rowCatch = catchKey ? String(row[catchKey]).trim() : '';
+          const rawExaminerName = String(row[examinerKey] || '').trim();
+
+          // Match paper in bulkPapers
+          let matchedPaper = null;
+          if (rowId) {
+            matchedPaper = bulkPapers.find(p => String(p.paperId) === String(rowId));
+          }
+          if (!matchedPaper && rowCode) {
+            matchedPaper = bulkPapers.find(p => p.paperCode?.trim().toLowerCase() === rowCode.toLowerCase());
+          }
+          if (!matchedPaper && rowCatch) {
+            matchedPaper = bulkPapers.find(p => p.catchNo?.trim() === rowCatch);
+          }
+
+          if (!matchedPaper) {
+            // Paper does not belong to this project or not found
+            return;
+          }
+
+          if (!rawExaminerName) {
+            previewRows.push({
+              key: `row-${rowIndex}-${matchedPaper.paperId}`,
+              paper: matchedPaper,
+              excelExaminerName: '',
+              matchStatus: 'empty',
+              candidates: [],
+              selectedExaminerId: null
+            });
+            return;
+          }
+
+          const cleanInput = rawExaminerName.toLowerCase().replace(/^(dr\.|prof\.|dr|prof|mr\.|ms\.|mrs\.|mr|ms|mrs)\s+/i, '').trim();
+
+          // 1. Exact full name match
+          const exactMatches = bulkExaminers.filter(ex => 
+            ex.name?.trim().toLowerCase() === rawExaminerName.toLowerCase()
+          );
+
+          let matchingExaminers = exactMatches;
+
+          // 2. Title-normalized match (e.g. "John Doe" vs "Prof John Doe")
+          if (matchingExaminers.length === 0) {
+            const titleNormalizedMatches = bulkExaminers.filter(ex => {
+              const exClean = (ex.name || '').toLowerCase().replace(/^(dr\.|prof\.|dr|prof|mr\.|ms\.|mrs\.|mr|ms|mrs)\s+/i, '').trim();
+              return exClean === cleanInput;
+            });
+            if (titleNormalizedMatches.length > 0) {
+              matchingExaminers = titleNormalizedMatches;
+            }
+          }
+
+          // 3. Substring/partial match if still not found
+          if (matchingExaminers.length === 0 && cleanInput.length >= 3) {
+            const partialMatches = bulkExaminers.filter(ex => 
+              (ex.name || '').toLowerCase().includes(cleanInput)
+            );
+            if (partialMatches.length > 0) {
+              matchingExaminers = partialMatches;
+            }
+          }
+
+          if (matchingExaminers.length === 1) {
+            previewRows.push({
+              key: `row-${rowIndex}-${matchedPaper.paperId}`,
+              paper: matchedPaper,
+              excelExaminerName: rawExaminerName,
+              matchStatus: 'matched',
+              candidates: matchingExaminers,
+              selectedExaminerId: matchingExaminers[0].id
+            });
+          } else if (matchingExaminers.length > 1) {
+            // Multiple examiners have the same name: Coordinator must choose from candidates
+            previewRows.push({
+              key: `row-${rowIndex}-${matchedPaper.paperId}`,
+              paper: matchedPaper,
+              excelExaminerName: rawExaminerName,
+              matchStatus: 'multiple',
+              candidates: matchingExaminers,
+              selectedExaminerId: null
+            });
+          } else {
+            previewRows.push({
+              key: `row-${rowIndex}-${matchedPaper.paperId}`,
+              paper: matchedPaper,
+              excelExaminerName: rawExaminerName,
+              matchStatus: 'not_found',
+              candidates: bulkExaminers,
+              selectedExaminerId: null
+            });
+          }
+        });
+
+        if (previewRows.length === 0) {
+          message.warning("No matching project papers found in the uploaded Excel.");
+          if (excelFileInputRef.current) excelFileInputRef.current.value = '';
+          return;
+        }
+
+        setExcelPreviewData(previewRows);
+        setExcelPreviewFilter('all');
+        message.success(`Parsed ${previewRows.length} papers from Excel. Review allocations below!`);
+      } catch (err) {
+        console.error("Failed to parse Excel file:", err);
+        message.error("Failed to read Excel file: " + (err.message || ''));
+      } finally {
+        if (excelFileInputRef.current) excelFileInputRef.current.value = '';
+      }
+    };
+
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleSelectExaminerInPreview = (rowKey, examinerId) => {
+    setExcelPreviewData(prev => {
+      if (!prev) return prev;
+      return prev.map(item => {
+        if (item.key === rowKey) {
+          return {
+            ...item,
+            selectedExaminerId: examinerId ? parseInt(examinerId) : null
+          };
+        }
+        return item;
+      });
+    });
+  };
+
+  const handleConfirmExcelAssignments = async () => {
+    if (!excelPreviewData) return;
+
+    const rowsToAssign = excelPreviewData.filter(r => r.selectedExaminerId);
+
+    if (rowsToAssign.length === 0) {
+      message.warning("No examiners selected to assign. Please select examiners for the papers.");
+      return;
+    }
+
+    const unresolvedMultiple = excelPreviewData.filter(r => r.matchStatus === 'multiple' && !r.selectedExaminerId);
+    if (unresolvedMultiple.length > 0) {
+      const proceed = window.confirm(
+        `${unresolvedMultiple.length} paper(s) have multiple matching examiners that have not been selected and will be skipped. Do you want to proceed with assigning the remaining ${rowsToAssign.length} paper(s)?`
+      );
+      if (!proceed) return;
+    }
+
+    setIsUploadingExcel(true);
+    try {
+      const examinerToPapers = {};
+      rowsToAssign.forEach(r => {
+        const exId = r.selectedExaminerId;
+        const pId = r.paper.paperId;
+        if (!examinerToPapers[exId]) examinerToPapers[exId] = [];
+        examinerToPapers[exId].push(pId);
+      });
+
+      await Promise.all(
+        Object.entries(examinerToPapers).map(([exIdStr, pIds]) =>
+          apiCall('/paperexaminers/bulk-assign', {
+            method: 'POST',
+            body: {
+              paperIds: pIds,
+              examinerIds: [parseInt(exIdStr)]
+            }
+          })
+        )
+      );
+
+      message.success(`Successfully assigned examiners to ${rowsToAssign.length} paper(s) from Excel!`);
+      setExcelPreviewData(null);
+      setExcelFileName('');
+      await loadBulkAssignData();
+      refreshTable();
+    } catch (err) {
+      console.error("Failed to commit Excel bulk assignments:", err);
+      message.error("Failed to save assignments: " + (err.message || ''));
+    } finally {
+      setIsUploadingExcel(false);
+    }
+  };
+
+  const handleCancelExcelPreview = () => {
+    setExcelPreviewData(null);
+    setExcelPreviewFilter('all');
+    setExcelFileName('');
+    setOpenPreviewDropdownKey(null);
+    setPreviewSubjectFilter('');
+  };
+
+  // Derive unique subjects (with id) from bulkPapers for the subject filter
+  const bulkSubjectOptions = useMemo(() => {
+    const seen = new Set();
+    const list = [];
+    bulkPapers.forEach(p => {
+      if (p.subjectName && p.subjectId && !seen.has(p.subjectId)) {
+        seen.add(p.subjectId);
+        list.push({ label: p.subjectName, value: String(p.subjectId) });
+      }
+    });
+    return list.sort((a, b) => a.label.localeCompare(b.label));
+  }, [bulkPapers]);
+
+  // When subject filter changes, reload examiners for that specific subject
+  useEffect(() => {
+    if (!bulkSubjectFilter) {
+      // No subject selected – reload all examiners for the university (filtering happens per row)
+      (async () => {
+        try {
+          const proj = projects.find(p => p.projectId === parseInt(projectId));
+          const targetUnivId = proj?.universityId || activeUniversityId;
+          const res = await apiCall(`/users/examiners${targetUnivId ? `?universityId=${targetUnivId}` : ''}`);
+          setBulkExaminers(Array.isArray(res) ? res : (res?.items || []));
+        } catch { /* silent */ }
+      })();
+    } else {
+      // Subject selected – fetch examiners for that specific subject only
+      (async () => {
+        try {
+          const proj = projects.find(p => p.projectId === parseInt(projectId));
+          const targetUnivId = proj?.universityId || activeUniversityId;
+          const univPart = targetUnivId ? `&universityId=${targetUnivId}` : '';
+          const res = await apiCall(`/users/examiners?subjectId=${bulkSubjectFilter}${univPart}`);
+          setBulkExaminers(Array.isArray(res) ? res : (res?.items || []));
+        } catch { /* silent */ }
+      })();
+    }
+  }, [bulkSubjectFilter, projectId, activeUniversityId, projects]);
+
+  const previewSubjectOptions = useMemo(() => {
+    if (!excelPreviewData) return [];
+    const seen = new Set();
+    const list = [];
+    excelPreviewData.forEach(r => {
+      const sub = r.subjectName || r.subject || '';
+      if (sub && !seen.has(sub)) { seen.add(sub); list.push(sub); }
+    });
+    return list.sort();
+  }, [excelPreviewData]);
+
+  const filteredBulkPapers = bulkPapers.filter(p => {
+    // Always show only unassigned papers
+    if ((p.expertsCount || 0) > 0) return false;
+
+    const matchesSearch = !bulkPaperSearch ||
+      p.paperCode?.toLowerCase().includes(bulkPaperSearch.toLowerCase()) ||
+      p.paperName?.toLowerCase().includes(bulkPaperSearch.toLowerCase()) ||
+      p.subjectName?.toLowerCase().includes(bulkPaperSearch.toLowerCase()) ||
+      p.catchNo?.toLowerCase().includes(bulkPaperSearch.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    if (bulkSubjectFilter) {
+      // bulkSubjectFilter stores the subjectId as string
+      return String(p.subjectId) === bulkSubjectFilter;
+    }
+
+    return true;
+  });
+
+  const totalBulkCount = filteredBulkPapers.length;
+  const totalBulkPages = Math.max(1, Math.ceil(totalBulkCount / bulkPageSize));
+
+  const paginatedBulkPapers = useMemo(() => {
+    const start = (bulkPage - 1) * bulkPageSize;
+    return filteredBulkPapers.slice(start, start + bulkPageSize);
+  }, [filteredBulkPapers, bulkPage, bulkPageSize]);
+
+  useEffect(() => {
+    setBulkPage(1);
+  }, [bulkPaperSearch, bulkSubjectFilter]);
+
+  useEffect(() => {
+    if (bulkPage > totalBulkPages && totalBulkPages > 0) {
+      setBulkPage(totalBulkPages);
+    }
+  }, [bulkPage, totalBulkPages]);
+
+  const pendingAssignedCount = Object.keys(assignedExaminersMap).filter(pId => assignedExaminersMap[pId]?.length > 0).length;
+
 
   const SortHeader = ({ label, field, isCenter = false, hasFilter = false, customFilter, filterOptions }) => {
     const isSorted = sortField === field;
@@ -1126,7 +1745,7 @@ export default function PapersManagement({ isTab = false }) {
         )}
 
         {/* Papers Main Table Area */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className={`bg-white rounded-xl border border-gray-100 shadow-sm ${activeInnerTab === 'bulk-assign' ? 'overflow-visible' : 'overflow-hidden'}`}>
           {/* ── TOOLBAR: Tabs left | Actions right ── */}
           <div className="flex items-center border-b border-gray-100 bg-white">
             {/* LEFT: Tab switcher (always visible) */}
@@ -1164,6 +1783,17 @@ export default function PapersManagement({ isTab = false }) {
                 >
                   <Upload size={13} className={activeInnerTab === 'bulk-import' ? 'text-teal-700' : 'text-gray-400'} />
                   Bulk QP Import
+                </button>
+                <button
+                  onClick={() => setActiveInnerTab('bulk-assign')}
+                  className={`flex items-center gap-2 px-5 py-4 text-xs font-extrabold tracking-wide border-b-2 transition-all duration-150 whitespace-nowrap cursor-pointer ${
+                    activeInnerTab === 'bulk-assign'
+                      ? 'border-teal-600 text-teal-700 bg-teal-50/50'
+                      : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50'
+                  }`}
+                >
+                  <UserCheck size={13} className={activeInnerTab === 'bulk-assign' ? 'text-teal-700' : 'text-gray-400'} />
+                  Bulk Assign Examiner
                 </button>
               </div>
             )}
@@ -1286,46 +1916,9 @@ export default function PapersManagement({ isTab = false }) {
                 </>
               )}
 
-              {/* Bulk QP Import Tab Actions */}
-              {activeInnerTab === 'bulk-import' && (
-                <>
-                  {selectedFiles.length > 0 && (
-                    <>
-                      <button
-                        onClick={clearAllFiles}
-                        className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
-                      >
-                        Clear Queue
-                      </button>
-                      <button
-                        onClick={handleBulkUpload}
-                        disabled={isUploading}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-extrabold text-white bg-teal-700 hover:bg-teal-800 shadow-sm transition-all whitespace-nowrap disabled:opacity-50"
-                      >
-                        {isUploading ? (
-                          <>
-                            <Loader size={13} className="animate-spin" />
-                            <span>Uploading...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Upload size={13} />
-                            <span>Upload & Allocate ({selectedFiles.length})</span>
-                          </>
-                        )}
-                      </button>
-                    </>
-                  )}
-                  {uploadResult && (
-                    <button
-                      onClick={() => { setSelectedFiles([]); setUploadResult(null); }}
-                      className="text-xs font-bold text-teal-700 hover:text-teal-800 hover:bg-teal-50 border border-teal-200 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap shadow-2xs"
-                    >
-                      New Upload
-                    </button>
-                  )}
-                </>
-              )}
+              {/* Bulk QP Import and Bulk Assign Examiner tabs use their dedicated in-tab action bars below */}
+
+              {/* Bulk Assign Examiner tab uses the in-table action strip directly below */}
             </div>
           </div>
 
@@ -1391,9 +1984,9 @@ export default function PapersManagement({ isTab = false }) {
                         </td>
                         <td className="px-5 py-2.5">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center font-black shrink-0">
+                            {/* <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center font-black shrink-0">
                               {paper.paperCode.substring(0, 2)}
-                            </div>
+                            </div> */}
                             <div>
                               <span className="text-gray-900 font-extrabold text-sm block">{paper.paperCode}</span>
                               <span className="text-sm text-gray-800 font-semibold block">{paper.paperName}</span>
@@ -1502,69 +2095,30 @@ export default function PapersManagement({ isTab = false }) {
                             const isFullyReady = missingReasons.length === 0;
 
                             return (
-                              <div className="flex flex-col gap-1 items-start min-w-[170px]" title={tooltipTitle}>
-                                {isFullyReady ? (
-                                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
-                                    <CheckCircle2 size={12} className="text-emerald-600" />
-                                    <span className="text-[10px] font-black uppercase tracking-wider">Ready for Allocation</span>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs">
-                                      <AlertCircle size={11} className="text-amber-600" />
-                                      <span className="text-[9px] font-black uppercase tracking-wider">Action Required</span>
-                                    </div>
-                                    {!hasSections || !marksMatch ? (
-                                      <Link 
-                                        to={userType === 'admin' ? `/admin/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers` : `/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`} 
-                                        className="inline-flex items-center gap-1 text-[10px] font-black text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-md border border-indigo-200 transition-colors uppercase tracking-wider"
-                                      >
-                                        Configure Sections <ChevronRight size={11} />
-                                      </Link>
-                                    ) : !hasEvaluators ? (
-                                      <button 
-                                        onClick={() => openAllocationModal(paper)} 
-                                        className="inline-flex items-center gap-1 text-[10px] font-black text-orange-700 hover:text-orange-800 bg-orange-50 hover:bg-orange-100 px-2 py-0.5 rounded-md border border-orange-200 transition-colors uppercase tracking-wider cursor-pointer"
-                                      >
-                                        Assign Examiner <ChevronRight size={11} />
-                                      </button>
-                                    ) : !hasQp ? (
-                                      <button 
-                                        onClick={() => triggerTableUpload(paper)} 
-                                        className="inline-flex items-center gap-1 text-[10px] font-black text-blue-700 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-md border border-blue-200 transition-colors uppercase tracking-wider cursor-pointer"
-                                      >
-                                        Upload PDF <ChevronRight size={11} />
-                                      </button>
-                                    ) : null}
-                                  </div>
-                                )}
-
-                                {/* Compact horizontal micro-status checklist */}
-                                <div className="flex items-center gap-2.5 text-[11px] font-medium text-gray-600 mt-0.5">
-                                  <span 
-                                    className={`inline-flex items-center gap-1 ${hasSections && marksMatch ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`} 
-                                    title={hasSections && marksMatch ? `Sections & Marks: ${paper.sectionsCount || 0} sections, ${paper.configuredMarks}/${paper.maxMarks} marks` : (!hasSections ? 'Sections: 0 created' : `Marks mismatch: ${paper.configuredMarks}/${paper.maxMarks}`)}
-                                  >
-                                    {hasSections && marksMatch ? <CheckCircle2 size={12} className="text-emerald-600 shrink-0" /> : <X size={12} className="text-rose-500 shrink-0" />}
-                                    Sections
-                                  </span>
-                                  <span className="text-gray-300">•</span>
-                                  <span 
-                                    className={`inline-flex items-center gap-1 ${hasEvaluators ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`} 
-                                    title={hasEvaluators ? `Evaluators: ${paper.expertsCount} assigned` : 'Evaluators: None assigned'}
-                                  >
-                                    {hasEvaluators ? <CheckCircle2 size={12} className="text-emerald-600 shrink-0" /> : <X size={12} className="text-rose-500 shrink-0" />}
-                                    Evaluator
-                                  </span>
-                                  <span className="text-gray-300">•</span>
-                                  <span 
-                                    className={`inline-flex items-center gap-1 ${hasQp ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`} 
-                                    title={hasQp ? 'Question Paper: PDF uploaded' : 'Question Paper: PDF missing'}
-                                  >
-                                    {hasQp ? <CheckCircle2 size={12} className="text-emerald-600 shrink-0" /> : <X size={12} className="text-rose-500 shrink-0" />}
-                                    QP PDF
-                                  </span>
-                                </div>
+                              <div className="flex items-center gap-2.5 text-[11px] font-medium text-gray-600" title={tooltipTitle}>
+                                <span 
+                                  className={`inline-flex items-center gap-1 ${hasSections && marksMatch ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`} 
+                                  title={hasSections && marksMatch ? `Sections & Marks: ${paper.sectionsCount || 0} sections, ${paper.configuredMarks}/${paper.maxMarks} marks` : (!hasSections ? 'Sections: 0 created' : `Marks mismatch: ${paper.configuredMarks}/${paper.maxMarks}`)}
+                                >
+                                  {hasSections && marksMatch ? <CheckCircle2 size={12} className="text-emerald-600 shrink-0" /> : <X size={12} className="text-rose-500 shrink-0" />}
+                                  Sections
+                                </span>
+                                <span className="text-gray-300">•</span>
+                                <span 
+                                  className={`inline-flex items-center gap-1 ${hasEvaluators ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`} 
+                                  title={hasEvaluators ? `Evaluators: ${paper.expertsCount} assigned` : 'Evaluators: None assigned'}
+                                >
+                                  {hasEvaluators ? <CheckCircle2 size={12} className="text-emerald-600 shrink-0" /> : <X size={12} className="text-rose-500 shrink-0" />}
+                                  Evaluator
+                                </span>
+                                <span className="text-gray-300">•</span>
+                                <span 
+                                  className={`inline-flex items-center gap-1 ${hasQp ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`} 
+                                  title={hasQp ? 'Question Paper: PDF uploaded' : 'Question Paper: PDF missing'}
+                                >
+                                  {hasQp ? <CheckCircle2 size={12} className="text-emerald-600 shrink-0" /> : <X size={12} className="text-rose-500 shrink-0" />}
+                                  QP PDF
+                                </span>
                               </div>
                             );
                           })()}
@@ -1783,191 +2337,1034 @@ export default function PapersManagement({ isTab = false }) {
                 </label>
               </div>
 
-              {/* Selected Files Queue */}
+              {/* Selected Files Count & Action Bar */}
               {selectedFiles.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-4 sm:p-5 space-y-4 animate-in fade-in duration-200">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
-                    <div className="flex items-center gap-2">
-                      <FileCheck size={16} className="text-teal-700" />
-                      <span className="text-xs font-extrabold text-gray-900 uppercase tracking-wider">
-                        Selected Files Queue ({selectedFiles.length})
-                      </span>
+                <div className="bg-gradient-to-r from-teal-50 to-teal-100/50 border border-teal-200 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-teal-600 text-white rounded-lg flex items-center justify-center font-bold shadow-sm">
+                      <FileCheck size={20} />
                     </div>
-                    <div className="flex items-center gap-2.5">
-                      <button
-                        onClick={clearAllFiles}
-                        className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg transition-colors"
-                      >
-                        Clear Queue
-                      </button>
-                      <button
-                        onClick={handleBulkUpload}
-                        disabled={isUploading}
-                        className="bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider py-2 px-5 rounded-lg transition-all shadow-sm flex items-center gap-2"
-                      >
-                        {isUploading ? (
-                          <>
-                            <Loader size={13} className="animate-spin" />
-                            <span>Uploading...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Upload size={14} />
-                            <span>Upload & Auto-Allocate</span>
-                          </>
-                        )}
-                      </button>
+                    <div>
+                      <p className="text-sm font-extrabold text-gray-900">
+                        {selectedFiles.length} PDF {selectedFiles.length === 1 ? 'file' : 'files'} selected
+                      </p>
+                      <p className="text-xs text-gray-600 font-medium">
+                        Total size: <span className="font-bold text-gray-800">{formatBytes(totalQueueSize)}</span>
+                      </p>
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto pr-1">
-                    {selectedFiles.map((f, i) => (
-                      <div key={i} className="flex items-center justify-between p-2.5 bg-gray-50 hover:bg-teal-50/40 border border-gray-200 rounded-lg text-xs transition-colors">
-                        <div className="flex items-center gap-2 truncate pr-2">
-                          <FileText size={14} className="text-teal-700 shrink-0" />
-                          <span className="font-bold text-gray-800 truncate" title={f.name}>{f.name}</span>
-                        </div>
-                        <button
-                          onClick={() => removeFile(i)}
-                          className="text-gray-400 hover:text-rose-600 transition-colors p-1"
-                          title="Remove file"
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    ))}
+                  
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={clearAllFiles}
+                      disabled={isUploading}
+                      className="px-4 py-2 text-xs font-bold text-rose-600 hover:text-rose-700 bg-white hover:bg-rose-50 border border-rose-200 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      Clear All
+                    </button>
+                    <button
+                      onClick={handleBulkUpload}
+                      disabled={isUploading}
+                      className="px-5 py-2 bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider rounded-lg transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+                    >
+                      {isUploading ? (
+                        <>
+                          <Loader size={14} className="animate-spin" />
+                          <span>Uploading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={14} />
+                          <span>Upload & Process ({selectedFiles.length})</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               )}
+            </div>
+          )}
 
-              {/* Upload Results & Summary Report */}
-              {uploadResult && (
-                <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden space-y-0 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                  <div className="p-4 sm:p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gray-50/50">
-                    <div>
-                      <h3 className="text-sm font-extrabold text-gray-900 flex items-center gap-2">
-                        <CheckCircle2 size={16} className="text-teal-700" />
-                        Import Summary & Allocation Report
-                      </h3>
-                      <p className="text-xs text-gray-500 mt-0.5">{uploadResult.message}</p>
-                    </div>
-                    <div className="flex items-center gap-2.5">
-                      <div className="bg-teal-50 text-teal-800 border border-teal-200 px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5">
-                        <CheckCircle2 size={13} className="text-teal-700" />
-                        <span>{uploadResult.matchedCount} Allocated</span>
-                      </div>
-                      {uploadResult.unmatchedCount > 0 && (
-                        <div className="bg-amber-50 text-amber-800 border border-amber-200 px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5">
-                          <AlertCircle size={13} className="text-amber-700" />
-                          <span>{uploadResult.unmatchedCount} Unmatched</span>
-                        </div>
-                      )}
-                      <button
-                        onClick={() => { setSelectedFiles([]); setUploadResult(null); }}
-                        className="px-3 py-1 text-xs font-bold text-gray-600 hover:text-gray-900 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors shadow-2xs"
+          {/* ── BULK ASSIGN EXAMINER TAB CONTENT ──────────────────────────── */}
+          {activeInnerTab === 'bulk-assign' && (
+            <div className="overflow-visible">
+              {/* ── ACTION TOOLBAR STRIP: Search, Filter, Quick Assign & Save ── */}
+              <div className="px-5 py-3 bg-gray-50/70 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+                {/* Left: Search & Filter Pills */}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {/* Search */}
+                  <div className="relative">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search papers by code, name, subject, or catch no..."
+                      value={bulkPaperSearch}
+                      onChange={(e) => setBulkPaperSearch(e.target.value)}
+                      className="pl-8 pr-7 py-2 text-xs font-semibold bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 w-64 sm:w-72 md:w-80 transition-all shadow-2xs"
+                    />
+                    {bulkPaperSearch && (
+                      <button 
+                        onClick={() => setBulkPaperSearch('')} 
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                        title="Clear search"
                       >
-                        Upload More
+                        <X size={11} />
                       </button>
-                    </div>
+                    )}
                   </div>
 
-                  {/* Results Search Filter */}
-                  <div className="px-4 sm:px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-4 bg-white">
-                    <div className="relative w-full max-w-sm">
-                      <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="Filter results by filename, catch no, paper code..."
-                        value={searchFilter}
-                        onChange={(e) => setSearchFilter(e.target.value)}
-                        className="w-full pl-8 pr-7 py-1.5 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white placeholder-gray-400 transition-all"
-                      />
-                      {searchFilter && (
-                        <button onClick={() => setSearchFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                          <X size={12} />
-                        </button>
-                      )}
-                    </div>
-                    <span className="text-xs text-gray-500 font-medium shrink-0">
-                      Showing {filteredResults.length} file(s)
-                    </span>
+
+                </div>
+
+                {/* Right: Quick Assign All, Download & Upload Excel */}
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-gray-600 hidden md:inline">Quick Assign All:</span>
+                    <select
+                      value={quickAssignExaminerId}
+                      onChange={(e) => setQuickAssignExaminerId(e.target.value)}
+                      className="text-xs font-semibold bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-teal-500 text-gray-700 min-w-[150px] shadow-2xs"
+                    >
+                      <option value="">Choose Examiner...</option>
+                      {bulkExaminers.map(ex => (
+                        <option key={ex.id} value={ex.id}>{ex.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyToAllFiltered(quickAssignExaminerId)}
+                      disabled={!quickAssignExaminerId}
+                      className="px-3 py-1.5 text-xs font-bold bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap shadow-2xs"
+                    >
+                      Apply to All
+                    </button>
                   </div>
 
-                  {/* Results Table */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
-                        <tr>
-                          <th className="px-5 py-3.5 border-b border-gray-100">File Name</th>
-                          <th className="px-5 py-3.5 text-center border-b border-gray-100">Status</th>
-                          <th className="px-5 py-3.5 border-b border-gray-100">Matched Paper Code & Name</th>
-                          <th className="px-5 py-3.5 text-center border-b border-gray-100">Catch No</th>
-                          <th className="px-5 py-3.5 text-right border-b border-gray-100">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100 text-xs font-bold text-gray-700">
-                        {filteredResults.length === 0 ? (
-                          <tr>
-                            <td colSpan={5} className="px-5 py-12 text-center text-gray-400">
-                              No results match your filter.
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredResults.map((r, idx) => (
-                            <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                              <td className="px-5 py-3 font-extrabold text-gray-900">
-                                <div className="flex items-center gap-2">
-                                  <FileText size={14} className={r.status === 'Success' ? 'text-teal-700' : 'text-amber-500'} />
-                                  <span>{r.fileName}</span>
-                                </div>
-                              </td>
-                              <td className="px-5 py-3 text-center">
-                                {r.status === 'Success' ? (
-                                  <span className="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-teal-50 text-teal-800 border border-teal-200">
-                                    Allocated
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-200">
-                                    Unmatched
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-5 py-3">
-                                {r.paperCode ? (
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono bg-gray-100 text-gray-600 font-bold px-2 py-0.5 rounded-md text-[11px] uppercase tracking-wider">
-                                      {r.paperCode}
-                                    </span>
-                                    <span className="font-bold text-gray-900">{r.paperName}</span>
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-400 italic">No matching paper</span>
-                                )}
-                              </td>
-                              <td className="px-5 py-3 text-center font-mono font-bold text-gray-700">
-                                {r.catchNo || '—'}
-                              </td>
-                              <td className="px-5 py-3 text-right">
-                                {r.fileUrl ? (
-                                  <a
-                                    href={`${import.meta.env.VITE_API_URL.replace('/api', '')}${r.fileUrl}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-colors"
-                                  >
-                                    <FileText size={12} /> View PDF
-                                  </a>
-                                ) : (
-                                  <span className="text-[10px] text-gray-400 italic">No PDF Attached</span>
-                                )}
+                  <div className="h-5 w-px bg-gray-200 mx-1 hidden sm:block" />
+
+                  {/* Download Excel Template */}
+                  <button
+                    type="button"
+                    onClick={handleDownloadExcelTemplate}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-lg transition-all shadow-2xs cursor-pointer whitespace-nowrap"
+                    title="Download Excel template with all paper details and an empty Examiner column to fill manually"
+                  >
+                    <Download size={13} className="text-teal-700" />
+                    <span>Download Excel</span>
+                  </button>
+
+                  {/* Upload Excel */}
+                  <label
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-lg transition-all shadow-2xs cursor-pointer whitespace-nowrap"
+                    title="Upload filled Excel sheet with examiner allocations"
+                  >
+                    <Upload size={13} className="text-teal-700" />
+                    <span>Upload Excel</span>
+                    <input
+                      type="file"
+                      ref={excelFileInputRef}
+                      accept=".xlsx, .xls, .csv"
+                      onChange={handleExcelUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* ── EXCEL ALLOCATION PREVIEW VIEW ── */}
+              {excelPreviewData ? (
+                <div className="overflow-visible min-h-[300px]">
+                  {/* Preview Banner Strip */}
+                  <div className="px-5 py-3.5 bg-teal-50/50 border-b border-teal-100 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-800 flex items-center justify-center shrink-0 shadow-2xs font-bold">
+                        <FileCheck size={16} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-extrabold text-gray-900 text-sm">Excel Allocation Preview</span>
+                          <span className="font-mono bg-white border border-teal-200 text-teal-900 px-2 py-0.5 rounded text-[11px] font-bold shadow-2xs">
+                            {excelFileName}
+                          </span>
+                        </div>
+                        <p className="text-gray-500 text-[11px] font-medium mt-0.5">
+                          Review parsed allocations below. If examiners share the same name, select the intended one from the dropdown before uploading.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Summary Badges & Actions as Interactive Filter Tabs */}
+                    {(() => {
+                      const totalRows = excelPreviewData.length;
+                      const matchedRows = excelPreviewData.filter(r => r.matchStatus === 'matched').length;
+                      const multipleRows = excelPreviewData.filter(r => r.matchStatus === 'multiple').length;
+                      const notFoundRows = excelPreviewData.filter(r => r.matchStatus === 'not_found').length;
+
+                      return (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {/* All Rows Filter */}
+                          <button
+                            type="button"
+                            onClick={() => setExcelPreviewFilter('all')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                              excelPreviewFilter === 'all'
+                                ? 'bg-gray-900 text-white ring-2 ring-gray-900/20'
+                                : 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'
+                            }`}
+                            title="Show all parsed rows"
+                          >
+                            <span>All Rows</span>
+                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                              excelPreviewFilter === 'all' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-700'
+                            }`}>
+                              {totalRows}
+                            </span>
+                          </button>
+
+                          {/* Matched Filter */}
+                          <button
+                            type="button"
+                            onClick={() => setExcelPreviewFilter(excelPreviewFilter === 'matched' ? 'all' : 'matched')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                              excelPreviewFilter === 'matched'
+                                ? 'bg-emerald-700 text-white ring-2 ring-emerald-600/30'
+                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            }`}
+                            title="Filter rows with exact single examiner match"
+                          >
+                            <Check size={12} className={excelPreviewFilter === 'matched' ? 'text-white' : 'text-emerald-700'} />
+                            <span>Matched</span>
+                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                              excelPreviewFilter === 'matched' ? 'bg-emerald-800 text-white' : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {matchedRows}
+                            </span>
+                          </button>
+
+                          {/* Multiple Matches Filter */}
+                          {multipleRows > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setExcelPreviewFilter(excelPreviewFilter === 'multiple' ? 'all' : 'multiple')}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                                excelPreviewFilter === 'multiple'
+                                  ? 'bg-amber-600 text-white ring-2 ring-amber-500/30'
+                                  : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300'
+                              }`}
+                              title="Filter rows requiring selection due to duplicate examiner names"
+                            >
+                              <AlertTriangle size={12} className={excelPreviewFilter === 'multiple' ? 'text-white' : 'text-amber-600'} />
+                              <span>Multiple Matches</span>
+                              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                                excelPreviewFilter === 'multiple' ? 'bg-amber-700 text-white' : 'bg-amber-100 text-amber-900'
+                              }`}>
+                                {multipleRows}
+                              </span>
+                            </button>
+                          )}
+
+                          {/* Not Found Filter */}
+                          {notFoundRows > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setExcelPreviewFilter(excelPreviewFilter === 'not_found' ? 'all' : 'not_found')}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                                excelPreviewFilter === 'not_found'
+                                  ? 'bg-rose-700 text-white ring-2 ring-rose-600/30'
+                                  : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200'
+                              }`}
+                              title="Filter rows where examiner name was not found in database"
+                            >
+                              <X size={12} className={excelPreviewFilter === 'not_found' ? 'text-white' : 'text-rose-600'} />
+                              <span>Not Found</span>
+                              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                                excelPreviewFilter === 'not_found' ? 'bg-rose-800 text-white' : 'bg-rose-100 text-rose-800'
+                              }`}>
+                                {notFoundRows}
+                              </span>
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={handleCancelExcelPreview}
+                            className="ml-1 px-3 py-1.5 text-xs font-bold text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors cursor-pointer"
+                          >
+                            Discard
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Preview Table */}
+                  <table className="w-full text-left">
+                    <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                      <tr>
+                        <th className="px-5 py-3.5 border-b border-gray-100 w-1/3">Paper Code & Name</th>
+                        <th className="px-5 py-3.5 border-b border-gray-100">
+                          <div className="flex items-center">
+                            <span>Subject &amp; Catch No</span>
+                            <ColumnFilter
+                              columnKey="previewSubject"
+                              currentFilter={previewSubjectFilter}
+                              setFilter={(_, val) => setPreviewSubjectFilter(val)}
+                              placeholder="Filter by subject..."
+                              options={bulkSubjectOptions}
+                            />
+                          </div>
+                        </th>
+                        <th className="px-5 py-3.5 border-b border-gray-100">Excel Examiner Name</th>
+                        <th className="px-5 py-3.5 border-b border-gray-100 min-w-[280px]">Assigned Examiner</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-xs font-semibold text-gray-700">
+                      {(() => {
+                        const filteredRows = excelPreviewData.filter(row => {
+                          if (excelPreviewFilter === 'matched') { if (row.matchStatus !== 'matched') return false; }
+                          else if (excelPreviewFilter === 'multiple') { if (row.matchStatus !== 'multiple') return false; }
+                          else if (excelPreviewFilter === 'not_found') { if (row.matchStatus !== 'not_found') return false; }
+                          if (previewSubjectFilter) {
+                            // previewSubjectFilter stores subjectId; compare via bulkSubjectOptions
+                            const opt = bulkSubjectOptions.find(o => o.value === previewSubjectFilter);
+                            const subName = opt ? opt.label : '';
+                            const rowSub = row.subjectName || row.subject || '';
+                            if (!rowSub || rowSub !== subName) return false;
+                          }
+                          return true;
+                        });
+
+                        if (filteredRows.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={4} className="py-12 text-center text-xs font-semibold text-gray-500 bg-gray-50/50">
+                                <Filter size={24} className="mx-auto text-gray-300 mb-2" />
+                                <div>No papers match the selected filter ({excelPreviewFilter}).</div>
+                                <button
+                                  type="button"
+                                  onClick={() => setExcelPreviewFilter('all')}
+                                  className="mt-2 text-teal-700 font-bold hover:underline cursor-pointer"
+                                >
+                                  Show All ({excelPreviewData.length}) Papers
+                                </button>
                               </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                          );
+                        }
+
+                        return filteredRows.map((row) => {
+                        const isDropdownOpen = openPreviewDropdownKey === row.key;
+                        const selectedEx = bulkExaminers.find(e => e.id === row.selectedExaminerId);
+                        
+                        // Filter examiners by paper's subject AND university for dropdown
+                        let dropdownOptions;
+                        if (row.matchStatus === 'multiple') {
+                          // For multiple matches, use candidates but filter by subject and university
+                          dropdownOptions = row.candidates.filter(ex => {
+                            // Check university match
+                            if (activeUniversityId && ex.universityId !== parseInt(activeUniversityId)) {
+                              return false;
+                            }
+                            // Check subject match
+                            return row.paper.subjectId && (
+                              ex.subjectId1 === row.paper.subjectId ||
+                              ex.subjectId2 === row.paper.subjectId ||
+                              ex.subjectId3 === row.paper.subjectId
+                            );
+                          });
+                        } else {
+                          // For not found or other cases, filter all examiners by subject and university
+                          dropdownOptions = bulkExaminers.filter(ex => {
+                            // Check university match
+                            if (activeUniversityId && ex.universityId !== parseInt(activeUniversityId)) {
+                              return false;
+                            }
+                            // Check subject match
+                            return row.paper.subjectId && (
+                              ex.subjectId1 === row.paper.subjectId ||
+                              ex.subjectId2 === row.paper.subjectId ||
+                              ex.subjectId3 === row.paper.subjectId
+                            );
+                          });
+                        }
+                        
+                        const filteredOptions = dropdownOptions.filter(ex => {
+                          if (!previewDropdownSearch) return true;
+                          const q = previewDropdownSearch.toLowerCase();
+                          return (
+                            ex.name?.toLowerCase().includes(q) ||
+                            ex.email?.toLowerCase().includes(q) ||
+                            ex.empId?.toLowerCase().includes(q)
+                          );
+                        });
+
+                        return (
+                          <tr 
+                            key={row.key} 
+                            className={`hover:bg-gray-50/60 transition-colors ${
+                              row.matchStatus === 'multiple' && !row.selectedExaminerId ? 'bg-amber-50/30' : ''
+                            }`}
+                          >
+                            {/* Paper Code & Name + Match Status Flag */}
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center font-black text-xs shrink-0">
+                                  {row.paper.paperCode ? row.paper.paperCode.substring(0, 2) : "P"}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-gray-900 font-extrabold text-xs">
+                                      {row.paper.paperCode}
+                                    </span>
+                                    {row.matchStatus === 'matched' && (
+                                      <span 
+                                        className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full shadow-2xs"
+                                        title="1 Examiner Matched Successfully"
+                                      >
+                                        <Flag size={9} className="fill-emerald-500 text-emerald-600 shrink-0" />
+                                        <span>Matched</span>
+                                      </span>
+                                    )}
+                                    {row.matchStatus === 'multiple' && (
+                                      <span 
+                                        className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-full shadow-2xs"
+                                        title={`${row.candidates.length} examiners with this name found. ${row.selectedExaminerId ? 'Selection made.' : 'Action required: choose examiner.'}`}
+                                      >
+                                        <Flag size={9} className="fill-amber-500 text-amber-600 shrink-0" />
+                                        
+                                      </span>
+                                    )}
+                                    {row.matchStatus === 'not_found' && (
+                                      <span 
+                                        className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200/80 px-2 py-0.5 rounded-full shadow-2xs"
+                                        title="Examiner name in Excel not found"
+                                      >
+                                        <Flag size={9} className="fill-rose-500 text-rose-600 shrink-0" />
+                                        <span>Not Found</span>
+                                      </span>
+                                    )}
+                                    {row.matchStatus === 'empty' && (
+                                      <span 
+                                        className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-500 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full shadow-2xs"
+                                        title="No examiner specified in Excel"
+                                      >
+                                        <Flag size={9} className="text-gray-400 shrink-0" />
+                                        <span>Not Specified</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-gray-600 font-medium text-xs block truncate" title={row.paper.paperName}>
+                                    {row.paper.paperName}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Subject & Catch No */}
+                            <td className="px-5 py-3.5">
+                              <div className="text-gray-900 font-bold text-xs">{row.paper.subjectName || "—"}</div>
+                              <div className="text-[11px] text-gray-500 font-medium font-mono">
+                                Catch No: {row.paper.catchNo || 'None'}
+                              </div>
+                            </td>
+
+                            {/* Examiner Name in Excel */}
+                            <td className="px-5 py-3.5">
+                              {row.excelExaminerName ? (
+                                <span className="inline-block font-mono font-bold text-xs bg-gray-100 text-gray-800 px-2.5 py-1 rounded border border-gray-200">
+                                  {row.excelExaminerName}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 italic text-[11px]">Empty in Excel</span>
+                              )}
+                            </td>
+
+                            {/* Assigned Examiner (Dropdown / Selection) */}
+                            <td className="px-5 py-3.5">
+                              <div className="relative preview-dropdown-container">
+                                {selectedEx ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenPreviewDropdownKey(isDropdownOpen ? null : row.key);
+                                      setPreviewDropdownSearch('');
+                                    }}
+                                    className={`w-full flex items-center justify-between gap-2 p-1.5 bg-teal-50 hover:bg-teal-100/70 border border-teal-200 hover:border-teal-400 rounded-lg text-left transition-all cursor-pointer shadow-2xs ${
+                                      isDropdownOpen ? 'ring-2 ring-teal-500/30 border-teal-500' : ''
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <img
+                                        src={selectedEx.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedEx.name || 'User')}&background=0D9488&color=fff`}
+                                        alt=""
+                                        className="w-6 h-6 rounded-full border border-teal-200 object-cover shrink-0 shadow-2xs"
+                                      />
+                                      <div className="min-w-0">
+                                        <div className="text-xs font-bold text-teal-950 truncate leading-tight">{selectedEx.name}</div>
+                                        <div className="text-[10px] text-teal-700 truncate leading-tight">{selectedEx.email || selectedEx.empId}</div>
+                                      </div>
+                                    </div>
+                                    <ChevronDown size={14} className={`text-teal-700 shrink-0 transition-transform duration-150 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                                  </button>
+                                ) : row.matchStatus === 'multiple' ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenPreviewDropdownKey(isDropdownOpen ? null : row.key);
+                                      setPreviewDropdownSearch('');
+                                    }}
+                                    className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-amber-50 hover:bg-amber-100/70 border border-amber-300 rounded-lg text-xs font-bold text-amber-900 transition-all cursor-pointer shadow-2xs"
+                                  >
+                                    <span className="flex items-center gap-1.5 text-amber-800 truncate">
+                                      <Users size={13} className="text-amber-600 shrink-0" />
+                                      Choose from {row.candidates.length} examiners...
+                                    </span>
+                                    <ChevronDown size={14} className="text-amber-700 shrink-0" />
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenPreviewDropdownKey(isDropdownOpen ? null : row.key);
+                                      setPreviewDropdownSearch('');
+                                    }}
+                                    className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-gray-50 hover:bg-white border border-gray-200 hover:border-teal-400 rounded-lg text-xs font-semibold text-gray-500 transition-all cursor-pointer shadow-2xs"
+                                  >
+                                    <span className="flex items-center gap-1.5 text-gray-500">
+                                      <UserPlus size={13} className="text-gray-400" />
+                                      Select Examiner...
+                                    </span>
+                                    <ChevronDown size={14} className="text-gray-400" />
+                                  </button>
+                                )}
+
+                                {/* Dropdown Popup */}
+                                {isDropdownOpen && (
+                                  <div className="absolute left-0 top-full mt-1.5 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 p-2.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                                    {row.matchStatus === 'multiple' && (
+                                      <div className="px-2 py-1 mb-1.5 bg-amber-50 rounded-lg border border-amber-200 text-[11px] font-bold text-amber-900">
+                                        Multiple examiners named "{row.excelExaminerName}" found. Choose one:
+                                      </div>
+                                    )}
+
+                                    {dropdownOptions.length > 4 && (
+                                      <div className="relative mb-2">
+                                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                        <input
+                                          type="text"
+                                          placeholder="Filter examiners..."
+                                          value={previewDropdownSearch}
+                                          onChange={(e) => setPreviewDropdownSearch(e.target.value)}
+                                          className="w-full pl-7 pr-6 py-1 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                        />
+                                        {previewDropdownSearch && (
+                                          <button
+                                            onClick={() => setPreviewDropdownSearch('')}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                          >
+                                            <X size={11} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    <div className="max-h-52 overflow-y-auto custom-scrollbar space-y-1">
+                                      {filteredOptions.length === 0 ? (
+                                        <div className="py-4 text-center text-xs text-gray-400 font-semibold">
+                                          No examiners found
+                                        </div>
+                                      ) : (
+                                        filteredOptions.map(ex => {
+                                          const isSelected = row.selectedExaminerId === ex.id;
+                                          return (
+                                            <div
+                                              key={ex.id}
+                                              onClick={() => {
+                                                handleSelectExaminerInPreview(row.key, ex.id);
+                                                setOpenPreviewDropdownKey(null);
+                                              }}
+                                              className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
+                                                isSelected ? 'bg-teal-50 border border-teal-200' : 'hover:bg-gray-50'
+                                              }`}
+                                            >
+                                              <div className="flex items-center gap-2.5 min-w-0">
+                                                <img
+                                                  src={ex.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(ex.name || 'User')}&background=0D9488&color=fff`}
+                                                  alt=""
+                                                  className="w-7 h-7 rounded-full border border-gray-200 object-cover shrink-0 shadow-2xs"
+                                                />
+                                                <div className="min-w-0">
+                                                  <div className="text-xs font-bold text-gray-900 truncate">{ex.name}</div>
+                                                  <div className="text-[10px] text-gray-500 truncate">
+                                                    {ex.email || ex.empId || "Examiner"}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                              {isSelected && (
+                                                <Check size={14} className="text-teal-700 shrink-0 ml-2" />
+                                              )}
+                                            </div>
+                                          );
+                                        })
+                                      )}
+                                    </div>
+
+                                    <div className="border-t border-gray-100 mt-2 pt-1 flex items-center justify-between">
+                                      {row.selectedExaminerId ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            handleSelectExaminerInPreview(row.key, null);
+                                            setOpenPreviewDropdownKey(null);
+                                          }}
+                                          className="text-[11px] font-bold text-rose-600 hover:text-rose-800 px-2 py-0.5 rounded cursor-pointer"
+                                        >
+                                          Clear Selection
+                                        </button>
+                                      ) : <span />}
+                                      <button
+                                        type="button"
+                                        onClick={() => setOpenPreviewDropdownKey(null)}
+                                        className="text-[11px] font-bold text-gray-500 hover:text-gray-800 px-2 py-0.5 rounded cursor-pointer"
+                                      >
+                                        Close
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
+                    </tbody>
+                  </table>
+
+                  {/* Preview Bottom Action Bar */}
+                  {(() => {
+                    const allExaminersSelected = excelPreviewData.length > 0 && excelPreviewData.every(r => !!r.selectedExaminerId);
+                    const selectedCount = excelPreviewData.filter(r => r.selectedExaminerId).length;
+                    const unselectedCount = excelPreviewData.length - selectedCount;
+
+                    return (
+                      <div className="p-4 bg-teal-50/50 border-t border-teal-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <UserCheck size={16} className="text-teal-700" />
+                          <span className="text-xs font-extrabold text-gray-900">
+                            {allExaminersSelected ? (
+                              <>All <span className="text-teal-700">{excelPreviewData.length}</span> papers assigned and ready to upload</>
+                            ) : (
+                              <>Assigned <span className="text-teal-700">{selectedCount}</span> of {excelPreviewData.length} papers</>
+                            )}
+                          </span>
+                          {!allExaminersSelected && (
+                            <span className="text-[11px] font-bold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                              <AlertTriangle size={12} className="text-amber-700 shrink-0" />
+                              <span>{unselectedCount} paper(s) require examiner selection before uploading</span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleCancelExcelPreview}
+                            className="text-xs font-bold text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                          >
+                            Cancel Preview
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleConfirmExcelAssignments}
+                            disabled={!allExaminersSelected || isUploadingExcel}
+                            className="bg-teal-700 hover:bg-teal-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold text-xs uppercase tracking-wider py-1.5 px-5 rounded-lg transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                            title={!allExaminersSelected ? "Choose examiners for all papers to enable upload" : ""}
+                          >
+                            {isUploadingExcel ? (
+                              <>
+                                <Loader size={13} className="animate-spin" />
+                                <span>Uploading & Assigning...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Check size={14} />
+                                <span>Upload & Assign ({selectedCount}/{excelPreviewData.length})</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
+              ) : (
+                /* ── STANDARD BULK ASSIGN TABLE VIEW ── */
+                <>
+                  {/* Table Area */}
+                  {loadingBulkData ? (
+                    <div className="p-16 text-center">
+                      <div className="animate-spin w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full mx-auto mb-3"></div>
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Loading Papers & Examiners...</p>
+                    </div>
+                  ) : filteredBulkPapers.length === 0 ? (
+                    <div className="p-16 text-center">
+                      <CheckCircle2 size={36} className="mx-auto text-teal-600 mb-2" />
+                       <h4 className="text-sm font-bold text-gray-800">
+                          {bulkSubjectFilter
+                            ? `No Unassigned Papers in "${bulkSubjectOptions.find(o => o.value === bulkSubjectFilter)?.label || bulkSubjectFilter}"`
+                            : "All Papers Assigned"}
+                       </h4>
+                       <p className="text-xs text-gray-500 mt-1">
+                         {bulkSubjectFilter
+                           ? "Try selecting a different subject or clearing the filter."
+                           : "All papers in this project currently have examiners assigned."}
+                       </p>
+                       {bulkSubjectFilter && (
+                         <button
+                           type="button"
+                           onClick={() => setBulkSubjectFilter("")}
+                           className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors cursor-pointer"
+                         >
+                           Clear Subject Filter
+                         </button>
+                       )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="overflow-visible min-h-[220px]">
+                      <table className="w-full text-left">
+                        <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                          <tr>
+                            <th className="px-5 py-3.5 border-b border-gray-100 w-1/3">Paper Code & Name</th>
+                             <th className="px-5 py-3.5 border-b border-gray-100">
+                               <div className="flex items-center">
+                                 <span>Subjects</span>
+                                 <ColumnFilter
+                                   columnKey="subjectFilter"
+                                   currentFilter={bulkSubjectFilter}
+                                   setFilter={(_, val) => setBulkSubjectFilter(val)}
+                                   placeholder="Filter by subject..."
+                                   options={bulkSubjectOptions}
+                                 />
+                               </div>
+                             </th>
+                            <th className="px-5 py-3.5 text-center border-b border-gray-100">Catch No</th>
+                            <th className="px-5 py-3.5 border-b border-gray-100 min-w-[280px]">Assign Examiner</th>
+                            <th className="px-5 py-3.5 text-right border-b border-gray-100">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 text-xs font-semibold text-gray-700">
+                          {paginatedBulkPapers.map((paper, index) => {
+                            const isDropdownOpen = openDropdownPaperId === paper.paperId;
+                            const isNearBottom = index >= Math.max(0, paginatedBulkPapers.length - 2) && paginatedBulkPapers.length > 2;
+                            const selectedIds = assignedExaminersMap[paper.paperId] || [];
+                            const selectedExaminers = bulkExaminers.filter(ex => selectedIds.includes(ex.id));
+                            const hasExaminerInDb = (paper.expertsCount || 0) > 0;
+
+                            // Filter examiners: must match paper's subjectId AND university AND search query
+                            const filteredExaminersInDropdown = bulkExaminers.filter(ex => {
+                              // First check university match
+                              if (activeUniversityId && ex.universityId !== parseInt(activeUniversityId)) {
+                                return false;
+                              }
+                              
+                              // Then filter by paper's subject
+                              const matchesSubject = paper.subjectId && (
+                                ex.subjectId1 === paper.subjectId ||
+                                ex.subjectId2 === paper.subjectId ||
+                                ex.subjectId3 === paper.subjectId
+                              );
+                              
+                              if (!matchesSubject) return false;
+                              
+                              // Finally filter by search query
+                              if (!dropdownSearch) return true;
+                              const q = dropdownSearch.toLowerCase();
+                              return (
+                                ex.name?.toLowerCase().includes(q) ||
+                                ex.email?.toLowerCase().includes(q) ||
+                                ex.empId?.toLowerCase().includes(q)
+                              );
+                            });
+
+                            return (
+                              <tr 
+                                key={paper.paperId} 
+                                className={`hover:bg-gray-50/60 transition-colors ${
+                                  selectedIds.length > 0 ? 'bg-teal-50/20' : ''
+                                }`}
+                              >
+                                {/* Paper Code & Name + Status Flag */}
+                                <td className="px-5 py-3.5">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center font-black text-xs shrink-0">
+                                      {paper.paperCode ? paper.paperCode.substring(0, 2) : "P"}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-gray-900 font-extrabold text-xs">
+                                          {paper.paperCode}
+                                        </span>
+                                        {hasExaminerInDb ? (
+                                          <span 
+                                            className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full shadow-2xs"
+                                            title={`Status: ${paper.expertsCount} Examiner(s) Assigned`}
+                                          >
+                                            <Flag size={9} className="fill-emerald-500 text-emerald-600 shrink-0" />
+                                            <span>Assigned ({paper.expertsCount})</span>
+                                          </span>
+                                        ) : (
+                                          <span 
+                                            className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-full shadow-2xs"
+                                            title="Status: Action Required (Examiner Unassigned)"
+                                          >
+                                            <Flag size={9} className="fill-amber-500 text-amber-600 shrink-0" />
+                                            
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span className="text-gray-600 font-medium text-xs block truncate" title={paper.paperName}>
+                                        {paper.paperName}
+                                      </span>
+
+                                    </div>
+                                  </div>
+                                </td>
+
+                                 {/* Subjects */}
+                                 <td className="px-5 py-3.5">
+                                   <div className="text-gray-900 font-bold text-xs">{paper.subjectName || "—"}</div>
+                                 </td>
+
+                                {/* Catch No */}
+                                <td className="px-5 py-3.5 text-center">
+                                  {paper.catchNo ? (
+                                    <span className="inline-block font-mono font-bold text-[11px] bg-gray-100 text-gray-700 px-2 py-0.5 rounded border border-gray-200">
+                                      {paper.catchNo}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-400 italic text-[11px]">None</span>
+                                  )}
+                                </td>
+
+                                {/* Examiner Dropdown Column */}
+                                <td className="px-5 py-3.5">
+                                  <div className="relative examiner-dropdown-container">
+                                    {selectedExaminers.length > 0 ? (
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        {selectedExaminers.map(ex => (
+                                          <div
+                                            key={ex.id}
+                                            className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 bg-teal-50 border border-teal-200 rounded-lg text-xs font-bold text-teal-900 shadow-2xs"
+                                          >
+                                            <img
+                                              src={ex.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(ex.name || 'User')}&background=0D9488&color=fff`}
+                                              alt=""
+                                              className="w-5 h-5 rounded-full border border-white object-cover shrink-0"
+                                            />
+                                            <span className="truncate max-w-[130px]">{ex.name}</span>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleSelectExaminerForPaper(paper.paperId, ex.id);
+                                              }}
+                                              className="text-teal-600 hover:text-rose-600 transition-colors p-0.5 rounded cursor-pointer"
+                                              title="Remove"
+                                            >
+                                              <X size={12} />
+                                            </button>
+                                          </div>
+                                        ))}
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setOpenDropdownPaperId(isDropdownOpen ? null : paper.paperId);
+                                            setDropdownSearch('');
+                                          }}
+                                          className="p-1 text-teal-700 hover:bg-teal-100 rounded-md transition-colors cursor-pointer"
+                                          title="Change / Add Examiner"
+                                        >
+                                          <ChevronDown size={14} />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setOpenDropdownPaperId(isDropdownOpen ? null : paper.paperId);
+                                          setDropdownSearch('');
+                                        }}
+                                        className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-gray-50 hover:bg-white border border-gray-200 hover:border-teal-400 rounded-lg text-xs font-semibold text-gray-500 transition-all cursor-pointer shadow-2xs"
+                                      >
+                                        <span className="flex items-center gap-2 text-gray-500">
+                                          <UserPlus size={13} className="text-gray-400" />
+                                          Select Examiner...
+                                        </span>
+                                        <ChevronDown size={14} className="text-gray-400" />
+                                      </button>
+                                    )}
+
+                                    {/* Dropdown Menu Popup */}
+                                    {isDropdownOpen && (
+                                      <div
+                                        className={`absolute left-0 ${
+                                          isNearBottom ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+                                        } w-72 bg-white rounded-xl shadow-2xl border border-gray-200 p-2.5 z-50 animate-in fade-in zoom-in-95 duration-100`}
+                                      >
+                                        {/* Dropdown In-search (no autoFocus) */}
+                                        <div className="relative mb-2">
+                                          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                          <input
+                                            type="text"
+                                            placeholder="Search examiner..."
+                                            value={dropdownSearch}
+                                            onChange={(e) => setDropdownSearch(e.target.value)}
+                                            className="w-full pl-7 pr-6 py-1 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                          />
+                                          {dropdownSearch && (
+                                            <button
+                                              onClick={() => setDropdownSearch('')}
+                                              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                                            >
+                                              <X size={11} />
+                                            </button>
+                                          )}
+                                        </div>
+
+                                        {/* Examiners list */}
+                                        <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-1">
+                                          {filteredExaminersInDropdown.length === 0 ? (
+                                            <div className="py-4 text-center text-xs text-gray-400 font-semibold">
+                                              No examiners found
+                                            </div>
+                                          ) : (
+                                            filteredExaminersInDropdown.map(ex => {
+                                              const isExSelected = selectedIds.includes(ex.id);
+                                              return (
+                                                <div
+                                                  key={ex.id}
+                                                  onClick={() => handleSelectExaminerForPaper(paper.paperId, ex.id)}
+                                                  className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
+                                                    isExSelected ? 'bg-teal-50 border border-teal-200' : 'hover:bg-gray-50'
+                                                  }`}
+                                                >
+                                                  <div className="flex items-center gap-2.5 min-w-0">
+                                                    <img
+                                                      src={ex.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(ex.name || 'User')}&background=0D9488&color=fff`}
+                                                      alt=""
+                                                      className="w-7 h-7 rounded-full border border-gray-200 object-cover shrink-0 shadow-2xs"
+                                                    />
+                                                    <div className="min-w-0">
+                                                      <div className="text-xs font-bold text-gray-900 truncate">{ex.name}</div>
+                                                      <div className="text-[10px] text-gray-500 truncate">
+                                                        {ex.email || ex.empId || "Examiner"}
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={isExSelected}
+                                                    readOnly
+                                                    className="rounded border-gray-300 text-teal-700 focus:ring-teal-500 w-4 h-4 shrink-0 pointer-events-none"
+                                                  />
+                                                </div>
+                                              );
+                                            })
+                                          )}
+                                        </div>
+
+                                        {/* Dropdown footer close */}
+                                        <div className="border-t border-gray-100 mt-2 pt-1.5 flex justify-end">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setOpenDropdownPaperId(null);
+                                              setDropdownSearch('');
+                                            }}
+                                            className="text-[11px] font-bold text-teal-700 hover:text-teal-800 px-2 py-0.5 rounded cursor-pointer"
+                                          >
+                                            Done
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* Action column */}
+                                <td className="px-5 py-3.5 text-right">
+                                  {selectedIds.length > 0 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleClearPaperExaminer(paper.paperId)}
+                                      className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
+                                      title="Reset selection for this paper"
+                                    >
+                                      Clear
+                                    </button>
+                                  ) : (
+                                    <span className="text-[11px] text-gray-400 italic">Not set</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                      <TablePagination 
+                        page={bulkPage}
+                        totalPages={totalBulkPages}
+                        totalCount={totalBulkCount}
+                        pageSize={bulkPageSize}
+                        setPage={setBulkPage}
+                        setPageSize={setBulkPageSize}
+                      />
+                    </>
+                  )}
+
+                  {/* Bottom Sticky Action Bar with Save and Cancel */}
+                  {pendingAssignedCount > 0 && (
+                    <div className="p-4 bg-teal-50/50 border-t border-teal-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-150">
+                      <div className="flex items-center gap-2">
+                        <UserCheck size={16} className="text-teal-700" />
+                        <span className="text-xs font-extrabold text-gray-900">
+                          Ready to assign <span className="text-teal-700">{pendingAssignedCount} paper{pendingAssignedCount > 1 ? 's' : ''}</span>
+                        </span>
+                        <span className="text-xs text-gray-500 hidden sm:inline">• Click Save to apply assignments</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleCancelBulkAssignments}
+                          className="text-xs font-bold text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveBulkAssignments}
+                          disabled={isBulkAssigning}
+                          className="bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider py-1.5 px-5 rounded-lg transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                        >
+                          {isBulkAssigning ? (
+                            <>
+                              <Loader size={13} className="animate-spin" />
+                              <span>Saving...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Check size={14} />
+                              <span>Save Assignments ({pendingAssignedCount})</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
