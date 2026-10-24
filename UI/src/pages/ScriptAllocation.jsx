@@ -995,7 +995,7 @@ export default function ScriptAllocation({ isTab = false }) {
                 <option value="">Select Examiner...</option>
                 {allExaminersList.map(ex => (
                   <option key={ex.examinerId || ex.id} value={ex.examinerId || ex.id}>
-                    {ex.fullName || ex.examinerName || ex.userName} (ID: {ex.examinerId || ex.id})
+                    {ex.fullName || ex.examinerName || ex.userName}
                   </option>
                 ))}
               </select>
