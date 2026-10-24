@@ -170,6 +170,14 @@ function AppRoutes() {
               path="/section-masters" 
               element={userType === 'coordinator' ? <SectionMasterManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
+            <Route 
+              path="/admin/projects" 
+              element={userType === 'admin' ? <ProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
+            <Route 
+              path="/projects" 
+              element={userType === 'coordinator' ? <ProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            />
           </Route>
           <Route 
             path="/admin/question-types" 
@@ -178,14 +186,6 @@ function AppRoutes() {
           <Route 
             path="/question-types" 
             element={userType === 'coordinator' ? <QuestionTypeMaster /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-          />
-          <Route 
-            path="/admin/projects" 
-            element={userType === 'admin' ? <ProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
-          />
-          <Route 
-            path="/projects" 
-            element={userType === 'coordinator' ? <ProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
 
           {/* Papers Management (Project Context) */}

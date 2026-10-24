@@ -287,7 +287,7 @@ export default function ScriptDeallocation() {
                             </div>
                             <div>
                               <p className="font-bold text-gray-900 text-xs">{item.examinerName}</p>
-                              <p className="text-[10px] text-gray-400">{item.email || `ID: ${item.examinerId}`}</p>
+                              <p className="text-[10px] text-gray-400">{item.email}</p>
                             </div>
                           </div>
                         </td>

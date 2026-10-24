@@ -11,7 +11,8 @@ import ColumnFilter from '../components/ColumnFilter';
 import { 
   BookOpen, 
   Plus, 
-  Edit2, 
+  Edit2,
+  Trash2, 
   XCircle, 
   CheckCircle2, 
   Building2,
@@ -165,6 +166,21 @@ export default function SubjectManagement() {
     
   };
 
+  const handleDelete = async (subjectId) => {
+    if (!window.confirm('Are you sure you want to delete this subject? It will be marked as inactive.')) {
+      return;
+    }
+
+    try {
+      await subjectService.deleteSubject(subjectId);
+      message.success('Subject deactivated successfully!');
+      refresh();
+    } catch (err) {
+      console.error(err);
+      message.error(err.message || 'Failed to deactivate subject.');
+    }
+  };
+
   // Register into the unified header bar
   const { setConfigHeader } = useConfigHeader();
   useEffect(() => {
@@ -248,25 +264,6 @@ export default function SubjectManagement() {
                         <ColumnFilter columnKey="subCode" currentFilter={filters.subCode} setFilter={setFilter} placeholder="Filter subject code..." />
                       </div>
                     </th>
-                    <th className="py-2.5 md:px-6 px-4">
-                      <div className="flex items-center gap-1.5">
-                        Departments
-                        {!departmentId && (
-                          <ColumnFilter 
-                            columnKey="departmentId" 
-                            currentFilter={filters.departmentId} 
-                            setFilter={setFilter}
-                            options={[
-                              { label: 'All Departments', value: '' },
-                              ...departments.map(dept => ({
-                                label: dept.name,
-                                value: String(dept.departmentId)
-                              }))
-                            ]}
-                          />
-                        )}
-                      </div>
-                    </th>
                     <th className="py-2.5 md:px-6 px-4">Courses</th>
                     <th 
                       className="py-2.5 text-center cursor-pointer hover:bg-gray-100 transition-colors group md:px-6 px-4"
@@ -307,22 +304,6 @@ export default function SubjectManagement() {
                         </span>
                       </td>
                       <td className="py-2.5 max-w-xs md:px-6 px-4">
-                        {subject.departmentSubjects && subject.departmentSubjects.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {subject.departmentSubjects.map((ds) => ds.department?.name).filter(Boolean).map((name, idx) => (
-                              <span 
-                                key={idx}
-                                className="px-2 py-1 bg-teal-50 border border-teal-100 text-teal-700 rounded-md font-bold text-[9px] uppercase tracking-wider"
-                              >
-                                {name}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-gray-400 font-medium text-[10px]">No departments assigned</span>
-                        )}
-                      </td>
-                      <td className="py-2.5 max-w-xs md:px-6 px-4">
                         {subject.courseSubjects && subject.courseSubjects.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {subject.courseSubjects.map((cs) => cs.course?.name).filter(Boolean).map((name, idx) => (
@@ -356,6 +337,13 @@ export default function SubjectManagement() {
                             title="Edit Subject"
                           >
                             <Edit2 size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(subject.subjectId)}
+                            className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-100 transition cursor-pointer"
+                            title="Delete Subject"
+                          >
+                            <Trash2 size={13} />
                           </button>
                         </div>
                       </td>

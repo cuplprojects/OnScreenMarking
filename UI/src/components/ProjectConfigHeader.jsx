@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Calendar,
@@ -285,7 +285,6 @@ export default function ProjectConfigHeader({ completePercentage = 0, title, tit
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold truncate leading-tight">{p.projectName}</p>
-                        <p className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider mt-0.5">ID: {p.projectId}</p>
                       </div>
                     </button>
                   ))}

@@ -46,7 +46,7 @@ namespace API.Controllers
                 }
                 else if (universityId.HasValue)
                 {
-                    query = query.Where(c => c.DepartmentCourses.Any(dc => dc.Department.UniversityId == universityId.Value));
+                    query = query.Where(c => c.UniversityId == universityId.Value || c.DepartmentCourses.Any(dc => dc.Department.UniversityId == universityId.Value));
                 }
 
                 if (isActive.HasValue)
@@ -162,30 +162,36 @@ namespace API.Controllers
                 if (string.IsNullOrEmpty(courseDto.Name))
                     return BadRequest(new { success = false, message = "Course name is required" });
 
-                if (courseDto.DepartmentId <= 0)
-                    return BadRequest(new { success = false, message = "Department ID is required" });
-
-                var department = await _context.Departments.FindAsync(courseDto.DepartmentId);
-                if (department == null)
-                    return BadRequest(new { success = false, message = "Department not found" });
-
                 var course = new Courses
                 {
                     Name = courseDto.Name,
                     Type = courseDto.Type,
-                    IsActive = true
+                    UniversityId = courseDto.UniversityId ?? 0,
+                    IsActive = courseDto.IsActive
                 };
+
+                if (courseDto.DepartmentId.HasValue && courseDto.DepartmentId.Value > 0)
+                {
+                    var department = await _context.Departments.FindAsync(courseDto.DepartmentId.Value);
+                    if (department != null && course.UniversityId == 0)
+                    {
+                        course.UniversityId = department.UniversityId;
+                    }
+                }
 
                 _context.Courses.Add(course);
                 await _context.SaveChangesAsync();
 
-                var departmentCourse = new DepartmentCourse
+                if (courseDto.DepartmentId.HasValue && courseDto.DepartmentId.Value > 0)
                 {
-                    DepartmentId = courseDto.DepartmentId,
-                    CourseId = course.Id
-                };
-                _context.DepartmentCourses.Add(departmentCourse);
-                await _context.SaveChangesAsync();
+                    var departmentCourse = new DepartmentCourse
+                    {
+                        DepartmentId = courseDto.DepartmentId.Value,
+                        CourseId = course.Id
+                    };
+                    _context.DepartmentCourses.Add(departmentCourse);
+                    await _context.SaveChangesAsync();
+                }
 
                 return CreatedAtAction(nameof(GetCourse), new { id = course.Id }, course);
             }
@@ -210,21 +216,22 @@ namespace API.Controllers
                 
                 course.Type = courseDto.Type;
                 course.IsActive = courseDto.IsActive;
-                if (courseDto.DepartmentId > 0)
+                if (courseDto.DepartmentId.HasValue && courseDto.DepartmentId.Value > 0)
                 {
+                    var deptId = courseDto.DepartmentId.Value;
                     // For single department mapping from existing API payload
                     var existingMapping = await _context.DepartmentCourses.FirstOrDefaultAsync(dc => dc.CourseId == course.Id);
                     if (existingMapping != null)
                     {
-                        if (existingMapping.DepartmentId != courseDto.DepartmentId)
+                        if (existingMapping.DepartmentId != deptId)
                         {
                             _context.DepartmentCourses.Remove(existingMapping);
-                            _context.DepartmentCourses.Add(new DepartmentCourse { CourseId = course.Id, DepartmentId = courseDto.DepartmentId });
+                            _context.DepartmentCourses.Add(new DepartmentCourse { CourseId = course.Id, DepartmentId = deptId });
                         }
                     }
                     else
                     {
-                        _context.DepartmentCourses.Add(new DepartmentCourse { CourseId = course.Id, DepartmentId = courseDto.DepartmentId });
+                        _context.DepartmentCourses.Add(new DepartmentCourse { CourseId = course.Id, DepartmentId = deptId });
                     }
                 }
 
@@ -249,10 +256,11 @@ namespace API.Controllers
                 if (course == null)
                     return NotFound(new { success = false, message = "Course not found" });
 
-                _context.Courses.Remove(course);
+                course.IsActive = false;
+                _context.Courses.Update(course);
                 await _context.SaveChangesAsync();
 
-                return Ok(new { success = true, message = "Course deleted successfully" });
+                return Ok(new { success = true, message = "Course deactivated successfully" });
             }
             catch (Exception ex)
             {

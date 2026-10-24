@@ -227,5 +227,27 @@ namespace API.Controllers
                 });
             }
         }
+
+        [HttpDelete("{id}")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> DeleteProject(int id)
+        {
+            try
+            {
+                var project = await _context.Projects.FindAsync(id);
+                if (project == null)
+                    return NotFound(new { success = false, message = "Project not found" });
+
+                project.IsActive = false;
+                _context.Projects.Update(project);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "Project deactivated successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
     }
 }

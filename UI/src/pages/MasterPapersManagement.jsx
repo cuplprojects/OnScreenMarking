@@ -227,9 +227,6 @@ function ManagePaperSectionsModal({ isOpen, onClose, paper, masterSections = [],
 
         {/* Footer */}
         <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
-          <span className="text-[11px] text-gray-500 font-medium">
-            Changes auto-apply to newly imported project papers.
-          </span>
           <div className="flex items-center gap-2">
             <button
               type="button"

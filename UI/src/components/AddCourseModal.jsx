@@ -9,12 +9,10 @@ export default function AddCourseModal({
   onSuccess,
   editingId,
   initialData,
-  activeUniversityId,
-  departments
+  activeUniversityId
 }) {
   const [courseName, setCourseName] = useState('');
   const [courseType, setCourseType] = useState('UG');
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [subjects, setSubjects] = useState([]);
   const [selectedSubjects, setSelectedSubjects] = useState([]);
@@ -44,7 +42,6 @@ export default function AddCourseModal({
         if (editingId && initialData) {
           setCourseName(initialData.name || '');
           setCourseType(initialData.type || 'UG');
-          setSelectedDepartmentId(initialData.departmentId || '');
           setIsActive(initialData.isActive !== undefined ? initialData.isActive : true);
 
           // Fetch current mapped subjects for this course
@@ -55,7 +52,6 @@ export default function AddCourseModal({
         } else {
           setCourseName('');
           setCourseType('UG');
-          setSelectedDepartmentId(initialData?.departmentId || (departments && departments[0]?.departmentId) || '');
           setIsActive(true);
           setSelectedSubjects([]);
           setInitialSubjects([]);
@@ -69,7 +65,7 @@ export default function AddCourseModal({
     };
 
     loadModalData();
-  }, [editingId, initialData, isOpen, activeUniversityId, departments]);
+  }, [editingId, initialData, isOpen, activeUniversityId]);
 
   if (!isOpen) return null;
 
@@ -85,10 +81,6 @@ export default function AddCourseModal({
       setError('Course name is required');
       return;
     }
-    if (!selectedDepartmentId) {
-      setError('Please select a department');
-      return;
-    }
 
     try {
       setLoading(true);
@@ -97,9 +89,13 @@ export default function AddCourseModal({
       const payload = {
         name: courseName.trim(),
         type: courseType,
-        departmentId: parseInt(selectedDepartmentId, 10),
+        universityId: activeUniversityId ? parseInt(activeUniversityId, 10) : 0,
         isActive: isActive
       };
+
+      if (initialData?.departmentId) {
+        payload.departmentId = parseInt(initialData.departmentId, 10);
+      }
 
       let responseCourse;
       if (editingId) {
@@ -176,36 +172,18 @@ export default function AddCourseModal({
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Degree Level</label>
-              <select
-                value={courseType}
-                onChange={(e) => setCourseType(e.target.value)}
-                className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 px-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition cursor-pointer"
-              >
-                <option value="UG">Undergraduate (UG)</option>
-                <option value="PG">Postgraduate (PG)</option>
-                <option value="Diploma">Diploma</option>
-                <option value="PhD">Doctorate (PhD)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Department</label>
-              <select
-                value={selectedDepartmentId}
-                onChange={(e) => setSelectedDepartmentId(e.target.value)}
-                className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 px-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition cursor-pointer"
-                disabled={!!initialData?.departmentId}
-              >
-                {departments.map((d) => (
-                  <option key={d.departmentId} value={d.departmentId}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Degree Level</label>
+            <select
+              value={courseType}
+              onChange={(e) => setCourseType(e.target.value)}
+              className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 px-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition cursor-pointer"
+            >
+              <option value="UG">Undergraduate (UG)</option>
+              <option value="PG">Postgraduate (PG)</option>
+              <option value="Diploma">Diploma</option>
+              <option value="PhD">Doctorate (PhD)</option>
+            </select>
           </div>
 
           {/* Subjects Checklist */}

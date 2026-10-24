@@ -7,7 +7,8 @@ namespace API.Models.DTOs
         public int SubjectId { get; set; }
         public string SubjectName { get; set; }
         public string SubjectCode { get; set; }
-        public int DepartmentId { get; set; }
+        public int? DepartmentId { get; set; }
+        public int? UniversityId { get; set; }
         public bool IsActive { get; set; }
     }
 
