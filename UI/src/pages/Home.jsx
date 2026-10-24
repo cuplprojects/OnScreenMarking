@@ -20,13 +20,14 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  Loader,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import apiCall from '../services/api';
+import message from '../services/messageService';
 import { useTable } from '../services/tableService';
 import TablePagination from '../components/TablePagination';
 import ColumnFilter from '../components/ColumnFilter';
-import RequestScriptsModal from '../components/RequestScriptsModal';
 import { ScriptStatus } from '../constants/enums';
 
 const Home = () => {
@@ -40,7 +41,8 @@ const Home = () => {
   });
   const [subjectWorkloads, setSubjectWorkloads] = useState([]);
   const [assignedPapers, setAssignedPapers] = useState([]);
-  const [requestModalPaper, setRequestModalPaper] = useState(null);
+  const [unsubmittedPaperIds, setUnsubmittedPaperIds] = useState(new Set());
+  const [requestingPaperId, setRequestingPaperId] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   
   const tableRef = useRef(null);
@@ -83,6 +85,37 @@ const Home = () => {
     });
   };
 
+  const handleRequestPaper = async (paper) => {
+    if (!paper?.paperId) return;
+    setRequestingPaperId(paper.paperId);
+    try {
+      const payload = {
+        paperId: paper.paperId,
+        subjectId: paper.subjectId ?? null,
+        examinerId: user?.id,
+        universityId: paper.universityId ?? user?.universityId ?? null,
+        requested: true
+      };
+      const res = await apiCall('/PaperExaminers/request-paper', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      if (res?.success !== false) {
+        message.success('Request recorded successfully in SubjectPaperRequest!');
+        setAssignedPapers(prev =>
+          prev.map(p => p.paperId === paper.paperId ? { ...p, hasAlreadyRequested: true } : p)
+        );
+      } else {
+        message.error(res?.message || 'Failed to submit request');
+      }
+    } catch (err) {
+      console.error('Request failed:', err);
+      message.error(err?.message || 'Failed to submit request');
+    } finally {
+      setRequestingPaperId(null);
+    }
+  };
+
   const fetchFn = useCallback(async (params) => {
     if (!user?.id) {
       return { items: [], totalCount: 0, page: 1, pageSize: 10, totalPages: 1 };
@@ -122,7 +155,12 @@ const Home = () => {
       if (!user?.id) return;
       try {
         const papers = await apiCall(`/PaperExaminers/examiner/${user.id}`);
-        if (Array.isArray(papers)) setAssignedPapers(papers);
+        if (Array.isArray(papers)) {
+          const matchingUniv = user?.universityId 
+            ? papers.filter(p => !p.universityId || p.universityId === user.universityId)
+            : papers;
+          setAssignedPapers(matchingUniv);
+        }
       } catch(e) { console.error("Failed to load papers:", e); }
       
       try {
@@ -145,6 +183,14 @@ const Home = () => {
           pending: pendingCount,
           averageScore: parseFloat(avgScore.toFixed(1)),
         });
+
+        const unsubmittedSet = new Set(
+          allScripts
+            .filter(s => s.status !== ScriptStatus.COMPLETED)
+            .map(s => s.paperId)
+            .filter(Boolean)
+        );
+        setUnsubmittedPaperIds(unsubmittedSet);
 
         const expertiseIds = [user?.subjectId1, user?.subjectId2, user?.subjectId3].filter(id => id && id > 0);
         let subjectsData = [];
@@ -572,22 +618,69 @@ const Home = () => {
               <span>Request New Scripts</span>
             </h2>
             <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
-              {assignedPapers.map((paper, idx) => (
-                <div key={idx} className="bg-gray-50/50 border border-gray-200/60 rounded-lg hover:border-teal-300 hover:bg-teal-50/30 transition-all group">
-                  <div className="p-3 flex items-center justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{paper.subjectName || paper.paperCode}</div>
-                      <div className="text-xs font-bold text-gray-800 leading-tight truncate">{paper.paperName}</div>
+              {assignedPapers.map((paper, idx) => {
+                const isUnsubmitted = Boolean(
+                  paper.hasUnsubmittedAllocations || 
+                  paper.HasUnsubmittedAllocations || 
+                  unsubmittedPaperIds.has(paper.paperId)
+                );
+                const isRequesting = requestingPaperId === paper.paperId;
+                const hasRequested = Boolean(paper.hasAlreadyRequested);
+                const isDisabled = isUnsubmitted || isRequesting || hasRequested;
+
+                return (
+                  <div key={idx} className="bg-gray-50/50 border border-gray-200/60 rounded-lg hover:border-teal-300 hover:bg-teal-50/30 transition-all group">
+                    <div className="p-3 flex items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{paper.subjectName || paper.paperCode}</span>
+                          {isUnsubmitted && (
+                            <span className="inline-flex items-center gap-1 text-[8px] font-bold px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200/70 rounded">
+                              <Clock size={8} /> Pending Evaluation
+                            </span>
+                          )}
+                          {!isUnsubmitted && hasRequested && (
+                            <span className="inline-flex items-center gap-1 text-[8px] font-bold px-1.5 py-0.5 bg-teal-50 text-teal-700 border border-teal-200/70 rounded">
+                              <CheckCircle size={8} /> Requested
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs font-bold text-gray-800 leading-tight truncate">{paper.paperName}</div>
+                      </div>
+                      <button 
+                        onClick={() => !isDisabled && handleRequestPaper(paper)}
+                        disabled={isDisabled}
+                        title={
+                          isUnsubmitted 
+                            ? "Assigned scripts for this paper are not yet submitted in the marking table. Submit them before requesting more." 
+                            : hasRequested
+                              ? "You have already requested this paper."
+                              : "Request paper"
+                        }
+                        className={`shrink-0 px-3 py-1.5 text-[10px] uppercase font-bold tracking-wider rounded-lg transition-colors flex items-center gap-1.5 ${
+                          isDisabled
+                            ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed select-none shadow-none'
+                            : 'bg-teal-600 hover:bg-teal-700 text-white cursor-pointer shadow-sm'
+                        }`}
+                      >
+                        {isRequesting ? (
+                          <>
+                            <Loader size={12} className="animate-spin" /> Requesting...
+                          </>
+                        ) : hasRequested ? (
+                          <>
+                            <CheckCircle size={12} className="text-teal-600" /> Requested
+                          </>
+                        ) : (
+                          <>
+                            <Zap size={12} /> Request
+                          </>
+                        )}
+                      </button>
                     </div>
-                    <button 
-                      onClick={() => setRequestModalPaper(paper)}
-                      className="shrink-0 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-[10px] uppercase font-bold tracking-wider rounded-lg transition-colors flex items-center gap-1.5"
-                    >
-                      <Zap size={12} /> Request
-                    </button>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -652,18 +745,6 @@ const Home = () => {
 
       </div>
       </div>
-
-      <RequestScriptsModal 
-        isOpen={!!requestModalPaper}
-        onClose={() => setRequestModalPaper(null)}
-        paper={requestModalPaper}
-        examinerId={user?.id}
-        onRequested={() => {
-          refreshTable();
-          // reload stats to update pending count
-          const timer = setTimeout(() => window.location.reload(), 1500);
-        }}
-      />
     </div>
   );
 };

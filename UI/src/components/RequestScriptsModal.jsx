@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { X, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import apiCall from '../services/api';
 
-const RequestScriptsModal = ({ isOpen, onClose, paper, examinerId, onRequested }) => {
+// paper object shape expected:
+// { paperId, paperCode, paperName, subjectId?, universityId? }
+const RequestScriptsModal = ({ isOpen, onClose, paper, examinerId, user, onRequested }) => {
   const [requestCount, setRequestCount] = useState(10);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -20,6 +22,7 @@ const RequestScriptsModal = ({ isOpen, onClose, paper, examinerId, onRequested }
         throw new Error("You can only request between 1 and 50 scripts at a time.");
       }
 
+      // Step 1: allocate scripts
       const res = await apiCall('/allocation/request-scripts', {
         method: 'POST',
         body: JSON.stringify({
@@ -29,6 +32,22 @@ const RequestScriptsModal = ({ isOpen, onClose, paper, examinerId, onRequested }
       });
 
       if (res.success) {
+        // Step 2: record the request in SubjectPaperRequests table
+        try {
+          await apiCall('/PaperExaminers/request-paper', {
+            method: 'POST',
+            body: JSON.stringify({
+              paperId: paper.paperId,
+              subjectId: paper.subjectId ?? null,
+              universityId: paper.universityId ?? user?.universityId ?? null,
+              requested: true
+            })
+          });
+        } catch (recordErr) {
+          // Log but don't block the user — allocation already succeeded
+          console.warn('Failed to record SubjectPaperRequest:', recordErr);
+        }
+
         setSuccess(true);
         setTimeout(() => {
           onRequested();
@@ -113,6 +132,13 @@ const RequestScriptsModal = ({ isOpen, onClose, paper, examinerId, onRequested }
                 </p>
               </div>
 
+              {paper?.hasUnsubmittedAllocations && (
+                <div className="p-3 bg-amber-50 text-amber-800 rounded-xl text-xs border border-amber-200 flex gap-2">
+                  <AlertCircle size={16} className="shrink-0 mt-0.5 text-amber-600" />
+                  <p>You have scripts assigned for this paper that are not yet marked as submitted in the marking table. Please submit them before requesting more.</p>
+                </div>
+              )}
+
               {/* Actions */}
               <div className="pt-4 flex gap-3">
                 <button
@@ -125,7 +151,7 @@ const RequestScriptsModal = ({ isOpen, onClose, paper, examinerId, onRequested }
                 </button>
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || paper?.hasUnsubmittedAllocations}
                   className="flex-1 px-4 py-3 text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-md transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm shadow-teal-600/20 hover:shadow-md hover:shadow-teal-600/30"
                 >
                   {loading ? (
@@ -147,4 +173,3 @@ const RequestScriptsModal = ({ isOpen, onClose, paper, examinerId, onRequested }
 };
 
 export default RequestScriptsModal;
-

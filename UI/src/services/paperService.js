@@ -172,7 +172,31 @@ const paperService = {
       } catch (e) {}
       throw new Error(errMsg);
     }
-    return res.json();
+  },
+
+  // Subject Paper Requests (Coordinator / Admin)
+  getSubjectPaperRequests: async (universityId) => {
+    const query = universityId ? `?universityId=${universityId}` : '';
+    return apiCall(`/PaperExaminers/subject-paper-requests${query}`);
+  },
+
+  toggleSubjectPaperRequestStatus: async (requestId) => {
+    return apiCall(`/PaperExaminers/subject-paper-requests/${requestId}/toggle-status`, {
+      method: 'PATCH'
+    });
+  },
+
+  deleteSubjectPaperRequest: async (requestId) => {
+    return apiCall(`/PaperExaminers/subject-paper-requests/${requestId}`, {
+      method: 'DELETE'
+    });
+  },
+
+  allocateAndFulfillPaperRequest: async (requestId, count = 1) => {
+    return apiCall(`/PaperExaminers/subject-paper-requests/${requestId}/allocate-and-fulfill`, {
+      method: 'POST',
+      body: JSON.stringify({ count })
+    });
   }
 };
 
