@@ -157,6 +157,23 @@ namespace API.Controllers
                 script.UpdatedAt = DateTime.UtcNow;
                 _context.Scripts.Update(script);
 
+                // If there's an active request for this examiner & paper, mark it as fulfilled (requested = false)
+                try
+                {
+                    var paperId = script.ProjectPaper?.PaperId;
+                    if (paperId.HasValue && paperId.Value > 0)
+                    {
+                        var req = await _context.SubjectPaperRequests
+                            .FirstOrDefaultAsync(r => r.PaperId == paperId.Value && r.ExaminerId == allocationDto.ExaminerId && r.Requested);
+                        if (req != null)
+                        {
+                            req.Requested = false;
+                            req.UpdatedAt = DateTime.UtcNow;
+                        }
+                    }
+                }
+                catch { }
+
                 await _context.SaveChangesAsync();
 
                 return CreatedAtAction(nameof(GetAllocation), new { id = allocation.AllocationId }, allocation);
@@ -520,6 +537,22 @@ namespace API.Controllers
                     }
                 }
 
+                // Mark active SubjectPaperRequests as fulfilled (requested = false) for examiners who received scripts
+                try
+                {
+                    var allocatedExaminerIds = request.Allocations.Select(a => a.ExaminerId).Distinct().ToList();
+                    var matchingRequests = await _context.SubjectPaperRequests
+                        .Where(r => r.PaperId == request.PaperId && allocatedExaminerIds.Contains(r.ExaminerId) && r.Requested)
+                        .ToListAsync();
+
+                    foreach (var req in matchingRequests)
+                    {
+                        req.Requested = false;
+                        req.UpdatedAt = DateTime.UtcNow;
+                    }
+                }
+                catch { }
+
                 await _context.SaveChangesAsync();
 
                 return Ok(new
@@ -780,6 +813,20 @@ namespace API.Controllers
                     return BadRequest(new { success = false, message = $"Cannot request {request.RequestCount} scripts. You already have {activeCount} active scripts. Maximum allowed active scripts is 50." });
                 }
 
+                // Check if examiner already has assigned scripts for this paper that are not yet submitted in Markings table
+                var hasUnsubmittedForPaper = await _context.Allocations.AnyAsync(a =>
+                    a.ExaminerId == examinerId &&
+                    a.Status != AllocationStatus.cancelled &&
+                    a.Script.ProjectPaper.PaperId == request.PaperId &&
+                    !_context.Markings.Any(m =>
+                        m.AllocationId == a.AllocationId &&
+                        m.Status == MarkingStatus.submitted));
+
+                if (hasUnsubmittedForPaper)
+                {
+                    return BadRequest(new { success = false, message = "You have assigned scripts for this paper that are not yet marked as submitted evaluate it before requesting more" });
+                }
+
                 var pendingScripts = await _context.Scripts
                     .Where(s => s.ProjectPaper.PaperId == request.PaperId && 
                                (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any())))
@@ -982,6 +1029,20 @@ namespace API.Controllers
                     }
 
                     _context.Scripts.UpdateRange(pendingScripts);
+
+                    // Mark active SubjectPaperRequest as fulfilled (requested = false)
+                    try
+                    {
+                        var req = await _context.SubjectPaperRequests
+                            .FirstOrDefaultAsync(r => r.PaperId == request.PaperId && r.ExaminerId == request.ExaminerId && r.Requested);
+                        if (req != null)
+                        {
+                            req.Requested = false;
+                            req.UpdatedAt = DateTime.UtcNow;
+                        }
+                    }
+                    catch { }
+
                     await _context.SaveChangesAsync();
 
                     return Ok(new { success = true, message = $"Successfully updated allocation count to {request.TargetCount}." });

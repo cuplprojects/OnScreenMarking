@@ -51,6 +51,7 @@ import ScriptAllocation from './pages/ScriptAllocation';
 import ScriptDeallocation from './pages/ScriptDeallocation';
 import QuestionTypeMaster from './pages/QuestionTypeMaster';
 import SectionMasterManagement from './pages/SectionMasterManagement';
+import SubjectPaperRequests from './pages/SubjectPaperRequests';
 
 function AppRoutes() {
   const { isAuthenticated, userType, loading, hasPermission } = useAuth();
@@ -261,6 +262,14 @@ function AppRoutes() {
           <Route 
             path="/deallocate-scripts" 
             element={hasPermission("READ_ALLOCATION") ? <ScriptDeallocation /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+          <Route 
+            path="/admin/paper-requests" 
+            element={userType === 'admin' || userType === 'coordinator' || hasPermission("READ_ALLOCATION") ? <SubjectPaperRequests /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+          <Route 
+            path="/paper-requests" 
+            element={userType === 'admin' || userType === 'coordinator' || hasPermission("READ_ALLOCATION") ? <SubjectPaperRequests /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
 
           {/* Examiner Routes */}

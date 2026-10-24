@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   X, LayoutDashboard, School, Building2, GraduationCap, BookOpen,
   Calendar, FileText, Layers, Zap, Users, Shield, Activity, PenTool,
-  BarChart3, BookMarked, Settings2, Briefcase, Upload, Folder
+  BarChart3, BookMarked, Settings2, Briefcase, Upload, Folder, FileCheck
 } from 'lucide-react';
 import { encryptId } from '../utils/encryption';
 
@@ -74,6 +74,7 @@ function useNavGroups(userType, hasPermission) {
     const ops = { label: 'Operations', items: [] };
     if (hasPermission('READ_ALLOCATION')) {
       ops.items.push({ label: 'Script Allocation', path: allocationPath, icon: Zap });
+      ops.items.push({ label: 'Paper Requests', path: '/admin/paper-requests', icon: FileCheck });
     }
     if (hasPermission('READ_USER')) {
       ops.items.push({ label: 'Users', path: '/admin/users', icon: Users });
@@ -113,6 +114,7 @@ function useNavGroups(userType, hasPermission) {
     const ops = { label: 'Operations', items: [] };
     if (hasPermission('READ_ALLOCATION')) {
       ops.items.push({ label: 'Script Allocation', path: allocationPath, icon: Zap });
+      ops.items.push({ label: 'Paper Requests', path: '/paper-requests', icon: FileCheck });
     }
     if (hasPermission('READ_USER')) {
       ops.items.push({ label: 'Users', path: '/admin/users', icon: Users });

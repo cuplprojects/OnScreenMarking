@@ -35,7 +35,9 @@ namespace API.Controllers
             [FromQuery] string sortField = "",
             [FromQuery] string sortOrder = "",
             [FromQuery] string statusFilter = "",
-            [FromQuery] int? subjectId = null)
+            [FromQuery] int? subjectId = null,
+            [FromQuery] string? subjectName = null,
+            [FromQuery] string? paperCode = null)
         {
             try
             {
@@ -50,6 +52,19 @@ namespace API.Controllers
                 if (subjectId.HasValue)
                 {
                     query = query.Where(p => p.SubjectPapers.Any(sp => sp.SubjectId == subjectId.Value));
+                }
+
+                if (!string.IsNullOrWhiteSpace(subjectName))
+                {
+                    query = query.Where(p => 
+                        p.SubjectPapers.Any(sp => sp.Subject.SubName.Contains(subjectName)) ||
+                        p.ProjectPapers.Any(pp => pp.CatchNo.Contains(subjectName))
+                    );
+                }
+
+                if (!string.IsNullOrWhiteSpace(paperCode))
+                {
+                    query = query.Where(p => p.PaperCode.Contains(paperCode) || p.PaperName.Contains(paperCode));
                 }
 
                 if (isActive.HasValue)

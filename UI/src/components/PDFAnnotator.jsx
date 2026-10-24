@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { RotateCcw, Copy, Type, ZoomIn, ZoomOut, Check, X, Undo, Move, Trash2, FileText, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Edit3, Pencil, Minus, Plus } from 'lucide-react';
+import { RotateCcw, Copy, Type, ZoomIn, ZoomOut, Check, X, Undo, Move, Trash2, FileText, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Edit3, Pencil, Minus, Plus, AlertTriangle } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import message from '../services/messageService';
@@ -1522,8 +1522,9 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
             {!isSkipped && (
               <div className="p-3 max-h-48 overflow-y-auto">
                 {canAttemptQuestion && !canAttemptQuestion(pendingAnno?.questionId) && (
-                  <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-800 font-medium">
-                    ⚠️ {getQuestionBlockedReason ? getQuestionBlockedReason(pendingAnno?.questionId) : "Maximum attempt limit reached for this section. You can mark this question as skipped."}
+                  <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-800 font-medium flex items-start gap-1.5">
+                    <AlertTriangle size={13} className="text-amber-600 shrink-0 mt-0.5" />
+                    <span>{getQuestionBlockedReason ? getQuestionBlockedReason(pendingAnno?.questionId) : "Maximum attempt limit reached for this section. You can mark this question as skipped."}</span>
                   </div>
                 )}
                 <div className="grid grid-cols-4 gap-1">

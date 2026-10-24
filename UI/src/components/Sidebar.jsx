@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Home, FileText, BarChart3, Settings, Users, BookOpen, PenTool, Layers, School, Building2, Calendar, ClipboardList, Shield, UserCheck, GraduationCap, Zap } from 'lucide-react';
+import { Home, FileText, BarChart3, Settings, Users, BookOpen, PenTool, Layers, School, Building2, Calendar, ClipboardList, Shield, UserCheck, GraduationCap, Zap, FileCheck } from 'lucide-react';
 import { encryptId } from '../utils/encryption';
 
 const Sidebar = () => {
@@ -37,6 +37,7 @@ const Sidebar = () => {
       
       if (hasPermission("READ_ALLOCATION")) {
         items.push({ icon: <Zap size={20} />, label: 'Script Allocation', path: allocationPath });
+        items.push({ icon: <FileCheck size={20} />, label: 'Paper Requests', path: '/admin/paper-requests' });
       }
       if (hasPermission("READ_USER")) {
         items.push({ icon: <Users size={20} />, label: 'Users', path: '/admin/users' });
@@ -60,6 +61,7 @@ const Sidebar = () => {
 
       if (hasPermission("READ_ALLOCATION")) {
         items.push({ icon: <Zap size={20} />, label: 'Script Allocation', path: allocationPath });
+        items.push({ icon: <FileCheck size={20} />, label: 'Paper Requests', path: '/paper-requests' });
       }
       if (hasPermission("READ_USER")) {
         items.push({ icon: <Users size={20} />, label: 'Users', path: '/admin/users' });

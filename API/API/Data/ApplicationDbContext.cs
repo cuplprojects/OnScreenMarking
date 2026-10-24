@@ -54,6 +54,7 @@ namespace API.Data
         public DbSet<UploadQueue> UploadQueues { get; set; }
         public DbSet<PaperSectionMaster> PaperSectionMasters { get; set; }
         public DbSet<ProjectPaperSection> ProjectPaperSections { get; set; }
+        public DbSet<SubjectPaperRequest> SubjectPaperRequests { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -388,6 +389,34 @@ namespace API.Data
                 .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<PaperExaminer>()
                 .HasIndex(pe => new { pe.PaperId, pe.ExaminerId })
+                .IsUnique();
+
+            // SubjectPaperRequest configuration
+            modelBuilder.Entity<SubjectPaperRequest>()
+                .HasKey(spr => spr.Id);
+            modelBuilder.Entity<SubjectPaperRequest>()
+                .HasOne(spr => spr.Paper)
+                .WithMany()
+                .HasForeignKey(spr => spr.PaperId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<SubjectPaperRequest>()
+                .HasOne(spr => spr.Subject)
+                .WithMany()
+                .HasForeignKey(spr => spr.SubjectId)
+                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<SubjectPaperRequest>()
+                .HasOne(spr => spr.Examiner)
+                .WithMany()
+                .HasForeignKey(spr => spr.ExaminerId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<SubjectPaperRequest>()
+                .HasOne(spr => spr.University)
+                .WithMany()
+                .HasForeignKey(spr => spr.UniversityId)
+                .OnDelete(DeleteBehavior.SetNull);
+            // One examiner can only have one request row per paper
+            modelBuilder.Entity<SubjectPaperRequest>()
+                .HasIndex(spr => new { spr.PaperId, spr.ExaminerId })
                 .IsUnique();
 
             // QuestionMark configuration
