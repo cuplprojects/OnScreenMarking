@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System;
 using System.Collections.Generic;
@@ -15,6 +15,9 @@ namespace API.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         
+        public int? AssignmentTypeId { get; set; }
+        public AssignmentType? AssignmentType { get; set; }
+
         // Navigation properties
         public ICollection<Department> Departments { get; set; } = new List<Department>();
         public ICollection<Project> Projects { get; set; } = new List<Project>();

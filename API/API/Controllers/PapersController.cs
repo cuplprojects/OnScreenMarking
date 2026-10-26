@@ -28,6 +28,7 @@ namespace API.Controllers
         [HttpGet("dashboard-stats")]
         public async Task<IActionResult> GetProjectDashboardPapers(
             [FromQuery] int projectId,
+            [FromQuery] int? universityId = null,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 10,
             [FromQuery] string search = "",
@@ -45,9 +46,37 @@ namespace API.Controllers
                 if (pageSize <= 0) pageSize = 10;
                 if (pageSize > 100) pageSize = 100;
                 if (page <= 0) page = 1;
-                var query = _context.Papers
-                    .Where(p => p.ProjectPapers.Any(pp => pp.ProjectId == projectId))
-                    .AsQueryable();
+
+                // Resolve logged-in user's UniversityId
+                int? targetUniversityId = universityId;
+                if (!targetUniversityId.HasValue || targetUniversityId.Value <= 0)
+                {
+                    var loggedInUserIdStr = User.FindFirst("id")?.Value;
+                    if (int.TryParse(loggedInUserIdStr, out int userId))
+                    {
+                        var userRecord = await _context.Users
+                            .Where(u => u.Id == userId)
+                            .Select(u => new { u.UniversityId })
+                            .FirstOrDefaultAsync();
+
+                        if (userRecord?.UniversityId != null && userRecord.UniversityId > 0)
+                        {
+                            targetUniversityId = userRecord.UniversityId;
+                        }
+                    }
+                }
+
+                var query = _context.Papers.AsQueryable();
+
+                if (projectId > 0)
+                {
+                    query = query.Where(p => p.ProjectPapers.Any(pp => pp.ProjectId == projectId));
+                }
+
+                if (targetUniversityId.HasValue && targetUniversityId.Value > 0)
+                {
+                    query = query.Where(p => p.UniversityId == targetUniversityId.Value);
+                }
 
                 if (subjectId.HasValue)
                 {
@@ -109,12 +138,9 @@ namespace API.Controllers
                             break;
                         case "ready_for_allocation":
                             query = query.Where(p => 
-                                (_context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId) || _context.Sections.Any(s => s.PaperId == p.PaperId)) && 
-                                ((_context.ProjectPaperSections.Where(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId).Sum(pps => (int?)pps.TotalMarks) ?? 0) == p.MaxMarks || 
-                                 _context.Sections.Where(s => s.PaperId == p.PaperId).Sum(s => (int?)s.TotalMarks) == p.MaxMarks) &&
-                                p.ProjectPapers.Any(pp => pp.ProjectId == projectId && !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl)) &&
-                                _context.PaperExaminers.Any(pe => pe.PaperId == p.PaperId) &&
-                                _context.Scripts.Any(s => s.ProjectPaper.PaperId == p.PaperId && s.ProjectPaper.ProjectId == projectId && s.Status != ScriptStatus.completed)
+                                _context.Scripts.Any(s => s.ProjectPaper.PaperId == p.PaperId && 
+                                                          (projectId <= 0 || s.ProjectPaper.ProjectId == projectId) && 
+                                                          !_context.Allocations.Any(a => a.ScriptId == s.Id && a.Status != AllocationStatus.cancelled))
                             );
                             break;
                     }
@@ -147,13 +173,13 @@ namespace API.Controllers
                             break;
                         case "pendingscripts":
                             query = isDesc 
-                                ? query.OrderByDescending(p => _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any())))) 
-                                : query.OrderBy(p => _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any()))));
+                                ? query.OrderByDescending(p => _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && !_context.Allocations.Any(a => a.ScriptId == s.Id && a.Status != AllocationStatus.cancelled))) 
+                                : query.OrderBy(p => _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && !_context.Allocations.Any(a => a.ScriptId == s.Id && a.Status != AllocationStatus.cancelled)));
                             break;
                         case "allocatedscripts":
                             query = isDesc 
-                                ? query.OrderByDescending(p => _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (s.Status == ScriptStatus.allocated || s.Status == ScriptStatus.marking))) 
-                                : query.OrderBy(p => _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (s.Status == ScriptStatus.allocated || s.Status == ScriptStatus.marking)));
+                                ? query.OrderByDescending(p => _context.Allocations.Count(a => a.Script.ProjectPaper.PaperId == p.PaperId && a.Status != AllocationStatus.cancelled)) 
+                                : query.OrderBy(p => _context.Allocations.Count(a => a.Script.ProjectPaper.PaperId == p.PaperId && a.Status != AllocationStatus.cancelled));
                             break;
                         case "completedscripts":
                             query = isDesc 
@@ -189,10 +215,10 @@ namespace API.Controllers
                         isActive = p.IsActive,
                         subjectName = p.SubjectPapers.Select(sp => sp.Subject.SubName).FirstOrDefault() ?? "N/A",
                         subjectId = p.SubjectPapers.Select(sp => sp.SubjectId).FirstOrDefault(),
-                        totalScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.ProjectPaper.ProjectId == projectId),
-                        completedScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.ProjectPaper.ProjectId == projectId && s.Status == ScriptStatus.completed),
-                        allocatedScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.ProjectPaper.ProjectId == projectId && (s.Status == ScriptStatus.allocated || s.Status == ScriptStatus.marking)),
-                        pendingScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.ProjectPaper.ProjectId == projectId && (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any()))),
+                        totalScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || s.ProjectPaper.ProjectId == projectId)),
+                        completedScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || s.ProjectPaper.ProjectId == projectId) && s.Status == ScriptStatus.completed),
+                        allocatedScripts = _context.Allocations.Count(a => a.Script.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || a.Script.ProjectPaper.ProjectId == projectId) && a.Status != AllocationStatus.cancelled),
+                        pendingScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || s.ProjectPaper.ProjectId == projectId) && !_context.Allocations.Any(a => a.ScriptId == s.Id && a.Status != AllocationStatus.cancelled)),
                         isSectionsConfigured = _context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId) || _context.Sections.Any(s => s.PaperId == p.PaperId),
                         sectionsCount = _context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId) 
                             ? _context.ProjectPaperSections.Count(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId) 

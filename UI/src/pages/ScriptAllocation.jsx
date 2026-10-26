@@ -77,17 +77,42 @@ export default function ScriptAllocation({ isTab = false }) {
   // -------------------------------------------------------------
   // Table Fetch Function for Papers
   // -------------------------------------------------------------
-  const fetchFn = useCallback((params) => {
+  const fetchFn = useCallback(async (params) => {
     if (projectId) {
       const searchVal = params.search || '';
       const pageVal = params.page || 1;
       const pageSizeVal = params.pageSize || 10;
       const sortFieldVal = params.sortField || '';
       const sortOrderVal = params.sortOrder || '';
-      return apiCall(`/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}&statusFilter=ready_for_allocation`);
+      const uniQuery = activeUniversityId ? `&universityId=${activeUniversityId}` : '';
+
+      try {
+        const res = await apiCall(`/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}&statusFilter=ready_for_allocation${uniQuery}`);
+        if (res && res.items && res.items.length > 0) {
+          return res;
+        }
+      } catch (e) {
+        console.warn('dashboard-stats query failed, checking unallocated endpoint:', e);
+      }
+
+      // University-wise unallocated scripts endpoint fallback
+      try {
+        const unallocRes = await apiCall(`/scripts/unallocated?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}${uniQuery}`);
+        if (unallocRes && unallocRes.papers && unallocRes.papers.length > 0) {
+          return {
+            items: unallocRes.papers,
+            totalCount: unallocRes.papers.length,
+            page: pageVal,
+            pageSize: pageSizeVal,
+            totalPages: 1
+          };
+        }
+      } catch (err) {
+        console.warn('unallocated endpoint query error:', err);
+      }
     }
-    return Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 10, totalPages: 1 });
-  }, [projectId]);
+    return { items: [], totalCount: 0, page: 1, pageSize: 10, totalPages: 1 };
+  }, [projectId, activeUniversityId]);
 
   const {
     items: papers,
@@ -167,8 +192,7 @@ export default function ScriptAllocation({ isTab = false }) {
   // -------------------------------------------------------------
   const openAllocationPane = async (paper) => {
     if (!paper.questionPaperPdfUrl) {
-      message.warning(`Paper "${paper.paperName}" does not have a Question Paper PDF uploaded.`);
-      return;
+      message.info(`Note: Paper "${paper.paperName}" does not have a Question Paper PDF uploaded yet.`);
     }
 
     if (activePaper?.paperId === paper.paperId && !isMultiPaperMode) {
@@ -253,11 +277,9 @@ export default function ScriptAllocation({ isTab = false }) {
 
     const selectedPapersData = papers.filter(p => selectedPaperIds.includes(p.paperId));
     const missingQpPapers = selectedPapersData.filter(p => !p.questionPaperPdfUrl);
-    
     if (missingQpPapers.length > 0) {
       const names = missingQpPapers.map(p => p.paperName).join(', ');
-      message.warning(`Cannot allocate. The following papers are missing Question Paper PDFs: ${names}`);
-      return;
+      message.info(`Note: The following papers do not have a Question Paper PDF uploaded yet: ${names}`);
     }
 
     setIsMultiPaperMode(true);

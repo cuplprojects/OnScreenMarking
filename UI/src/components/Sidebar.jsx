@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Home, FileText, BarChart3, Settings, Users, BookOpen, PenTool, Layers, School, Building2, Calendar, ClipboardList, Shield, UserCheck, GraduationCap, Zap, FileCheck } from 'lucide-react';
+import { Home, FileText, BarChart3, Settings, Users, BookOpen, PenTool, Layers, School, Building2, Calendar, ClipboardList, Shield, UserCheck, GraduationCap, Zap, FileCheck, Sliders } from 'lucide-react';
 import { encryptId } from '../utils/encryption';
 
 const Sidebar = () => {
@@ -28,6 +28,7 @@ const Sidebar = () => {
       items.push({ icon: <School size={20} />, label: 'Universities', path: '/admin/universities' });
       items.push({ icon: <Building2 size={20} />, label: 'Colleges', path: '/admin/colleges' });
       items.push({ icon: <Building2 size={20} />, label: 'Departments', path: '/admin/departments' });
+      items.push({ icon: <Sliders size={20} />, label: 'Assignment Types', path: '/admin/university-settings' });
       items.push({ icon: <GraduationCap size={20} />, label: 'Courses', path: '/admin/courses' });
       items.push({ icon: <BookOpen size={20} />, label: 'Subjects', path: '/admin/subjects' });
       items.push({ icon: <Calendar size={20} />, label: 'Sessions & Projects', path: '/admin/sessions' });
@@ -52,6 +53,7 @@ const Sidebar = () => {
     } else if (userType === 'coordinator') {
       items.push({ icon: <Home size={20} />, label: 'Dashboard', path: '/coordinator/dashboard' });
       items.push({ icon: <Building2 size={20} />, label: 'Departments', path: '/departments' });
+      items.push({ icon: <Sliders size={20} />, label: 'Assignment Types', path: '/university-settings' });
       items.push({ icon: <GraduationCap size={20} />, label: 'Courses', path: '/courses' });
       items.push({ icon: <BookOpen size={20} />, label: 'Subjects', path: '/subjects' });
       items.push({ icon: <Calendar size={20} />, label: 'Sessions & Projects', path: '/sessions' });
