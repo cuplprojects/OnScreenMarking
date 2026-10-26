@@ -52,6 +52,7 @@ import ScriptDeallocation from './pages/ScriptDeallocation';
 import QuestionTypeMaster from './pages/QuestionTypeMaster';
 import SectionMasterManagement from './pages/SectionMasterManagement';
 import SubjectPaperRequests from './pages/SubjectPaperRequests';
+import UniversitySettings from './pages/UniversitySettings';
 
 function AppRoutes() {
   const { isAuthenticated, userType, loading, hasPermission } = useAuth();
@@ -271,6 +272,23 @@ function AppRoutes() {
             path="/paper-requests" 
             element={userType === 'admin' || userType === 'coordinator' || hasPermission("READ_ALLOCATION") ? <SubjectPaperRequests /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
+          <Route 
+            path="/admin/university-settings" 
+            element={userType === 'admin' ? <UniversitySettings /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+          <Route 
+            path="/university-settings" 
+            element={userType === 'coordinator' || userType === 'admin' ? <UniversitySettings /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+          <Route 
+            path="/admin/assignment-types" 
+            element={userType === 'admin' ? <UniversitySettings /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+          <Route 
+            path="/assignment-types" 
+            element={userType === 'coordinator' || userType === 'admin' ? <UniversitySettings /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+
 
           {/* Examiner Routes */}
           <Route 

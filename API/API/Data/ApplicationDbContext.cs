@@ -55,6 +55,7 @@ namespace API.Data
         public DbSet<PaperSectionMaster> PaperSectionMasters { get; set; }
         public DbSet<ProjectPaperSection> ProjectPaperSections { get; set; }
         public DbSet<SubjectPaperRequest> SubjectPaperRequests { get; set; }
+        public DbSet<AssignmentType> AssignmentTypes { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -67,6 +68,11 @@ namespace API.Data
             // University configuration
             modelBuilder.Entity<University>()
                 .HasKey(u => u.UniversityId);
+            modelBuilder.Entity<University>()
+                .HasOne(u => u.AssignmentType)
+                .WithMany()
+                .HasForeignKey(u => u.AssignmentTypeId)
+                .OnDelete(DeleteBehavior.SetNull);
             modelBuilder.Entity<University>()
                 .HasMany(u => u.Departments)
                 .WithOne(d => d.University)

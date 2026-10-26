@@ -458,5 +458,184 @@ namespace API.Controllers
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
+
+        /// <summary>
+        /// GET /api/scripts/unallocated
+        /// Retrieves unallocated scripts university-wise:
+        /// Script -> ProjectPaper -> Paper -> UniversityId.
+        /// Resolves logged-in user's UniversityId from Users table,
+        /// and identifies scripts that are not assigned in the Allocations table.
+        /// </summary>
+        [HttpGet("unallocated")]
+        public async Task<IActionResult> GetUnallocatedScripts(
+            [FromQuery] int? projectId = null,
+            [FromQuery] int? paperId = null,
+            [FromQuery] int? universityId = null,
+            [FromQuery] string search = "",
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50)
+        {
+            try
+            {
+                if (pageSize <= 0) pageSize = 50;
+                if (pageSize > 500) pageSize = 500;
+                if (page <= 0) page = 1;
+
+                // 1. Get logged-in user's UniversityId from Users table
+                int? targetUniversityId = universityId;
+                if (!targetUniversityId.HasValue || targetUniversityId.Value <= 0)
+                {
+                    var loggedInUserIdStr = User.FindFirst("id")?.Value;
+                    if (int.TryParse(loggedInUserIdStr, out int userId))
+                    {
+                        var userRecord = await _context.Users
+                            .Where(u => u.Id == userId)
+                            .Select(u => new { u.UniversityId })
+                            .FirstOrDefaultAsync();
+
+                        if (userRecord?.UniversityId != null && userRecord.UniversityId > 0)
+                        {
+                            targetUniversityId = userRecord.UniversityId;
+                        }
+                    }
+                }
+
+                // 2. Base query: Scripts -> ProjectPaper -> Paper
+                var query = _context.Scripts
+                    .Include(s => s.ProjectPaper)
+                        .ThenInclude(pp => pp.Paper)
+                    .Include(s => s.ProjectPaper)
+                        .ThenInclude(pp => pp.Project)
+                    .AsQueryable();
+
+                // 3. Filter by UniversityId on Paper
+                if (targetUniversityId.HasValue && targetUniversityId.Value > 0)
+                {
+                    query = query.Where(s => s.ProjectPaper != null && 
+                                             s.ProjectPaper.Paper != null && 
+                                             s.ProjectPaper.Paper.UniversityId == targetUniversityId.Value);
+                }
+
+                // 4. Filter by ProjectId if provided
+                if (projectId.HasValue && projectId.Value > 0)
+                {
+                    query = query.Where(s => s.ProjectPaper != null && s.ProjectPaper.ProjectId == projectId.Value);
+                }
+
+                // 5. Filter by PaperId if provided
+                if (paperId.HasValue && paperId.Value > 0)
+                {
+                    query = query.Where(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId.Value);
+                }
+
+                // 6. Check in Allocations: which scripts are assigned, and the ones NOT assigned are unallocated
+                query = query.Where(s => !_context.Allocations.Any(a => a.ScriptId == s.Id && a.Status != AllocationStatus.cancelled) 
+                                      && s.Status != ScriptStatus.completed);
+
+                // Optional Search by barcode, paper code, roll number, or catch no
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    var sLower = search.ToLower();
+                    query = query.Where(s => 
+                        (s.GeneratedBarcode != null && s.GeneratedBarcode.ToLower().Contains(sLower)) ||
+                        (s.InBuiltBarcode != null && s.InBuiltBarcode.ToLower().Contains(sLower)) ||
+                        (s.RollNumber != null && s.RollNumber.ToLower().Contains(sLower)) ||
+                        (s.ProjectPaper != null && s.ProjectPaper.Paper != null && 
+                            (s.ProjectPaper.Paper.PaperCode.ToLower().Contains(sLower) || 
+                             s.ProjectPaper.Paper.PaperName.ToLower().Contains(sLower))) ||
+                        (s.ProjectPaper != null && s.ProjectPaper.CatchNo != null && s.ProjectPaper.CatchNo.ToLower().Contains(sLower))
+                    );
+                }
+
+                var totalCount = await query.CountAsync();
+
+                // Paginated scripts list
+                var scripts = await query
+                    .OrderByDescending(s => s.CreatedAt)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(s => new
+                    {
+                        id = s.Id,
+                        generatedBarcode = s.GeneratedBarcode,
+                        inBuiltBarcode = s.InBuiltBarcode,
+                        rollNumber = s.RollNumber,
+                        cleanPdfUrl = s.CleanPdfUrl,
+                        status = s.Status.ToString(),
+                        projectPaperId = s.ProjectPaperId,
+                        paperId = s.ProjectPaper != null ? s.ProjectPaper.PaperId : 0,
+                        paperCode = s.ProjectPaper != null && s.ProjectPaper.Paper != null ? s.ProjectPaper.Paper.PaperCode : "",
+                        paperName = s.ProjectPaper != null && s.ProjectPaper.Paper != null ? s.ProjectPaper.Paper.PaperName : "",
+                        catchNo = s.ProjectPaper != null ? s.ProjectPaper.CatchNo : "",
+                        projectId = s.ProjectPaper != null ? s.ProjectPaper.ProjectId : 0,
+                        projectName = s.ProjectPaper != null && s.ProjectPaper.Project != null ? s.ProjectPaper.Project.ProjectName : "",
+                        universityId = s.ProjectPaper != null && s.ProjectPaper.Paper != null ? s.ProjectPaper.Paper.UniversityId : null,
+                        createdAt = s.CreatedAt
+                    })
+                    .ToListAsync();
+
+                // Grouped summary by paper (for convenient rendering in Script Allocation UI table)
+                var paperIds = await query
+                    .Where(s => s.ProjectPaper != null)
+                    .Select(s => s.ProjectPaper.PaperId)
+                    .Distinct()
+                    .ToListAsync();
+
+                var papersSummary = new List<object>();
+                if (paperIds.Count > 0)
+                {
+                    papersSummary = await _context.Papers
+                        .Where(p => paperIds.Contains(p.PaperId))
+                        .Select(p => new
+                        {
+                            paperId = p.PaperId,
+                            projectPaperId = p.ProjectPapers.Where(pp => !projectId.HasValue || pp.ProjectId == projectId.Value).Select(pp => pp.Id).FirstOrDefault(),
+                            paperCode = p.PaperCode,
+                            paperName = p.PaperName,
+                            catchNo = p.ProjectPapers.Where(pp => !projectId.HasValue || pp.ProjectId == projectId.Value).Select(pp => pp.CatchNo).FirstOrDefault() ?? "",
+                            questionPaperPdfUrl = p.ProjectPapers.Where(pp => !projectId.HasValue || pp.ProjectId == projectId.Value).Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() ?? "",
+                            projectId = projectId ?? p.ProjectPapers.Select(pp => pp.ProjectId).FirstOrDefault(),
+                            universityId = p.UniversityId,
+                            maxMarks = p.MaxMarks,
+                            totalScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (!projectId.HasValue || s.ProjectPaper.ProjectId == projectId.Value)),
+                            allocatedScripts = _context.Allocations.Count(a => a.Script.ProjectPaper.PaperId == p.PaperId && a.Status != AllocationStatus.cancelled && (!projectId.HasValue || a.Script.ProjectPaper.ProjectId == projectId.Value)),
+                            pendingScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (!projectId.HasValue || s.ProjectPaper.ProjectId == projectId.Value) && !_context.Allocations.Any(a => a.ScriptId == s.Id && a.Status != AllocationStatus.cancelled)),
+                            isSectionsConfigured = _context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && (!projectId.HasValue || pps.ProjectPaper.ProjectId == projectId.Value)) || _context.Sections.Any(sec => sec.PaperId == p.PaperId),
+                            expertsCount = _context.PaperExaminers.Count(pe => pe.PaperId == p.PaperId)
+                        })
+                        .ToListAsync<object>();
+                }
+
+                // University Name
+                string universityName = "";
+                if (targetUniversityId.HasValue)
+                {
+                    universityName = await _context.Universities
+                        .Where(u => u.UniversityId == targetUniversityId.Value)
+                        .Select(u => u.UniversityName)
+                        .FirstOrDefaultAsync() ?? "";
+                }
+
+                var totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 1;
+
+                return Ok(new
+                {
+                    success = true,
+                    universityId = targetUniversityId,
+                    universityName = universityName,
+                    totalCount = totalCount,
+                    totalUnallocatedScripts = totalCount,
+                    page = page,
+                    pageSize = pageSize,
+                    totalPages = totalPages,
+                    items = scripts,
+                    papers = papersSummary
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
     }
 }

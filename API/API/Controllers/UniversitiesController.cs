@@ -84,6 +84,14 @@ namespace API.Controllers
                         u.IsActive,
                         u.CreatedAt,
                         u.UpdatedAt,
+                        u.AssignmentTypeId,
+                        AssignmentType = u.AssignmentType != null ? new
+                        {
+                            u.AssignmentType.Id,
+                            u.AssignmentType.Type,
+                            u.AssignmentType.DailyLimit,
+                            u.AssignmentType.TimePerCopy
+                        } : null,
                         Departments = u.Departments.Select(d => new { d.DepartmentId }).ToList(),
                         Projects = u.Projects.Select(p => new { p.ProjectId }).ToList()
                     })
@@ -124,6 +132,7 @@ namespace API.Controllers
                 var university = await _context.Universities
                     .Include(u => u.Departments)
                     .Include(u => u.Projects)
+                    .Include(u => u.AssignmentType)
                     .FirstOrDefaultAsync(u => u.UniversityId == id);
 
                 if (university == null)
@@ -299,5 +308,175 @@ namespace API.Controllers
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
         }
+
+        // Helper to resolve the active universityId for coordinator or admin
+        private async Task<int?> GetTargetUniversityIdAsync(int? queryUniversityId)
+        {
+            if (queryUniversityId.HasValue && queryUniversityId.Value > 0)
+            {
+                return queryUniversityId.Value;
+            }
+
+            var loggedInUserIdStr = User.FindFirst("id")?.Value;
+            if (int.TryParse(loggedInUserIdStr, out int userId))
+            {
+                var userRecord = await _context.Users
+                    .Where(u => u.Id == userId)
+                    .Select(u => new { u.UniversityId })
+                    .FirstOrDefaultAsync();
+
+                if (userRecord?.UniversityId != null && userRecord.UniversityId > 0)
+                {
+                    return userRecord.UniversityId;
+                }
+            }
+
+            // Fallback to first active university if only one exists
+            var fallbackId = await _context.Universities
+                .Where(u => u.IsActive)
+                .OrderBy(u => u.UniversityId)
+                .Select(u => u.UniversityId)
+                .FirstOrDefaultAsync();
+
+            return fallbackId > 0 ? fallbackId : null;
+        }
+
+        /// <summary>
+        /// GET /api/Universities/assignment-settings
+        /// GET /api/Universities/assignment-type
+        /// Gets the university and its configured AssignmentType (with DailyLimit and TimePerCopy)
+        /// </summary>
+        [HttpGet("assignment-settings")]
+        [HttpGet("assignment-type")]
+        [Authorize(Roles = "admin,Admin,coordinator,Coordinator")]
+        public async Task<IActionResult> GetAssignmentSettings([FromQuery] int? universityId = null)
+        {
+            try
+            {
+                int? targetUniversityId = await GetTargetUniversityIdAsync(universityId);
+
+                var query = _context.Universities
+                    .Include(u => u.AssignmentType)
+                    .AsQueryable();
+
+                if (targetUniversityId.HasValue && targetUniversityId.Value > 0)
+                {
+                    query = query.Where(u => u.UniversityId == targetUniversityId.Value);
+                }
+
+                var list = await query
+                    .OrderBy(u => u.UniversityName)
+                    .Select(u => new
+                    {
+                        universityId = u.UniversityId,
+                        universityName = u.UniversityName,
+                        assignmentTypeId = u.AssignmentTypeId,
+                        assignmentType = u.AssignmentType != null ? u.AssignmentType.Type : null,
+                        dailyLimit = u.AssignmentType != null ? u.AssignmentType.DailyLimit : 0,
+                        timePerCopy = u.AssignmentType != null ? u.AssignmentType.TimePerCopy : 0,
+                        updatedAt = u.UpdatedAt
+                    })
+                    .ToListAsync();
+
+                // If targetUniversityId was filtered and returned empty, return all active universities
+                if (list.Count == 0)
+                {
+                    list = await _context.Universities
+                        .Include(u => u.AssignmentType)
+                        .Where(u => u.IsActive)
+                        .OrderBy(u => u.UniversityName)
+                        .Select(u => new
+                        {
+                            universityId = u.UniversityId,
+                            universityName = u.UniversityName,
+                            assignmentTypeId = u.AssignmentTypeId,
+                            assignmentType = u.AssignmentType != null ? u.AssignmentType.Type : null,
+                            dailyLimit = u.AssignmentType != null ? u.AssignmentType.DailyLimit : 0,
+                            timePerCopy = u.AssignmentType != null ? u.AssignmentType.TimePerCopy : 0,
+                            updatedAt = u.UpdatedAt
+                        })
+                        .ToListAsync();
+                }
+
+                return Ok(list);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// POST /api/Universities/assignment-setting
+        /// POST /api/Universities/assignment-type
+        /// PUT /api/Universities/assignment-type
+        /// Updates AssignmentTypeId in Universities table
+        /// </summary>
+        [HttpPost("assignment-setting")]
+        [HttpPost("assignment-type")]
+        [HttpPut("assignment-type")]
+        [Authorize(Roles = "admin,Admin,coordinator,Coordinator")]
+        public async Task<IActionResult> SetAssignmentSetting([FromBody] UniversityAssignmentSettingDto dto)
+        {
+            try
+            {
+                if (dto == null || dto.AssignmentTypeId <= 0)
+                {
+                    return BadRequest(new { success = false, message = "Assignment Type is required" });
+                }
+
+                int? targetUniversityId = await GetTargetUniversityIdAsync(dto.UniversityId);
+                if (!targetUniversityId.HasValue || targetUniversityId.Value <= 0)
+                {
+                    return BadRequest(new { success = false, message = "University ID is required" });
+                }
+
+                var university = await _context.Universities
+                    .Include(u => u.AssignmentType)
+                    .FirstOrDefaultAsync(u => u.UniversityId == targetUniversityId.Value);
+
+                if (university == null)
+                {
+                    return NotFound(new { success = false, message = "University not found" });
+                }
+
+                var assignType = await _context.AssignmentTypes.FindAsync(dto.AssignmentTypeId);
+                if (assignType == null)
+                {
+                    return BadRequest(new { success = false, message = "Invalid Assignment Type ID" });
+                }
+
+                university.AssignmentTypeId = dto.AssignmentTypeId;
+                university.UpdatedAt = DateTime.UtcNow;
+
+                _context.Universities.Update(university);
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    message = $"University assignment type updated to '{assignType.Type}' successfully",
+                    data = new
+                    {
+                        universityId = university.UniversityId,
+                        universityName = university.UniversityName,
+                        assignmentTypeId = assignType.Id,
+                        assignmentType = assignType.Type,
+                        dailyLimit = assignType.DailyLimit,
+                        timePerCopy = assignType.TimePerCopy
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+    }
+
+    public class UniversityAssignmentSettingDto
+    {
+        public int? UniversityId { get; set; }
+        public int AssignmentTypeId { get; set; }
     }
 }
