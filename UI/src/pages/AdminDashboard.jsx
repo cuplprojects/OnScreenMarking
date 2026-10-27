@@ -197,7 +197,7 @@ export default function AdminDashboard() {
   return (
     <div className="h-[calc(100vh-64px)] flex flex-col bg-zinc-50 pb-6 w-full lg:px-10 pt-6 overflow-hidden md:px-6 px-4">
       
-      {/* Dynamic Unallocated Alert Warning Banner */}
+      {/* Dynamic Pending Alert Warning Banner */}
       {/* <div className="pt-6">
         {unassignedCount > 0 && (
           <div className="mb-6 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-pulse">
@@ -206,8 +206,8 @@ export default function AdminDashboard() {
                 <AlertCircle size={18} />
               </div>
               <div>
-                <h3 className="text-xs font-bold text-amber-900 uppercase tracking-wider">Unallocated Scripts Alert</h3>
-                <p className="text-xs text-amber-800 mt-0.5">There are currently <span className="font-bold text-red-600">{unassignedCount}</span> scripts that have not been assigned to any examiner.</p>
+                <h3 className="text-xs font-bold text-amber-900 uppercase tracking-wider">Pending Scripts Alert</h3>
+                <p className="text-xs text-amber-800 mt-0.5">There are currently <span className="font-bold text-red-600">{unassignedCount}</span> pending scripts that have not been assigned to any examiner.</p>
               </div>
             </div>
             <Link 

@@ -361,7 +361,7 @@ namespace API.Controllers
 
                 if (!availableScripts.Any())
                 {
-                    return BadRequest(new { success = false, message = "No unallocated scripts available in pool for this paper." });
+                    return BadRequest(new { success = false, message = "No pending scripts available in pool for this paper." });
                 }
 
                 int actualAllocated = 0;

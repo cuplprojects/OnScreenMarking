@@ -85,7 +85,7 @@ namespace API.Controllers
             }
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id:int}")]
         public async Task<ActionResult<ScriptDto>> GetScript(int id)
         {
             try
@@ -130,7 +130,7 @@ namespace API.Controllers
             }
         }
 
-        [HttpGet("{id}/pdf")]
+        [HttpGet("{id:int}/pdf")]
         public async Task<IActionResult> GetScriptPdf(int id)
         {
             try
@@ -230,7 +230,7 @@ namespace API.Controllers
             }
         }
 
-        [HttpPut("{id}")]
+        [HttpPut("{id:int}")]
         public async Task<IActionResult> UpdateScript(int id, [FromBody] ScriptStatusUpdateRequest request)
         {
             try
@@ -257,7 +257,7 @@ namespace API.Controllers
             }
         }
 
-        [HttpPut("{id}/assign")]
+        [HttpPut("{id:int}/assign")]
         [Authorize(Roles = "admin,coordinator")]
         public async Task<IActionResult> AssignScript(int id, [FromBody] AssignScriptRequest request)
         {
@@ -460,14 +460,15 @@ namespace API.Controllers
         }
 
         /// <summary>
-        /// GET /api/scripts/unallocated
-        /// Retrieves unallocated scripts university-wise:
+        /// GET /api/scripts/pending (also supports /api/scripts/unallocated)
+        /// Retrieves pending scripts university-wise:
         /// Script -> ProjectPaper -> Paper -> UniversityId.
         /// Resolves logged-in user's UniversityId from Users table,
-        /// and identifies scripts that are not assigned in the Allocations table.
+        /// and identifies scripts that are pending allocation.
         /// </summary>
+        [HttpGet("pending")]
         [HttpGet("unallocated")]
-        public async Task<IActionResult> GetUnallocatedScripts(
+        public async Task<IActionResult> GetPendingScripts(
             [FromQuery] int? projectId = null,
             [FromQuery] int? paperId = null,
             [FromQuery] int? universityId = null,
@@ -624,6 +625,7 @@ namespace API.Controllers
                     universityId = targetUniversityId,
                     universityName = universityName,
                     totalCount = totalCount,
+                    totalPendingScripts = totalCount,
                     totalUnallocatedScripts = totalCount,
                     page = page,
                     pageSize = pageSize,
