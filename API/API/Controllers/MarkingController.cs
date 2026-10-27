@@ -44,6 +44,8 @@ namespace API.Controllers
                 var existingMarking = await _context.Markings
                     .FirstOrDefaultAsync(m => m.AllocationId == request.AllocationId);
 
+                var timePerCopy = await GetTimePerCopyMinutesForScriptAsync(allocation.ScriptId);
+
                 if (existingMarking != null)
                 {
                     var existingMarkingDto = new MarkingDto
@@ -56,7 +58,8 @@ namespace API.Controllers
                         Percentage = existingMarking.Percentage,
                         Remarks = existingMarking.Remarks,
                         Status = existingMarking.Status,
-                        StartedAt = existingMarking.StartedAt
+                        StartedAt = existingMarking.StartedAt,
+                        TimePerCopyMinutes = timePerCopy
                     };
                     return Ok(existingMarkingDto);
                 }
@@ -90,7 +93,8 @@ namespace API.Controllers
                     Percentage = marking.Percentage,
                     Remarks = marking.Remarks,
                     Status = marking.Status,
-                    StartedAt = marking.StartedAt
+                    StartedAt = marking.StartedAt,
+                    TimePerCopyMinutes = timePerCopy
                 };
 
                 return CreatedAtAction(nameof(GetMarking), new { id = marking.Id }, markingDto);
@@ -126,6 +130,8 @@ namespace API.Controllers
                     }
                 }
 
+                var timePerCopy = await GetTimePerCopyMinutesForScriptAsync(marking.ScriptId);
+
                 var markingDto = new MarkingDto
                 {
                     Id = marking.Id,
@@ -137,7 +143,8 @@ namespace API.Controllers
                     Remarks = marking.Remarks,
                     Status = marking.Status,
                     StartedAt = marking.StartedAt,
-                    SubmittedAt = marking.SubmittedAt
+                    SubmittedAt = marking.SubmittedAt,
+                    TimePerCopyMinutes = timePerCopy
                 };
 
                 return Ok(markingDto);
@@ -231,7 +238,7 @@ namespace API.Controllers
                     if (marking == null)
                     {
                         var allocation = await _context.Allocations
-                            .FirstOrDefaultAsync(a => a.ScriptId == scriptId && a.ExaminerId == request.ExaminerId);
+                            .FirstOrDefaultAsync(a => a.ScriptId == scriptId && a.ExaminerId == request.ExaminerId && a.AssignmentStatus);
 
                         if (allocation != null)
                         {
@@ -423,6 +430,18 @@ namespace API.Controllers
                 // Allow re-submission if script status is not completed (means previous submit failed)
                 bool isResubmission = marking.Status == MarkingStatus.submitted && marking.Script.Status != ScriptStatus.completed;
 
+                // Enforce minimum required evaluation time if TimePerCopy is configured
+                var timePerCopy = await GetTimePerCopyMinutesForScriptAsync(marking.ScriptId);
+                if (timePerCopy.HasValue && timePerCopy.Value > 0)
+                {
+                    var minTimeRequired = marking.StartedAt.AddMinutes(timePerCopy.Value);
+                    if (DateTime.UtcNow < minTimeRequired)
+                    {
+                        var remainingSeconds = (int)(minTimeRequired - DateTime.UtcNow).TotalSeconds;
+                        return BadRequest(new { success = false, message = $"Minimum required evaluation time ({timePerCopy.Value} minutes) has not elapsed. Please spend at least {timePerCopy.Value} minutes on this script ({remainingSeconds} seconds remaining)." });
+                    }
+                }
+
                 // Recalculate total marks from question marks to ensure accuracy
                 decimal totalMarks = marking.QuestionMarks
                     .Where(qm => !qm.IsSkipped)
@@ -558,6 +577,8 @@ namespace API.Controllers
                     }
                 }
 
+                var timePerCopy = await GetTimePerCopyMinutesForScriptAsync(marking.ScriptId);
+
                 var markingDto = new MarkingDto
                 {
                     Id = marking.Id,
@@ -569,7 +590,8 @@ namespace API.Controllers
                     Remarks = marking.Remarks,
                     Status = marking.Status,
                     StartedAt = marking.StartedAt,
-                    SubmittedAt = marking.SubmittedAt
+                    SubmittedAt = marking.SubmittedAt,
+                    TimePerCopyMinutes = timePerCopy
                 };
 
                 return Ok(markingDto);
@@ -919,6 +941,31 @@ namespace API.Controllers
             {
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
+        }
+
+        private async Task<int?> GetTimePerCopyMinutesForScriptAsync(int scriptId)
+        {
+            try
+            {
+                var universityId = await _context.Scripts
+                    .Where(s => s.Id == scriptId)
+                    .Select(s => (int?)s.ProjectPaper.Paper.UniversityId)
+                    .FirstOrDefaultAsync();
+
+                if (universityId.HasValue)
+                {
+                    var assignmentType = await _context.AssignmentTypes
+                        .FirstOrDefaultAsync(at => at.UniversityId == universityId.Value);
+
+                    if (assignmentType != null && assignmentType.TimePerCopy > 0)
+                    {
+                        return assignmentType.TimePerCopy;
+                    }
+                }
+            }
+            catch { }
+
+            return null;
         }
     }
 }

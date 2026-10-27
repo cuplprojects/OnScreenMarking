@@ -141,6 +141,33 @@ export const allocationService = {
       method: 'POST',
       body: JSON.stringify({ paperId, examinerId, targetCount })
     });
+  },
+
+  /**
+   * Trigger Daily Allocation for a specific university
+   */
+  dailyAllocateByUniversity: async (universityId) => {
+    return apiCall(`/allocation/university/${universityId}/daily-allocate`, {
+      method: 'POST'
+    });
+  },
+
+  /**
+   * Trigger Daily Allocation for all universities configured with 'Daily allocation'
+   */
+  dailyAllocateAll: async () => {
+    return apiCall('/allocation/daily-allocate', {
+      method: 'POST'
+    });
+  },
+
+  /**
+   * Trigger expired allocation reassignment for a university
+   */
+  reassignExpiredByUniversity: async (universityId) => {
+    return apiCall(`/allocation/university/${universityId}/reassign-expired`, {
+      method: 'POST'
+    });
   }
 };
 
