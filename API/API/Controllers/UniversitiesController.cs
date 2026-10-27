@@ -84,14 +84,14 @@ namespace API.Controllers
                         u.IsActive,
                         u.CreatedAt,
                         u.UpdatedAt,
-                        u.AssignmentTypeId,
-                        AssignmentType = u.AssignmentType != null ? new
+                        AssignmentTypes = u.AssignmentTypes.Select(at => new
                         {
-                            u.AssignmentType.Id,
-                            u.AssignmentType.Type,
-                            u.AssignmentType.DailyLimit,
-                            u.AssignmentType.TimePerCopy
-                        } : null,
+                            at.Id,
+                            at.Type,
+                            at.DailyLimit,
+                            at.TimePerCopy,
+                            at.ReassignmentHours
+                        }).ToList(),
                         Departments = u.Departments.Select(d => new { d.DepartmentId }).ToList(),
                         Projects = u.Projects.Select(p => new { p.ProjectId }).ToList()
                     })
@@ -132,7 +132,7 @@ namespace API.Controllers
                 var university = await _context.Universities
                     .Include(u => u.Departments)
                     .Include(u => u.Projects)
-                    .Include(u => u.AssignmentType)
+                    .Include(u => u.AssignmentTypes)
                     .FirstOrDefaultAsync(u => u.UniversityId == id);
 
                 if (university == null)
@@ -356,7 +356,7 @@ namespace API.Controllers
                 int? targetUniversityId = await GetTargetUniversityIdAsync(universityId);
 
                 var query = _context.Universities
-                    .Include(u => u.AssignmentType)
+                    .Include(u => u.AssignmentTypes)
                     .AsQueryable();
 
                 if (targetUniversityId.HasValue && targetUniversityId.Value > 0)
@@ -370,10 +370,20 @@ namespace API.Controllers
                     {
                         universityId = u.UniversityId,
                         universityName = u.UniversityName,
-                        assignmentTypeId = u.AssignmentTypeId,
-                        assignmentType = u.AssignmentType != null ? u.AssignmentType.Type : null,
-                        dailyLimit = u.AssignmentType != null ? u.AssignmentType.DailyLimit : 0,
-                        timePerCopy = u.AssignmentType != null ? u.AssignmentType.TimePerCopy : 0,
+                        assignmentTypeId = u.AssignmentTypes.OrderByDescending(at => at.UpdatedAt).Select(at => (int?)at.Id).FirstOrDefault(),
+                        assignmentType = u.AssignmentTypes.OrderByDescending(at => at.UpdatedAt).Select(at => at.Type).FirstOrDefault(),
+                        dailyLimit = u.AssignmentTypes.OrderByDescending(at => at.UpdatedAt).Select(at => at.DailyLimit).FirstOrDefault(),
+                        timePerCopy = u.AssignmentTypes.OrderByDescending(at => at.UpdatedAt).Select(at => at.TimePerCopy).FirstOrDefault(),
+                        reassignmentHours = u.AssignmentTypes.OrderByDescending(at => at.UpdatedAt).Select(at => at.ReassignmentHours).FirstOrDefault(),
+                        assignmentTypes = u.AssignmentTypes.Select(at => new
+                        {
+                            id = at.Id,
+                            type = at.Type,
+                            dailyLimit = at.DailyLimit,
+                            timePerCopy = at.TimePerCopy,
+                            reassignmentHours = at.ReassignmentHours,
+                            updatedAt = at.UpdatedAt
+                        }).ToList(),
                         updatedAt = u.UpdatedAt
                     })
                     .ToListAsync();
@@ -382,17 +392,27 @@ namespace API.Controllers
                 if (list.Count == 0)
                 {
                     list = await _context.Universities
-                        .Include(u => u.AssignmentType)
+                        .Include(u => u.AssignmentTypes)
                         .Where(u => u.IsActive)
                         .OrderBy(u => u.UniversityName)
                         .Select(u => new
                         {
                             universityId = u.UniversityId,
                             universityName = u.UniversityName,
-                            assignmentTypeId = u.AssignmentTypeId,
-                            assignmentType = u.AssignmentType != null ? u.AssignmentType.Type : null,
-                            dailyLimit = u.AssignmentType != null ? u.AssignmentType.DailyLimit : 0,
-                            timePerCopy = u.AssignmentType != null ? u.AssignmentType.TimePerCopy : 0,
+                            assignmentTypeId = u.AssignmentTypes.OrderByDescending(at => at.UpdatedAt).Select(at => (int?)at.Id).FirstOrDefault(),
+                            assignmentType = u.AssignmentTypes.OrderByDescending(at => at.UpdatedAt).Select(at => at.Type).FirstOrDefault(),
+                            dailyLimit = u.AssignmentTypes.OrderByDescending(at => at.UpdatedAt).Select(at => at.DailyLimit).FirstOrDefault(),
+                            timePerCopy = u.AssignmentTypes.OrderByDescending(at => at.UpdatedAt).Select(at => at.TimePerCopy).FirstOrDefault(),
+                            reassignmentHours = u.AssignmentTypes.OrderByDescending(at => at.UpdatedAt).Select(at => at.ReassignmentHours).FirstOrDefault(),
+                            assignmentTypes = u.AssignmentTypes.Select(at => new
+                            {
+                                id = at.Id,
+                                type = at.Type,
+                                dailyLimit = at.DailyLimit,
+                                timePerCopy = at.TimePerCopy,
+                                reassignmentHours = at.ReassignmentHours,
+                                updatedAt = at.UpdatedAt
+                            }).ToList(),
                             updatedAt = u.UpdatedAt
                         })
                         .ToListAsync();
@@ -432,7 +452,6 @@ namespace API.Controllers
                 }
 
                 var university = await _context.Universities
-                    .Include(u => u.AssignmentType)
                     .FirstOrDefaultAsync(u => u.UniversityId == targetUniversityId.Value);
 
                 if (university == null)
@@ -446,9 +465,11 @@ namespace API.Controllers
                     return BadRequest(new { success = false, message = "Invalid Assignment Type ID" });
                 }
 
-                university.AssignmentTypeId = dto.AssignmentTypeId;
-                university.UpdatedAt = DateTime.UtcNow;
+                assignType.UniversityId = university.UniversityId;
+                assignType.UpdatedAt = DateTime.UtcNow;
+                _context.AssignmentTypes.Update(assignType);
 
+                university.UpdatedAt = DateTime.UtcNow;
                 _context.Universities.Update(university);
                 await _context.SaveChangesAsync();
 
@@ -463,7 +484,8 @@ namespace API.Controllers
                         assignmentTypeId = assignType.Id,
                         assignmentType = assignType.Type,
                         dailyLimit = assignType.DailyLimit,
-                        timePerCopy = assignType.TimePerCopy
+                        timePerCopy = assignType.TimePerCopy,
+                        reassignmentHours = assignType.ReassignmentHours
                     }
                 });
             }

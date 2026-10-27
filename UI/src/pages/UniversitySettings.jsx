@@ -5,6 +5,7 @@ import {
   RefreshCw,
   Clock,
   Gauge,
+  Timer,
   Layers,
   Building2,
   CheckCircle2,
@@ -39,7 +40,8 @@ export default function UniversitySettings() {
   const [newType, setNewType] = useState({
     type: '',
     dailyLimit: 50,
-    timePerCopy: 15
+    timePerCopy: 15,
+    reassignmentHours: 24
   });
 
   // Fetch list of universities (for Admin dropdown)
@@ -90,7 +92,8 @@ export default function UniversitySettings() {
           assignmentTypeId: null,
           assignmentType: null,
           dailyLimit: 0,
-          timePerCopy: 0
+          timePerCopy: 0,
+          reassignmentHours: 0
         });
       }
     } catch (err) {
@@ -102,7 +105,8 @@ export default function UniversitySettings() {
         assignmentTypeId: null,
         assignmentType: null,
         dailyLimit: 0,
-        timePerCopy: 0
+        timePerCopy: 0,
+        reassignmentHours: 0
       });
     } finally {
       setLoading(false);
@@ -159,14 +163,17 @@ export default function UniversitySettings() {
 
     try {
       setCreating(true);
+      const targetUniId = selectedUniversityId || currentUniversity?.universityId || userUniversityId;
       await universitySettingService.createAssignmentType({
+        universityId: targetUniId ? parseInt(targetUniId, 10) : null,
         type: newType.type.trim(),
         dailyLimit: parseInt(newType.dailyLimit, 10) || 50,
-        timePerCopy: parseInt(newType.timePerCopy, 10) || 15
+        timePerCopy: parseInt(newType.timePerCopy, 10) || 15,
+        reassignmentHours: parseInt(newType.reassignmentHours, 10) || 24
       });
       message.success('New assignment type created successfully!');
       setShowAddModal(false);
-      setNewType({ type: '', dailyLimit: 50, timePerCopy: 15 });
+      setNewType({ type: '', dailyLimit: 50, timePerCopy: 15, reassignmentHours: 24 });
       await fetchAssignmentTypes();
     } catch (err) {
       console.error('Failed to create assignment type:', err);
@@ -178,13 +185,21 @@ export default function UniversitySettings() {
 
   // Resolve currently active assignment type object
   const activeAssignmentType = useMemo(() => {
-    if (!currentUniversity?.assignmentTypeId) return null;
-    return assignmentTypes.find(t => t.id === currentUniversity.assignmentTypeId) || {
-      id: currentUniversity.assignmentTypeId,
-      type: currentUniversity.assignmentType || `Type #${currentUniversity.assignmentTypeId}`,
-      dailyLimit: currentUniversity.dailyLimit,
-      timePerCopy: currentUniversity.timePerCopy
-    };
+    const uniId = currentUniversity?.universityId ? parseInt(currentUniversity.universityId, 10) : null;
+    if (uniId) {
+      const matchByUni = assignmentTypes.find(t => t.universityId === uniId);
+      if (matchByUni) return matchByUni;
+    }
+    if (currentUniversity?.assignmentTypeId) {
+      return assignmentTypes.find(t => t.id === currentUniversity.assignmentTypeId) || {
+        id: currentUniversity.assignmentTypeId,
+        type: currentUniversity.assignmentType || `Type #${currentUniversity.assignmentTypeId}`,
+        dailyLimit: currentUniversity.dailyLimit,
+        timePerCopy: currentUniversity.timePerCopy,
+        reassignmentHours: currentUniversity.reassignmentHours
+      };
+    }
+    return null;
   }, [currentUniversity, assignmentTypes]);
 
   return (
@@ -289,9 +304,9 @@ export default function UniversitySettings() {
           </div>
 
           {/* Active Configuration Metrics */}
-          <div className="grid grid-cols-2 gap-3 shrink-0">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
             {/* Daily Limit Metric */}
-            <div className="bg-white/10 backdrop-blur-xs rounded-xl p-3.5 border border-white/10 min-w-[140px]">
+            <div className="bg-white/10 backdrop-blur-xs rounded-xl p-3.5 border border-white/10 min-w-[130px]">
               <div className="flex items-center gap-1.5 text-teal-200 text-[10px] font-bold uppercase tracking-wider">
                 <Gauge size={14} className="text-teal-300" />
                 <span>Daily Limit</span>
@@ -305,7 +320,7 @@ export default function UniversitySettings() {
             </div>
 
             {/* Time Per Copy Metric */}
-            <div className="bg-white/10 backdrop-blur-xs rounded-xl p-3.5 border border-white/10 min-w-[140px]">
+            <div className="bg-white/10 backdrop-blur-xs rounded-xl p-3.5 border border-white/10 min-w-[130px]">
               <div className="flex items-center gap-1.5 text-amber-200 text-[10px] font-bold uppercase tracking-wider">
                 <Clock size={14} className="text-amber-300" />
                 <span>Time / Copy</span>
@@ -315,6 +330,20 @@ export default function UniversitySettings() {
                   {activeAssignmentType ? (activeAssignmentType.timePerCopy ?? activeAssignmentType.TimePerCopy ?? 0) : 0}
                 </span>
                 <span className="text-[11px] text-amber-200/80 font-medium">minutes</span>
+              </div>
+            </div>
+
+            {/* Reassignment Hours Metric */}
+            <div className="bg-white/10 backdrop-blur-xs rounded-xl p-3.5 border border-white/10 min-w-[130px]">
+              <div className="flex items-center gap-1.5 text-sky-200 text-[10px] font-bold uppercase tracking-wider">
+                <Timer size={14} className="text-sky-300" />
+                <span>Reassign Time</span>
+              </div>
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="text-2xl font-black text-white">
+                  {activeAssignmentType ? (activeAssignmentType.reassignmentHours ?? activeAssignmentType.ReassignmentHours ?? 24) : 0}
+                </span>
+                <span className="text-[11px] text-sky-200/80 font-medium">hours</span>
               </div>
             </div>
           </div>
@@ -364,7 +393,7 @@ export default function UniversitySettings() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {assignmentTypes.map(t => {
-              const isSelected = currentUniversity?.assignmentTypeId === t.id;
+              const isSelected = activeAssignmentType?.id === t.id;
               const isSaving = savingId === t.id;
 
               return (
@@ -387,30 +416,49 @@ export default function UniversitySettings() {
                       <span className="text-xs font-bold text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded font-mono">
                         ID: #{t.id}
                       </span>
+                      {t.universityId ? (
+                        <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">
+                          Univ #{t.universityId}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-gray-500 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded">
+                          Global
+                        </span>
+                      )}
                       <h3 className="text-base font-black text-gray-900">
                         {t.type || t.Type}
                       </h3>
                     </div>
 
                     {/* Metric Cards */}
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
-                      <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-100">
+                      <div className="bg-gray-50 p-2 rounded-lg border border-gray-100">
                         <div className="flex items-center gap-1 text-teal-700 text-[10px] font-bold uppercase tracking-wider">
-                          <Gauge size={13} /> Daily Limit
+                          <Gauge size={12} /> Limit
                         </div>
-                        <p className="text-lg font-black text-gray-900 mt-1">
+                        <p className="text-base font-black text-gray-900 mt-1">
                           {t.dailyLimit ?? t.DailyLimit ?? 50}
-                          <span className="text-[10px] text-gray-400 font-semibold ml-1">copies</span>
+                          <span className="text-[9px] text-gray-400 font-semibold ml-0.5">copies</span>
                         </p>
                       </div>
 
-                      <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                      <div className="bg-gray-50 p-2 rounded-lg border border-gray-100">
                         <div className="flex items-center gap-1 text-amber-700 text-[10px] font-bold uppercase tracking-wider">
-                          <Clock size={13} /> Time / Copy
+                          <Clock size={12} /> Time/Copy
                         </div>
-                        <p className="text-lg font-black text-gray-900 mt-1">
+                        <p className="text-base font-black text-gray-900 mt-1">
                           {t.timePerCopy ?? t.TimePerCopy ?? 15}
-                          <span className="text-[10px] text-gray-400 font-semibold ml-1">mins</span>
+                          <span className="text-[9px] text-gray-400 font-semibold ml-0.5">m</span>
+                        </p>
+                      </div>
+
+                      <div className="bg-gray-50 p-2 rounded-lg border border-gray-100">
+                        <div className="flex items-center gap-1 text-sky-700 text-[10px] font-bold uppercase tracking-wider">
+                          <Timer size={12} /> Reassign
+                        </div>
+                        <p className="text-base font-black text-gray-900 mt-1">
+                          {t.reassignmentHours ?? t.ReassignmentHours ?? 24}
+                          <span className="text-[9px] text-gray-400 font-semibold ml-0.5">hrs</span>
                         </p>
                       </div>
                     </div>
@@ -493,9 +541,9 @@ export default function UniversitySettings() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-2.5">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-700">
+                  <label className="text-[11px] font-bold text-gray-700">
                     Daily Limit (copies)
                   </label>
                   <input
@@ -504,13 +552,13 @@ export default function UniversitySettings() {
                     max="1000"
                     value={newType.dailyLimit}
                     onChange={(e) => setNewType({ ...newType, dailyLimit: e.target.value })}
-                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
+                    className="w-full px-2.5 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
                     required
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-700">
+                  <label className="text-[11px] font-bold text-gray-700">
                     Time / Copy (mins)
                   </label>
                   <input
@@ -519,7 +567,22 @@ export default function UniversitySettings() {
                     max="180"
                     value={newType.timePerCopy}
                     onChange={(e) => setNewType({ ...newType, timePerCopy: e.target.value })}
-                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
+                    className="w-full px-2.5 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-gray-700">
+                    Reassign (hrs)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="720"
+                    value={newType.reassignmentHours}
+                    onChange={(e) => setNewType({ ...newType, reassignmentHours: e.target.value })}
+                    className="w-full px-2.5 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-teal-600"
                     required
                   />
                 </div>
