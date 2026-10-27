@@ -281,7 +281,8 @@ namespace API.Controllers
                     ScriptId = id,
                     ExaminerId = request.ExaminerId,
                     AllocatedAt = DateTime.UtcNow,
-                    Status = AllocationStatus.allocated
+                    Status = AllocationStatus.allocated,
+                    AssignmentStatus = true
                 };
 
                 _context.Allocations.Add(allocation);
@@ -530,7 +531,7 @@ namespace API.Controllers
                 }
 
                 // 6. Check in Allocations: which scripts are assigned, and the ones NOT assigned are unallocated
-                query = query.Where(s => !_context.Allocations.Any(a => a.ScriptId == s.Id && a.Status != AllocationStatus.cancelled) 
+                query = query.Where(s => !_context.Allocations.Any(a => a.ScriptId == s.Id && a.AssignmentStatus) 
                                       && s.Status != ScriptStatus.completed);
 
                 // Optional Search by barcode, paper code, roll number, or catch no
@@ -599,8 +600,8 @@ namespace API.Controllers
                             universityId = p.UniversityId,
                             maxMarks = p.MaxMarks,
                             totalScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (!projectId.HasValue || s.ProjectPaper.ProjectId == projectId.Value)),
-                            allocatedScripts = _context.Allocations.Count(a => a.Script.ProjectPaper.PaperId == p.PaperId && a.Status != AllocationStatus.cancelled && (!projectId.HasValue || a.Script.ProjectPaper.ProjectId == projectId.Value)),
-                            pendingScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (!projectId.HasValue || s.ProjectPaper.ProjectId == projectId.Value) && !_context.Allocations.Any(a => a.ScriptId == s.Id && a.Status != AllocationStatus.cancelled)),
+                            allocatedScripts = _context.Allocations.Count(a => a.Script.ProjectPaper.PaperId == p.PaperId && a.AssignmentStatus && (!projectId.HasValue || a.Script.ProjectPaper.ProjectId == projectId.Value)),
+                            pendingScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (!projectId.HasValue || s.ProjectPaper.ProjectId == projectId.Value) && !_context.Allocations.Any(a => a.ScriptId == s.Id && a.AssignmentStatus)),
                             isSectionsConfigured = _context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && (!projectId.HasValue || pps.ProjectPaper.ProjectId == projectId.Value)) || _context.Sections.Any(sec => sec.PaperId == p.PaperId),
                             expertsCount = _context.PaperExaminers.Count(pe => pe.PaperId == p.PaperId)
                         })

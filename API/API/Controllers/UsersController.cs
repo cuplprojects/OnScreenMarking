@@ -256,7 +256,7 @@ namespace API.Controllers
                         name = u.Name,
                         email = u.Email,
                         phone = u.Phone,
-                        allocatedCount = _context.Allocations.Count(a => a.ExaminerId == u.Id)
+                        allocatedCount = _context.Allocations.Count(a => a.ExaminerId == u.Id && a.AssignmentStatus)
                     })
                     .ToListAsync();
 
@@ -658,7 +658,7 @@ namespace API.Controllers
                 var allAllocations = await _context.Allocations
                     .Include(a => a.Script)
                         .ThenInclude(s => s.ProjectPaper)
-                    .Where(a => examinerIds.Contains(a.ExaminerId))
+                    .Where(a => examinerIds.Contains(a.ExaminerId) && a.AssignmentStatus)
                     .ToListAsync();
 
                 var processedExaminers = new List<ProjectExaminerDto>();

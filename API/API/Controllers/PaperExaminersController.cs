@@ -102,7 +102,7 @@ namespace API.Controllers
                         // True if the examiner has assigned scripts for this paper that are not yet marked as submitted in Markings
                         hasUnsubmittedAllocations = _context.Allocations.Any(a =>
                             a.ExaminerId == examinerId &&
-                            a.Status != AllocationStatus.cancelled &&
+                            a.AssignmentStatus &&
                             a.Script.ProjectPaper.PaperId == p.PaperId &&
                             !_context.Markings.Any(m =>
                                 m.AllocationId == a.AllocationId &&
@@ -283,7 +283,7 @@ namespace API.Controllers
                         allocatedToExaminerCount = _context.Allocations.Count(a =>
                             a.ExaminerId == r.ExaminerId &&
                             a.Script.ProjectPaper.PaperId == r.PaperId &&
-                            a.Status != AllocationStatus.cancelled),
+                            a.AssignmentStatus),
                         // Count of scripts submitted by this examiner for this paper
                         submittedByExaminerCount = _context.Markings.Count(m =>
                             m.ExaminerId == r.ExaminerId &&
@@ -355,7 +355,7 @@ namespace API.Controllers
                     .Include(s => s.ProjectPaper)
                     .Where(s => s.ProjectPaper.PaperId == request.PaperId &&
                                 !_context.Markings.Any(m => m.ScriptId == s.Id && m.Status == MarkingStatus.submitted) &&
-                                !_context.Allocations.Any(a => a.ScriptId == s.Id && a.Status != AllocationStatus.cancelled))
+                                !_context.Allocations.Any(a => a.ScriptId == s.Id && a.AssignmentStatus))
                     .Take(countToAllocate)
                     .ToListAsync();
 
@@ -374,7 +374,8 @@ namespace API.Controllers
                         ScriptId = script.Id,
                         ExaminerId = request.ExaminerId,
                         AllocatedAt = now,
-                        Status = AllocationStatus.allocated
+                        Status = AllocationStatus.allocated,
+                        AssignmentStatus = true
                     };
 
                     _context.Allocations.Add(allocation);
@@ -491,15 +492,17 @@ namespace API.Controllers
                     .ThenInclude(s => s.ProjectPaper)
                     .Where(a => a.ExaminerId == assignment.ExaminerId 
                              && a.Script.ProjectPaper.PaperId == assignment.PaperId 
-                             && a.Status == AllocationStatus.allocated)
+                             && a.AssignmentStatus)
                     .ToListAsync();
 
                 foreach (var allocation in allocationsToRemove)
                 {
+                    allocation.AssignmentStatus = false;
+                    allocation.Status = AllocationStatus.cancelled;
                     allocation.Script.Status = ScriptStatus.pending;
                 }
                 
-                _context.Allocations.RemoveRange(allocationsToRemove);
+                _context.Allocations.UpdateRange(allocationsToRemove);
                 _context.PaperExaminers.Remove(assignment);
                 await _context.SaveChangesAsync();
 

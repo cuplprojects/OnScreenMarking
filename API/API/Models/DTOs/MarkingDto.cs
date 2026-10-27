@@ -15,6 +15,7 @@ namespace API.Models.DTOs
         public MarkingStatus Status { get; set; }
         public DateTime StartedAt { get; set; }
         public DateTime? SubmittedAt { get; set; }
+        public int? TimePerCopyMinutes { get; set; }
     }
 
     public class SubmitMarkingRequest

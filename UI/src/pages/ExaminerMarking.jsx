@@ -16,7 +16,8 @@ import {
   Barcode,
   Check,
   Lock,
-  AlertTriangle
+  AlertTriangle,
+  Clock
 } from "lucide-react";
 import PDFAnnotator from "../components/PDFAnnotator";
 import sectionService from "../services/sectionService";
@@ -106,6 +107,13 @@ const compareFaces = (face1, face2) => {
   return sumDist / len;
 };
 
+const formatCountdown = (totalSec) => {
+  if (!totalSec || totalSec <= 0) return "00:00";
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+};
+
 const ExaminerMarking = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -156,6 +164,49 @@ const ExaminerMarking = () => {
     console.log('Is Marking Submitted:', isMarkingSubmitted);
     console.log('Is Effective ReadOnly:', isEffectiveReadOnly);
   }, [markingStatus, isMarkingSubmitted, isEffectiveReadOnly]);
+
+  // TimePerCopy timer state
+  const [timePerCopyMinutes, setTimePerCopyMinutes] = useState(0);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [markingStartedAt, setMarkingStartedAt] = useState(null);
+
+  // TimePerCopy countdown timer effect
+  useEffect(() => {
+    if (!timePerCopyMinutes || timePerCopyMinutes <= 0 || isMarkingSubmitted || !scriptId) {
+      setRemainingSeconds(0);
+      return;
+    }
+
+    const storageKey = `marking_timer_start_${scriptId}`;
+    let startTimeEpoch = sessionStorage.getItem(storageKey);
+    if (!startTimeEpoch) {
+      if (markingStartedAt) {
+        startTimeEpoch = new Date(markingStartedAt).getTime().toString();
+      } else {
+        startTimeEpoch = Date.now().toString();
+      }
+      sessionStorage.setItem(storageKey, startTimeEpoch);
+    }
+
+    const computeRemaining = () => {
+      const startMs = parseInt(sessionStorage.getItem(storageKey) || startTimeEpoch, 10);
+      const elapsedSec = Math.floor((Date.now() - startMs) / 1000);
+      const requiredTotalSec = timePerCopyMinutes * 60;
+      const left = Math.max(0, requiredTotalSec - elapsedSec);
+      setRemainingSeconds(left);
+      return left;
+    };
+
+    computeRemaining();
+    const interval = setInterval(() => {
+      const left = computeRemaining();
+      if (left <= 0) {
+        clearInterval(interval);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [timePerCopyMinutes, isMarkingSubmitted, scriptId, markingStartedAt]);
   const [annotations, setAnnotations] = useState([]);
   const [selectedQuestion, setSelectedQuestion] = useState(null);
   const [showRemarksModal, setShowRemarksModal] = useState(false);
@@ -624,6 +675,12 @@ const ExaminerMarking = () => {
               setSubmitted(true);
             }
           }
+          if (existingMarking?.timePerCopyMinutes) {
+            setTimePerCopyMinutes(existingMarking.timePerCopyMinutes);
+          }
+          if (existingMarking?.startedAt) {
+            setMarkingStartedAt(existingMarking.startedAt);
+          }
         } catch (err) {
           console.log('No prior marking found by scriptId or failed to fetch:', err);
         }
@@ -641,6 +698,12 @@ const ExaminerMarking = () => {
         setMarkingId(markingResponse.id);
         if (markingResponse.remarks) {
           setRemarks(markingResponse.remarks);
+        }
+        if (markingResponse.timePerCopyMinutes) {
+          setTimePerCopyMinutes(markingResponse.timePerCopyMinutes);
+        }
+        if (markingResponse.startedAt) {
+          setMarkingStartedAt(markingResponse.startedAt);
         }
         const mStatus = markingResponse.status?.toLowerCase();
         if (mStatus) {
@@ -1195,6 +1258,10 @@ const ExaminerMarking = () => {
   }, [questionMarks, loading, submitted, scriptId, examinerId]);
 
   const handleSaveMarks = async () => {
+    if (remainingSeconds > 0) {
+      showStatus("warning", `Save is disabled. You must spend at least ${timePerCopyMinutes} minutes evaluating this copy (${formatCountdown(remainingSeconds)} remaining).`);
+      return;
+    }
     if (!markingId) {
       showStatus("error", "No active marking session. Cannot persist marks.");
       return;
@@ -1222,6 +1289,10 @@ const ExaminerMarking = () => {
   };
  
   const handleSubmitMarking = async () => {
+    if (remainingSeconds > 0) {
+      showStatus("warning", `Submit is disabled. You must spend at least ${timePerCopyMinutes} minutes evaluating this copy (${formatCountdown(remainingSeconds)} remaining).`);
+      return;
+    }
     const totalPages = annotatorRef.current?.getTotalPages ? annotatorRef.current.getTotalPages() : 0;
 
     // Page coverage check: skip page 1 (index 0), all other pages must have at least one annotation
@@ -1406,6 +1477,8 @@ const ExaminerMarking = () => {
   // Build tooltip reason — show the most blocking reason first
   const submitDisabledReason = isMarkingSubmitted
     ? 'This script has been submitted and is locked'
+    : remainingSeconds > 0
+    ? `Required evaluation time of ${timePerCopyMinutes} minutes is active. Save and Submit are locked for ${formatCountdown(remainingSeconds)}.`
     : !allSectionsSatisfied
     ? `Section requirements pending before submitting: ${pendingSectionRequirements.join('; ')}`
     : !allPagesAnnotated
@@ -1416,7 +1489,7 @@ const ExaminerMarking = () => {
     ? 'This submission is read-only'
     : '';
 
-  const isSubmitDisabled = isMarkingSubmitted || isEffectiveReadOnly || saving || !allPagesAnnotated || !allSectionsSatisfied;
+  const isSubmitDisabled = isMarkingSubmitted || isEffectiveReadOnly || saving || !allPagesAnnotated || !allSectionsSatisfied || remainingSeconds > 0;
 
 
   if (loading) {
@@ -1513,6 +1586,31 @@ const ExaminerMarking = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          {timePerCopyMinutes > 0 && !isMarkingSubmitted && (
+            <div
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all shadow-sm ${
+                remainingSeconds > 0
+                  ? 'bg-amber-50 border-amber-300 text-amber-900 animate-pulse'
+                  : 'bg-emerald-50 border-emerald-300 text-emerald-800'
+              }`}
+              title={
+                remainingSeconds > 0
+                  ? `Required evaluation time: ${timePerCopyMinutes} min. Save & Submit unlock in ${formatCountdown(remainingSeconds)}.`
+                  : 'Minimum required time met. You may save or submit.'
+              }
+            >
+              <Clock size={16} className={remainingSeconds > 0 ? 'text-amber-600' : 'text-emerald-600'} />
+              <div>
+                <p className="text-[9px] uppercase font-extrabold tracking-wider leading-none">
+                  {remainingSeconds > 0 ? 'Required Time' : 'Time Requirement Met'}
+                </p>
+                <p className="text-sm font-black font-mono leading-tight">
+                  {remainingSeconds > 0 ? `${formatCountdown(remainingSeconds)} left` : 'Unlocked'}
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="bg-teal-50 py-1.5 rounded-lg border border-teal-200 flex flex-col items-center md:px-4 px-3">
             <p className="text-[10px] uppercase font-bold text-teal-700">Total Score</p>
             <p className="text-2xl font-bold text-teal-900 leading-none">
@@ -1531,7 +1629,7 @@ const ExaminerMarking = () => {
               }`}
               title={submitDisabledReason || 'Submit evaluation'}
             >
-              {saving ? 'Saving...' : 'Submit'}
+              {saving ? 'Saving...' : remainingSeconds > 0 ? `Submit (${formatCountdown(remainingSeconds)})` : 'Submit'}
             </button>
           )}
         </div>
@@ -1646,10 +1744,11 @@ const ExaminerMarking = () => {
               <div className="grid gap-2 grid-cols-2">
                 <button 
                   onClick={handleSaveMarks}
-                  disabled={isEffectiveReadOnly}
+                  disabled={isEffectiveReadOnly || remainingSeconds > 0}
                   className="flex items-center justify-center gap-1.5 bg-white border border-teal-200 text-teal-700 hover:bg-teal-50 disabled:bg-gray-100 disabled:text-gray-400 font-semibold py-2 rounded-md shadow-sm transition-colors text-xs uppercase disabled:cursor-not-allowed cursor-pointer"
+                  title={remainingSeconds > 0 ? `Save locked. Spend at least ${timePerCopyMinutes} min on this copy (${formatCountdown(remainingSeconds)} left)` : "Save draft marks"}
                 >
-                  <Save size={15} /> Save
+                  <Save size={15} /> Save {remainingSeconds > 0 ? `(${formatCountdown(remainingSeconds)})` : ''}
                 </button>
                 <button 
                   onClick={() => {if(window.confirm("Reset all marks?")) window.location.reload();}}

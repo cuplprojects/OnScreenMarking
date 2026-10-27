@@ -339,7 +339,10 @@ namespace API.Data
                 .Property(a => a.Status)
                 .HasConversion(
                     v => v.ToString(),
-                    v => (AllocationStatus)Enum.Parse(typeof(AllocationStatus), v.Replace("-", "_"), true));
+                    v => string.IsNullOrEmpty(v) ? AllocationStatus.allocated : (AllocationStatus)Enum.Parse(typeof(AllocationStatus), v.Replace("-", "_"), true));
+            modelBuilder.Entity<Allocation>()
+                .Property(a => a.AssignmentStatus)
+                .HasDefaultValue(true);
             modelBuilder.Entity<Allocation>()
                 .HasOne(a => a.Script)
                 .WithMany(s => s.Allocations)

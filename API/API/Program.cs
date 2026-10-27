@@ -43,6 +43,10 @@ builder.Services.AddScoped<IPasswordGenerationService, PasswordGenerationService
 // Add Logging Service
 builder.Services.AddScoped<ILoggingService, LoggingService>();
 
+// Add Daily Allocation & Overdue Reassignment Engine + Background Daemon
+builder.Services.AddScoped<IDailyAllocationService, DailyAllocationService>();
+builder.Services.AddHostedService<DailyAllocationBackgroundService>();
+
 // Add CORS
 builder.Services.AddCors(options => {
     options.AddDefaultPolicy(policy => {
