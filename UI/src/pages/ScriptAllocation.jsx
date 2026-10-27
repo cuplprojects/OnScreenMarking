@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import {
   FileText,
@@ -28,11 +28,33 @@ import allocationService from '../services/allocationService';
 import sectionService from '../services/sectionService';
 import userService from '../services/userService';
 import message from '../services/messageService';
+import universitySettingService from '../services/universitySettingService';
 import { decryptId } from '../utils/encryption';
 import ProjectConfigHeader from '../components/ProjectConfigHeader';
 import TablePagination from '../components/TablePagination';
 import ColumnFilter from '../components/ColumnFilter';
 import { useTable } from '../services/tableService';
+
+const ALL_STRATEGIES = [
+  { id: 'even', label: 'Even Distribution' },
+  { id: 'daily', label: 'Daily Allocation' },
+  { id: 'custom', label: 'Custom Ratio' },
+];
+
+const getStrategyFromAssignmentType = (typeStr) => {
+  if (!typeStr) return null;
+  const lower = typeStr.toLowerCase().trim();
+  if (lower.includes('daily') || lower.includes('quota') || lower.includes('limit')) {
+    return 'daily';
+  }
+  if (lower.includes('equal') || lower.includes('even') || lower.includes('single') || lower.includes('double')) {
+    return 'even';
+  }
+  if (lower.includes('custom') || lower.includes('ratio') || lower.includes('manual')) {
+    return 'custom';
+  }
+  return null;
+};
 
 export default function ScriptAllocation({ isTab = false }) {
   const [searchParams] = useSearchParams();
@@ -62,6 +84,97 @@ export default function ScriptAllocation({ isTab = false }) {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [autoProjectLoading, setAutoProjectLoading] = useState(false);
 
+  // University Assignment Configuration State
+  const [configuredAssignmentSetting, setConfiguredAssignmentSetting] = useState(null);
+
+  const configuredStrategyKey = getStrategyFromAssignmentType(configuredAssignmentSetting?.assignmentType);
+
+  const visibleStrategies = useMemo(() => {
+    if (configuredStrategyKey) {
+      return [{
+        id: configuredStrategyKey,
+        label: configuredAssignmentSetting?.assignmentType || (
+          configuredStrategyKey === 'daily' ? 'Daily Allocation' :
+          configuredStrategyKey === 'even' ? 'Equal Distribution' : 'Custom Ratio'
+        )
+      }];
+    }
+    return ALL_STRATEGIES;
+  }, [configuredStrategyKey, configuredAssignmentSetting]);
+
+  const totalToAllocate = useMemo(() => {
+    return Object.values(examinerCounts).reduce((a, b) => a + (Number(b) || 0), 0);
+  }, [examinerCounts]);
+
+  useEffect(() => {
+    if (configuredStrategyKey && bulkMode !== configuredStrategyKey) {
+      setBulkMode(configuredStrategyKey);
+    }
+  }, [configuredStrategyKey, bulkMode]);
+
+  const fetchAssignmentConfig = useCallback(async (forcedUniId = null) => {
+    try {
+      let targetUniId = forcedUniId || activeUniversityId;
+      if (!targetUniId && projectId) {
+        try {
+          const pData = await apiCall(`/project/${projectId}`);
+          if (pData?.universityId) targetUniId = pData.universityId;
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      const res = await universitySettingService.getSettings(targetUniId ? parseInt(targetUniId, 10) : null);
+      const list = Array.isArray(res) ? res : (res?.data || res?.items || (res?.universityId ? [res] : []));
+      if (list.length > 0) {
+        const matched = targetUniId ? list.find(u => u.universityId === parseInt(targetUniId, 10)) || list[0] : list[0];
+        if (matched) {
+          setConfiguredAssignmentSetting(matched);
+          if (matched.dailyLimit && matched.dailyLimit > 0) {
+            setDailyQuotaLimit(matched.dailyLimit);
+          }
+          const strat = getStrategyFromAssignmentType(matched.assignmentType);
+          if (strat) {
+            setBulkMode(strat);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch university assignment settings:', err);
+    }
+  }, [activeUniversityId, projectId]);
+
+  useEffect(() => {
+    fetchAssignmentConfig();
+  }, [fetchAssignmentConfig]);
+
+  // Automatically calculate distribution counts according to configured strategy / daily limit
+  useEffect(() => {
+    if (examiners.length > 0 && scriptCounts.pending > 0) {
+      const strat = getStrategyFromAssignmentType(configuredAssignmentSetting?.assignmentType) || bulkMode;
+      const limit = configuredAssignmentSetting?.dailyLimit || dailyQuotaLimit || 2;
+
+      const counts = {};
+      if (strat === 'daily') {
+        let remaining = scriptCounts.pending;
+        examiners.forEach((examiner) => {
+          const quota = Math.min(remaining, limit);
+          counts[examiner.examinerId] = quota;
+          remaining -= quota;
+        });
+      } else if (strat === 'even') {
+        const baseShare = Math.floor(scriptCounts.pending / examiners.length);
+        const remainder = scriptCounts.pending % examiners.length;
+        examiners.forEach((examiner, idx) => {
+          counts[examiner.examinerId] = baseShare + (idx < remainder ? 1 : 0);
+        });
+      }
+      if (strat === 'daily' || strat === 'even') {
+        setExaminerCounts(counts);
+      }
+    }
+  }, [configuredAssignmentSetting, examiners, scriptCounts.pending, bulkMode, dailyQuotaLimit]);
+
   // Manage Tab & Reallocation State
   const [allocationsList, setAllocationsList] = useState([]);
   const [allocationsLoading, setAllocationsLoading] = useState(false);
@@ -86,29 +199,32 @@ export default function ScriptAllocation({ isTab = false }) {
       const sortOrderVal = params.sortOrder || '';
       const uniQuery = activeUniversityId ? `&universityId=${activeUniversityId}` : '';
 
-      try {
-        const res = await apiCall(`/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}&statusFilter=ready_for_allocation${uniQuery}`);
-        if (res && res.items && res.items.length > 0) {
-          return res;
-        }
-      } catch (e) {
-        console.warn('dashboard-stats query failed, checking unallocated endpoint:', e);
-      }
+      // try {
+      //   const res = await apiCall(`/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}&statusFilter=ready_for_allocation${uniQuery}`);
+      //   if (res && res.items && res.items.length > 0) {
+      //     return res;
+      //   }
+      // } catch (e) {
+      //   console.warn('dashboard-stats query failed, checking pending endpoint:', e);
+      // }
 
-      // University-wise unallocated scripts endpoint fallback
+      // University-wise pending scripts endpoint fallback
       try {
-        const unallocRes = await apiCall(`/scripts/unallocated?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}${uniQuery}`);
-        if (unallocRes && unallocRes.papers && unallocRes.papers.length > 0) {
+        const pendingRes = await apiCall(`/scripts/pending?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}${uniQuery}`);
+        if (pendingRes && pendingRes.papers && pendingRes.papers.length > 0) {
+          if (pendingRes.universityId && !configuredAssignmentSetting) {
+            fetchAssignmentConfig(pendingRes.universityId);
+          }
           return {
-            items: unallocRes.papers,
-            totalCount: unallocRes.papers.length,
+            items: pendingRes.papers,
+            totalCount: pendingRes.papers.length,
             page: pageVal,
             pageSize: pageSizeVal,
             totalPages: 1
           };
         }
       } catch (err) {
-        console.warn('unallocated endpoint query error:', err);
+        console.warn('pending endpoint query error:', err);
       }
     }
     return { items: [], totalCount: 0, page: 1, pageSize: 10, totalPages: 1 };
@@ -250,15 +366,27 @@ export default function ScriptAllocation({ isTab = false }) {
       const examinersData = await apiCall(`/PaperExaminers/paper/${paper.paperId}`);
       setExaminers(examinersData || []);
 
-      // Default distribution counts
+      // Strategy-based distribution counts
       const counts = {};
       const activeEx = (examinersData || []);
-      const baseShare = activeEx.length > 0 ? Math.floor(pendingCount / activeEx.length) : 0;
-      const remainder = activeEx.length > 0 ? pendingCount % activeEx.length : 0;
+      const currentStrategy = getStrategyFromAssignmentType(configuredAssignmentSetting?.assignmentType) || bulkMode;
+      const currentLimit = configuredAssignmentSetting?.dailyLimit || dailyQuotaLimit || 50;
 
-      activeEx.forEach((ex, idx) => {
-        counts[ex.examinerId] = baseShare + (idx < remainder ? 1 : 0);
-      });
+      if (currentStrategy === 'daily') {
+        let remaining = pendingCount;
+        activeEx.forEach((ex) => {
+          const quota = Math.min(remaining, currentLimit);
+          counts[ex.examinerId] = quota;
+          remaining -= quota;
+        });
+      } else {
+        const baseShare = activeEx.length > 0 ? Math.floor(pendingCount / activeEx.length) : 0;
+        const remainder = activeEx.length > 0 ? pendingCount % activeEx.length : 0;
+
+        activeEx.forEach((ex, idx) => {
+          counts[ex.examinerId] = baseShare + (idx < remainder ? 1 : 0);
+        });
+      }
       setExaminerCounts(counts);
 
     } catch (err) {
@@ -329,14 +457,26 @@ export default function ScriptAllocation({ isTab = false }) {
       const uniqueExaminers = Array.from(combinedExaminersMap.values());
       setExaminers(uniqueExaminers);
 
-      // Distribute pending scripts across examiners
+      // Distribute pending scripts across examiners based on configured strategy
       const counts = {};
-      const baseShare = uniqueExaminers.length > 0 ? Math.floor(totalPending / uniqueExaminers.length) : 0;
-      const remainder = uniqueExaminers.length > 0 ? totalPending % uniqueExaminers.length : 0;
+      const currentStrategy = getStrategyFromAssignmentType(configuredAssignmentSetting?.assignmentType) || bulkMode;
+      const currentLimit = configuredAssignmentSetting?.dailyLimit || dailyQuotaLimit || 50;
 
-      uniqueExaminers.forEach((ex, idx) => {
-        counts[ex.examinerId] = baseShare + (idx < remainder ? 1 : 0);
-      });
+      if (currentStrategy === 'daily') {
+        let remaining = totalPending;
+        uniqueExaminers.forEach((ex) => {
+          const quota = Math.min(remaining, currentLimit);
+          counts[ex.examinerId] = quota;
+          remaining -= quota;
+        });
+      } else {
+        const baseShare = uniqueExaminers.length > 0 ? Math.floor(totalPending / uniqueExaminers.length) : 0;
+        const remainder = uniqueExaminers.length > 0 ? totalPending % uniqueExaminers.length : 0;
+
+        uniqueExaminers.forEach((ex, idx) => {
+          counts[ex.examinerId] = baseShare + (idx < remainder ? 1 : 0);
+        });
+      }
       setExaminerCounts(counts);
 
     } catch (err) {
@@ -377,15 +517,16 @@ export default function ScriptAllocation({ isTab = false }) {
 
     const counts = {};
     let remaining = pendingCount;
+    const limit = dailyQuotaLimit > 0 ? dailyQuotaLimit : (configuredAssignmentSetting?.dailyLimit || 2);
 
     examiners.forEach((examiner) => {
-      const quota = Math.min(remaining, dailyQuotaLimit);
+      const quota = Math.min(remaining, limit);
       counts[examiner.examinerId] = quota;
       remaining -= quota;
     });
 
     setExaminerCounts(counts);
-    message.info(`Applied daily quota limit of ${dailyQuotaLimit} scripts/examiner.`);
+    message.info(`Applied daily quota limit of ${limit} scripts/examiner.`);
   };
 
   const updateExaminerCount = (examinerId, count) => {
@@ -779,34 +920,32 @@ export default function ScriptAllocation({ isTab = false }) {
             {/* Modal: Allocation Configuration Pane (Single or Multi Paper) */}
             {(activePaper || isMultiPaperMode) && (
               <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
                   
-                  {/* Pane Header */}
-                  <div className="p-5 bg-gray-50 border-b border-gray-100">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-teal-100 text-teal-700 rounded-lg flex items-center justify-center font-bold text-sm">
-                          2
-                        </div>
-                        <div>
-                          <h2 className="text-base font-black text-gray-900 tracking-tight">
-                            {isMultiPaperMode ? `Multi-Paper Allocation (${selectedPaperIds.length} Papers)` : `Allocate: ${activePaper.paperName}`}
-                          </h2>
-                          <p className="text-xs text-gray-500 font-medium">
-                            {isMultiPaperMode ? "Configure batch allocation across selected papers" : `Paper Code: ${activePaper.paperCode}`}
-                          </p>
-                        </div>
+                  {/* Modal Header */}
+                  <div className="px-6 py-4 bg-white border-b border-gray-100 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-100 text-teal-700 flex items-center justify-center font-bold text-sm shadow-2xs">
+                        <Zap size={18} />
                       </div>
-                      <button 
-                        onClick={() => { setActivePaper(null); setIsMultiPaperMode(false); }}
-                        className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 rounded-lg transition-all"
-                      >
-                        <X size={18} />
-                      </button>
+                      <div>
+                        <h2 className="text-base font-extrabold text-gray-900 tracking-tight">
+                          {isMultiPaperMode ? `Batch Allocation (${selectedPaperIds.length} ${selectedPaperIds.length === 1 ? 'Paper' : 'Papers'})` : `Allocate: ${activePaper.paperName}`}
+                        </h2>
+                        <p className="text-xs text-gray-500 font-medium">
+                          {isMultiPaperMode ? "Assign scripts across selected papers" : `Paper Code: ${activePaper.paperCode}`}
+                        </p>
+                      </div>
                     </div>
+                    <button 
+                      onClick={() => { setActivePaper(null); setIsMultiPaperMode(false); }}
+                      className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
+                    >
+                      <X size={18} />
+                    </button>
                   </div>
 
-                  <div className="p-5 overflow-y-auto flex-1 space-y-5">
+                  <div className="p-6 overflow-y-auto flex-1 space-y-4">
                     {loading ? (
                       <div className="flex items-center justify-center py-12">
                         <Loader className="animate-spin text-teal-700" size={32} />
@@ -818,133 +957,159 @@ export default function ScriptAllocation({ isTab = false }) {
                       </div>
                     ) : (
                       <>
-                        {/* Allocation Strategy Tabs */}
-                        <div>
-                          <p className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider mb-2">
-                            Select Distribution Strategy
-                          </p>
-                          <div className="grid gap-2 p-1 bg-gray-100 rounded-xl border border-gray-200 sm:grid-cols-2 grid-cols-1 lg:grid-cols-3">
-                            <button
-                              type="button"
-                              onClick={() => setBulkMode('even')}
-                              className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
-                                bulkMode === 'even'
-                                  ? 'bg-white text-teal-800 shadow-xs border border-gray-200'
-                                  : 'text-gray-600 hover:text-gray-900'
-                              }`}
-                            >
-                              Even Distribution
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setBulkMode('daily')}
-                              className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
-                                bulkMode === 'daily'
-                                  ? 'bg-white text-teal-800 shadow-xs border border-gray-200'
-                                  : 'text-gray-600 hover:text-gray-900'
-                              }`}
-                            >
-                              Daily Quota / Limit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setBulkMode('custom')}
-                              className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
-                                bulkMode === 'custom'
-                                  ? 'bg-white text-teal-800 shadow-xs border border-gray-200'
-                                  : 'text-gray-600 hover:text-gray-900'
-                              }`}
-                            >
-                              Custom Ratio
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Strategy Details Box */}
-                        {bulkMode === 'even' && (
-                          <div className="p-4 bg-teal-50/70 border border-teal-200 rounded-xl flex items-center justify-between gap-4">
-                            <div>
-                              <h4 className="text-xs font-bold text-teal-900">Equal Distribution Across Examiners</h4>
-                              <p className="text-[11px] text-teal-700 mt-0.5">
-                                Automatically splits <span className="font-bold">{scriptCounts.pending}</span> pending scripts among <span className="font-bold">{examiners.length}</span> assigned examiners.
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={calculateEvenDistribution}
-                              className="px-3.5 py-1.5 bg-teal-700 text-white rounded-lg text-xs font-bold hover:bg-teal-800 transition-all shrink-0"
-                            >
-                              Calculate
-                            </button>
-                          </div>
-                        )}
-
-                        {bulkMode === 'daily' && (
-                          <div className="p-4 bg-teal-50/70 border border-teal-200 rounded-xl flex items-center justify-between gap-4">
-                            <div>
-                              <h4 className="text-xs font-bold text-teal-900">Daily Allotment Limit</h4>
-                              <p className="text-[11px] text-teal-700 mt-0.5">
-                                Set maximum scripts allotted per examiner per day.
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-3 shrink-0">
-                              <div className="flex items-center gap-2">
-                                <label className="text-xs font-bold text-gray-600">Quota:</label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  max="200"
-                                  value={dailyQuotaLimit}
-                                  onChange={(e) => setDailyQuotaLimit(parseInt(e.target.value) || 10)}
-                                  className="w-16 px-2 py-1 border border-teal-300 rounded-md text-xs font-bold text-center bg-white"
-                                />
+                        {/* Policy Banner (One sleek, non-repetitive bar) */}
+                        {configuredStrategyKey ? (
+                          <div className="bg-gradient-to-r from-teal-50/90 via-teal-50/40 to-emerald-50/50 border border-teal-200/80 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-xl bg-teal-700 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                <Clock size={17} />
                               </div>
-                              <button
-                                type="button"
-                                onClick={calculateDailyQuotaDistribution}
-                                className="px-3.5 py-1.5 bg-teal-700 text-white rounded-lg text-xs font-bold hover:bg-teal-800 transition-all shrink-0"
-                              >
-                                Apply Daily Limit
-                              </button>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-extrabold text-gray-900 tracking-tight">
+                                    {configuredAssignmentSetting?.assignmentType || "Daily Allocation"}
+                                  </span>
+                                  <span className="text-[10px] font-bold text-teal-800 bg-teal-100/80 px-2 py-0.5 rounded-full">
+                                    Auto-applied
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  Allocating <span className="font-extrabold text-teal-900">{configuredAssignmentSetting?.dailyLimit || dailyQuotaLimit} scripts / examiner</span> automatically according to university policy.
+                                </p>
+                              </div>
                             </div>
+
+                            <div className="px-3.5 py-1.5 bg-white border border-teal-200/80 rounded-xl text-right shrink-0 shadow-2xs">
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400 block">Total to Allocate</span>
+                              <span className="text-sm font-black text-teal-800">
+                                {totalToAllocate} <span className="text-xs font-semibold text-gray-400">/ {scriptCounts.pending} pending</span>
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          /* Manual Strategy Selection (Only if university has no configured strategy) */
+                          <div className="space-y-3">
+                            <p className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">
+                              Select Distribution Strategy
+                            </p>
+                            <div className="grid gap-2 p-1 bg-gray-100 rounded-xl border border-gray-200 sm:grid-cols-3 grid-cols-1">
+                              {visibleStrategies.map(strat => (
+                                <button
+                                  key={strat.id}
+                                  type="button"
+                                  onClick={() => setBulkMode(strat.id)}
+                                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                                    bulkMode === strat.id
+                                      ? 'bg-white text-teal-800 shadow-xs border border-gray-200'
+                                      : 'text-gray-600 hover:text-gray-900'
+                                  }`}
+                                >
+                                  {strat.label}
+                                </button>
+                              ))}
+                            </div>
+
+                            {bulkMode === 'even' && (
+                              <div className="p-3.5 bg-teal-50/70 border border-teal-200 rounded-xl flex items-center justify-between gap-4">
+                                <div>
+                                  <h4 className="text-xs font-bold text-teal-900">Equal Distribution Across Examiners</h4>
+                                  <p className="text-[11px] text-teal-700 mt-0.5">
+                                    Automatically splits <span className="font-bold">{scriptCounts.pending}</span> pending scripts among <span className="font-bold">{examiners.length}</span> assigned examiners.
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={calculateEvenDistribution}
+                                  className="px-3 py-1.5 bg-teal-700 text-white rounded-lg text-xs font-bold hover:bg-teal-800 transition-all shrink-0"
+                                >
+                                  Calculate
+                                </button>
+                              </div>
+                            )}
+
+                            {bulkMode === 'daily' && (
+                              <div className="p-3.5 bg-teal-50/70 border border-teal-200 rounded-xl flex items-center justify-between gap-4">
+                                <div>
+                                  <h4 className="text-xs font-bold text-teal-900">Daily Allotment Limit</h4>
+                                  <p className="text-[11px] text-teal-700 mt-0.5">
+                                    Set maximum scripts allotted per examiner per day.
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="200"
+                                    value={dailyQuotaLimit}
+                                    onChange={(e) => setDailyQuotaLimit(parseInt(e.target.value) || 1)}
+                                    className="w-16 px-2 py-1 border border-teal-300 rounded-md text-xs font-bold text-center bg-white"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={calculateDailyQuotaDistribution}
+                                    className="px-3 py-1.5 bg-teal-700 text-white rounded-lg text-xs font-bold hover:bg-teal-800 transition-all shrink-0"
+                                  >
+                                    Apply
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
 
-                        {/* Examiners List & Allocation Input */}
-                        <div>
-                          <div className="flex items-center justify-between mb-3">
-                            <p className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">
+                        {/* Examiners List */}
+                        <div className="space-y-2 pt-1">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
                               Assigned Examiners ({examiners.length})
-                            </p>
+                            </h3>
+                            {!configuredStrategyKey && (
+                              <span className="text-[11px] font-bold text-gray-600 bg-gray-100 px-2.5 py-0.5 rounded-md">
+                                Total: <span className="text-teal-700 font-extrabold">{totalToAllocate}</span> / {scriptCounts.pending} pending
+                              </span>
+                            )}
                           </div>
 
                           {examiners.length === 0 ? (
-                            <div className="text-center bg-gray-50 rounded-xl border border-dashed border-gray-200 p-4 md:p-8">
+                            <div className="text-center bg-gray-50 rounded-xl border border-dashed border-gray-200 p-8">
                               <Users className="mx-auto text-gray-300 mb-2" size={28} />
                               <p className="text-xs font-bold text-gray-500">No examiners assigned for selected scope</p>
                             </div>
                           ) : (
                             <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
                               {examiners.map(examiner => (
-                                <div key={examiner.examinerId} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-xl hover:border-teal-300 transition-all">
+                                <div key={examiner.examinerId} className="flex items-center justify-between p-3.5 bg-white border border-gray-100 rounded-xl hover:border-teal-200 hover:shadow-2xs transition-all">
                                   <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-xs uppercase">
+                                    <div className="w-8 h-8 rounded-full bg-teal-50 border border-teal-100 text-teal-700 flex items-center justify-center font-bold text-xs uppercase shadow-2xs">
                                       {(examiner.examiner?.name || 'E').charAt(0)}
                                     </div>
                                     <div>
                                       <p className="text-xs font-bold text-gray-900">{examiner.examiner?.name || 'Examiner'}</p>
+                                      {examiner.examiner?.email && (
+                                        <p className="text-[11px] text-gray-400 font-medium">{examiner.examiner.email}</p>
+                                      )}
                                     </div>
                                   </div>
+
                                   <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase">Count</span>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max={scriptCounts.pending || 0}
-                                      value={examinerCounts[examiner.examinerId] || 0}
-                                      onChange={(e) => updateExaminerCount(examiner.examinerId, parseInt(e.target.value) || 0)}
-                                      className="w-20 px-2.5 py-1.5 text-center text-xs font-bold border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none bg-gray-50 focus:bg-white"
-                                    />
+                                    {configuredStrategyKey ? (
+                                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50/70 border border-teal-200/70 rounded-lg text-teal-900 shadow-2xs">
+                                        <span className="text-xs font-black">{examinerCounts[examiner.examinerId] || 0}</span>
+                                        <span className="text-[11px] font-semibold text-teal-700">scripts</span>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-1.5">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          max={scriptCounts.pending || 0}
+                                          value={examinerCounts[examiner.examinerId] || 0}
+                                          onChange={(e) => updateExaminerCount(examiner.examinerId, parseInt(e.target.value) || 0)}
+                                          className="w-20 px-2.5 py-1.5 text-center text-xs font-bold border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none bg-gray-50 focus:bg-white"
+                                        />
+                                        <span className="text-xs text-gray-400 font-medium">scripts</span>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               ))}
@@ -952,25 +1117,33 @@ export default function ScriptAllocation({ isTab = false }) {
                           )}
                         </div>
 
-
                         {/* Submit Action Buttons */}
-                        <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-100">
-                          <button
-                            type="button"
-                            onClick={() => { setActivePaper(null); setIsMultiPaperMode(false); }}
-                            className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleBulkAllocate}
-                            disabled={bulkLoading || examiners.length === 0}
-                            className="px-5 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-lg shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50"
-                          >
-                            {bulkLoading ? <Loader className="animate-spin" size={14} /> : <Zap size={14} />}
-                            {bulkLoading ? 'Allocating...' : 'Confirm Allocation'}
-                          </button>
+                        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                          <div className="text-xs text-gray-500 font-medium">
+                            {totalToAllocate > 0 ? (
+                              <span>Assigning <strong className="text-gray-900">{totalToAllocate} scripts</strong> to <strong className="text-gray-900">{examiners.filter(e => (examinerCounts[e.examinerId] || 0) > 0).length} examiners</strong></span>
+                            ) : (
+                              <span className="text-amber-600 font-medium">No scripts ready to allocate</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2.5">
+                            <button
+                              type="button"
+                              onClick={() => { setActivePaper(null); setIsMultiPaperMode(false); }}
+                              className="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-100 border border-gray-200 rounded-xl transition-all shadow-2xs"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleBulkAllocate}
+                              disabled={bulkLoading || examiners.length === 0 || totalToAllocate === 0}
+                              className="px-5 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-xl shadow-xs hover:shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {bulkLoading ? <Loader className="animate-spin" size={14} /> : <Zap size={14} />}
+                              {bulkLoading ? 'Allocating...' : 'Confirm Allocation'}
+                            </button>
+                          </div>
                         </div>
                       </>
                     )}
