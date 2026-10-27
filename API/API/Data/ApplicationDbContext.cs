@@ -68,11 +68,11 @@ namespace API.Data
             // University configuration
             modelBuilder.Entity<University>()
                 .HasKey(u => u.UniversityId);
-            modelBuilder.Entity<University>()
-                .HasOne(u => u.AssignmentType)
-                .WithMany()
-                .HasForeignKey(u => u.AssignmentTypeId)
-                .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<AssignmentType>()
+                .HasOne(at => at.University)
+                .WithMany(u => u.AssignmentTypes)
+                .HasForeignKey(at => at.UniversityId)
+                .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<University>()
                 .HasMany(u => u.Departments)
                 .WithOne(d => d.University)

@@ -15,9 +15,10 @@ const universitySettingService = {
   },
 
   // Assignment Types
-  getAssignmentTypes: async () => {
+  getAssignmentTypes: async (universityId) => {
     try {
-      const res = await apiCall('/AssignmentTypes');
+      const query = universityId ? `?universityId=${universityId}` : '';
+      const res = await apiCall(`/AssignmentTypes${query}`);
       if (Array.isArray(res) && res.length > 0) return res;
       if (Array.isArray(res?.data) && res.data.length > 0) return res.data;
       if (Array.isArray(res?.items) && res.items.length > 0) return res.items;
@@ -44,6 +45,19 @@ const universitySettingService = {
   deleteAssignmentType: async (id) => {
     return apiCall(`/AssignmentTypes/${id}`, {
       method: 'DELETE'
+    });
+  },
+
+  // Direct Assignment Configuration (Hardcoded: Daily Allocation & Equal Distribution)
+  getAssignmentConfig: async (universityId) => {
+    const query = universityId ? `?universityId=${universityId}` : '';
+    return apiCall(`/AssignmentTypes/configuration${query}`);
+  },
+
+  saveAssignmentConfig: async (data) => {
+    return apiCall('/AssignmentTypes/configuration', {
+      method: 'POST',
+      body: JSON.stringify(data)
     });
   }
 };
