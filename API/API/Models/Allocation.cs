@@ -13,6 +13,9 @@ namespace API.Models
         public int ScriptId { get; set; }
         public Script Script { get; set; }
 
+        public int? ProjectId { get; set; }
+        public Project? Project { get; set; }
+
         public int ExaminerId { get; set; }
         public User Examiner { get; set; }
 

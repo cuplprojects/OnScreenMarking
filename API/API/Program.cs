@@ -153,6 +153,156 @@ using (var scope = app.Services.CreateScope())
         {
             Console.WriteLine($"Self-Healing Database Note (Decimal TotalMarks): {exMarks.Message}");
         }
+
+        // Ensure ProjectPapers table has IsSectionConfigured and IsExaminerAssigned columns and accurate values
+        try
+        {
+            var conn = dbContext.Database.GetDbConnection();
+            if (conn.State != System.Data.ConnectionState.Open)
+            {
+                await conn.OpenAsync();
+            }
+
+            // Check if IsSectionConfigured column exists
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ProjectPapers' AND COLUMN_NAME = 'IsSectionConfigured';";
+                var count = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+                if (count == 0)
+                {
+                    using var alterCmd = conn.CreateCommand();
+                    alterCmd.CommandText = "ALTER TABLE `ProjectPapers` ADD COLUMN `IsSectionConfigured` TINYINT(1) NOT NULL DEFAULT 0;";
+                    await alterCmd.ExecuteNonQueryAsync();
+                    Console.WriteLine("Self-Healing Database: Successfully added IsSectionConfigured column to ProjectPapers table.");
+                }
+            }
+
+            // Check if IsExaminerAssigned column exists
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ProjectPapers' AND COLUMN_NAME = 'IsExaminerAssigned';";
+                var count = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+                if (count == 0)
+                {
+                    using var alterCmd = conn.CreateCommand();
+                    alterCmd.CommandText = "ALTER TABLE `ProjectPapers` ADD COLUMN `IsExaminerAssigned` TINYINT(1) NOT NULL DEFAULT 0;";
+                    await alterCmd.ExecuteNonQueryAsync();
+                    Console.WriteLine("Self-Healing Database: Successfully added IsExaminerAssigned column to ProjectPapers table.");
+                }
+            }
+
+            // Backfill / sync values for all existing ProjectPapers:
+            // If section configured for that project paperid -> 1 else 0
+            // If examiner assigned for that project paperid -> 1 else 0
+            using (var syncCmd = conn.CreateCommand())
+            {
+                syncCmd.CommandText = @"
+                    UPDATE `ProjectPapers` pp
+                    SET pp.`IsSectionConfigured` = CASE 
+                        WHEN EXISTS (
+                            SELECT 1 FROM `ProjectPaperSections` pps WHERE pps.`ProjectPaperId` = pp.`Id`
+                        ) OR EXISTS (
+                            SELECT 1 FROM `Sections` s WHERE s.`PaperId` = pp.`PaperId`
+                        ) THEN 1 
+                        ELSE 0 
+                    END;
+
+                    UPDATE `ProjectPapers` pp
+                    SET pp.`IsExaminerAssigned` = CASE 
+                        WHEN EXISTS (
+                            SELECT 1 FROM `PaperExaminers` pe 
+                            WHERE pe.`ProjectPaperId` = pp.`Id` AND pe.`IsActive` = 1
+                        ) THEN 1 
+                        ELSE 0 
+                    END;
+                ";
+                var updatedRows = await syncCmd.ExecuteNonQueryAsync();
+                Console.WriteLine($"Self-Healing Database: ProjectPapers columns IsSectionConfigured and IsExaminerAssigned verified & synced ({updatedRows} updates applied).");
+            }
+
+            // Ensure ProjectId column exists in Allocations, Markings, Scripts, PaperExaminers and backfill accurate values
+            try
+            {
+                var targetTables = new[] { "Scripts", "PaperExaminers", "Allocations", "Markings" };
+                foreach (var table in targetTables)
+                {
+                    using var checkCmd = conn.CreateCommand();
+                    checkCmd.CommandText = $"SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{table}' AND COLUMN_NAME = 'ProjectId';";
+                    var count = Convert.ToInt32(await checkCmd.ExecuteScalarAsync());
+                    if (count == 0)
+                    {
+                        using var alterCmd = conn.CreateCommand();
+                        alterCmd.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `ProjectId` INT NULL;";
+                        await alterCmd.ExecuteNonQueryAsync();
+                        Console.WriteLine($"Self-Healing Database: Successfully added ProjectId column to {table} table.");
+                    }
+                }
+
+                // 1. Scripts: from ProjectPapers.ProjectId
+                using (var syncScripts = conn.CreateCommand())
+                {
+                    syncScripts.CommandText = @"
+                        UPDATE `Scripts` s
+                        JOIN `ProjectPapers` pp ON s.`ProjectPaperId` = pp.`Id`
+                        SET s.`ProjectId` = pp.`ProjectId`
+                        WHERE s.`ProjectId` IS NULL OR s.`ProjectId` != pp.`ProjectId`;
+                    ";
+                    var updated = await syncScripts.ExecuteNonQueryAsync();
+                    if (updated > 0) Console.WriteLine($"Self-Healing Database: Backfilled ProjectId on {updated} Scripts.");
+                }
+
+                // 2. PaperExaminers: from ProjectPapers.ProjectId
+                using (var syncPe = conn.CreateCommand())
+                {
+                    syncPe.CommandText = @"
+                        UPDATE `PaperExaminers` pe
+                        JOIN `ProjectPapers` pp ON pe.`ProjectPaperId` = pp.`Id`
+                        SET pe.`ProjectId` = pp.`ProjectId`
+                        WHERE pe.`ProjectId` IS NULL OR pe.`ProjectId` != pp.`ProjectId`;
+                    ";
+                    var updated = await syncPe.ExecuteNonQueryAsync();
+                    if (updated > 0) Console.WriteLine($"Self-Healing Database: Backfilled ProjectId on {updated} PaperExaminers.");
+                }
+
+                // 3. Allocations: from Scripts.ProjectId or ProjectPapers.ProjectId
+                using (var syncAlloc = conn.CreateCommand())
+                {
+                    syncAlloc.CommandText = @"
+                        UPDATE `Allocations` a
+                        JOIN `Scripts` s ON a.`ScriptId` = s.`Id`
+                        JOIN `ProjectPapers` pp ON s.`ProjectPaperId` = pp.`Id`
+                        SET a.`ProjectId` = COALESCE(s.`ProjectId`, pp.`ProjectId`)
+                        WHERE a.`ProjectId` IS NULL OR a.`ProjectId` != COALESCE(s.`ProjectId`, pp.`ProjectId`);
+                    ";
+                    var updated = await syncAlloc.ExecuteNonQueryAsync();
+                    if (updated > 0) Console.WriteLine($"Self-Healing Database: Backfilled ProjectId on {updated} Allocations.");
+                }
+
+                // 4. Markings: from Allocations.ProjectId or Scripts.ProjectId or ProjectPapers.ProjectId
+                using (var syncMark = conn.CreateCommand())
+                {
+                    syncMark.CommandText = @"
+                        UPDATE `Markings` m
+                        JOIN `Scripts` s ON m.`ScriptId` = s.`Id`
+                        JOIN `ProjectPapers` pp ON s.`ProjectPaperId` = pp.`Id`
+                        SET m.`ProjectId` = COALESCE(s.`ProjectId`, pp.`ProjectId`)
+                        WHERE m.`ProjectId` IS NULL OR m.`ProjectId` != COALESCE(s.`ProjectId`, pp.`ProjectId`);
+                    ";
+                    var updated = await syncMark.ExecuteNonQueryAsync();
+                    if (updated > 0) Console.WriteLine($"Self-Healing Database: Backfilled ProjectId on {updated} Markings.");
+                }
+
+                Console.WriteLine("Self-Healing Database: ProjectId columns verified and synced across Allocations, Markings, Scripts, and PaperExaminers.");
+            }
+            catch (Exception exProjSync)
+            {
+                Console.WriteLine($"ProjectId sync note: {exProjSync.Message}");
+            }
+        }
+        catch (Exception exSync)
+        {
+            Console.WriteLine($"ProjectPapers sync error: {exSync.Message}");
+        }
     }
     catch (Exception ex)
     {
@@ -205,7 +355,6 @@ app.MapGet("/", context => {
     return Task.CompletedTask;
 });
 
-// Health check endpoint
-app.MapGet("/api/health", () => new { success = true, message = "Server is running" });
+
 
 app.Run();

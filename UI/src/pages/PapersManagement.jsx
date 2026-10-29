@@ -264,6 +264,10 @@ export default function PapersManagement({ isTab = false }) {
   // Table Level Question Paper Upload State
   const [uploadingPaperId, setUploadingPaperId] = useState(null);
   const [activePaperForUpload, setActivePaperForUpload] = useState(null);
+  const [pendingUploadFile, setPendingUploadFile] = useState(null);
+  const [showUploadConfirmModal, setShowUploadConfirmModal] = useState(false);
+  const [isConfirmUploading, setIsConfirmUploading] = useState(false);
+  const [showBulkConfirmModal, setShowBulkConfirmModal] = useState(false);
   const tableFileInputRef = React.useRef(null);
 
   useEffect(() => {
@@ -437,7 +441,7 @@ export default function PapersManagement({ isTab = false }) {
   };
 
   // -------------------------------------------------------------
-  // Table-Level Question Paper Upload Handlers
+  // Table-Level Question Paper Upload Handlers with Confirmation Modal
   // -------------------------------------------------------------
   const triggerTableUpload = (paper) => {
     setActivePaperForUpload(paper);
@@ -447,32 +451,53 @@ export default function PapersManagement({ isTab = false }) {
     }
   };
 
-  const handleTableFileChange = async (e) => {
+  const handleTableFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file || !activePaperForUpload) return;
     if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
       message.error("Please select a valid PDF file.");
+      if (tableFileInputRef.current) tableFileInputRef.current.value = "";
       return;
     }
+
+    setPendingUploadFile(file);
+    setShowUploadConfirmModal(true);
+    if (tableFileInputRef.current) tableFileInputRef.current.value = "";
+  };
+
+
+  const handleConfirmUpload = async () => {
+    if (!pendingUploadFile || !activePaperForUpload) return;
 
     const currentPaperId = activePaperForUpload.paperId;
     const currentProjectId = activePaperForUpload.projectId || projectId;
 
+    setIsConfirmUploading(true);
     setUploadingPaperId(currentPaperId);
     try {
       await paperService.uploadQuestionPaper(
         currentPaperId,
         currentProjectId,
-        file
+        pendingUploadFile
       );
-      message.success("Question paper PDF uploaded successfully!");
+      message.success(`Question paper PDF uploaded successfully for ${activePaperForUpload.paperCode}!`);
+      setShowUploadConfirmModal(false);
+      setPendingUploadFile(null);
+      setActivePaperForUpload(null);
       refreshTable();
     } catch (err) {
       message.error("Failed to upload question paper: " + (err.response?.data?.message || err.message));
     } finally {
+      setIsConfirmUploading(false);
       setUploadingPaperId(null);
-      setActivePaperForUpload(null);
     }
+  };
+
+  const handleCancelUploadConfirm = () => {
+    if (isConfirmUploading) return;
+    setShowUploadConfirmModal(false);
+    setPendingUploadFile(null);
+    setActivePaperForUpload(null);
   };
 
   // -------------------------------------------------------------
@@ -590,10 +615,12 @@ export default function PapersManagement({ isTab = false }) {
     setAllocationLoading(true);
     try {
       const project = projects.find(p => p.projectId === paper.projectId);
-      const projUniversityId = project ? project.universityId : activeUniversityId;
+      const projUniversityId = project?.universityId || paper.universityId || activeUniversityId;
       
       const fullPaper = await paperService.getPaperById(paper.paperId);
-      const subIds = fullPaper.subjectPapers?.map(sp => sp.subjectId) || [];
+      const subIds = (fullPaper?.subjectIds && fullPaper.subjectIds.length > 0)
+        ? fullPaper.subjectIds
+        : (paper.subjectId ? [paper.subjectId] : (fullPaper?.subjectPapers?.map(sp => sp.subjectId) || []));
       
       let allExaminers = [];
       if (subIds.length > 0) {
@@ -602,15 +629,27 @@ export default function PapersManagement({ isTab = false }) {
         );
         const examinerMap = new Map();
         examinerSets.forEach(examList => {
-          examList.forEach(ex => {
-            if (!examinerMap.has(ex.id)) examinerMap.set(ex.id, ex);
-          });
+          if (Array.isArray(examList)) {
+            examList.forEach(ex => {
+              if (!examinerMap.has(ex.id)) examinerMap.set(ex.id, ex);
+            });
+          }
         });
         allExaminers = Array.from(examinerMap.values());
       } else {
         allExaminers = await apiCall(`/users/examiners${projUniversityId ? `?universityId=${projUniversityId}` : ''}`);
       }
-      setAvailableExaminers(allExaminers);
+
+      // Filter: get only those examiners with university id whose subject1 is same as paper's subject
+      const filteredExaminers = allExaminers.filter(ex => {
+        const matchesUni = !projUniversityId || ex.universityId === parseInt(projUniversityId);
+        const matchesSub = subIds.length > 0 
+          ? subIds.includes(ex.subjectId1)
+          : (paper.subjectId ? ex.subjectId1 === parseInt(paper.subjectId) : true);
+        return matchesUni && matchesSub;
+      });
+
+      setAvailableExaminers(filteredExaminers);
 
       const assigned = await apiCall(`/PaperExaminers/paper/${paper.paperId}`);
       setAssignedExaminers(assigned);
@@ -645,21 +684,43 @@ export default function PapersManagement({ isTab = false }) {
     setAllocationLoading(true);
     try {
       const newAssignments = assignedExaminers.filter(a => a.isNew);
-      for (const a of newAssignments) {
-        await apiCall('/PaperExaminers/assign', {
-          method: 'POST', body: JSON.stringify({ paperId: selectedPaper.paperId, examinerId: a.examinerId })
+
+      // When updating examiners (both removals and new assignments exist), use PUT endpoint
+      // so unmarked scripts are transferred to the newly assigned examiner and marked scripts are preserved.
+      const pairCount = Math.min(pendingRemovals.length, newAssignments.length);
+      for (let i = 0; i < pairCount; i++) {
+        await apiCall(`/PaperExaminers/${pendingRemovals[i]}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            examinerId: newAssignments[i].examinerId
+          })
         });
       }
-      for (const id of pendingRemovals) {
-        await apiCall(`/PaperExaminers/remove/${id}`, { method: 'DELETE' });
+
+      // Any remaining additions
+      for (let i = pairCount; i < newAssignments.length; i++) {
+        await apiCall('/PaperExaminers/assign', {
+          method: 'POST',
+          body: JSON.stringify({
+            paperId: selectedPaper.paperId,
+            projectPaperId: selectedPaper.projectPaperId,
+            examinerId: newAssignments[i].examinerId
+          })
+        });
       }
+
+      // Any remaining pure removals
+      for (let i = pairCount; i < pendingRemovals.length; i++) {
+        await apiCall(`/PaperExaminers/remove/${pendingRemovals[i]}`, { method: 'DELETE' });
+      }
+
       if (newAssignments.length > 0 || pendingRemovals.length > 0) {
         message.success("Assignments updated successfully");
       }
       setShowExaminerModal(false);
       refreshTable();
     } catch (err) {
-      message.error("Failed to save some assignments");
+      message.error(err.message || "Failed to save some assignments");
     } finally {
       setAllocationLoading(false);
     }
@@ -765,6 +826,23 @@ export default function PapersManagement({ isTab = false }) {
 
   const clearAllFiles = () => {
     setSelectedFiles([]);
+  };
+
+  const handleBulkUploadClick = () => {
+    if (!projectId) {
+      message.error('Please select a project before uploading');
+      return;
+    }
+    if (selectedFiles.length === 0) {
+      message.error('Please select at least one Question Paper PDF file');
+      return;
+    }
+    setShowBulkConfirmModal(true);
+  };
+
+  const handleBulkUploadConfirm = async () => {
+    setShowBulkConfirmModal(false);
+    await handleBulkUpload();
   };
 
   const handleBulkUpload = async () => {
@@ -2363,7 +2441,7 @@ export default function PapersManagement({ isTab = false }) {
                       Clear All
                     </button>
                     <button
-                      onClick={handleBulkUpload}
+                      onClick={handleBulkUploadClick}
                       disabled={isUploading}
                       className="px-5 py-2 bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider rounded-lg transition-all shadow-sm flex items-center gap-2 cursor-pointer"
                     >
@@ -2666,11 +2744,7 @@ export default function PapersManagement({ isTab = false }) {
                               return false;
                             }
                             // Check subject match
-                            return row.paper.subjectId && (
-                              ex.subjectId1 === row.paper.subjectId ||
-                              ex.subjectId2 === row.paper.subjectId ||
-                              ex.subjectId3 === row.paper.subjectId
-                            );
+                            return row.paper.subjectId && ex.subjectId1 === row.paper.subjectId;
                           });
                         } else {
                           // For not found or other cases, filter all examiners by subject and university
@@ -2680,11 +2754,7 @@ export default function PapersManagement({ isTab = false }) {
                               return false;
                             }
                             // Check subject match
-                            return row.paper.subjectId && (
-                              ex.subjectId1 === row.paper.subjectId ||
-                              ex.subjectId2 === row.paper.subjectId ||
-                              ex.subjectId3 === row.paper.subjectId
-                            );
+                            return row.paper.subjectId && ex.subjectId1 === row.paper.subjectId;
                           });
                         }
                         
@@ -3069,11 +3139,7 @@ export default function PapersManagement({ isTab = false }) {
                               }
                               
                               // Then filter by paper's subject
-                              const matchesSubject = paper.subjectId && (
-                                ex.subjectId1 === paper.subjectId ||
-                                ex.subjectId2 === paper.subjectId ||
-                                ex.subjectId3 === paper.subjectId
-                              );
+                              const matchesSubject = paper.subjectId && ex.subjectId1 === paper.subjectId;
                               
                               if (!matchesSubject) return false;
                               
@@ -3561,14 +3627,18 @@ export default function PapersManagement({ isTab = false }) {
                         {allocationLoading ? (
                         <div className="text-center py-10 opacity-50 text-xs font-bold text-gray-500">Loading examiners...</div>
                         ) : availableExaminers.filter(ex => ex.name.toLowerCase().includes(examinerSearchQuery.toLowerCase()) && !assignedExaminers.some(a => a.examinerId === ex.id)).map(examiner => (
-                        <div key={examiner.id} className="flex items-center justify-between p-3 bg-gray-50/50 rounded-xl hover:bg-teal-50 border border-gray-100 group transition-all">
+                        <div 
+                          key={examiner.id} 
+                          onClick={() => handleAssign(examiner.id)} 
+                          className="flex items-center justify-between p-3 bg-gray-50/50 hover:bg-teal-50 border border-gray-100 hover:border-teal-300 rounded-xl group transition-all cursor-pointer select-none"
+                        >
                             <div className="flex items-center gap-3">
-                            <img src={examiner.profileImage || "https://ui-avatars.com/api/?name=" + examiner.name} alt="" className="w-8 h-8 rounded-full bg-gray-200 border-2 border-white shadow-sm" />
-                            <div><p className="text-xs font-bold text-gray-800">{examiner.name}</p></div>
+                              <img src={examiner.profileImage || "https://ui-avatars.com/api/?name=" + examiner.name} alt="" className="w-8 h-8 rounded-full bg-gray-200 border-2 border-white shadow-sm" />
+                              <div><p className="text-xs font-bold text-gray-800 group-hover:text-teal-900 transition-colors">{examiner.name}</p></div>
                             </div>
-                            <button onClick={() => handleAssign(examiner.id)} className="p-1.5 bg-white text-teal-700 rounded-lg shadow-sm border border-gray-100 opacity-0 group-hover:opacity-100 transition-all hover:scale-110">
-                            <UserPlus size={14} />
-                            </button>
+                            <div className="p-1.5 bg-white text-teal-700 rounded-lg shadow-sm border border-gray-100 opacity-0 group-hover:opacity-100 transition-all group-hover:scale-110">
+                              <UserPlus size={14} />
+                            </div>
                         </div>
                         ))}
                     </div>
@@ -3617,6 +3687,120 @@ export default function PapersManagement({ isTab = false }) {
             </div>
             </div>
         )}
+        {/* ------------------------------------------------------------------ */}
+        {/* Simple Question Paper Upload Confirmation Modal */}
+        {/* ------------------------------------------------------------------ */}
+        {showUploadConfirmModal && activePaperForUpload && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150">
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-gray-900">Upload Question Paper</h3>
+                <button
+                  type="button"
+                  onClick={handleCancelUploadConfirm}
+                  disabled={isConfirmUploading}
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded-md transition-colors cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-5 space-y-2.5">
+                <p className="text-xs text-gray-600 leading-relaxed">
+                  Are you sure you want to upload <span className="font-bold text-gray-900">{pendingUploadFile?.name}</span> for <span className="font-bold text-gray-900">{activePaperForUpload.paperCode} - {activePaperForUpload.paperName}</span>?
+                </p>
+                {activePaperForUpload.questionPaperPdfUrl && (
+                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                    Note: An existing question paper is already uploaded for this paper and will be replaced.
+                  </p>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-5 py-3.5 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleCancelUploadConfirm}
+                  disabled={isConfirmUploading}
+                  className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmUpload}
+                  disabled={isConfirmUploading || !pendingUploadFile}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-sm"
+                >
+                  {isConfirmUploading ? (
+                    <>
+                      <Loader size={13} className="animate-spin" />
+                      <span>Uploading...</span>
+                    </>
+                  ) : (
+                    <span>Upload</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ------------------------------------------------------------------ */}
+        {/* Bulk Question Paper Upload Confirmation Modal */}
+        {/* ------------------------------------------------------------------ */}
+        {showBulkConfirmModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-gray-900">Confirm Bulk Upload</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowBulkConfirmModal(false)}
+                  disabled={isUploading}
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded-md transition-colors cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="p-5">
+                <p className="text-xs text-gray-600 leading-relaxed">
+                  Are you sure you want to upload and process <strong className="text-gray-900">{selectedFiles.length} Question Paper PDF(s)</strong> ({formatBytes(totalQueueSize)}) for this project?
+                </p>
+              </div>
+
+              <div className="px-5 py-3.5 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkConfirmModal(false)}
+                  disabled={isUploading}
+                  className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkUploadConfirm}
+                  disabled={isUploading}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-sm"
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader size={13} className="animate-spin" />
+                      <span>Uploading...</span>
+                    </>
+                  ) : (
+                    <span>Confirm &amp; Upload</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <input
           type="file"
           ref={tableFileInputRef}

@@ -241,6 +241,12 @@ namespace API.Data
                 .HasForeignKey(s => s.ProjectPaperId)
                 .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<ProjectPaper>()
+                .Property(pp => pp.IsSectionConfigured)
+                .HasDefaultValue(false);
+            modelBuilder.Entity<ProjectPaper>()
+                .Property(pp => pp.IsExaminerAssigned)
+                .HasDefaultValue(false);
+            modelBuilder.Entity<ProjectPaper>()
                 .HasMany(pp => pp.ProjectPaperSections)
                 .WithOne(pps => pps.ProjectPaper)
                 .HasForeignKey(pps => pps.ProjectPaperId)
@@ -331,6 +337,11 @@ namespace API.Data
                 .WithOne(m => m.Script)
                 .HasForeignKey(m => m.ScriptId)
                 .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<Script>()
+                .HasOne(s => s.Project)
+                .WithMany(p => p.Scripts)
+                .HasForeignKey(s => s.ProjectId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             // Allocation configuration
             modelBuilder.Entity<Allocation>()
@@ -353,6 +364,11 @@ namespace API.Data
                 .WithMany(u => u.Allocations)
                 .HasForeignKey(a => a.ExaminerId)
                 .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<Allocation>()
+                .HasOne(a => a.Project)
+                .WithMany(p => p.Allocations)
+                .HasForeignKey(a => a.ProjectId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             // Marking configuration
             modelBuilder.Entity<Marking>()
@@ -382,14 +398,19 @@ namespace API.Data
                 .WithOne(qm => qm.Marking)
                 .HasForeignKey(qm => qm.MarkingId)
                 .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<Marking>()
+                .HasOne(m => m.Project)
+                .WithMany(p => p.Markings)
+                .HasForeignKey(m => m.ProjectId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             // PaperExaminer configuration
             modelBuilder.Entity<PaperExaminer>()
                 .HasKey(pe => pe.Id);
             modelBuilder.Entity<PaperExaminer>()
-                .HasOne(pe => pe.Paper)
-                .WithMany()
-                .HasForeignKey(pe => pe.PaperId)
+                .HasOne(pe => pe.ProjectPaper)
+                .WithMany(pp => pp.PaperExaminers)
+                .HasForeignKey(pe => pe.ProjectPaperId)
                 .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<PaperExaminer>()
                 .HasOne(pe => pe.Examiner)
@@ -397,8 +418,13 @@ namespace API.Data
                 .HasForeignKey(pe => pe.ExaminerId)
                 .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<PaperExaminer>()
-                .HasIndex(pe => new { pe.PaperId, pe.ExaminerId })
+                .HasIndex(pe => new { pe.ProjectPaperId, pe.ExaminerId })
                 .IsUnique();
+            modelBuilder.Entity<PaperExaminer>()
+                .HasOne(pe => pe.Project)
+                .WithMany(p => p.PaperExaminers)
+                .HasForeignKey(pe => pe.ProjectId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             // SubjectPaperRequest configuration
             modelBuilder.Entity<SubjectPaperRequest>()

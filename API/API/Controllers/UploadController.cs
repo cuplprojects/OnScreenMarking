@@ -8,6 +8,8 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Linq;
 using API.Data;
+using API.Models;
+using API.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace API.Controllers
@@ -20,16 +22,27 @@ namespace API.Controllers
         private readonly IWebHostEnvironment _environment;
         private readonly ApplicationDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IDailyAllocationService _dailyAllocationService;
 
-        public UploadController(IWebHostEnvironment environment, ApplicationDbContext context, IConfiguration configuration)
+        public UploadController(
+            IWebHostEnvironment environment, 
+            ApplicationDbContext context, 
+            IConfiguration configuration,
+            IDailyAllocationService dailyAllocationService)
         {
             _environment = environment;
             _context = context;
             _configuration = configuration;
+            _dailyAllocationService = dailyAllocationService;
         }
 
         [HttpPost]
-        public async Task<IActionResult> UploadFile(IFormFile file, [FromQuery] int? markingId)
+        public async Task<IActionResult> UploadFile(
+            IFormFile file, 
+            [FromQuery] int? markingId,
+            [FromQuery(Name = "paperId")] int? queryPaperId,
+            [FromQuery(Name = "projectId")] int? queryProjectId,
+            [FromQuery] int? projectPaperId)
         {
             try
             {
@@ -75,7 +88,86 @@ namespace API.Controllers
                         marking.EvaluatedPdfUrl = fileUrl;
                         await _context.SaveChangesAsync();
 
-                        return Ok(new { success = true, url = fileUrl, message = "File uploaded successfully" });
+                    }
+                }
+
+                // If paperId or projectPaperId is passed, this is an answer script upload
+                if (projectPaperId.HasValue || queryPaperId.HasValue)
+                {
+                    ProjectPaper? targetProjectPaper = null;
+                    if (projectPaperId.HasValue && projectPaperId.Value > 0)
+                    {
+                        targetProjectPaper = await _context.ProjectPapers
+                            .Include(pp => pp.Paper)
+                            .Include(pp => pp.Project)
+                            .FirstOrDefaultAsync(pp => pp.Id == projectPaperId.Value);
+                    }
+                    else if (queryPaperId.HasValue && queryPaperId.Value > 0)
+                    {
+                        var ppQuery = _context.ProjectPapers
+                            .Include(pp => pp.Paper)
+                            .Include(pp => pp.Project)
+                            .Where(pp => pp.PaperId == queryPaperId.Value || pp.Id == queryPaperId.Value);
+
+                        if (queryProjectId.HasValue && queryProjectId.Value > 0)
+                        {
+                            ppQuery = ppQuery.Where(pp => pp.ProjectId == queryProjectId.Value);
+                        }
+
+                        targetProjectPaper = await ppQuery.FirstOrDefaultAsync();
+                    }
+
+                    if (targetProjectPaper != null)
+                    {
+                        var originalFileName = Path.GetFileName(file.FileName);
+                        var fileNameWithoutExt = Path.GetFileNameWithoutExtension(originalFileName)?.Trim() ?? "";
+
+                        var pId = targetProjectPaper.ProjectId;
+                        var papId = targetProjectPaper.PaperId;
+                        var baseOsmPath = _configuration["StorageSettings:BasePath"] ?? _configuration["StorageSettings:BaseOsmPath"] ?? Path.Combine(_environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "storage");
+                        var targetFolder = Path.Combine(baseOsmPath, "osm", pId.ToString(), papId.ToString(), "cleancopies");
+
+                        if (!Directory.Exists(targetFolder))
+                        {
+                            Directory.CreateDirectory(targetFolder);
+                        }
+
+                        var uniqueFileName = $"{Guid.NewGuid():N}_{originalFileName}";
+                        var filePath = Path.Combine(targetFolder, uniqueFileName);
+                        var fileUrl = $"/osm/{pId}/{papId}/cleancopies/{uniqueFileName}";
+
+                        using (var fileStream = new FileStream(filePath, FileMode.Create))
+                        {
+                            await file.CopyToAsync(fileStream);
+                        }
+
+                        var barcode = fileNameWithoutExt.Length >= 6 
+                            ? fileNameWithoutExt 
+                            : $"SC-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}".Substring(0, 24).ToUpper();
+
+                        var script = new Script
+                        {
+                            ProjectPaperId = targetProjectPaper.Id,
+                            ProjectId = targetProjectPaper.ProjectId,
+                            InBuiltBarcode = barcode,
+                            GeneratedBarcode = barcode,
+                            CleanPdfUrl = fileUrl,
+                            RollNumber = barcode,
+                            Status = ScriptStatus.pending,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+
+                        _context.Scripts.Add(script);
+                        await _context.SaveChangesAsync();
+
+                        int? targetUniId = targetProjectPaper.Paper?.UniversityId ?? targetProjectPaper.Project?.UniversityId;
+                        if (targetUniId.HasValue && targetUniId.Value > 0)
+                        {
+                            _dailyAllocationService.TriggerAutoAllocationBackground(targetUniId.Value);
+                        }
+
+                        return Ok(new { success = true, scriptId = script.Id, url = fileUrl, message = "Script uploaded successfully" });
                     }
                 }
 

@@ -21,10 +21,13 @@ namespace API.Models
         public string? QuestionPaperPdfUrl { get; set; }
         
         public bool IsActive { get; set; } = true;
+        public bool IsSectionConfigured { get; set; } = false;
+        public bool IsExaminerAssigned { get; set; } = false;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
         public ICollection<Script> Scripts { get; set; } = new List<Script>();
         public ICollection<ProjectPaperSection> ProjectPaperSections { get; set; } = new List<ProjectPaperSection>();
+        public ICollection<PaperExaminer> PaperExaminers { get; set; } = new List<PaperExaminer>();
     }
 }
