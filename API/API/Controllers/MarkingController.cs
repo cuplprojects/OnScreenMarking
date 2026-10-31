@@ -41,13 +41,35 @@ namespace API.Controllers
                 if (allocation.ExaminerId != request.ExaminerId)
                     return BadRequest(new { success = false, message = "Allocation not assigned to this examiner" });
 
-                var existingMarking = await _context.Markings
-                    .FirstOrDefaultAsync(m => m.AllocationId == request.AllocationId);
-
                 var timePerCopy = await GetTimePerCopyMinutesForScriptAsync(allocation.ScriptId);
 
-                if (existingMarking != null)
+                decimal maxMarks = allocation.Script?.ProjectPaper?.Paper?.MaxMarks ?? 100;
+                if (maxMarks <= 0) maxMarks = 100;
+
+                // Load ALL markings for this ScriptId + ExaminerId combination
+                var allMarkingsForScript = await _context.Markings
+                    .Where(m => m.ScriptId == allocation.ScriptId && m.ExaminerId == request.ExaminerId)
+                    .OrderByDescending(m => m.Status == MarkingStatus.submitted) // submitted first
+                    .ThenByDescending(m => m.UpdatedAt)
+                    .ToListAsync();
+
+                if (allMarkingsForScript.Any())
                 {
+                    // Keep the most relevant one (submitted > latest updated draft)
+                    var existingMarking = allMarkingsForScript.First();
+
+                    // Remove any extra duplicate draft rows for this script+examiner
+                    var duplicateDrafts = allMarkingsForScript
+                        .Skip(1)
+                        .Where(m => m.Status == MarkingStatus.draft)
+                        .ToList();
+                    if (duplicateDrafts.Any())
+                    {
+                        _context.Markings.RemoveRange(duplicateDrafts);
+                        await _context.SaveChangesAsync();
+                    }
+
+                    // Return existing without modifying it (examiner resumes from where they left off)
                     var existingMarkingDto = new MarkingDto
                     {
                         Id = existingMarking.Id,
@@ -59,29 +81,56 @@ namespace API.Controllers
                         Remarks = existingMarking.Remarks,
                         Status = existingMarking.Status,
                         StartedAt = existingMarking.StartedAt,
-                        TimePerCopyMinutes = timePerCopy
+                        TimePerCopyMinutes = timePerCopy,
+                        ProjectId = existingMarking.ProjectId
                     };
                     return Ok(existingMarkingDto);
                 }
-
-                decimal maxMarks = allocation.Script?.ProjectPaper?.Paper?.MaxMarks ?? 100;
-                if (maxMarks <= 0) maxMarks = 100;
 
                 var marking = new Marking
                 {
                     ScriptId = allocation.ScriptId,
                     ExaminerId = request.ExaminerId,
                     AllocationId = request.AllocationId,
-                    TotalMarks = request.TotalMarks,
-                    Percentage = (request.TotalMarks / maxMarks) * 100,
+                    ProjectId = allocation.ProjectId ?? allocation.Script?.ProjectId ?? allocation.Script?.ProjectPaper?.ProjectId,
+                    TotalMarks = Math.Round(request.TotalMarks, 2),
+                    Percentage = Math.Round((request.TotalMarks / maxMarks) * 100, 2),
                     Remarks = request.Remarks ?? "",
                     Status = MarkingStatus.draft,
                     StartedAt = DateTime.UtcNow,
                     EvaluatedPdfUrl = "" // Avoid Column 'EvaluatedPdfUrl' cannot be null error
                 };
 
-                _context.Markings.Add(marking);
-                await _context.SaveChangesAsync();
+                try
+                {
+                    _context.Markings.Add(marking);
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateException)
+                {
+                    // Concurrency safeguard: existing marking inserted simultaneously, fetch and return it
+                    _context.ChangeTracker.Clear();
+                    var concurrentMarking = await _context.Markings
+                        .FirstOrDefaultAsync(m => m.ScriptId == allocation.ScriptId && m.ExaminerId == request.ExaminerId);
+
+                    if (concurrentMarking != null)
+                    {
+                        return Ok(new MarkingDto
+                        {
+                            Id = concurrentMarking.Id,
+                            ScriptId = concurrentMarking.ScriptId,
+                            ExaminerId = concurrentMarking.ExaminerId,
+                            AllocationId = concurrentMarking.AllocationId,
+                            TotalMarks = concurrentMarking.TotalMarks,
+                            Percentage = concurrentMarking.Percentage,
+                            Remarks = concurrentMarking.Remarks,
+                            Status = concurrentMarking.Status,
+                            StartedAt = concurrentMarking.StartedAt,
+                            TimePerCopyMinutes = timePerCopy
+                        });
+                    }
+                    throw;
+                }
 
                 var markingDto = new MarkingDto
                 {
@@ -178,8 +227,8 @@ namespace API.Controllers
                 decimal maxMarks = existingMarking.Script?.ProjectPaper?.Paper?.MaxMarks ?? 100;
                 if (maxMarks <= 0) maxMarks = 100;
 
-                existingMarking.TotalMarks = request.TotalMarks;
-                existingMarking.Percentage = (request.TotalMarks / maxMarks) * 100;
+                existingMarking.TotalMarks = Math.Round(request.TotalMarks, 2);
+                existingMarking.Percentage = Math.Round((request.TotalMarks / maxMarks) * 100, 2);
                 existingMarking.Remarks = request.Remarks;
                 existingMarking.EvaluatedPdfUrl = request.EvaluatedPdfUrl ?? "";
                 existingMarking.UpdatedAt = DateTime.UtcNow;
@@ -247,6 +296,7 @@ namespace API.Controllers
                                 ScriptId = scriptId,
                                 ExaminerId = request.ExaminerId,
                                 AllocationId = allocation.AllocationId,
+                                ProjectId = allocation.ProjectId,
                                 TotalMarks = 0,
                                 Percentage = 0,
                                 Remarks = "",
@@ -334,8 +384,8 @@ namespace API.Controllers
                             decimal maxMarks = marking.Script?.ProjectPaper?.Paper?.MaxMarks ?? 100;
                             if (maxMarks <= 0) maxMarks = 100;
 
-                            marking.TotalMarks = totalMarks;
-                            marking.Percentage = (totalMarks / maxMarks) * 100;
+                            marking.TotalMarks = Math.Round(totalMarks, 2);
+                            marking.Percentage = Math.Round((totalMarks / maxMarks) * 100, 2);
                             marking.UpdatedAt = DateTime.UtcNow;
                             await _context.SaveChangesAsync();
                         }
@@ -447,12 +497,12 @@ namespace API.Controllers
                     .Where(qm => !qm.IsSkipped)
                     .Sum(qm => qm.MarksAwarded);
 
-                marking.TotalMarks = totalMarks;
-                
+                marking.TotalMarks = Math.Round(totalMarks, 2);
+
                 // Recalculate percentage
                 decimal maxMarks = marking.Script?.ProjectPaper?.Paper?.MaxMarks ?? 100;
                 if (maxMarks <= 0) maxMarks = 100;
-                marking.Percentage = (totalMarks / maxMarks) * 100;
+                marking.Percentage = Math.Round((totalMarks / maxMarks) * 100, 2);
 
                 marking.Status = MarkingStatus.submitted;
                 marking.SubmittedAt = DateTime.UtcNow;
@@ -460,8 +510,8 @@ namespace API.Controllers
 
                 // Update script status
                 marking.Script.Status = ScriptStatus.completed;
-                marking.Script.TotalMarks = totalMarks;
-                marking.Script.Percentage = marking.Percentage;
+                marking.Script.TotalMarks = Math.Round(totalMarks, 2);
+                marking.Script.Percentage = Math.Round(marking.Percentage, 2);
                 marking.Script.Remarks = marking.Remarks;
                 marking.Script.SubmittedAt = DateTime.UtcNow;
                 marking.Script.UpdatedAt = DateTime.UtcNow;
@@ -557,25 +607,30 @@ namespace API.Controllers
         {
             try
             {
-                var marking = await _context.Markings
-                    .Include(m => m.Script)
-                    .Include(m => m.Examiner)
-                    .Include(m => m.Allocation)
-                    .FirstOrDefaultAsync(m => m.ScriptId == scriptId);
-
-                if (marking == null)
-                    return NotFound(new { success = false, message = "Marking not found for this script" });
-
                 var loggedInUserType = User.FindFirst("userType")?.Value;
                 var loggedInUserIdStr = User.FindFirst("id")?.Value;
 
-                if (loggedInUserType == "examiner")
+                // Build query: prefer submitted marking for this script, filtered by examiner if examiner role
+                var query = _context.Markings
+                    .Include(m => m.Script)
+                    .Include(m => m.Examiner)
+                    .Include(m => m.Allocation)
+                    .Where(m => m.ScriptId == scriptId);
+
+                if (loggedInUserType == "examiner" && !string.IsNullOrEmpty(loggedInUserIdStr) && int.TryParse(loggedInUserIdStr, out int loggedInExaminerId))
                 {
-                    if (string.IsNullOrEmpty(loggedInUserIdStr) || marking.ExaminerId != int.Parse(loggedInUserIdStr))
-                    {
-                        return StatusCode(403, new { success = false, message = "You do not have permission to view this marking." });
-                    }
+                    // Examiner can only see their own marking for this script
+                    query = query.Where(m => m.ExaminerId == loggedInExaminerId);
                 }
+
+                // Return submitted marking first (if any), otherwise latest draft
+                var marking = await query
+                    .OrderByDescending(m => m.Status == MarkingStatus.submitted)
+                    .ThenByDescending(m => m.UpdatedAt)
+                    .FirstOrDefaultAsync();
+
+                if (marking == null)
+                    return NotFound(new { success = false, message = "Marking not found for this script" });
 
                 var timePerCopy = await GetTimePerCopyMinutesForScriptAsync(marking.ScriptId);
 

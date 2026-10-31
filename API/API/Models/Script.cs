@@ -14,11 +14,15 @@ namespace API.Models
         public string GeneratedBarcode { get; set; }
         public int ProjectPaperId { get; set; }
         public ProjectPaper ProjectPaper { get; set; }
+        public int? ProjectId { get; set; }
+        public Project? Project { get; set; }
         public string CleanPdfUrl { get; set; }
         public ScriptStatus Status { get; set; } = ScriptStatus.pending;
         public bool? IsReEvaluationRequested { get; set; }
         public string? RollNumber { get; set; }
+        [Column(TypeName = "decimal(10,2)")]
         public decimal? TotalMarks { get; set; } = 0;
+        [Column(TypeName = "decimal(10,2)")]
         public decimal? Percentage { get; set; } = 0;
         public string? Remarks { get; set; }
         public DateTime? SubmittedAt { get; set; }

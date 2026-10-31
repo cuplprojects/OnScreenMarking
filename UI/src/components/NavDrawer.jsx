@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   X, LayoutDashboard, School, Building2, GraduationCap, BookOpen,
   Calendar, FileText, Layers, Zap, Users, Shield, Activity, PenTool,
-  BarChart3, BookMarked, Settings2, Briefcase, Upload, Folder, FileCheck, Sliders
+  BarChart3, BookMarked, Settings2, Briefcase, Upload, Folder, FileCheck
 } from 'lucide-react';
 import { encryptId } from '../utils/encryption';
 
@@ -55,7 +55,6 @@ function useNavGroups(userType, hasPermission) {
         items: [
           { label: 'Universities',      path: '/admin/universities',                  icon: School },
           { label: 'University Config',  path: '/admin/departments',                  icon: Settings2 },
-          { label: 'Assignment Types',  path: '/admin/university-settings',          icon: Sliders },
           { label: 'Project Config',    path: '/admin/project-dashboard',             icon: Briefcase },
           { label: 'Colleges',          path: '/admin/colleges',                      icon: Building2 },
           ...(hasPermission('VIEW_LOGS') ? [{ label: 'Attendance Audit', path: '/admin/attendance', icon: Activity }] : []),
@@ -98,7 +97,6 @@ function useNavGroups(userType, hasPermission) {
         label: 'Academic Setup',
         items: [
           { label: 'University Config', path: '/departments', icon: Settings2 },
-          { label: 'Assignment Types',  path: '/university-settings', icon: Sliders },
           { label: 'Project Config',    path: '/project-dashboard', icon: Briefcase },
         ],
       },

@@ -132,7 +132,8 @@ export default function ProjectDashboard() {
         method: 'POST',
         body: {
           paperIds: selectedPaperIds,
-          examinerIds: selectedExaminerIds
+          examinerIds: selectedExaminerIds,
+          projectId: projectId
         }
       });
       alert(res.message);

@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+using API.Services;
+
 namespace API.Controllers
 {
     [ApiController]
@@ -17,10 +19,12 @@ namespace API.Controllers
     public class AssignmentTypesController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IDailyAllocationService _dailyAllocationService;
 
-        public AssignmentTypesController(ApplicationDbContext context)
+        public AssignmentTypesController(ApplicationDbContext context, IDailyAllocationService dailyAllocationService)
         {
             _context = context;
+            _dailyAllocationService = dailyAllocationService;
         }
 
         /// <summary>
@@ -107,9 +111,10 @@ namespace API.Controllers
                 {
                     UniversityId = dto.UniversityId,
                     Type = trimmedType,
-                    DailyLimit = dto.DailyLimit > 0 ? dto.DailyLimit : 50,
+                    DailyLimit = dto.DailyLimit.HasValue && dto.DailyLimit.Value > 0 ? dto.DailyLimit.Value : 50,
                     TimePerCopy = dto.TimePerCopy > 0 ? dto.TimePerCopy : 15,
-                    ReassignmentHours = dto.ReassignmentHours > 0 ? dto.ReassignmentHours : 24,
+                    ReassignmentHours = dto.ReassignmentHours,
+                    CompletionDate = dto.CompletionDate,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
@@ -154,9 +159,9 @@ namespace API.Controllers
                     type.Type = dto.Type.Trim();
                 }
 
-                if (dto.DailyLimit > 0)
+                if (dto.DailyLimit.HasValue)
                 {
-                    type.DailyLimit = dto.DailyLimit;
+                    type.DailyLimit = dto.DailyLimit.Value;
                 }
 
                 if (dto.TimePerCopy > 0)
@@ -164,9 +169,11 @@ namespace API.Controllers
                     type.TimePerCopy = dto.TimePerCopy;
                 }
 
-                if (dto.ReassignmentHours > 0)
+                type.ReassignmentHours = dto.ReassignmentHours;
+
+                if (dto.CompletionDate.HasValue)
                 {
-                    type.ReassignmentHours = dto.ReassignmentHours;
+                    type.CompletionDate = dto.CompletionDate.Value;
                 }
 
                 type.UpdatedAt = DateTime.UtcNow;
@@ -305,9 +312,10 @@ namespace API.Controllers
                         universityId = targetUniId,
                         universityName = universityName ?? "All Universities",
                         type = activeType,
-                        dailyLimit = config?.DailyLimit > 0 ? config.DailyLimit : 50,
+                        dailyLimit = activeType.Equals("Equal Distribution", StringComparison.OrdinalIgnoreCase) ? 0 : (config?.DailyLimit > 0 ? config.DailyLimit : 50),
                         timePerCopy = config?.TimePerCopy > 0 ? config.TimePerCopy : 15,
-                        reassignmentHours = config?.ReassignmentHours > 0 ? config.ReassignmentHours : 24,
+                        reassignmentHours = activeType.Equals("Equal Distribution", StringComparison.OrdinalIgnoreCase) ? (int?)null : (config?.ReassignmentHours > 0 ? config.ReassignmentHours : 24),
+                        completionDate = activeType.Equals("Equal Distribution", StringComparison.OrdinalIgnoreCase) ? config?.CompletionDate : null,
                         updatedAt = config?.UpdatedAt ?? DateTime.UtcNow
                     }
                 });
@@ -354,37 +362,87 @@ namespace API.Controllers
                 AssignmentType config = null;
                 if (targetUniId.HasValue)
                 {
-                    config = await _context.AssignmentTypes
+                    var existingConfigs = await _context.AssignmentTypes
                         .Where(t => t.UniversityId == targetUniId.Value)
-                        .OrderByDescending(t => t.UpdatedAt)
-                        .FirstOrDefaultAsync();
-                }
+                        .ToListAsync();
 
-                if (config != null)
-                {
-                    config.Type = normalizedType;
-                    config.DailyLimit = dto.DailyLimit > 0 ? dto.DailyLimit : 50;
-                    config.TimePerCopy = dto.TimePerCopy > 0 ? dto.TimePerCopy : 15;
-                    config.ReassignmentHours = dto.ReassignmentHours > 0 ? dto.ReassignmentHours : 24;
-                    config.UpdatedAt = DateTime.UtcNow;
-                    _context.AssignmentTypes.Update(config);
+                    bool isEqualDist = normalizedType.Equals("Equal Distribution", StringComparison.OrdinalIgnoreCase);
+                    int targetDailyLimit = isEqualDist ? 0 : ((dto.DailyLimit.HasValue && dto.DailyLimit.Value > 0) ? dto.DailyLimit.Value : 50);
+                    int? targetReassignHours = isEqualDist ? null : ((dto.ReassignmentHours.HasValue && dto.ReassignmentHours.Value > 0) ? dto.ReassignmentHours.Value : 24);
+                    int targetTimePerCopy = dto.TimePerCopy > 0 ? dto.TimePerCopy : 15;
+                    DateTime? targetCompletionDate = isEqualDist ? dto.CompletionDate : null;
+
+                    if (existingConfigs.Any())
+                    {
+                        config = existingConfigs.OrderByDescending(t => t.UpdatedAt).First();
+                        // Remove any duplicate rows for this university to keep strictly 1 row per university
+                        var duplicates = existingConfigs.Where(t => t.Id != config.Id).ToList();
+                        if (duplicates.Any())
+                        {
+                            _context.AssignmentTypes.RemoveRange(duplicates);
+                        }
+
+                        config.Type = normalizedType;
+                        config.DailyLimit = targetDailyLimit;
+                        config.TimePerCopy = targetTimePerCopy;
+                        config.ReassignmentHours = targetReassignHours;
+                        config.CompletionDate = targetCompletionDate;
+                        config.UpdatedAt = DateTime.UtcNow;
+                        _context.AssignmentTypes.Update(config);
+                    }
+                    else
+                    {
+                        config = new AssignmentType
+                        {
+                            UniversityId = targetUniId,
+                            Type = normalizedType,
+                            DailyLimit = targetDailyLimit,
+                            TimePerCopy = targetTimePerCopy,
+                            ReassignmentHours = targetReassignHours,
+                            CompletionDate = targetCompletionDate,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+                        _context.AssignmentTypes.Add(config);
+                    }
+
+                    await _context.SaveChangesAsync();
                 }
                 else
                 {
+                    bool isEqualDist = normalizedType.Equals("Equal Distribution", StringComparison.OrdinalIgnoreCase);
                     config = new AssignmentType
                     {
-                        UniversityId = targetUniId,
                         Type = normalizedType,
-                        DailyLimit = dto.DailyLimit > 0 ? dto.DailyLimit : 50,
+                        DailyLimit = isEqualDist ? 0 : ((dto.DailyLimit.HasValue && dto.DailyLimit.Value > 0) ? dto.DailyLimit.Value : 50),
                         TimePerCopy = dto.TimePerCopy > 0 ? dto.TimePerCopy : 15,
-                        ReassignmentHours = dto.ReassignmentHours > 0 ? dto.ReassignmentHours : 24,
+                        ReassignmentHours = isEqualDist ? null : ((dto.ReassignmentHours.HasValue && dto.ReassignmentHours.Value > 0) ? dto.ReassignmentHours.Value : 24),
+                        CompletionDate = isEqualDist ? dto.CompletionDate : null,
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     };
                     _context.AssignmentTypes.Add(config);
+                    await _context.SaveChangesAsync();
                 }
 
-                await _context.SaveChangesAsync();
+                // Immediately trigger Auto-Allocation based on chosen configuration
+                int allocatedCount = 0;
+                int reassignedCount = 0;
+                string allocMessage = "";
+
+                if (normalizedType.Equals("Daily Allocation", StringComparison.OrdinalIgnoreCase) && targetUniId.HasValue)
+                {
+                    var allocRes = await _dailyAllocationService.PerformDailyAllocationForUniversityAsync(targetUniId.Value);
+                    allocatedCount = allocRes.allocatedCount;
+                    reassignedCount = allocRes.reassignedCount;
+                    allocMessage = allocRes.message;
+                }
+                else if (normalizedType.Equals("Equal Distribution", StringComparison.OrdinalIgnoreCase) && targetUniId.HasValue)
+                {
+                    var eqRes = await _dailyAllocationService.PerformEqualDistributionForUniversityAsync(targetUniId.Value);
+                    allocatedCount = eqRes.allocatedCount;
+                    allocMessage = eqRes.message;
+                }
 
                 string universityName = null;
                 if (targetUniId.HasValue)
@@ -395,10 +453,22 @@ namespace API.Controllers
                         .FirstOrDefaultAsync();
                 }
 
+                string finalMessage = $"Assignment configuration updated to '{normalizedType}' successfully.";
+                if (allocatedCount > 0)
+                {
+                    finalMessage += $" Auto-allocated {allocatedCount} script(s) to examiners.";
+                }
+                else if (!string.IsNullOrEmpty(allocMessage))
+                {
+                    finalMessage += $" {allocMessage}";
+                }
+
                 return Ok(new
                 {
                     success = true,
-                    message = $"Assignment configuration updated to '{normalizedType}' successfully",
+                    message = finalMessage,
+                    allocatedCount,
+                    reassignedCount,
                     data = new
                     {
                         id = config.Id,
@@ -408,6 +478,7 @@ namespace API.Controllers
                         dailyLimit = config.DailyLimit,
                         timePerCopy = config.TimePerCopy,
                         reassignmentHours = config.ReassignmentHours,
+                        completionDate = config.CompletionDate,
                         updatedAt = config.UpdatedAt
                     }
                 });
@@ -423,17 +494,19 @@ namespace API.Controllers
     {
         public int? UniversityId { get; set; }
         public string Type { get; set; }
-        public int DailyLimit { get; set; } = 50;
+        public int? DailyLimit { get; set; }
         public int TimePerCopy { get; set; } = 15;
-        public int ReassignmentHours { get; set; } = 24;
+        public int? ReassignmentHours { get; set; }
+        public DateTime? CompletionDate { get; set; }
     }
 
     public class AssignmentConfigurationDto
     {
         public int? UniversityId { get; set; }
         public string Type { get; set; } // "Daily Allocation" or "Equal Distribution"
-        public int DailyLimit { get; set; } = 50;
+        public int? DailyLimit { get; set; }
         public int TimePerCopy { get; set; } = 15;
-        public int ReassignmentHours { get; set; } = 24;
+        public int? ReassignmentHours { get; set; }
+        public DateTime? CompletionDate { get; set; }
     }
 }

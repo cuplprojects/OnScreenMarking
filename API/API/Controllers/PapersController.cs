@@ -6,6 +6,7 @@ using System.IO;
 using API.Data;
 using API.Models;
 using API.Models.DTOs;
+using API.Services;
 
 namespace API.Controllers
 {
@@ -17,12 +18,18 @@ namespace API.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _environment;
         private readonly Microsoft.Extensions.Configuration.IConfiguration _configuration;
+        private readonly IDailyAllocationService _dailyAllocationService;
 
-        public PapersController(ApplicationDbContext context, IWebHostEnvironment environment, Microsoft.Extensions.Configuration.IConfiguration configuration)
+        public PapersController(
+            ApplicationDbContext context, 
+            IWebHostEnvironment environment, 
+            Microsoft.Extensions.Configuration.IConfiguration configuration,
+            IDailyAllocationService dailyAllocationService)
         {
             _context = context;
             _environment = environment;
             _configuration = configuration;
+            _dailyAllocationService = dailyAllocationService;
         }
 
         [HttpGet("dashboard-stats")]
@@ -134,7 +141,7 @@ namespace API.Controllers
                             query = query.Where(p => !p.ProjectPapers.Any(pp => pp.ProjectId == projectId && !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl)));
                             break;
                         case "not_assigned":
-                            query = query.Where(p => !_context.PaperExaminers.Any(pe => pe.PaperId == p.PaperId));
+                            query = query.Where(p => !_context.PaperExaminers.Any(pe => pe.ProjectPaper != null && pe.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || pe.ProjectPaper.ProjectId == projectId)));
                             break;
                         case "ready_for_allocation":
                             query = query.Where(p => 
@@ -205,6 +212,7 @@ namespace API.Controllers
                     {
                         paperId = p.PaperId,
                         projectPaperId = p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.Id).FirstOrDefault(),
+                        universityId = p.UniversityId,
                         paperCode = p.PaperCode,
                         paperName = p.PaperName,
                         catchNo = p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.CatchNo).FirstOrDefault() ?? "",
@@ -220,13 +228,18 @@ namespace API.Controllers
                         allocatedScripts = _context.Allocations.Count(a => a.Script.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || a.Script.ProjectPaper.ProjectId == projectId) && a.AssignmentStatus),
                         pendingScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || s.ProjectPaper.ProjectId == projectId) && !_context.Allocations.Any(a => a.ScriptId == s.Id && a.AssignmentStatus)),
                         isSectionsConfigured = _context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId) || _context.Sections.Any(s => s.PaperId == p.PaperId),
+                        isSectionConfigured = p.ProjectPapers.Any(pp => (projectId <= 0 || pp.ProjectId == projectId) && pp.IsSectionConfigured) 
+                            || _context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || pps.ProjectPaper.ProjectId == projectId)) 
+                            || _context.Sections.Any(s => s.PaperId == p.PaperId),
+                        isExaminerAssigned = p.ProjectPapers.Any(pp => (projectId <= 0 || pp.ProjectId == projectId) && pp.IsExaminerAssigned) 
+                            || _context.PaperExaminers.Any(pe => pe.ProjectPaper != null && pe.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || pe.ProjectPaper.ProjectId == projectId) && pe.IsActive),
                         sectionsCount = _context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId) 
                             ? _context.ProjectPaperSections.Count(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId) 
                             : _context.Sections.Count(s => s.PaperId == p.PaperId),
                         configuredMarks = _context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId)
                             ? (_context.ProjectPaperSections.Where(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId).Sum(pps => (int?)pps.TotalMarks) ?? 0)
                             : (_context.Sections.Where(s => s.PaperId == p.PaperId).Sum(s => (int?)s.TotalMarks) ?? 0),
-                        expertsCount = _context.PaperExaminers.Count(pe => pe.PaperId == p.PaperId)
+                        expertsCount = _context.PaperExaminers.Count(pe => pe.ProjectPaper != null && pe.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || pe.ProjectPaper.ProjectId == projectId))
                     })
                     .ToListAsync();
 
@@ -379,6 +392,9 @@ namespace API.Controllers
                     IsActive = p.IsActive,
                     UniversityId = p.UniversityId,
                     ProjectId = projectId ?? p.ProjectPapers.Select(pp => (int?)pp.ProjectId).FirstOrDefault(),
+                    ProjectPaperId = projectId.HasValue 
+                        ? p.ProjectPapers.Where(pp => pp.ProjectId == projectId.Value).Select(pp => (int?)pp.Id).FirstOrDefault() 
+                        : p.ProjectPapers.Select(pp => (int?)pp.Id).FirstOrDefault(),
                     CatchNo = projectId.HasValue ? p.ProjectPapers.Where(pp => pp.ProjectId == projectId.Value).Select(pp => pp.CatchNo).FirstOrDefault() ?? "" : p.ProjectPapers.Select(pp => pp.CatchNo).FirstOrDefault() ?? "",
                     QuestionPaperPdfUrl = projectId.HasValue ? p.ProjectPapers.Where(pp => pp.ProjectId == projectId.Value).Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() ?? "" : p.ProjectPapers.Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() ?? "",
                     SubjectIds = p.SubjectPapers
@@ -444,6 +460,7 @@ namespace API.Controllers
                     IsActive = paper.IsActive,
                     UniversityId = paper.UniversityId,
                     ProjectId = firstProjectPaper?.ProjectId,
+                    ProjectPaperId = firstProjectPaper?.Id,
                     SubjectIds = paper.SubjectPapers
                         .Select(sp => sp.SubjectId)
                         .ToList(),
@@ -584,6 +601,8 @@ namespace API.Controllers
                         CatchNo = paperDto.CatchNo ?? "",
                         QuestionPaperPdfUrl = paperDto.QuestionPaperPdfUrl ?? "",
                         IsActive = true,
+                        IsSectionConfigured = _context.Sections.Any(s => s.PaperId == paper.PaperId),
+                        IsExaminerAssigned = false,
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     });
@@ -652,6 +671,7 @@ namespace API.Controllers
                             .Where(pp => pp.PaperId == paperId && !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl))
                             .FirstOrDefaultAsync();
 
+                        bool hasSec = await _context.Sections.AnyAsync(s => s.PaperId == paperId);
                         _context.ProjectPapers.Add(new ProjectPaper
                         {
                             ProjectId = request.TargetProjectId,
@@ -659,6 +679,8 @@ namespace API.Controllers
                             CatchNo = sourcePp?.CatchNo ?? "",
                             QuestionPaperPdfUrl = "",
                             IsActive = true,
+                            IsSectionConfigured = hasSec,
+                            IsExaminerAssigned = false,
                             CreatedAt = DateTime.UtcNow,
                             UpdatedAt = DateTime.UtcNow
                         });
@@ -837,6 +859,8 @@ namespace API.Controllers
                             CatchNo = paperDto.CatchNo ?? "",
                             QuestionPaperPdfUrl = paperDto.QuestionPaperPdfUrl ?? "",
                             IsActive = true,
+                            IsSectionConfigured = _context.Sections.Any(s => s.PaperId == paper.PaperId),
+                            IsExaminerAssigned = false,
                             CreatedAt = DateTime.UtcNow,
                             UpdatedAt = DateTime.UtcNow
                         });
@@ -967,6 +991,8 @@ namespace API.Controllers
                             PaperId = paper.PaperId,
                             QuestionPaperPdfUrl = fileUrl,
                             IsActive = true,
+                            IsSectionConfigured = _context.Sections.Any(s => s.PaperId == paper.PaperId),
+                            IsExaminerAssigned = false,
                             CreatedAt = DateTime.UtcNow,
                             UpdatedAt = DateTime.UtcNow
                         });
@@ -985,6 +1011,17 @@ namespace API.Controllers
                 }
 
                 await _context.SaveChangesAsync();
+
+                int? targetUniId = paper.UniversityId;
+                if (projectId.HasValue && projectId.Value > 0)
+                {
+                    var pp = paper.ProjectPapers.FirstOrDefault(p => p.ProjectId == projectId.Value);
+                    if (pp?.Project != null && pp.Project.UniversityId > 0)
+                    {
+                        targetUniId = pp.Project.UniversityId;
+                    }
+                }
+                _dailyAllocationService.TriggerAutoAllocationBackground(targetUniId);
 
                 return Ok(new { success = true, url = fileUrl, message = "Question paper PDF uploaded successfully" });
             }
@@ -1165,6 +1202,8 @@ namespace API.Controllers
                                     PaperId = matchedPaper.PaperId,
                                     QuestionPaperPdfUrl = fileUrl,
                                     IsActive = true,
+                                    IsSectionConfigured = _context.Sections.Any(s => s.PaperId == matchedPaper.PaperId),
+                                    IsExaminerAssigned = false,
                                     CreatedAt = DateTime.UtcNow,
                                     UpdatedAt = DateTime.UtcNow
                                 };
@@ -1213,6 +1252,15 @@ namespace API.Controllers
                 }
 
                 await _context.SaveChangesAsync();
+
+                if (projectId.HasValue && projectId.Value > 0)
+                {
+                    var proj = await _context.Projects.FindAsync(projectId.Value);
+                    if (proj != null && proj.UniversityId > 0)
+                    {
+                        _dailyAllocationService.TriggerAutoAllocationBackground(proj.UniversityId);
+                    }
+                }
 
                 return Ok(new
                 {

@@ -18,5 +18,9 @@ namespace API.Models
         public bool IsActive { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public ICollection<ProjectPaper> ProjectPapers { get; set; } = new List<ProjectPaper>();
+        public ICollection<Script> Scripts { get; set; } = new List<Script>();
+        public ICollection<Allocation> Allocations { get; set; } = new List<Allocation>();
+        public ICollection<Marking> Markings { get; set; } = new List<Marking>();
+        public ICollection<PaperExaminer> PaperExaminers { get; set; } = new List<PaperExaminer>();
     }
 }

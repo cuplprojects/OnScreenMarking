@@ -11,8 +11,8 @@ namespace API.Services
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<DailyAllocationBackgroundService> _logger;
-        // Interval between auto-allocation & reassignment checks (15 minutes)
-        private static readonly TimeSpan Interval = TimeSpan.FromMinutes(15);
+        // Interval between auto-allocation & reassignment checks (1 minute)
+        private static readonly TimeSpan Interval = TimeSpan.FromMinutes(1);
 
         public DailyAllocationBackgroundService(
             IServiceScopeFactory scopeFactory,

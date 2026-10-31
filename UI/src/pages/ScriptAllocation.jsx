@@ -83,6 +83,8 @@ export default function ScriptAllocation({ isTab = false }) {
   const [examinerCounts, setExaminerCounts] = useState({});
   const [bulkLoading, setBulkLoading] = useState(false);
   const [autoProjectLoading, setAutoProjectLoading] = useState(false);
+  // Per-paper data for multi-paper allocation (paperId -> { examiners, pendingCount })
+  const [perPaperData, setPerPaperData] = useState({});
 
   // University Assignment Configuration State
   const [configuredAssignmentSetting, setConfiguredAssignmentSetting] = useState(null);
@@ -199,16 +201,21 @@ export default function ScriptAllocation({ isTab = false }) {
       const sortOrderVal = params.sortOrder || '';
       const uniQuery = activeUniversityId ? `&universityId=${activeUniversityId}` : '';
 
-      // try {
-      //   const res = await apiCall(`/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}&statusFilter=ready_for_allocation${uniQuery}`);
-      //   if (res && res.items && res.items.length > 0) {
-      //     return res;
-      //   }
-      // } catch (e) {
-      //   console.warn('dashboard-stats query failed, checking pending endpoint:', e);
-      // }
+      // 1. Try papers/dashboard-stats (retrieves all project papers with allocated and pending counts)
+      try {
+        const res = await apiCall(`/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}${uniQuery}`);
+        if (res && res.items && res.items.length > 0) {
+          const firstUniId = res.items[0]?.universityId;
+          if (firstUniId && !configuredAssignmentSetting) {
+            fetchAssignmentConfig(firstUniId);
+          }
+          return res;
+        }
+      } catch (e) {
+        console.warn('dashboard-stats query failed, checking pending endpoint:', e);
+      }
 
-      // University-wise pending scripts endpoint fallback
+      // 2. University-wise pending scripts endpoint fallback
       try {
         const pendingRes = await apiCall(`/scripts/pending?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}${uniQuery}`);
         if (pendingRes && pendingRes.papers && pendingRes.papers.length > 0) {
@@ -363,7 +370,11 @@ export default function ScriptAllocation({ isTab = false }) {
         experts: countsData?.expertsCount ?? paper.expertsCount ?? 0
       });
 
-      const examinersData = await apiCall(`/PaperExaminers/paper/${paper.paperId}`);
+      const examinersData = await apiCall(
+        paper.projectPaperId 
+          ? `/PaperExaminers/project-paper/${paper.projectPaperId}` 
+          : `/PaperExaminers/paper/${paper.paperId}${projectId ? `?projectId=${projectId}` : ''}`
+      );
       setExaminers(examinersData || []);
 
       // Strategy-based distribution counts
@@ -415,11 +426,14 @@ export default function ScriptAllocation({ isTab = false }) {
     setLoading(true);
 
     try {
-      
+      const currentStrategy = getStrategyFromAssignmentType(configuredAssignmentSetting?.assignmentType) || bulkMode;
+      const currentLimit = configuredAssignmentSetting?.dailyLimit || dailyQuotaLimit || 50;
+
       let totalPending = 0;
       let totalAllocated = 0;
       let totalScriptsSum = 0;
       let combinedExaminersMap = new Map();
+      const newPerPaperData = {};
 
       for (const p of selectedPapersData) {
         let pCounts = null;
@@ -433,19 +447,49 @@ export default function ScriptAllocation({ isTab = false }) {
           };
         }
 
-        totalPending += (pCounts?.pendingScripts ?? p.pendingScripts ?? 0);
+        const paperPending = pCounts?.pendingScripts ?? p.pendingScripts ?? 0;
+        totalPending += paperPending;
         totalAllocated += (pCounts?.allocatedScripts ?? p.allocatedScripts ?? 0);
         totalScriptsSum += (pCounts?.totalScripts ?? p.totalScripts ?? 0);
 
-        const exData = await apiCall(`/PaperExaminers/paper/${p.paperId}`);
-        if (Array.isArray(exData)) {
-          exData.forEach(ex => {
-            if (!combinedExaminersMap.has(ex.examinerId)) {
-              combinedExaminersMap.set(ex.examinerId, ex);
-            }
+        const exData = await apiCall(
+          p.projectPaperId
+            ? `/PaperExaminers/project-paper/${p.projectPaperId}`
+            : `/PaperExaminers/paper/${p.paperId}${projectId ? `?projectId=${projectId}` : ''}`
+        );
+        const paperExaminers = Array.isArray(exData) ? exData : [];
+
+        // Compute per-paper distribution independently based on this paper's examiners + pending count
+        const paperCounts = {};
+        if (currentStrategy === 'daily') {
+          let remaining = paperPending;
+          paperExaminers.forEach((ex) => {
+            const quota = Math.min(remaining, currentLimit);
+            paperCounts[ex.examinerId] = quota;
+            remaining -= quota;
           });
+        } else {
+          // Even/equal distribution: divide pending scripts equally among this paper's examiners
+          const n = paperExaminers.length;
+          if (n > 0) {
+            const baseShare = Math.floor(paperPending / n);
+            const rem = paperPending % n;
+            paperExaminers.forEach((ex, idx) => {
+              paperCounts[ex.examinerId] = baseShare + (idx < rem ? 1 : 0);
+            });
+          }
         }
+
+        newPerPaperData[p.paperId] = { examiners: paperExaminers, pending: paperPending, counts: paperCounts };
+
+        paperExaminers.forEach(ex => {
+          if (!combinedExaminersMap.has(ex.examinerId)) {
+            combinedExaminersMap.set(ex.examinerId, ex);
+          }
+        });
       }
+
+      setPerPaperData(newPerPaperData);
 
       setScriptCounts({
         pending: totalPending,
@@ -457,27 +501,14 @@ export default function ScriptAllocation({ isTab = false }) {
       const uniqueExaminers = Array.from(combinedExaminersMap.values());
       setExaminers(uniqueExaminers);
 
-      // Distribute pending scripts across examiners based on configured strategy
-      const counts = {};
-      const currentStrategy = getStrategyFromAssignmentType(configuredAssignmentSetting?.assignmentType) || bulkMode;
-      const currentLimit = configuredAssignmentSetting?.dailyLimit || dailyQuotaLimit || 50;
-
-      if (currentStrategy === 'daily') {
-        let remaining = totalPending;
-        uniqueExaminers.forEach((ex) => {
-          const quota = Math.min(remaining, currentLimit);
-          counts[ex.examinerId] = quota;
-          remaining -= quota;
+      // Show combined totals per examiner in the UI (sum across all papers they are assigned to)
+      const combinedCounts = {};
+      Object.values(newPerPaperData).forEach(({ counts }) => {
+        Object.entries(counts).forEach(([exId, cnt]) => {
+          combinedCounts[exId] = (combinedCounts[exId] || 0) + cnt;
         });
-      } else {
-        const baseShare = uniqueExaminers.length > 0 ? Math.floor(totalPending / uniqueExaminers.length) : 0;
-        const remainder = uniqueExaminers.length > 0 ? totalPending % uniqueExaminers.length : 0;
-
-        uniqueExaminers.forEach((ex, idx) => {
-          counts[ex.examinerId] = baseShare + (idx < remainder ? 1 : 0);
-        });
-      }
-      setExaminerCounts(counts);
+      });
+      setExaminerCounts(combinedCounts);
 
     } catch (err) {
       message.error('Failed to load multi-paper allocation details');
@@ -544,18 +575,19 @@ export default function ScriptAllocation({ isTab = false }) {
       setBulkLoading(true);
 
       if (isMultiPaperMode) {
-        // Allocate per paper across selected papers
+        // Allocate per paper using per-paper examiner lists and independently computed counts
         const targetPapers = papers.filter(p => selectedPaperIds.includes(p.paperId));
         let successCount = 0;
 
         for (const paper of targetPapers) {
-          const pendingCount = paper.pendingScripts || 0;
+          const ppData = perPaperData[paper.paperId];
+          const pendingCount = ppData?.pending ?? paper.pendingScripts ?? 0;
           if (pendingCount === 0) continue;
 
-          // Scale examiner counts proportionally for this paper
-          const paperAllocations = examiners.map(e => {
-            const requested = examinerCounts[e.examinerId] || 0;
-            return { examinerId: e.examinerId, count: Math.min(requested, pendingCount) };
+          // Use per-paper examiners and their independently calculated counts
+          const paperAllocations = (ppData?.examiners || []).map(e => {
+            const count = ppData?.counts?.[e.examinerId] || 0;
+            return { examinerId: e.examinerId, count };
           }).filter(a => a.count > 0);
 
           if (paperAllocations.length > 0) {
@@ -567,6 +599,7 @@ export default function ScriptAllocation({ isTab = false }) {
         message.success(`Bulk allocation completed across ${successCount} papers!`);
         setIsMultiPaperMode(false);
         setSelectedPaperIds([]);
+        setPerPaperData({});
       } else if (activePaper) {
         const payload = examiners.map(e => ({
           examinerId: e.examinerId,
@@ -795,7 +828,10 @@ export default function ScriptAllocation({ isTab = false }) {
                         </button>
                       )}
                       {projectId && (
-                        <div className="relative group/tooltip inline-block">
+                        <div
+                          title={!papers.some(p => p.pendingScripts > 0) && papers.length > 0 ? "All scripts are already allocated" : ""}
+                          className="inline-block"
+                        >
                           <button
                             onClick={handleAutoAllocateProject}
                             disabled={autoProjectLoading || !papers.some(p => p.pendingScripts > 0)}
@@ -808,12 +844,6 @@ export default function ScriptAllocation({ isTab = false }) {
                             {autoProjectLoading ? <Loader size={13} className="animate-spin" /> : <Sparkles size={13} />}
                             {autoProjectLoading ? "Allocating..." : "Auto-Allocate All"}
                           </button>
-                          {!papers.some(p => p.pendingScripts > 0) && papers.length > 0 && (
-                            <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-bold rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50">
-                              All scripts are already allocated
-                              <div className="absolute top-full right-4 border-4 border-transparent border-t-gray-900"></div>
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>
@@ -881,7 +911,10 @@ export default function ScriptAllocation({ isTab = false }) {
                                 </span>
                               </td>
                               <td className="px-4 py-2.5 text-center">
-                                <div className="relative group/tooltip inline-block">
+                                <div
+                                  title={(paper.totalScripts === 0 && (paper.allocatedScripts || 0) === 0) ? "No Scripts Uploaded" : paper.pendingScripts === 0 ? "Already Fully Allocated" : "Allocate Scripts"}
+                                  className="inline-block"
+                                >
                                   <button
                                     onClick={() => openAllocationPane(paper)}
                                     disabled={paper.pendingScripts === 0}
@@ -893,10 +926,6 @@ export default function ScriptAllocation({ isTab = false }) {
                                   >
                                     <Zap size={14} />
                                   </button>
-                                  <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-bold rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50">
-                                    {paper.pendingScripts === 0 ? "Already Fully Allocated" : "Allocate Scripts"}
-                                    <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-900"></div>
-                                  </div>
                                 </div>
                               </td>
                             </tr>

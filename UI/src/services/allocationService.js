@@ -153,6 +153,15 @@ export const allocationService = {
   },
 
   /**
+   * Trigger Equal Distribution for a specific university
+   */
+  equalDistributeByUniversity: async (universityId) => {
+    return apiCall(`/allocation/university/${universityId}/equal-distribute`, {
+      method: 'POST'
+    });
+  },
+
+  /**
    * Trigger Daily Allocation for all universities configured with 'Daily allocation'
    */
   dailyAllocateAll: async () => {
