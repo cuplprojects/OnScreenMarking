@@ -181,6 +181,15 @@ namespace API.Controllers
                     });
                 }
 
+                if (!user.IsApproved && user.UserType.ToLower() != "admin")
+                {
+                    return BadRequest(new AuthResponse
+                    {
+                        Success = false,
+                        Message = "Your account is pending approval by the coordinator."
+                    });
+                }
+
                 if (!user.IsActive)
                 {
                     return BadRequest(new AuthResponse

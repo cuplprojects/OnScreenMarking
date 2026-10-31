@@ -19,7 +19,9 @@ const userService = {
     
     // Append filters
     if (params.activeTab) queryParams.push(`activeTab=${params.activeTab}`);
-    if (params.isActive !== undefined && params.isActive !== "") queryParams.push(`isActive=${params.isActive}`);
+    if (params.activeTab !== 'pending' && params.isActive !== undefined && params.isActive !== "") {
+      queryParams.push(`isActive=${params.isActive}`);
+    }
     if (params.userType) queryParams.push(`userType=${params.userType}`);
 
     if (queryParams.length > 0) {

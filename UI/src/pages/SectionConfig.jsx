@@ -597,11 +597,7 @@ export default function SectionConfig() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-xl font-bold text-gray-900 leading-tight">Section Management</h2>
-                    {isProjectMode && (
-                      <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider bg-teal-50 text-teal-700 border border-teal-200 rounded-md">
-                        Project Specific
-                      </span>
-                    )}
+                    
                   </div>
                   <p className="text-gray-500 text-xs font-medium">{selectedSubject?.subjectName} <ChevronRight className="inline w-3 h-3 mx-1" /> {selectedPaper?.paperName}</p>
                 </div>

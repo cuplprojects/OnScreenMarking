@@ -223,7 +223,7 @@ export default function PapersManagement({ isTab = false }) {
   // Form State
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
-    paperCode: "", paperName: "", paperNumber: 1, maxMarks: 100, 
+    paperCode: "", paperName: "", paperNumber: "", maxMarks: "", 
     totalQuestions: "", description: "", catchNo: "", projectId: projectId || "", 
     isActive: true, questionPaperPdfUrl: "",
   });
@@ -510,15 +510,26 @@ export default function PapersManagement({ isTab = false }) {
     const targetProjectId = formData.projectId || projectId || (projects.length > 0 ? projects[0].projectId : null);
     if (!targetProjectId) return message.error("Please select a project");
 
+    const totalQ = parseInt(formData.totalQuestions, 10);
+    if (!formData.totalQuestions || isNaN(totalQ) || totalQ <= 0) {
+      return message.error("Total Questions must be greater than 0");
+    }
+
+    const paperNum = formData.paperNumber ? parseInt(formData.paperNumber, 10) : 1;
+    const maxM = formData.maxMarks ? parseFloat(formData.maxMarks) : 0;
+    if (maxM <= 0) {
+      return message.error("Max Marks must be greater than 0");
+    }
+
     try {
       const payload = {
         ...formData,
         subjectIds: selectedSubjects.map(id => parseInt(id, 10)),
         projectId: parseInt(targetProjectId, 10),
         universityId: activeUniversityId ? parseInt(activeUniversityId, 10) : undefined,
-        paperNumber: parseInt(formData.paperNumber, 10),
-        maxMarks: parseFloat(formData.maxMarks),
-        totalQuestions: formData.totalQuestions === "" ? 0 : parseInt(formData.totalQuestions, 10),
+        paperNumber: paperNum,
+        maxMarks: maxM,
+        totalQuestions: totalQ,
       };
 
       let savedPaperId = editingId;
@@ -529,16 +540,11 @@ export default function PapersManagement({ isTab = false }) {
         savedPaperId = res?.paperId || res?.id || res;
       }
 
-      if (savedPaperId && selectedMasterSectionIds.length > 0) {
+      if (savedPaperId) {
         try {
-          await sectionService.savePaperMasterSections(savedPaperId, selectedMasterSectionIds);
-          await sectionService.importMasterSections({
-            targetPaperIds: [savedPaperId],
-            masterSectionIds: selectedMasterSectionIds,
-            overwriteExisting: false
-          });
+          await sectionService.savePaperMasterSections(savedPaperId, selectedMasterSectionIds || []);
         } catch (secErr) {
-          console.error("Failed to map/import master sections to paper", secErr);
+          console.error("Failed to map master sections to paper", secErr);
         }
       }
 
@@ -554,9 +560,14 @@ export default function PapersManagement({ isTab = false }) {
     try {
         const fullPaper = await paperService.getPaperById(paper.paperId);
         setFormData({
-            paperCode: fullPaper.paperCode, paperName: fullPaper.paperName, paperNumber: fullPaper.paperNumber,
-            maxMarks: fullPaper.maxMarks, totalQuestions: fullPaper.totalQuestions, description: fullPaper.description || "",
-            catchNo: fullPaper.catchNo || "", projectId: fullPaper.projectId ? String(fullPaper.projectId) : (projectId || ""), 
+            paperCode: fullPaper.paperCode || "", 
+            paperName: fullPaper.paperName || "", 
+            paperNumber: fullPaper.paperNumber ?? 1,
+            maxMarks: fullPaper.maxMarks, 
+            totalQuestions: fullPaper.totalQuestions, 
+            description: fullPaper.description || "",
+            catchNo: fullPaper.catchNo || "", 
+            projectId: fullPaper.projectId ? String(fullPaper.projectId) : (projectId || ""), 
             isActive: fullPaper.isActive,
             questionPaperPdfUrl: fullPaper.questionPaperPdfUrl || "",
         });
@@ -581,8 +592,13 @@ export default function PapersManagement({ isTab = false }) {
           const mappedMasters = await sectionService.getPaperMasterSections(fullPaper.paperId);
           if (Array.isArray(mappedMasters) && mappedMasters.length > 0) {
             setSelectedMasterSectionIds(mappedMasters.map(m => m.id));
+          } else {
+            setSelectedMasterSectionIds([]);
           }
-        } catch (e) { console.error(e); }
+        } catch (e) { 
+          setSelectedMasterSectionIds([]);
+          console.error(e); 
+        }
 
         setEditingId(fullPaper.paperId);
         setShowForm(true);
@@ -593,14 +609,12 @@ export default function PapersManagement({ isTab = false }) {
 
   const handleCancel = () => {
     setFormData({
-      paperCode: "", paperName: "", paperNumber: 1, maxMarks: 100, totalQuestions: "", description: "", 
+      paperCode: "", paperName: "", paperNumber: "", maxMarks: "", totalQuestions: "", description: "", 
       catchNo: "", projectId: projectId || (projects.length > 0 ? String(projects[0].projectId) : ""), 
       isActive: true, questionPaperPdfUrl: "",
     });
     setSelectedSubjects([]);
-    if (sectionMasters.length > 0) {
-      setSelectedMasterSectionIds(sectionMasters.map(m => m.id));
-    }
+    setSelectedMasterSectionIds([]);
     setEditingId(null);
     setIsSubjectDropdownOpen(false);
     setShowForm(false);
@@ -1733,30 +1747,32 @@ export default function PapersManagement({ isTab = false }) {
                       value={formData.paperNumber} 
                       onChange={(e) => setFormData({ ...formData, paperNumber: e.target.value })} 
                       className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      placeholder="1"
+                      placeholder="e.g. 1"
                       min="1" 
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Max Marks</label>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Max Marks <span className="text-red-500">*</span></label>
                     <input 
                       type="number" 
                       value={formData.maxMarks} 
                       onChange={(e) => setFormData({ ...formData, maxMarks: e.target.value })} 
                       className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      placeholder="100"
-                      min="0" 
+                      placeholder="e.g. 100"
+                      min="1" 
+                      required
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Total Questions</label>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Total Questions <span className="text-red-500">*</span></label>
                     <input 
                       type="number" 
                       value={formData.totalQuestions} 
                       onChange={(e) => setFormData({ ...formData, totalQuestions: e.target.value })} 
                       className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      placeholder="10"
-                      min="0" 
+                      placeholder="e.g. 10"
+                      min="1" 
+                      required
                     />
                   </div>
                 </div>
@@ -1780,20 +1796,58 @@ export default function PapersManagement({ isTab = false }) {
                       <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600">
                         Master Sections ({selectedMasterSectionIds.length} selected)
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (selectedMasterSectionIds.length === sectionMasters.length) {
-                            setSelectedMasterSectionIds([]);
-                          } else {
-                            setSelectedMasterSectionIds(sectionMasters.map(m => m.id));
-                          }
-                        }}
-                        className="text-[10px] font-bold text-teal-700 hover:underline"
-                      >
-                        {selectedMasterSectionIds.length === sectionMasters.length ? "Deselect All" : "Select All"}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {selectedMasterSectionIds.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedMasterSectionIds([])}
+                            className="text-[10px] font-bold text-red-600 hover:underline cursor-pointer"
+                          >
+                            Remove All / Clear
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedMasterSectionIds.length === sectionMasters.length) {
+                              setSelectedMasterSectionIds([]);
+                            } else {
+                              setSelectedMasterSectionIds(sectionMasters.map(m => m.id));
+                            }
+                          }}
+                          className="text-[10px] font-bold text-teal-700 hover:underline cursor-pointer"
+                        >
+                          {selectedMasterSectionIds.length === sectionMasters.length ? "Deselect All" : "Select All"}
+                        </button>
+                      </div>
                     </div>
+
+                    {/* Selected Master Section Badges with Quick Remove */}
+                    {selectedMasterSectionIds.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {selectedMasterSectionIds.map(mId => {
+                          const m = sectionMasters.find(s => s.id === mId);
+                          if (!m) return null;
+                          return (
+                            <span
+                              key={mId}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-[10px] font-semibold"
+                            >
+                              {m.name} ({m.totalMarks}M)
+                              <button
+                                type="button"
+                                onClick={() => setSelectedMasterSectionIds(prev => prev.filter(id => id !== mId))}
+                                className="text-teal-600 hover:text-red-600 transition-colors cursor-pointer"
+                                title="Remove this master section"
+                              >
+                                <X size={10} />
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+
                     <div className="bg-gray-50/70 border border-gray-200 rounded-lg p-2 max-h-[85px] overflow-y-auto custom-scrollbar">
                       <div className="grid sm:grid-cols-3 gap-2 grid-cols-1 md:grid-cols-2">
                         {sectionMasters.map((m) => {
@@ -1939,10 +1993,11 @@ export default function PapersManagement({ isTab = false }) {
                   <button
                     onClick={() => {
                       setFormData({
-                        paperCode: "", paperName: "", paperNumber: 1, maxMarks: 100, totalQuestions: "", description: "",
+                        paperCode: "", paperName: "", paperNumber: "", maxMarks: "", totalQuestions: "", description: "",
                         catchNo: "", projectId: projectId || "", isActive: true, questionPaperPdfUrl: "",
                       });
                       setSelectedSubjects([]);
+                      setSelectedMasterSectionIds([]);
                       setEditingId(null);
                       setShowForm(true);
                     }}

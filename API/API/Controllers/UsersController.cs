@@ -119,8 +119,7 @@ namespace API.Controllers
                 {
                     query = query.Where(u => u.IsApproved == false && u.UserType.ToLower() != "admin");
                 }
-
-                if (isActive.HasValue)
+                else if (isActive.HasValue)
                 {
                     query = query.Where(u => u.IsActive == isActive.Value);
                 }

@@ -540,6 +540,15 @@ namespace API.Controllers
                     });
                 }
 
+                if (paperDto.TotalQuestions <= 0)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Total Questions must be greater than 0"
+                    });
+                }
+
                 var subjects = await _context.Subjects
                     .Where(s => paperDto.SubjectIds.Contains(s.SubjectId))
                     .ToListAsync();
@@ -791,6 +800,15 @@ namespace API.Controllers
                 if (paper == null)
                     return NotFound(new { success = false, message = "Paper not found" });
 
+                if (paperDto.TotalQuestions <= 0)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Total Questions must be greater than 0"
+                    });
+                }
+
                 // Validate if reducing TotalQuestions or MaxMarks conflicts with currently mapped master sections
                 if (paper.PaperSectionMasters != null && paper.PaperSectionMasters.Any())
                 {
@@ -829,7 +847,9 @@ namespace API.Controllers
                     }
                 }
 
+                if (!string.IsNullOrEmpty(paperDto.PaperCode)) paper.PaperCode = paperDto.PaperCode;
                 paper.PaperName = paperDto.PaperName;
+                paper.PaperNumber = paperDto.PaperNumber;
                 paper.MaxMarks = paperDto.MaxMarks;
                 paper.TotalQuestions = paperDto.TotalQuestions;
                 paper.Description = paperDto.Description;
