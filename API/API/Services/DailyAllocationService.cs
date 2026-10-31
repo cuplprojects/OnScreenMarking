@@ -11,6 +11,8 @@ namespace API.Services
 {
     public class DailyAllocationService : IDailyAllocationService
     {
+        private static readonly SemaphoreSlim _distributionLock = new SemaphoreSlim(1, 1);
+        private static readonly SemaphoreSlim _dailyAllocationLock = new SemaphoreSlim(1, 1);
         private readonly ApplicationDbContext _context;
         private readonly ILogger<DailyAllocationService> _logger;
         private readonly IServiceScopeFactory _scopeFactory;
@@ -93,6 +95,7 @@ namespace API.Services
 
         public async Task<(bool success, int allocatedCount, int reassignedCount, string message)> PerformDailyAllocationForUniversityAsync(int universityId)
         {
+            await _dailyAllocationLock.WaitAsync();
             try
             {
                 var assignType = await _context.AssignmentTypes
@@ -135,7 +138,7 @@ namespace API.Services
                     .Where(s => s.ProjectPaper != null &&
                                 ((s.ProjectPaper.Paper != null && s.ProjectPaper.Paper.UniversityId == universityId) ||
                                  (s.ProjectPaper.Project != null && s.ProjectPaper.Project.UniversityId == universityId)) &&
-                                s.Status == ScriptStatus.pending &&
+                                (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !_context.Allocations.Any(a => a.ScriptId == s.Id && a.AssignmentStatus))) &&
                                 !_context.Markings.Any(m => m.ScriptId == s.Id && m.Status == MarkingStatus.submitted) &&
                                 !_context.Allocations.Any(a => a.ScriptId == s.Id && a.AssignmentStatus))
                     .ToListAsync();
@@ -175,45 +178,17 @@ namespace API.Services
                         .Distinct()
                         .ToListAsync();
 
-                    // Check all 3 conditions for each paper in this project:
-                    // 1. Examiner is assigned (IsExaminerAssigned flag on ProjectPaper or active in PaperExaminers)
-                    // 2. Question paper PDF is uploaded (QuestionPaperPdfUrl is present)
-                    // 3. Sections are configured (IsSectionConfigured is true)
+                    // Crucial requirement: ONLY run when ALL papers of that project have an examiner assigned in PaperExaminers
                     var missingExaminerPapers = allPapersInProject
                         .Where(pp => !pp.IsExaminerAssigned && !assignedPaperIds.Contains(pp.Id))
                         .ToList();
 
-                    var missingQpPapers = allPapersInProject
-                        .Where(pp => string.IsNullOrWhiteSpace(pp.QuestionPaperPdfUrl))
-                        .ToList();
-
-                    var missingSectionPapers = allPapersInProject
-                        .Where(pp => !pp.IsSectionConfigured)
-                        .ToList();
-
-                    if (missingExaminerPapers.Any() || missingQpPapers.Any() || missingSectionPapers.Any())
+                    if (missingExaminerPapers.Any())
                     {
-                        var issues = new List<string>();
-                        if (missingExaminerPapers.Any())
-                        {
-                            var names = missingExaminerPapers.Select(pp => pp.Paper?.PaperName ?? pp.Paper?.PaperCode ?? $"Paper #{pp.PaperId}");
-                            issues.Add($"examiner not assigned ({string.Join(", ", names)})");
-                        }
-                        if (missingQpPapers.Any())
-                        {
-                            var names = missingQpPapers.Select(pp => pp.Paper?.PaperName ?? pp.Paper?.PaperCode ?? $"Paper #{pp.PaperId}");
-                            issues.Add($"QP PDF not uploaded ({string.Join(", ", names)})");
-                        }
-                        if (missingSectionPapers.Any())
-                        {
-                            var names = missingSectionPapers.Select(pp => pp.Paper?.PaperName ?? pp.Paper?.PaperCode ?? $"Paper #{pp.PaperId}");
-                            issues.Add($"sections not configured ({string.Join(", ", names)})");
-                        }
-
-                        unassignedProjectsInfo.Add($"Project #{projId}: {string.Join("; ", issues)}");
-                        _logger.LogInformation("Daily allocation skipped for Project {ProjectId}: Not all papers are fully ready. Issues: {Issues}",
-                            projId, string.Join("; ", issues));
-                        // Crucial requirement: ONLY run when ALL papers of that project have an examiner assigned, QP uploaded, and sections configured. Skip this project!
+                        var names = missingExaminerPapers.Select(pp => pp.Paper?.PaperName ?? pp.Paper?.PaperCode ?? $"Paper #{pp.PaperId}");
+                        unassignedProjectsInfo.Add($"Project #{projId}: examiner not assigned ({string.Join(", ", names)})");
+                        _logger.LogInformation("Daily allocation skipped for Project {ProjectId}: Not all papers have examiners assigned. Missing: {Missing}",
+                            projId, string.Join(", ", names));
                         continue;
                     }
 
@@ -312,10 +287,15 @@ namespace API.Services
                 _logger.LogError(ex, "Error executing Daily Allocation for university {UniversityId}", universityId);
                 return (false, 0, 0, ex.Message);
             }
+            finally
+            {
+                _dailyAllocationLock.Release();
+            }
         }
 
         public async Task<(bool success, int allocatedCount, string message)> PerformEqualDistributionForUniversityAsync(int universityId)
         {
+            await _distributionLock.WaitAsync();
             try
             {
                 var assignType = await _context.AssignmentTypes
@@ -354,9 +334,8 @@ namespace API.Services
 
                 if (crossedCompletionDate)
                 {
-                    // Equal distribution crossed completion date!
-                    // Example: Completion date was 31/10/2026, so on 01/11/2026 it reruns:
-                    // 1. Set assignmentstatus in allocation table as 0 (false) for unsubmitted allocations
+                    // Equal distribution crossed completion date:
+                    // 1. Set assignmentstatus in allocation table as 0 (false) for scripts NOT in markings table
                     var expiredAllocations = await _context.Allocations
                         .Include(a => a.Script)
                             .ThenInclude(s => s.ProjectPaper)
@@ -368,7 +347,7 @@ namespace API.Services
                                     (a.Deadline.HasValue ? a.Deadline.Value <= DateTime.UtcNow : a.AllocatedAt <= deadline) &&
                                     ((a.Script.ProjectPaper.Paper != null && a.Script.ProjectPaper.Paper.UniversityId == universityId) ||
                                      (a.Script.ProjectPaper.Project != null && a.Script.ProjectPaper.Project.UniversityId == universityId)) &&
-                                    !_context.Markings.Any(m => m.AllocationId == a.AllocationId && m.Status == MarkingStatus.submitted) &&
+                                    !_context.Markings.Any(m => m.ScriptId == a.ScriptId) &&
                                     a.Script.Status != ScriptStatus.completed)
                         .ToListAsync();
 
@@ -376,7 +355,7 @@ namespace API.Services
                     {
                         foreach (var alloc in expiredAllocations)
                         {
-                            alloc.AssignmentStatus = false; // set assignmentstatus in allocation table as 0
+                            alloc.AssignmentStatus = false;
                             alloc.Status = AllocationStatus.cancelled;
 
                             if (alloc.Script != null)
@@ -388,11 +367,11 @@ namespace API.Services
 
                         await _context.SaveChangesAsync();
                         reassignedCount = expiredAllocations.Count;
-                        _logger.LogInformation("Equal distribution crossed completion date {Deadline:yyyy-MM-dd}. Deactivated {Count} incomplete allocation(s) (set AssignmentStatus = 0) for university {UniversityId}",
+                        _logger.LogInformation("Equal distribution crossed completion date {Deadline:yyyy-MM-dd}. Deactivated {Count} incomplete allocation(s) for university {UniversityId}",
                             deadline, reassignedCount, universityId);
                     }
 
-                    // 2. Extend completion date for the next cycle so background service won't loop every minute
+                    // 2. Extend completion date for next cycle
                     int cycleDays = 7;
                     if (assignType.CompletionDate.HasValue)
                     {
@@ -411,140 +390,65 @@ namespace API.Services
 
                     deadline = newCompletionDate;
                 }
-                else
-                {
-                    // If deadline has not been crossed, check if all scripts have already been allocated
-                    var activeCount = await _context.Allocations
-                        .CountAsync(a => a.AssignmentStatus &&
-                                         ((a.Script.ProjectPaper.Paper != null && a.Script.ProjectPaper.Paper.UniversityId == universityId) ||
-                                          (a.Script.ProjectPaper.Project != null && a.Script.ProjectPaper.Project.UniversityId == universityId)));
 
-                    var hasPendingScripts = await _context.Scripts
-                        .AnyAsync(s => s.ProjectPaper != null &&
-                                       ((s.ProjectPaper.Paper != null && s.ProjectPaper.Paper.UniversityId == universityId) ||
-                                        (s.ProjectPaper.Project != null && s.ProjectPaper.Project.UniversityId == universityId)) &&
-                                       s.Status == ScriptStatus.pending &&
-                                       !_context.Markings.Any(m => m.ScriptId == s.Id && m.Status == MarkingStatus.submitted) &&
-                                       !_context.Allocations.Any(a => a.ScriptId == s.Id && a.AssignmentStatus));
-
-                    if (activeCount > 0 && !hasPendingScripts)
-                    {
-                        // Active and waiting for completion date
-                        return (true, 0, $"Equal distribution is active until {deadline:yyyy-MM-dd HH:mm:ss} UTC. It will only rerun when it crosses the completion date.");
-                    }
-                }
-
-                // 3. Find pending unassigned & unmarked scripts belonging to this university in Scripts table
-                var pendingScripts = await _context.Scripts
-                    .Include(s => s.ProjectPaper)
-                        .ThenInclude(pp => pp.Paper)
-                    .Include(s => s.ProjectPaper)
-                        .ThenInclude(pp => pp.Project)
-                    .Where(s => s.ProjectPaper != null &&
-                                ((s.ProjectPaper.Paper != null && s.ProjectPaper.Paper.UniversityId == universityId) ||
-                                 (s.ProjectPaper.Project != null && s.ProjectPaper.Project.UniversityId == universityId)) &&
-                                s.Status == ScriptStatus.pending &&
-                                !_context.Markings.Any(m => m.ScriptId == s.Id && m.Status == MarkingStatus.submitted) &&
-                                !_context.Allocations.Any(a => a.ScriptId == s.Id && a.AssignmentStatus))
+                // 3. Find all active project papers for this university
+                var allProjectPapers = await _context.ProjectPapers
+                    .Include(pp => pp.Paper)
+                    .Include(pp => pp.Project)
+                    .Where(pp => pp.IsActive &&
+                                 ((pp.Paper != null && pp.Paper.UniversityId == universityId) ||
+                                  (pp.Project != null && pp.Project.UniversityId == universityId)))
                     .ToListAsync();
 
-                if (!pendingScripts.Any())
+                if (!allProjectPapers.Any())
                 {
-                    return (true, 0, reassignedCount > 0
-                        ? $"Reassigned {reassignedCount} expired allocation(s) upon crossing completion date. No pending scripts to allocate."
-                        : $"No pending scripts found in scripts table for university {universityId}. No allocation performed.");
+                    return (true, 0, $"No active project papers found for university {universityId}.");
                 }
 
-                // 4. Group pending scripts by ProjectId to enforce that ALL papers of a project must have assigned examiners
-                var scriptsByProject = pendingScripts
-                    .Where(s => s.ProjectPaper != null && s.ProjectPaper.ProjectId > 0)
-                    .GroupBy(s => s.ProjectPaper.ProjectId)
+                // Group project papers by ProjectId
+                var papersByProject = allProjectPapers
+                    .Where(pp => pp.ProjectId > 0)
+                    .GroupBy(pp => pp.ProjectId)
                     .ToDictionary(g => g.Key, g => g.ToList());
 
-                var eligibleScripts = new List<Script>();
+                var allProjectPaperIds = allProjectPapers.Select(pp => pp.Id).ToList();
+                var assignedPaperIds = await _context.PaperExaminers
+                    .Where(pe => allProjectPaperIds.Contains(pe.ProjectPaperId) && pe.IsActive && pe.Examiner != null && pe.Examiner.IsActive)
+                    .Select(pe => pe.ProjectPaperId)
+                    .Distinct()
+                    .ToListAsync();
+
+                var eligibleProjectPaperIds = new List<int>();
                 var unassignedProjectsInfo = new List<string>();
 
-                foreach (var (projId, projScripts) in scriptsByProject)
+                foreach (var (projId, papersInProj) in papersByProject)
                 {
-                    var allPapersInProject = await _context.ProjectPapers
-                        .Include(pp => pp.Paper)
-                        .Where(pp => pp.ProjectId == projId && pp.IsActive)
-                        .ToListAsync();
-
-                    if (!allPapersInProject.Any())
-                    {
-                        continue;
-                    }
-
-                    var projectPaperIds = allPapersInProject.Select(pp => pp.Id).ToList();
-                    var assignedPaperIds = await _context.PaperExaminers
-                        .Where(pe => projectPaperIds.Contains(pe.ProjectPaperId) && pe.IsActive && pe.Examiner != null && pe.Examiner.IsActive)
-                        .Select(pe => pe.ProjectPaperId)
-                        .Distinct()
-                        .ToListAsync();
-
-                    // Check all 3 conditions for each paper in this project:
-                    // 1. Examiner is assigned (IsExaminerAssigned flag on ProjectPaper or active in PaperExaminers)
-                    // 2. Question paper PDF is uploaded (QuestionPaperPdfUrl is present)
-                    // 3. Sections are configured (IsSectionConfigured is true)
-                    var missingExaminerPapers = allPapersInProject
+                    // Crucial requirement: ONLY run when ALL papers of that project have an examiner assigned in PaperExaminers
+                    var missingExaminerPapers = papersInProj
                         .Where(pp => !pp.IsExaminerAssigned && !assignedPaperIds.Contains(pp.Id))
                         .ToList();
 
-                    var missingQpPapers = allPapersInProject
-                        .Where(pp => string.IsNullOrWhiteSpace(pp.QuestionPaperPdfUrl))
-                        .ToList();
-
-                    var missingSectionPapers = allPapersInProject
-                        .Where(pp => !pp.IsSectionConfigured)
-                        .ToList();
-
-                    if (missingExaminerPapers.Any() || missingQpPapers.Any() || missingSectionPapers.Any())
+                    if (missingExaminerPapers.Any())
                     {
-                        var issues = new List<string>();
-                        if (missingExaminerPapers.Any())
-                        {
-                            var names = missingExaminerPapers.Select(pp => pp.Paper?.PaperName ?? pp.Paper?.PaperCode ?? $"Paper #{pp.PaperId}");
-                            issues.Add($"examiner not assigned ({string.Join(", ", names)})");
-                        }
-                        if (missingQpPapers.Any())
-                        {
-                            var names = missingQpPapers.Select(pp => pp.Paper?.PaperName ?? pp.Paper?.PaperCode ?? $"Paper #{pp.PaperId}");
-                            issues.Add($"QP PDF not uploaded ({string.Join(", ", names)})");
-                        }
-                        if (missingSectionPapers.Any())
-                        {
-                            var names = missingSectionPapers.Select(pp => pp.Paper?.PaperName ?? pp.Paper?.PaperCode ?? $"Paper #{pp.PaperId}");
-                            issues.Add($"sections not configured ({string.Join(", ", names)})");
-                        }
-
-                        unassignedProjectsInfo.Add($"Project #{projId}: {string.Join("; ", issues)}");
-                        _logger.LogInformation("Equal distribution skipped for Project {ProjectId}: Not all papers are fully ready. Issues: {Issues}",
-                            projId, string.Join("; ", issues));
-                        // Crucial requirement: ONLY run when ALL papers of that project have an examiner assigned, QP uploaded, and sections configured. Skip this project!
+                        var names = missingExaminerPapers.Select(pp => pp.Paper?.PaperName ?? pp.Paper?.PaperCode ?? $"Paper #{pp.PaperId}");
+                        unassignedProjectsInfo.Add($"Project #{projId}: examiners not assigned for {string.Join(", ", names)}");
+                        _logger.LogInformation("Equal distribution skipped for Project {ProjectId}: Not all papers have examiners assigned. Missing: {Missing}",
+                            projId, string.Join(", ", names));
                         continue;
                     }
 
-                    eligibleScripts.AddRange(projScripts);
+                    eligibleProjectPaperIds.AddRange(papersInProj.Select(pp => pp.Id));
                 }
 
-                if (!eligibleScripts.Any())
+                if (!eligibleProjectPaperIds.Any())
                 {
                     string info = unassignedProjectsInfo.Any()
-                        ? $" Cannot allocate: all papers of a project must have an assigned examiner, question paper PDF, and configured sections. Unready projects: {string.Join("; ", unassignedProjectsInfo)}."
-                        : " No eligible projects found where all papers have examiners, question paper PDF, and configured sections.";
+                        ? $" Cannot allocate: all papers of a project must have an assigned examiner in PaperExaminers. Unassigned projects: {string.Join("; ", unassignedProjectsInfo)}."
+                        : " No eligible projects found where all papers have examiners.";
                     return (false, 0, $"No scripts distributed for university {universityId}.{info}");
                 }
 
-                // 5. Group eligible scripts by ProjectPaperId
-                var scriptsByProjectPaper = eligibleScripts
-                    .Where(s => s.ProjectPaperId > 0)
-                    .GroupBy(s => s.ProjectPaperId)
-                    .ToDictionary(g => g.Key, g => g.ToList());
-
-                var eligibleProjectPaperIds = scriptsByProjectPaper.Keys.ToList();
-
-                // 6. Look up assigned examiners for these project papers from PaperExaminers table
+                // 4. Look up assigned examiners for eligible project papers from PaperExaminers
                 var paperExaminersEntries = await _context.PaperExaminers
                     .Include(pe => pe.Examiner)
                     .Where(pe => eligibleProjectPaperIds.Contains(pe.ProjectPaperId) && pe.IsActive && pe.Examiner != null && pe.Examiner.IsActive)
@@ -554,44 +458,58 @@ namespace API.Services
                     .GroupBy(pe => pe.ProjectPaperId)
                     .ToDictionary(g => g.Key, g => g.Select(pe => pe.Examiner).DistinctBy(e => e.Id).ToList());
 
-                var allAssignedExaminers = paperExaminersMap.Values.SelectMany(list => list).DistinctBy(e => e.Id).ToList();
-                if (!allAssignedExaminers.Any())
-                {
-                    return (false, 0, $"No active examiners assigned in PaperExaminers table for the eligible project papers of university {universityId}. Please assign examiners to papers first.");
-                }
-
                 int totalAllocated = 0;
+                int totalRebalanced = 0;
                 var newAllocations = new List<Allocation>();
+                var allocationsToCancel = new List<Allocation>();
                 var updatedScripts = new List<Script>();
 
-                // 7. For each ProjectPaperId, distribute its scripts equally among examiners assigned to this ProjectPaperId in PaperExaminers
-                foreach (var kvp in scriptsByProjectPaper)
+                // 5. For each eligible ProjectPaperId, distribute its scripts equally among examiners assigned to this ProjectPaperId
+                foreach (var projectPaperId in eligibleProjectPaperIds)
                 {
-                    int projectPaperId = kvp.Key;
-                    var paperScripts = kvp.Value;
-
                     if (!paperExaminersMap.TryGetValue(projectPaperId, out var paperExaminers) || !paperExaminers.Any())
                     {
                         continue;
                     }
 
-                    DistributeEqually(
-                        paperScripts,
+                    var (paperAllocated, paperRebalanced) = await DistributeEquallyForPaperAsync(
+                        projectPaperId,
                         paperExaminers,
                         deadline,
                         newAllocations,
-                        updatedScripts,
-                        ref totalAllocated);
+                        allocationsToCancel,
+                        updatedScripts);
+
+                    totalAllocated += paperAllocated;
+                    totalRebalanced += paperRebalanced;
+                }
+
+                if (allocationsToCancel.Any())
+                {
+                    _context.Allocations.UpdateRange(allocationsToCancel);
                 }
 
                 if (newAllocations.Any())
                 {
                     await _context.Allocations.AddRangeAsync(newAllocations);
-                    _context.Scripts.UpdateRange(updatedScripts);
+                }
+
+                if (updatedScripts.Any())
+                {
+                    _context.Scripts.UpdateRange(updatedScripts.DistinctBy(s => s.Id));
+                }
+
+                if (allocationsToCancel.Any() || newAllocations.Any() || updatedScripts.Any())
+                {
                     await _context.SaveChangesAsync();
                 }
 
-                string msg = $"Successfully equally distributed {totalAllocated} script(s) to examiners from PaperExaminers with completion deadline {deadline:yyyy-MM-dd}.";
+                if (totalAllocated == 0 && totalRebalanced == 0)
+                {
+                    return (true, 0, $"Equal distribution is active until {deadline:yyyy-MM-dd}. All scripts for eligible project papers are already equally distributed among assigned examiners.");
+                }
+
+                string msg = $"Successfully equally distributed {totalAllocated} script(s) (with {totalRebalanced} rebalanced) across assigned examiners with deadline {deadline:yyyy-MM-dd}.";
                 if (reassignedCount > 0)
                 {
                     msg += $" (Reassigned {reassignedCount} expired allocations from crossed completion date).";
@@ -608,79 +526,273 @@ namespace API.Services
                 _logger.LogError(ex, "Error executing Equal Distribution for university {UniversityId}", universityId);
                 return (false, 0, ex.Message);
             }
+            finally
+            {
+                _distributionLock.Release();
+            }
         }
 
-        private static void DistributeEqually(
-            List<Script> scripts,
+        private async Task<(int allocatedCount, int rebalancedCount)> DistributeEquallyForPaperAsync(
+            int projectPaperId,
             List<User> examiners,
             DateTime deadline,
             List<Allocation> newAllocations,
-            List<Script> updatedScripts,
-            ref int totalAllocated)
+            List<Allocation> allocationsToCancel,
+            List<Script> updatedScripts)
         {
-            if (!examiners.Any() || !scripts.Any()) return;
+            if (!examiners.Any()) return (0, 0);
 
-            int scriptCount = scripts.Count;
-            int examinerCount = examiners.Count;
-            int baseShare = scriptCount / examinerCount;
-            int remainder = scriptCount % examinerCount;
+            int localAllocated = 0;
+            int localRebalanced = 0;
 
-            // Step 1: Base share + remainder distribution (e.g. 11 scripts / 3 examiners => 4, 4, 3)
-            int scriptIndex = 0;
-            for (int i = 0; i < examinerCount; i++)
+            // 1. Fetch uncompleted scripts for this paper (include ProjectPaper so ProjectId is always available on allocations)
+            var paperScripts = await _context.Scripts
+                .Include(s => s.ProjectPaper)
+                .Where(s => s.ProjectPaperId == projectPaperId && s.Status != ScriptStatus.completed)
+                .ToListAsync();
+
+            if (!paperScripts.Any()) return (0, 0);
+
+            var scriptIds = paperScripts.Select(s => s.Id).ToList();
+
+            // 2. Exclude scripts that are already submitted in Markings (evaluations finalized)
+            var submittedScriptIds = await _context.Markings
+                .Where(m => scriptIds.Contains(m.ScriptId) && m.Status == MarkingStatus.submitted)
+                .Select(m => m.ScriptId)
+                .Distinct()
+                .ToListAsync();
+
+            var submittedSet = new HashSet<int>(submittedScriptIds);
+            var availableScripts = paperScripts.Where(s => !submittedSet.Contains(s.Id)).ToList();
+
+            if (!availableScripts.Any()) return (0, 0);
+
+            // 3. Markings in progress (draft / not submitted yet) — keep with examiner who started marking
+            var inProgressMarkings = await _context.Markings
+                .Where(m => scriptIds.Contains(m.ScriptId) && m.Status != MarkingStatus.submitted)
+                .Select(m => new { m.ScriptId, m.ExaminerId })
+                .ToListAsync();
+            var inProgressExaminerMap = inProgressMarkings
+                .GroupBy(m => m.ScriptId)
+                .ToDictionary(g => g.Key, g => g.First().ExaminerId);
+
+            // 4. Calculate target shares per examiner
+            // Odd numbers are handled cleanly:
+            // e.g. 11 scripts / 2 examiners => baseShare = 5, remainder = 1 => 6, 5
+            // e.g. 13 scripts / 2 examiners => baseShare = 6, remainder = 1 => 7, 6
+            // e.g. 11 scripts / 3 examiners => baseShare = 3, remainder = 2 => 4, 4, 3
+            // e.g. 1 script / 2 examiners => 1, 0
+            int n = availableScripts.Count;
+            int m = examiners.Count;
+            int baseShare = n / m;
+            int remainder = n % m;
+
+            var targetMap = new Dictionary<int, int>();
+            for (int i = 0; i < m; i++)
             {
-                int share = baseShare + (i < remainder ? 1 : 0);
-                if (share <= 0) continue;
+                targetMap[examiners[i].Id] = baseShare + (i < remainder ? 1 : 0);
+            }
 
-                var examiner = examiners[i];
-                for (int j = 0; j < share; j++)
+            // 5. Query active allocations for this paper
+            var activeAllocations = await _context.Allocations
+                .Include(a => a.Script)
+                .Where(a => scriptIds.Contains(a.ScriptId) && a.AssignmentStatus)
+                .ToListAsync();
+
+            // De-duplicate if multiple active allocations exist for a script
+            var activeByScript = new Dictionary<int, Allocation>();
+            foreach (var alloc in activeAllocations)
+            {
+                if (activeByScript.TryGetValue(alloc.ScriptId, out var existing))
                 {
-                    if (scriptIndex >= scripts.Count) break;
+                    bool allocInProgress = inProgressExaminerMap.TryGetValue(alloc.ScriptId, out var ex1) && alloc.ExaminerId == ex1;
+                    bool existingInProgress = inProgressExaminerMap.TryGetValue(existing.ScriptId, out var ex2) && existing.ExaminerId == ex2;
 
-                    var script = scripts[scriptIndex++];
-                    var allocation = new Allocation
+                    Allocation toKeep, toDeactivate;
+                    if (allocInProgress && !existingInProgress)
                     {
-                        ScriptId = script.Id,
-                        ExaminerId = examiner.Id,
-                        ProjectId = script.ProjectId ?? script.ProjectPaper?.ProjectId,
-                        AllocatedAt = DateTime.UtcNow,
-                        Deadline = deadline,
-                        Status = AllocationStatus.allocated,
-                        AssignmentStatus = true
-                    };
+                        toKeep = alloc;
+                        toDeactivate = existing;
+                    }
+                    else if (existingInProgress && !allocInProgress)
+                    {
+                        toKeep = existing;
+                        toDeactivate = alloc;
+                    }
+                    else if (alloc.AllocatedAt > existing.AllocatedAt)
+                    {
+                        toKeep = alloc;
+                        toDeactivate = existing;
+                    }
+                    else
+                    {
+                        toKeep = existing;
+                        toDeactivate = alloc;
+                    }
 
-                    newAllocations.Add(allocation);
-                    script.Status = ScriptStatus.allocated;
-                    script.UpdatedAt = DateTime.UtcNow;
-                    updatedScripts.Add(script);
-                    totalAllocated++;
+                    toDeactivate.AssignmentStatus = false;
+                    toDeactivate.Status = AllocationStatus.cancelled;
+                    allocationsToCancel.Add(toDeactivate);
+                    activeByScript[alloc.ScriptId] = toKeep;
+                }
+                else
+                {
+                    activeByScript[alloc.ScriptId] = alloc;
                 }
             }
 
-            // Step 2: Fail-safe guarantee — if any leftover scripts remain for any reason, add them to examiners among them round-robin
-            while (scriptIndex < scripts.Count)
-            {
-                var script = scripts[scriptIndex];
-                var examiner = examiners[scriptIndex % examinerCount];
-                scriptIndex++;
+            var assignedExaminerIds = examiners.Select(e => e.Id).ToHashSet();
+            var retainedScriptIds = new HashSet<int>();
+            var examinerRetainedCount = examiners.ToDictionary(e => e.Id, _ => 0);
+            var excessAllocationsToReassign = new List<Allocation>();
 
-                var allocation = new Allocation
+            // A: Retain allocations for currently assigned examiners up to their target
+            foreach (var examiner in examiners)
+            {
+                int target = targetMap[examiner.Id];
+                var exAllocs = activeByScript.Values
+                    .Where(a => a.AssignmentStatus && a.ExaminerId == examiner.Id)
+                    .OrderByDescending(a => inProgressExaminerMap.ContainsKey(a.ScriptId)) // Prioritize keeping in-progress evaluations
+                    .ThenBy(a => a.AllocatedAt)
+                    .ToList();
+
+                // Keep in-progress first, and keep up to target
+                int inProgressCount = exAllocs.Count(a => inProgressExaminerMap.ContainsKey(a.ScriptId));
+                int keepCount = Math.Min(exAllocs.Count, Math.Max(target, inProgressCount));
+
+                var kept = exAllocs.Take(keepCount).ToList();
+                var excess = exAllocs.Skip(keepCount).ToList();
+
+                foreach (var alloc in kept)
+                {
+                    retainedScriptIds.Add(alloc.ScriptId);
+                }
+                examinerRetainedCount[examiner.Id] = kept.Count;
+
+                // Collect excess allocations for reassigning directly in-place to other examiners
+                excessAllocationsToReassign.AddRange(excess);
+            }
+
+            // B: Collect allocations belonging to examiners NO LONGER assigned to this paper
+            var foreignAllocs = activeByScript.Values
+                .Where(a => a.AssignmentStatus && !assignedExaminerIds.Contains(a.ExaminerId))
+                .ToList();
+
+            excessAllocationsToReassign.AddRange(foreignAllocs);
+
+            // C: Find scripts that have NO active allocation in the database at all
+            var unallocatedScripts = availableScripts
+                .Where(s => !activeByScript.ContainsKey(s.Id))
+                .ToList();
+
+            // 6. Allocate to examiners that are below target:
+            // First REUSE & REASSIGN existing excess allocation rows in-place (updates ExaminerId without creating ghost cancelled rows)
+            // Then allocate truly unallocated scripts with new Allocation rows
+            int excessIndex = 0;
+            int unallocatedIndex = 0;
+            var now = DateTime.UtcNow;
+
+            foreach (var examiner in examiners)
+            {
+                int currentCount = examinerRetainedCount[examiner.Id];
+                int target = targetMap[examiner.Id];
+                int needed = Math.Max(0, target - currentCount);
+
+                for (int k = 0; k < needed; k++)
+                {
+                    if (excessIndex < excessAllocationsToReassign.Count)
+                    {
+                        // In-place transfer: update existing allocation row to new examiner
+                        var allocToReassign = excessAllocationsToReassign[excessIndex++];
+                        allocToReassign.ExaminerId = examiner.Id;
+                        allocToReassign.AllocatedAt = now;
+                        allocToReassign.Deadline = deadline;
+                        allocToReassign.Status = AllocationStatus.allocated;
+                        allocToReassign.AssignmentStatus = true;
+
+                        if (allocToReassign.Script != null)
+                        {
+                            allocToReassign.Script.Status = ScriptStatus.allocated;
+                            allocToReassign.Script.UpdatedAt = now;
+                            updatedScripts.Add(allocToReassign.Script);
+                        }
+
+                        allocationsToCancel.Add(allocToReassign); // UpdateRange will update this row in DB
+                        examinerRetainedCount[examiner.Id]++;
+                        localRebalanced++;
+                    }
+                    else if (unallocatedIndex < unallocatedScripts.Count)
+                    {
+                        // Brand new allocation for a previously unallocated script
+                        var script = unallocatedScripts[unallocatedIndex++];
+                        var newAlloc = new Allocation
+                        {
+                            ScriptId = script.Id,
+                            ExaminerId = examiner.Id,
+                            ProjectId = script.ProjectId ?? script.ProjectPaper?.ProjectId,
+                            AllocatedAt = now,
+                            Deadline = deadline,
+                            Status = AllocationStatus.allocated,
+                            AssignmentStatus = true
+                        };
+
+                        newAllocations.Add(newAlloc);
+                        script.Status = ScriptStatus.allocated;
+                        script.UpdatedAt = now;
+                        updatedScripts.Add(script);
+                        examinerRetainedCount[examiner.Id]++;
+                        localAllocated++;
+                    }
+                }
+            }
+
+            // 7. If any excess allocation could not be reassigned (e.g. paper scripts reduced or 0 examiners left):
+            // Only then deactivate/cancel them
+            while (excessIndex < excessAllocationsToReassign.Count)
+            {
+                var leftover = excessAllocationsToReassign[excessIndex++];
+                leftover.AssignmentStatus = false;
+                leftover.Status = AllocationStatus.cancelled;
+
+                if (leftover.Script != null)
+                {
+                    leftover.Script.Status = ScriptStatus.pending;
+                    leftover.Script.UpdatedAt = now;
+                    updatedScripts.Add(leftover.Script);
+                }
+
+                allocationsToCancel.Add(leftover);
+                localRebalanced++;
+            }
+
+            // 8. Fail-safe: if any unallocated script remains, round-robin to examiners with lowest count
+            while (unallocatedIndex < unallocatedScripts.Count)
+            {
+                var script = unallocatedScripts[unallocatedIndex++];
+                var examiner = examiners
+                    .OrderBy(e => examinerRetainedCount[e.Id])
+                    .First();
+
+                var newAlloc = new Allocation
                 {
                     ScriptId = script.Id,
                     ExaminerId = examiner.Id,
                     ProjectId = script.ProjectId ?? script.ProjectPaper?.ProjectId,
-                    AllocatedAt = DateTime.UtcNow,
+                    AllocatedAt = now,
                     Deadline = deadline,
                     Status = AllocationStatus.allocated,
                     AssignmentStatus = true
                 };
 
-                newAllocations.Add(allocation);
+                newAllocations.Add(newAlloc);
                 script.Status = ScriptStatus.allocated;
-                script.UpdatedAt = DateTime.UtcNow;
+                script.UpdatedAt = now;
                 updatedScripts.Add(script);
-                totalAllocated++;
+                examinerRetainedCount[examiner.Id]++;
+                localAllocated++;
             }
+
+            return (localAllocated, localRebalanced);
         }
 
         private static void DistributeDailyForPaper(

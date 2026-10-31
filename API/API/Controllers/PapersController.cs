@@ -391,6 +391,9 @@ namespace API.Controllers
                     IsActive = p.IsActive,
                     UniversityId = p.UniversityId,
                     ProjectId = projectId ?? p.ProjectPapers.Select(pp => (int?)pp.ProjectId).FirstOrDefault(),
+                    ProjectPaperId = projectId.HasValue 
+                        ? p.ProjectPapers.Where(pp => pp.ProjectId == projectId.Value).Select(pp => (int?)pp.Id).FirstOrDefault() 
+                        : p.ProjectPapers.Select(pp => (int?)pp.Id).FirstOrDefault(),
                     CatchNo = projectId.HasValue ? p.ProjectPapers.Where(pp => pp.ProjectId == projectId.Value).Select(pp => pp.CatchNo).FirstOrDefault() ?? "" : p.ProjectPapers.Select(pp => pp.CatchNo).FirstOrDefault() ?? "",
                     QuestionPaperPdfUrl = projectId.HasValue ? p.ProjectPapers.Where(pp => pp.ProjectId == projectId.Value).Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() ?? "" : p.ProjectPapers.Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() ?? "",
                     SubjectIds = p.SubjectPapers
@@ -456,6 +459,7 @@ namespace API.Controllers
                     IsActive = paper.IsActive,
                     UniversityId = paper.UniversityId,
                     ProjectId = firstProjectPaper?.ProjectId,
+                    ProjectPaperId = firstProjectPaper?.Id,
                     SubjectIds = paper.SubjectPapers
                         .Select(sp => sp.SubjectId)
                         .ToList(),

@@ -35,15 +35,42 @@ namespace API.Controllers
         }
 
         [HttpGet("paper/{paperId}")]
-        public async Task<ActionResult<IEnumerable<PaperExaminer>>> GetPaperExaminers(int paperId)
+        public async Task<ActionResult<IEnumerable<PaperExaminer>>> GetPaperExaminers(
+            int paperId, 
+            [FromQuery] int? projectId = null, 
+            [FromQuery] int? projectPaperId = null)
         {
             try
             {
-                var assignments = await _context.PaperExaminers
+                var query = _context.PaperExaminers
                     .Include(pe => pe.Examiner)
                     .Include(pe => pe.ProjectPaper)
-                    .Where(pe => pe.ProjectPaperId == paperId || (pe.ProjectPaper != null && pe.ProjectPaper.PaperId == paperId))
-                    .ToListAsync();
+                    .Where(pe => pe.IsActive);
+
+                if (projectPaperId.HasValue && projectPaperId.Value > 0)
+                {
+                    query = query.Where(pe => pe.ProjectPaperId == projectPaperId.Value);
+                }
+                else if (projectId.HasValue && projectId.Value > 0)
+                {
+                    var targetPp = await _context.ProjectPapers
+                        .FirstOrDefaultAsync(pp => pp.PaperId == paperId && pp.ProjectId == projectId.Value);
+
+                    if (targetPp != null)
+                    {
+                        query = query.Where(pe => pe.ProjectPaperId == targetPp.Id);
+                    }
+                    else
+                    {
+                        return Ok(new List<PaperExaminer>());
+                    }
+                }
+                else
+                {
+                    query = query.Where(pe => pe.ProjectPaperId == paperId || (pe.ProjectPaper != null && pe.ProjectPaper.PaperId == paperId));
+                }
+
+                var assignments = await query.ToListAsync();
 
                 return Ok(assignments);
             }
@@ -61,7 +88,7 @@ namespace API.Controllers
                 var assignments = await _context.PaperExaminers
                     .Include(pe => pe.Examiner)
                     .Include(pe => pe.ProjectPaper)
-                    .Where(pe => pe.ProjectPaperId == projectPaperId)
+                    .Where(pe => pe.ProjectPaperId == projectPaperId && pe.IsActive)
                     .ToListAsync();
 
                 return Ok(assignments);
@@ -677,11 +704,35 @@ namespace API.Controllers
                 if (newExaminerId <= 0)
                     return BadRequest(new { success = false, message = "Valid new examiner ID is required." });
 
+                // If caller provided a projectPaperId and it doesn't match this assignment's projectPaperId,
+                // do NOT modify the wrong project paper!
+                if (dto.ProjectPaperId.HasValue && dto.ProjectPaperId.Value > 0 && dto.ProjectPaperId.Value != assignment.ProjectPaperId)
+                {
+                    int targetPpId = dto.ProjectPaperId.Value;
+                    var targetAssignment = await _context.PaperExaminers
+                        .FirstOrDefaultAsync(pe => pe.ProjectPaperId == targetPpId && pe.IsActive);
+
+                    if (targetAssignment != null)
+                    {
+                        assignment = targetAssignment;
+                    }
+                    else
+                    {
+                        // No active assignment on the intended project paper: create a new assignment for it
+                        return await AssignExaminer(new PaperExaminerAssignDto
+                        {
+                            ProjectPaperId = targetPpId,
+                            ExaminerId = newExaminerId,
+                            ProjectId = dto.ProjectId
+                        });
+                    }
+                }
+
                 var result = await UpdateExaminerAssignmentInternalAsync(
                     assignment.ProjectPaperId,
                     assignment.ExaminerId,
                     newExaminerId,
-                    id);
+                    assignment.Id);
 
                 if (!result.success)
                     return BadRequest(new { success = false, message = result.message });
@@ -727,7 +778,12 @@ namespace API.Controllers
 
                 if (projectPaperId <= 0 && dto.PaperId.HasValue && dto.PaperId.Value > 0)
                 {
-                    var pp = await _context.ProjectPapers.FirstOrDefaultAsync(p => p.PaperId == dto.PaperId.Value);
+                    var ppQuery = _context.ProjectPapers.Where(p => p.PaperId == dto.PaperId.Value);
+                    if (dto.ProjectId.HasValue && dto.ProjectId.Value > 0)
+                    {
+                        ppQuery = ppQuery.Where(p => p.ProjectId == dto.ProjectId.Value);
+                    }
+                    var pp = await ppQuery.FirstOrDefaultAsync();
                     if (pp != null)
                     {
                         projectPaperId = pp.Id;
@@ -743,7 +799,7 @@ namespace API.Controllers
                 {
                     // Default old examiner to the currently assigned examiner for this project paper
                     var existingPe = await _context.PaperExaminers
-                        .Where(pe => pe.ProjectPaperId == projectPaperId && pe.ExaminerId != newExaminerId)
+                        .Where(pe => pe.ProjectPaperId == projectPaperId && pe.ExaminerId != newExaminerId && pe.IsActive)
                         .OrderByDescending(pe => pe.AssignedAt)
                         .FirstOrDefaultAsync();
 
@@ -791,7 +847,12 @@ namespace API.Controllers
                 int projectPaperId = assignDto.ProjectPaperId ?? 0;
                 if (projectPaperId <= 0 && assignDto.PaperId.HasValue && assignDto.PaperId.Value > 0)
                 {
-                    var matchedPp = await _context.ProjectPapers.FirstOrDefaultAsync(pp => pp.PaperId == assignDto.PaperId.Value);
+                    var ppQuery = _context.ProjectPapers.Where(pp => pp.PaperId == assignDto.PaperId.Value);
+                    if (assignDto.ProjectId.HasValue && assignDto.ProjectId.Value > 0)
+                    {
+                        ppQuery = ppQuery.Where(pp => pp.ProjectId == assignDto.ProjectId.Value);
+                    }
+                    var matchedPp = await ppQuery.FirstOrDefaultAsync();
                     if (matchedPp != null)
                     {
                         projectPaperId = matchedPp.Id;
@@ -807,6 +868,21 @@ namespace API.Controllers
                     .Include(pp => pp.Project)
                     .Include(pp => pp.Paper)
                     .FirstOrDefaultAsync(pp => pp.Id == projectPaperId);
+
+                // If projectPaper doesn't match requested ProjectId and PaperId, correct it
+                if (assignDto.ProjectId.HasValue && assignDto.ProjectId.Value > 0 && assignDto.PaperId.HasValue && assignDto.PaperId.Value > 0
+                    && (projectPaper == null || projectPaper.ProjectId != assignDto.ProjectId.Value))
+                {
+                    var correctPp = await _context.ProjectPapers
+                        .Include(pp => pp.Project)
+                        .Include(pp => pp.Paper)
+                        .FirstOrDefaultAsync(pp => pp.PaperId == assignDto.PaperId.Value && pp.ProjectId == assignDto.ProjectId.Value);
+                    if (correctPp != null)
+                    {
+                        projectPaper = correctPp;
+                        projectPaperId = correctPp.Id;
+                    }
+                }
 
                 if (projectPaper == null)
                 {
@@ -837,9 +913,31 @@ namespace API.Controllers
                 }
 
                 // Check if already assigned
-                if (await _context.PaperExaminers.AnyAsync(pe => pe.ProjectPaperId == projectPaperId && pe.ExaminerId == assignDto.ExaminerId))
+                var existingAssignment = await _context.PaperExaminers
+                    .FirstOrDefaultAsync(pe => pe.ProjectPaperId == projectPaperId && pe.ExaminerId == assignDto.ExaminerId);
+
+                if (existingAssignment != null)
                 {
-                    return BadRequest(new { success = false, message = "Examiner already assigned to this project paper" });
+                    if (existingAssignment.IsActive)
+                    {
+                        return BadRequest(new { success = false, message = "Examiner already assigned to this project paper" });
+                    }
+                    else
+                    {
+                        // Reactivate previously inactive assignment
+                        existingAssignment.IsActive = true;
+                        existingAssignment.AssignedAt = DateTime.UtcNow;
+                        _context.PaperExaminers.Update(existingAssignment);
+                        projectPaper.IsExaminerAssigned = true;
+                        projectPaper.UpdatedAt = DateTime.UtcNow;
+                        _context.ProjectPapers.Update(projectPaper);
+                        await _context.SaveChangesAsync();
+
+                        int? uId = projectPaper.Project?.UniversityId ?? projectPaper.Paper?.UniversityId;
+                        TriggerAutoAllocationIfEligible(uId);
+
+                        return Ok(new { success = true, message = "Examiner reactivated successfully" });
+                    }
                 }
 
                 var assignment = new PaperExaminer
@@ -927,7 +1025,11 @@ namespace API.Controllers
                     _context.PaperExaminers.Remove(assignment);
                 }
 
-                var pp = await _context.ProjectPapers.FindAsync(assignment.ProjectPaperId);
+                var pp = await _context.ProjectPapers
+                    .Include(p => p.Project)
+                    .Include(p => p.Paper)
+                    .FirstOrDefaultAsync(p => p.Id == assignment.ProjectPaperId);
+
                 if (pp != null)
                 {
                     bool hasActiveExaminers = await _context.PaperExaminers
@@ -938,6 +1040,9 @@ namespace API.Controllers
                 }
 
                 await _context.SaveChangesAsync();
+
+                int? uniId = pp?.Project?.UniversityId ?? pp?.Paper?.UniversityId;
+                TriggerAutoAllocationIfEligible(uniId);
 
                 string msg = markings.Any()
                     ? $"Examiner deactivated from project paper. {unmarkedAllocations.Count} unmarked script(s) cancelled, while {markings.Count} evaluated script(s) were preserved."
@@ -974,21 +1079,36 @@ namespace API.Controllers
                     {
                         if (id <= 0) continue;
 
-                        // Check if id is directly a ProjectPaper.Id
-                        if (await _context.ProjectPapers.AnyAsync(pp => pp.Id == id))
-                        {
-                            targetProjectPaperIds.Add(id);
-                        }
-                        else
+                        if (request.ProjectId.HasValue && request.ProjectId.Value > 0)
                         {
                             var ppIds = await _context.ProjectPapers
-                                .Where(pp => pp.PaperId == id && (!request.ProjectId.HasValue || pp.ProjectId == request.ProjectId.Value))
+                                .Where(pp => (pp.PaperId == id || pp.Id == id) && pp.ProjectId == request.ProjectId.Value)
                                 .Select(pp => pp.Id)
                                 .ToListAsync();
 
                             foreach (var ppid in ppIds)
                             {
                                 targetProjectPaperIds.Add(ppid);
+                            }
+                        }
+                        else
+                        {
+                            // Check if id is directly a ProjectPaper.Id
+                            if (await _context.ProjectPapers.AnyAsync(pp => pp.Id == id))
+                            {
+                                targetProjectPaperIds.Add(id);
+                            }
+                            else
+                            {
+                                var ppIds = await _context.ProjectPapers
+                                    .Where(pp => pp.PaperId == id)
+                                    .Select(pp => pp.Id)
+                                    .ToListAsync();
+
+                                foreach (var ppid in ppIds)
+                                {
+                                    targetProjectPaperIds.Add(ppid);
+                                }
                             }
                         }
                     }
@@ -1003,10 +1123,10 @@ namespace API.Controllers
                 {
                     foreach (var examinerId in request.ExaminerIds)
                     {
-                        var exists = await _context.PaperExaminers
-                            .AnyAsync(pe => pe.ProjectPaperId == projectPaperId && pe.ExaminerId == examinerId);
+                        var existing = await _context.PaperExaminers
+                            .FirstOrDefaultAsync(pe => pe.ProjectPaperId == projectPaperId && pe.ExaminerId == examinerId);
                             
-                        if (!exists)
+                        if (existing == null)
                         {
                             _context.PaperExaminers.Add(new PaperExaminer
                             {
@@ -1016,6 +1136,13 @@ namespace API.Controllers
                                 AssignedAt = DateTime.UtcNow,
                                 IsActive = true
                             });
+                            assignedCount++;
+                        }
+                        else if (!existing.IsActive)
+                        {
+                            existing.IsActive = true;
+                            existing.AssignedAt = DateTime.UtcNow;
+                            _context.PaperExaminers.Update(existing);
                             assignedCount++;
                         }
                     }

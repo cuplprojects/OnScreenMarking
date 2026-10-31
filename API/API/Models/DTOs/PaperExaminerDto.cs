@@ -13,6 +13,7 @@ namespace API.Models.DTOs
     {
         public int? Id { get; set; }
         public int? ProjectPaperId { get; set; }
+        public int? ProjectId { get; set; }
         public int? PaperId { get; set; }
         public int? OldExaminerId { get; set; }
         public int? ExaminerId { get; set; }

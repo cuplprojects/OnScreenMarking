@@ -651,8 +651,16 @@ export default function PapersManagement({ isTab = false }) {
 
       setAvailableExaminers(filteredExaminers);
 
-      const assigned = await apiCall(`/PaperExaminers/paper/${paper.paperId}`);
-      setAssignedExaminers(assigned);
+      const targetProjId = paper.projectId || projectId;
+      let assigned = [];
+      if (paper.projectPaperId) {
+        assigned = await apiCall(`/PaperExaminers/project-paper/${paper.projectPaperId}`);
+      } else if (targetProjId) {
+        assigned = await apiCall(`/PaperExaminers/paper/${paper.paperId}?projectId=${targetProjId}`);
+      } else {
+        assigned = await apiCall(`/PaperExaminers/paper/${paper.paperId}`);
+      }
+      setAssignedExaminers(Array.isArray(assigned) ? assigned : []);
       setPendingRemovals([]);
     } catch (err) {
       console.error(err);
@@ -684,6 +692,8 @@ export default function PapersManagement({ isTab = false }) {
     setAllocationLoading(true);
     try {
       const newAssignments = assignedExaminers.filter(a => a.isNew);
+      const targetProjId = selectedPaper?.projectId || projectId;
+      const targetProjPaperId = selectedPaper?.projectPaperId;
 
       // When updating examiners (both removals and new assignments exist), use PUT endpoint
       // so unmarked scripts are transferred to the newly assigned examiner and marked scripts are preserved.
@@ -692,19 +702,33 @@ export default function PapersManagement({ isTab = false }) {
         await apiCall(`/PaperExaminers/${pendingRemovals[i]}`, {
           method: 'PUT',
           body: JSON.stringify({
-            examinerId: newAssignments[i].examinerId
+            examinerId: newAssignments[i].examinerId,
+            projectPaperId: targetProjPaperId,
+            projectId: targetProjId ? parseInt(targetProjId, 10) : null
           })
         });
       }
 
       // Any remaining additions
-      for (let i = pairCount; i < newAssignments.length; i++) {
+      const remainingNew = newAssignments.slice(pairCount);
+      if (remainingNew.length === 1) {
         await apiCall('/PaperExaminers/assign', {
           method: 'POST',
           body: JSON.stringify({
-            paperId: selectedPaper.paperId,
-            projectPaperId: selectedPaper.projectPaperId,
-            examinerId: newAssignments[i].examinerId
+            paperId: selectedPaper?.paperId,
+            projectPaperId: targetProjPaperId,
+            projectId: targetProjId ? parseInt(targetProjId, 10) : null,
+            examinerId: remainingNew[0].examinerId
+          })
+        });
+      } else if (remainingNew.length > 1) {
+        await apiCall('/PaperExaminers/bulk-assign', {
+          method: 'POST',
+          body: JSON.stringify({
+            projectPaperIds: targetProjPaperId ? [targetProjPaperId] : undefined,
+            paperIds: selectedPaper?.paperId ? [selectedPaper.paperId] : undefined,
+            projectId: targetProjId ? parseInt(targetProjId, 10) : null,
+            examinerIds: remainingNew.map(a => a.examinerId)
           })
         });
       }
@@ -1036,7 +1060,8 @@ export default function PapersManagement({ isTab = false }) {
             method: 'POST',
             body: {
               paperIds: pIds,
-              examinerIds: [parseInt(exIdStr)]
+              examinerIds: [parseInt(exIdStr)],
+              projectId: projectId ? parseInt(projectId, 10) : null
             }
           })
         )
@@ -1329,7 +1354,8 @@ export default function PapersManagement({ isTab = false }) {
             method: 'POST',
             body: {
               paperIds: pIds,
-              examinerIds: [parseInt(exIdStr)]
+              examinerIds: [parseInt(exIdStr)],
+              projectId: projectId ? parseInt(projectId, 10) : null
             }
           })
         )

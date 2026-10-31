@@ -83,6 +83,8 @@ export default function ScriptAllocation({ isTab = false }) {
   const [examinerCounts, setExaminerCounts] = useState({});
   const [bulkLoading, setBulkLoading] = useState(false);
   const [autoProjectLoading, setAutoProjectLoading] = useState(false);
+  // Per-paper data for multi-paper allocation (paperId -> { examiners, pendingCount })
+  const [perPaperData, setPerPaperData] = useState({});
 
   // University Assignment Configuration State
   const [configuredAssignmentSetting, setConfiguredAssignmentSetting] = useState(null);
@@ -363,7 +365,11 @@ export default function ScriptAllocation({ isTab = false }) {
         experts: countsData?.expertsCount ?? paper.expertsCount ?? 0
       });
 
-      const examinersData = await apiCall(`/PaperExaminers/paper/${paper.paperId}`);
+      const examinersData = await apiCall(
+        paper.projectPaperId 
+          ? `/PaperExaminers/project-paper/${paper.projectPaperId}` 
+          : `/PaperExaminers/paper/${paper.paperId}${projectId ? `?projectId=${projectId}` : ''}`
+      );
       setExaminers(examinersData || []);
 
       // Strategy-based distribution counts
@@ -415,11 +421,14 @@ export default function ScriptAllocation({ isTab = false }) {
     setLoading(true);
 
     try {
-      
+      const currentStrategy = getStrategyFromAssignmentType(configuredAssignmentSetting?.assignmentType) || bulkMode;
+      const currentLimit = configuredAssignmentSetting?.dailyLimit || dailyQuotaLimit || 50;
+
       let totalPending = 0;
       let totalAllocated = 0;
       let totalScriptsSum = 0;
       let combinedExaminersMap = new Map();
+      const newPerPaperData = {};
 
       for (const p of selectedPapersData) {
         let pCounts = null;
@@ -433,19 +442,49 @@ export default function ScriptAllocation({ isTab = false }) {
           };
         }
 
-        totalPending += (pCounts?.pendingScripts ?? p.pendingScripts ?? 0);
+        const paperPending = pCounts?.pendingScripts ?? p.pendingScripts ?? 0;
+        totalPending += paperPending;
         totalAllocated += (pCounts?.allocatedScripts ?? p.allocatedScripts ?? 0);
         totalScriptsSum += (pCounts?.totalScripts ?? p.totalScripts ?? 0);
 
-        const exData = await apiCall(`/PaperExaminers/paper/${p.paperId}`);
-        if (Array.isArray(exData)) {
-          exData.forEach(ex => {
-            if (!combinedExaminersMap.has(ex.examinerId)) {
-              combinedExaminersMap.set(ex.examinerId, ex);
-            }
+        const exData = await apiCall(
+          p.projectPaperId
+            ? `/PaperExaminers/project-paper/${p.projectPaperId}`
+            : `/PaperExaminers/paper/${p.paperId}${projectId ? `?projectId=${projectId}` : ''}`
+        );
+        const paperExaminers = Array.isArray(exData) ? exData : [];
+
+        // Compute per-paper distribution independently based on this paper's examiners + pending count
+        const paperCounts = {};
+        if (currentStrategy === 'daily') {
+          let remaining = paperPending;
+          paperExaminers.forEach((ex) => {
+            const quota = Math.min(remaining, currentLimit);
+            paperCounts[ex.examinerId] = quota;
+            remaining -= quota;
           });
+        } else {
+          // Even/equal distribution: divide pending scripts equally among this paper's examiners
+          const n = paperExaminers.length;
+          if (n > 0) {
+            const baseShare = Math.floor(paperPending / n);
+            const rem = paperPending % n;
+            paperExaminers.forEach((ex, idx) => {
+              paperCounts[ex.examinerId] = baseShare + (idx < rem ? 1 : 0);
+            });
+          }
         }
+
+        newPerPaperData[p.paperId] = { examiners: paperExaminers, pending: paperPending, counts: paperCounts };
+
+        paperExaminers.forEach(ex => {
+          if (!combinedExaminersMap.has(ex.examinerId)) {
+            combinedExaminersMap.set(ex.examinerId, ex);
+          }
+        });
       }
+
+      setPerPaperData(newPerPaperData);
 
       setScriptCounts({
         pending: totalPending,
@@ -457,27 +496,14 @@ export default function ScriptAllocation({ isTab = false }) {
       const uniqueExaminers = Array.from(combinedExaminersMap.values());
       setExaminers(uniqueExaminers);
 
-      // Distribute pending scripts across examiners based on configured strategy
-      const counts = {};
-      const currentStrategy = getStrategyFromAssignmentType(configuredAssignmentSetting?.assignmentType) || bulkMode;
-      const currentLimit = configuredAssignmentSetting?.dailyLimit || dailyQuotaLimit || 50;
-
-      if (currentStrategy === 'daily') {
-        let remaining = totalPending;
-        uniqueExaminers.forEach((ex) => {
-          const quota = Math.min(remaining, currentLimit);
-          counts[ex.examinerId] = quota;
-          remaining -= quota;
+      // Show combined totals per examiner in the UI (sum across all papers they are assigned to)
+      const combinedCounts = {};
+      Object.values(newPerPaperData).forEach(({ counts }) => {
+        Object.entries(counts).forEach(([exId, cnt]) => {
+          combinedCounts[exId] = (combinedCounts[exId] || 0) + cnt;
         });
-      } else {
-        const baseShare = uniqueExaminers.length > 0 ? Math.floor(totalPending / uniqueExaminers.length) : 0;
-        const remainder = uniqueExaminers.length > 0 ? totalPending % uniqueExaminers.length : 0;
-
-        uniqueExaminers.forEach((ex, idx) => {
-          counts[ex.examinerId] = baseShare + (idx < remainder ? 1 : 0);
-        });
-      }
-      setExaminerCounts(counts);
+      });
+      setExaminerCounts(combinedCounts);
 
     } catch (err) {
       message.error('Failed to load multi-paper allocation details');
@@ -544,18 +570,19 @@ export default function ScriptAllocation({ isTab = false }) {
       setBulkLoading(true);
 
       if (isMultiPaperMode) {
-        // Allocate per paper across selected papers
+        // Allocate per paper using per-paper examiner lists and independently computed counts
         const targetPapers = papers.filter(p => selectedPaperIds.includes(p.paperId));
         let successCount = 0;
 
         for (const paper of targetPapers) {
-          const pendingCount = paper.pendingScripts || 0;
+          const ppData = perPaperData[paper.paperId];
+          const pendingCount = ppData?.pending ?? paper.pendingScripts ?? 0;
           if (pendingCount === 0) continue;
 
-          // Scale examiner counts proportionally for this paper
-          const paperAllocations = examiners.map(e => {
-            const requested = examinerCounts[e.examinerId] || 0;
-            return { examinerId: e.examinerId, count: Math.min(requested, pendingCount) };
+          // Use per-paper examiners and their independently calculated counts
+          const paperAllocations = (ppData?.examiners || []).map(e => {
+            const count = ppData?.counts?.[e.examinerId] || 0;
+            return { examinerId: e.examinerId, count };
           }).filter(a => a.count > 0);
 
           if (paperAllocations.length > 0) {
@@ -567,6 +594,7 @@ export default function ScriptAllocation({ isTab = false }) {
         message.success(`Bulk allocation completed across ${successCount} papers!`);
         setIsMultiPaperMode(false);
         setSelectedPaperIds([]);
+        setPerPaperData({});
       } else if (activePaper) {
         const payload = examiners.map(e => ({
           examinerId: e.examinerId,
