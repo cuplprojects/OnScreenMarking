@@ -881,18 +881,59 @@ namespace API.Controllers
                     })
                     .ToListAsync();
 
-                // Grouped summary by paper (for convenient rendering in Script Allocation UI table)
-                var paperIds = await query
-                    .Where(s => s.ProjectPaper != null)
-                    .Select(s => s.ProjectPaper.PaperId)
-                    .Distinct()
-                    .ToListAsync();
+                // Grouped summary by paper (for convenient rendering in Script Allocation UI table):
+                // Include all active project papers for this project (or all papers that have scripts)
+                // so that the allocation table remains visible with full counts even when all scripts are allocated.
+                List<int> paperIds;
+                if (paperId.HasValue && paperId.Value > 0)
+                {
+                    paperIds = new List<int> { paperId.Value };
+                }
+                else if (projectId.HasValue && projectId.Value > 0)
+                {
+                    paperIds = await _context.ProjectPapers
+                        .Where(pp => pp.ProjectId == projectId.Value && pp.IsActive)
+                        .Select(pp => pp.PaperId)
+                        .Distinct()
+                        .ToListAsync();
+                }
+                else
+                {
+                    var allScriptsPaperQuery = _context.Scripts
+                        .Include(s => s.ProjectPaper)
+                            .ThenInclude(pp => pp.Paper)
+                        .AsQueryable();
+
+                    if (targetUniversityId.HasValue && targetUniversityId.Value > 0)
+                    {
+                        allScriptsPaperQuery = allScriptsPaperQuery.Where(s => s.ProjectPaper != null && 
+                                                                               s.ProjectPaper.Paper != null && 
+                                                                               s.ProjectPaper.Paper.UniversityId == targetUniversityId.Value);
+                    }
+
+                    paperIds = await allScriptsPaperQuery
+                        .Where(s => s.ProjectPaper != null)
+                        .Select(s => s.ProjectPaper.PaperId)
+                        .Distinct()
+                        .ToListAsync();
+                }
 
                 var papersSummary = new List<object>();
                 if (paperIds.Count > 0)
                 {
-                    papersSummary = await _context.Papers
-                        .Where(p => paperIds.Contains(p.PaperId))
+                    var papersQuery = _context.Papers
+                        .Where(p => paperIds.Contains(p.PaperId));
+
+                    if (!string.IsNullOrWhiteSpace(search))
+                    {
+                        var sLower = search.ToLower();
+                        papersQuery = papersQuery.Where(p => 
+                            p.PaperCode.ToLower().Contains(sLower) || 
+                            p.PaperName.ToLower().Contains(sLower) ||
+                            p.ProjectPapers.Any(pp => (!projectId.HasValue || pp.ProjectId == projectId.Value) && pp.CatchNo != null && pp.CatchNo.ToLower().Contains(sLower)));
+                    }
+
+                    papersSummary = await papersQuery
                         .Select(p => new
                         {
                             paperId = p.PaperId,

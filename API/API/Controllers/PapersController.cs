@@ -212,6 +212,7 @@ namespace API.Controllers
                     {
                         paperId = p.PaperId,
                         projectPaperId = p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.Id).FirstOrDefault(),
+                        universityId = p.UniversityId,
                         paperCode = p.PaperCode,
                         paperName = p.PaperName,
                         catchNo = p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.CatchNo).FirstOrDefault() ?? "",

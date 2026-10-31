@@ -201,16 +201,21 @@ export default function ScriptAllocation({ isTab = false }) {
       const sortOrderVal = params.sortOrder || '';
       const uniQuery = activeUniversityId ? `&universityId=${activeUniversityId}` : '';
 
-      // try {
-      //   const res = await apiCall(`/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}&statusFilter=ready_for_allocation${uniQuery}`);
-      //   if (res && res.items && res.items.length > 0) {
-      //     return res;
-      //   }
-      // } catch (e) {
-      //   console.warn('dashboard-stats query failed, checking pending endpoint:', e);
-      // }
+      // 1. Try papers/dashboard-stats (retrieves all project papers with allocated and pending counts)
+      try {
+        const res = await apiCall(`/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}${uniQuery}`);
+        if (res && res.items && res.items.length > 0) {
+          const firstUniId = res.items[0]?.universityId;
+          if (firstUniId && !configuredAssignmentSetting) {
+            fetchAssignmentConfig(firstUniId);
+          }
+          return res;
+        }
+      } catch (e) {
+        console.warn('dashboard-stats query failed, checking pending endpoint:', e);
+      }
 
-      // University-wise pending scripts endpoint fallback
+      // 2. University-wise pending scripts endpoint fallback
       try {
         const pendingRes = await apiCall(`/scripts/pending?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}${uniQuery}`);
         if (pendingRes && pendingRes.papers && pendingRes.papers.length > 0) {
@@ -823,7 +828,10 @@ export default function ScriptAllocation({ isTab = false }) {
                         </button>
                       )}
                       {projectId && (
-                        <div className="relative group/tooltip inline-block">
+                        <div
+                          title={!papers.some(p => p.pendingScripts > 0) && papers.length > 0 ? "All scripts are already allocated" : ""}
+                          className="inline-block"
+                        >
                           <button
                             onClick={handleAutoAllocateProject}
                             disabled={autoProjectLoading || !papers.some(p => p.pendingScripts > 0)}
@@ -836,12 +844,6 @@ export default function ScriptAllocation({ isTab = false }) {
                             {autoProjectLoading ? <Loader size={13} className="animate-spin" /> : <Sparkles size={13} />}
                             {autoProjectLoading ? "Allocating..." : "Auto-Allocate All"}
                           </button>
-                          {!papers.some(p => p.pendingScripts > 0) && papers.length > 0 && (
-                            <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-bold rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50">
-                              All scripts are already allocated
-                              <div className="absolute top-full right-4 border-4 border-transparent border-t-gray-900"></div>
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>
@@ -909,7 +911,10 @@ export default function ScriptAllocation({ isTab = false }) {
                                 </span>
                               </td>
                               <td className="px-4 py-2.5 text-center">
-                                <div className="relative group/tooltip inline-block">
+                                <div
+                                  title={(paper.totalScripts === 0 && (paper.allocatedScripts || 0) === 0) ? "No Scripts Uploaded" : paper.pendingScripts === 0 ? "Already Fully Allocated" : "Allocate Scripts"}
+                                  className="inline-block"
+                                >
                                   <button
                                     onClick={() => openAllocationPane(paper)}
                                     disabled={paper.pendingScripts === 0}
@@ -921,10 +926,6 @@ export default function ScriptAllocation({ isTab = false }) {
                                   >
                                     <Zap size={14} />
                                   </button>
-                                  <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-bold rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50">
-                                    {paper.pendingScripts === 0 ? "Already Fully Allocated" : "Allocate Scripts"}
-                                    <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-900"></div>
-                                  </div>
                                 </div>
                               </td>
                             </tr>
