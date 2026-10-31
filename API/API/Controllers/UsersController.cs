@@ -340,8 +340,8 @@ namespace API.Controllers
 
                 if (subjectId.HasValue)
                 {
-                    // Filter by expertise
-                    query = query.Where(u => u.Expertise.Any(e => e.SubjectId == subjectId.Value && e.IsActive));
+                    // Filter examiners whose SubjectId1 is the same as paper's subject
+                    query = query.Where(u => u.SubjectId1 == subjectId.Value);
                 }
 
                 var examiners = await query

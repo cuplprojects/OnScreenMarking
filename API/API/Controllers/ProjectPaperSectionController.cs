@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using API.Data;
 using API.Models;
 using API.Models.DTOs;
+using API.Services;
 
 namespace API.Controllers
 {
@@ -17,10 +18,14 @@ namespace API.Controllers
     public class ProjectPaperSectionController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IDailyAllocationService _dailyAllocationService;
 
-        public ProjectPaperSectionController(ApplicationDbContext context)
+        public ProjectPaperSectionController(
+            ApplicationDbContext context,
+            IDailyAllocationService dailyAllocationService)
         {
             _context = context;
+            _dailyAllocationService = dailyAllocationService;
         }
 
         // GET: api/projectpapersection?projectPaperId=5 OR ?projectId=1&paperId=2
@@ -198,6 +203,9 @@ namespace API.Controllers
                 };
 
                 _context.ProjectPaperSections.Add(section);
+                projectPaper.IsSectionConfigured = true;
+                projectPaper.UpdatedAt = DateTime.UtcNow;
+                _context.ProjectPapers.Update(projectPaper);
                 await _context.SaveChangesAsync();
 
                 // Add questions if provided
@@ -219,6 +227,9 @@ namespace API.Controllers
                     }
                     await _context.SaveChangesAsync();
                 }
+
+                int? targetUniId = projectPaper.Paper?.UniversityId;
+                _dailyAllocationService.TriggerAutoAllocationBackground(targetUniId);
 
                 return CreatedAtAction(nameof(GetProjectPaperSection), new { id = section.Id }, new { success = true, sectionId = section.Id });
             }
@@ -331,9 +342,21 @@ namespace API.Controllers
                 if (section == null)
                     return NotFound(new { success = false, message = "Project paper section not found" });
 
+                var ppId = section.ProjectPaperId;
                 _context.Questions.RemoveRange(section.Questions);
                 _context.ProjectPaperSections.Remove(section);
                 await _context.SaveChangesAsync();
+
+                var projectPaper = await _context.ProjectPapers.FindAsync(ppId);
+                if (projectPaper != null)
+                {
+                    bool hasRemaining = await _context.ProjectPaperSections.AnyAsync(pps => pps.ProjectPaperId == ppId)
+                        || await _context.Sections.AnyAsync(s => s.PaperId == projectPaper.PaperId);
+                    projectPaper.IsSectionConfigured = hasRemaining;
+                    projectPaper.UpdatedAt = DateTime.UtcNow;
+                    _context.ProjectPapers.Update(projectPaper);
+                    await _context.SaveChangesAsync();
+                }
 
                 return Ok(new { success = true, message = "Project paper section deleted successfully" });
             }
@@ -426,7 +449,15 @@ namespace API.Controllers
                     }
                 }
 
+                projectPaper.IsSectionConfigured = true;
+                projectPaper.UpdatedAt = DateTime.UtcNow;
+                _context.ProjectPapers.Update(projectPaper);
+
                 await _context.SaveChangesAsync();
+
+                int? targetUniId = projectPaper.Paper?.UniversityId;
+                _dailyAllocationService.TriggerAutoAllocationBackground(targetUniId);
+
                 return Ok(new { success = true, message = $"Successfully imported {masterSections.Count} section(s) to project paper" });
             }
             catch (Exception ex)
@@ -524,7 +555,15 @@ namespace API.Controllers
                     }
                 }
 
+                projectPaper.IsSectionConfigured = true;
+                projectPaper.UpdatedAt = DateTime.UtcNow;
+                _context.ProjectPapers.Update(projectPaper);
+
                 await _context.SaveChangesAsync();
+
+                int? targetUniId = projectPaper.Paper?.UniversityId;
+                _dailyAllocationService.TriggerAutoAllocationBackground(targetUniId);
+
                 return Ok(new { success = true, message = $"Successfully imported {masters.Count} master section(s) to project paper" });
             }
             catch (Exception ex)

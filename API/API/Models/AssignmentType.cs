@@ -21,7 +21,9 @@ namespace API.Models
 
         public int TimePerCopy { get; set; } = 15;
 
-        public int ReassignmentHours { get; set; } = 24;
+        public int? ReassignmentHours { get; set; }
+        
+        public DateTime? CompletionDate { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

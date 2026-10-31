@@ -32,6 +32,7 @@ namespace API.Models.DTOs
     {
         public int Id { get; set; }
         public int ScriptId { get; set; }
+        public int? ProjectId { get; set; }
         public int ExaminerId { get; set; }
         public DateTime AllocatedAt { get; set; }
         public DateTime? StartedAt { get; set; }

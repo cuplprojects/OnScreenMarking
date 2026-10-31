@@ -12,11 +12,15 @@ namespace API.Models
         public int Id { get; set; }
         public int ScriptId { get; set; }
         public Script Script { get; set; }
+        public int? ProjectId { get; set; }
+        public Project? Project { get; set; }
         public int ExaminerId { get; set; }
         public User Examiner { get; set; }
         public int AllocationId { get; set; }
         public Allocation Allocation { get; set; }
+        [Column(TypeName = "decimal(10,2)")]
         public decimal TotalMarks { get; set; }
+        [Column(TypeName = "decimal(10,2)")]
         public decimal Percentage { get; set; }
         public string Remarks { get; set; }
         public MarkingStatus Status { get; set; } = MarkingStatus.draft;

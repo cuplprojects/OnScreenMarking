@@ -163,6 +163,7 @@ namespace API.Controllers
                 {
                     ScriptId = allocationDto.ScriptId,
                     ExaminerId = allocationDto.ExaminerId,
+                    ProjectId = script.ProjectId ?? script.ProjectPaper?.ProjectId,
                     AllocatedAt = DateTime.UtcNow,
                     Status = AllocationStatus.allocated,
                     AssignmentStatus = true
@@ -533,6 +534,7 @@ namespace API.Controllers
                             {
                                 ScriptId = script.Id,
                                 ExaminerId = alloc.ExaminerId,
+                                ProjectId = script.ProjectId ?? script.ProjectPaper?.ProjectId,
                                 AllocatedAt = DateTime.UtcNow,
                                 Status = AllocationStatus.allocated,
                                 AssignmentStatus = true
@@ -695,6 +697,7 @@ namespace API.Controllers
                     {
                         ScriptId = alloc.ScriptId,
                         ExaminerId = request.TargetExaminerId,
+                        ProjectId = alloc.ProjectId ?? alloc.Script?.ProjectId ?? alloc.Script?.ProjectPaper?.ProjectId,
                         AllocatedAt = DateTime.UtcNow,
                         Status = AllocationStatus.allocated,
                         AssignmentStatus = true,
@@ -717,65 +720,121 @@ namespace API.Controllers
         {
             try
             {
-                var papers = await _context.Papers
-                    .Include(p => p.ProjectPapers)
-                    .Include(p => p.Sections)
-                    .Where(p => p.ProjectPapers.Any(pp => pp.ProjectId == projectId && !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl)) && p.Sections.Any())
+                var projectPapers = await _context.ProjectPapers
+                    .Include(pp => pp.Paper)
+                    .Where(pp => pp.ProjectId == projectId && pp.IsActive)
                     .ToListAsync();
 
+                if (!projectPapers.Any())
+                {
+                    return BadRequest(new { success = false, message = "No active papers found for this project." });
+                }
+
+                // Check if ALL papers of this project have been assigned an examiner in PaperExaminers
+                var projectPaperIds = projectPapers.Select(pp => pp.Id).ToList();
+                var assignedPaperIds = await _context.PaperExaminers
+                    .Where(pe => projectPaperIds.Contains(pe.ProjectPaperId) && pe.IsActive && pe.Examiner != null && pe.Examiner.IsActive)
+                    .Select(pe => pe.ProjectPaperId)
+                    .Distinct()
+                    .ToListAsync();
+
+                var missingPapers = projectPapers.Where(pp => !assignedPaperIds.Contains(pp.Id)).ToList();
+                if (missingPapers.Any())
+                {
+                    var missingPaperNames = missingPapers.Select(pp => pp.Paper?.PaperName ?? pp.Paper?.PaperCode ?? $"Paper #{pp.PaperId}").ToList();
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = $"Cannot allocate: All papers of this project must be assigned an examiner in PaperExaminers first. Missing examiners for {missingPapers.Count} paper(s): {string.Join(", ", missingPaperNames)}.",
+                        unassignedPapers = missingPaperNames
+                    });
+                }
+
                 int totalAllocated = 0;
-                
-                foreach (var paper in papers)
+
+                foreach (var pp in projectPapers)
                 {
                     var examiners = await _context.PaperExaminers
-                        .Where(pe => pe.PaperId == paper.PaperId)
+                        .Where(pe => pe.ProjectPaperId == pp.Id && pe.IsActive && pe.Examiner != null && pe.Examiner.IsActive)
                         .Select(pe => pe.ExaminerId)
                         .ToListAsync();
-                        
-                    if (!examiners.Any()) continue;
-                    
+
+                    if (!examiners.Any())
+                    {
+                        continue;
+                    }
+
                     var pendingScripts = await _context.Scripts
-                        .Where(s => s.ProjectPaper.PaperId == paper.PaperId && 
-                                   (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any())))
+                        .Where(s => s.ProjectPaperId == pp.Id && 
+                                   (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any(a => a.AssignmentStatus))))
                         .ToListAsync();
-                        
+
                     if (!pendingScripts.Any()) continue;
-                    
+
                     int scriptCount = pendingScripts.Count;
                     int baseShare = scriptCount / examiners.Count;
                     int remainder = scriptCount % examiners.Count;
-                    
+
                     int scriptIndex = 0;
                     for (int i = 0; i < examiners.Count; i++)
                     {
                         int share = baseShare + (i < remainder ? 1 : 0);
-                        if (share == 0) break;
-                        
+                        if (share == 0) continue;
+
                         var examinerId = examiners[i];
                         for (int j = 0; j < share; j++)
                         {
+                            if (scriptIndex >= pendingScripts.Count) break;
+
                             var script = pendingScripts[scriptIndex++];
-                            
+
                             var allocation = new Allocation
                             {
                                 ScriptId = script.Id,
                                 ExaminerId = examinerId,
+                                ProjectId = script.ProjectId ?? script.ProjectPaper?.ProjectId,
                                 AllocatedAt = DateTime.UtcNow,
                                 Deadline = DateTime.UtcNow.AddDays(7),
                                 Status = AllocationStatus.allocated,
                                 AssignmentStatus = true
                             };
-                            
+
                             _context.Allocations.Add(allocation);
                             script.Status = ScriptStatus.allocated;
                             _context.Scripts.Update(script);
                             totalAllocated++;
                         }
                     }
+
+                    // Leftover fail-safe: distribute any remaining odd scripts round-robin
+                    while (scriptIndex < pendingScripts.Count)
+                    {
+                        var script = pendingScripts[scriptIndex];
+                        var examinerId = examiners[scriptIndex % examiners.Count];
+                        scriptIndex++;
+
+                        var allocation = new Allocation
+                        {
+                            ScriptId = script.Id,
+                            ExaminerId = examinerId,
+                            ProjectId = script.ProjectId ?? script.ProjectPaper?.ProjectId,
+                            AllocatedAt = DateTime.UtcNow,
+                            Deadline = DateTime.UtcNow.AddDays(7),
+                            Status = AllocationStatus.allocated,
+                            AssignmentStatus = true
+                        };
+
+                        _context.Allocations.Add(allocation);
+                        script.Status = ScriptStatus.allocated;
+                        _context.Scripts.Update(script);
+                        totalAllocated++;
+                    }
                 }
-                
+
                 await _context.SaveChangesAsync();
-                return Ok(new { success = true, message = $"Successfully auto-allocated {totalAllocated} scripts across project." });
+
+                string msg = $"Successfully auto-allocated {totalAllocated} scripts across project to assigned examiners from PaperExaminers.";
+                return Ok(new { success = true, message = msg, totalAllocated });
             }
             catch (Exception ex)
             {
@@ -890,6 +949,7 @@ namespace API.Controllers
                     {
                         ScriptId = script.Id,
                         ExaminerId = examinerId,
+                        ProjectId = script.ProjectId ?? script.ProjectPaper?.ProjectId,
                         AllocatedAt = DateTime.UtcNow,
                         Deadline = endOfDay,
                         Status = AllocationStatus.allocated,
@@ -944,9 +1004,10 @@ namespace API.Controllers
                     .CountAsync(a => targetPaperIds.Contains(a.Script.ProjectPaper.PaperId) && a.AssignmentStatus && (_context.Markings.Any(m => m.AllocationId == a.AllocationId && m.Status == MarkingStatus.submitted) || a.Script.Status == ScriptStatus.completed));
 
                 var paperExaminersList = await _context.PaperExaminers
-                    .Where(pe => targetPaperIds.Contains(pe.PaperId))
+                    .Where(pe => pe.ProjectPaper != null && targetPaperIds.Contains(pe.ProjectPaper.PaperId))
                     .Include(pe => pe.Examiner)
-                    .Include(pe => pe.Paper)
+                    .Include(pe => pe.ProjectPaper)
+                        .ThenInclude(pp => pp.Paper)
                     .ToListAsync();
 
                 var resultList = new List<object>();
@@ -954,7 +1015,7 @@ namespace API.Controllers
                 foreach (var pe in paperExaminersList)
                 {
                     var exId = pe.ExaminerId;
-                    var pId = pe.PaperId;
+                    var pId = pe.ProjectPaper?.PaperId ?? pe.PaperId;
 
                     var activeAllocations = await _context.Allocations
                         .Include(a => a.Script)
@@ -972,8 +1033,9 @@ namespace API.Controllers
                         examinerName = pe.Examiner?.Name ?? ("Examiner #" + exId),
                         email = pe.Examiner?.Email ?? "",
                         paperId = pId,
-                        paperCode = pe.Paper?.PaperCode ?? "",
-                        paperName = pe.Paper?.PaperName ?? "",
+                        projectPaperId = pe.ProjectPaperId,
+                        paperCode = pe.ProjectPaper?.Paper?.PaperCode ?? "",
+                        paperName = pe.ProjectPaper?.Paper?.PaperName ?? "",
                         pendingScripts = paperPending,
                         allocatedCount = allocatedCount,
                         completedCount = completedCount,
@@ -1073,6 +1135,7 @@ namespace API.Controllers
                         {
                             ScriptId = script.Id,
                             ExaminerId = request.ExaminerId,
+                            ProjectId = script.ProjectId ?? script.ProjectPaper?.ProjectId,
                             AllocatedAt = DateTime.UtcNow,
                             Status = AllocationStatus.allocated,
                             AssignmentStatus = true
@@ -1120,6 +1183,29 @@ namespace API.Controllers
                     success = result.success,
                     allocatedCount = result.allocatedCount,
                     reassignedCount = result.reassignedCount,
+                    message = result.message
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Equal distribution allocation for a specific university
+        /// </summary>
+        [HttpPost("university/{universityId}/equal-distribute")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> EqualDistributeByUniversity(int universityId)
+        {
+            try
+            {
+                var result = await _dailyAllocationService.PerformEqualDistributionForUniversityAsync(universityId);
+                return Ok(new
+                {
+                    success = result.success,
+                    allocatedCount = result.allocatedCount,
                     message = result.message
                 });
             }

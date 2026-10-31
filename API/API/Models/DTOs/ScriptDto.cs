@@ -9,6 +9,7 @@ namespace API.Models.DTOs
         public string GeneratedBarcode { get; set; }
         public int PaperId { get; set; }
         public int? ProjectPaperId { get; set; }
+        public int? ProjectId { get; set; }
         public string CleanPdfUrl { get; set; }
         public ScriptStatus Status { get; set; }
         public bool? IsReEvaluationRequested { get; set; }

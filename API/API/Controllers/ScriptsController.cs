@@ -1,9 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using API.Data;
 using API.Models;
 using API.Models.DTOs;
+using API.Services;
+using System.IO;
 
 namespace API.Controllers
 {
@@ -14,11 +17,19 @@ namespace API.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IDailyAllocationService _dailyAllocationService;
+        private readonly IWebHostEnvironment _environment;
 
-        public ScriptsController(ApplicationDbContext context, IConfiguration configuration)
+        public ScriptsController(
+            ApplicationDbContext context, 
+            IConfiguration configuration,
+            IDailyAllocationService dailyAllocationService,
+            IWebHostEnvironment environment)
         {
             _context = context;
             _configuration = configuration;
+            _dailyAllocationService = dailyAllocationService;
+            _environment = environment;
         }
 
         [HttpGet]
@@ -57,6 +68,7 @@ namespace API.Controllers
                         InBuiltBarCode = s.InBuiltBarcode,
                         PaperId = s.ProjectPaper.PaperId,
                         ProjectPaperId = s.ProjectPaperId,
+                        ProjectId = s.ProjectId ?? s.ProjectPaper?.ProjectId,
                         CleanPdfUrl = s.CleanPdfUrl,
                         Status = s.Status,
                         IsReEvaluationRequested = s.IsReEvaluationRequested,
@@ -107,6 +119,7 @@ namespace API.Controllers
                     InBuiltBarCode = script.InBuiltBarcode,
                     PaperId = script.ProjectPaper.PaperId,
                     ProjectPaperId = script.ProjectPaperId,
+                    ProjectId = script.ProjectId ?? script.ProjectPaper?.ProjectId,
                     CleanPdfUrl = script.CleanPdfUrl,
                     Status = script.Status,
                     IsReEvaluationRequested = script.IsReEvaluationRequested,
@@ -180,7 +193,7 @@ namespace API.Controllers
                     .CountAsync(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId && s.Status == ScriptStatus.pending);
 
                 var expertsCount = await _context.PaperExaminers
-                    .CountAsync(pe => pe.PaperId == paperId);
+                    .CountAsync(pe => pe.ProjectPaper != null && pe.ProjectPaper.PaperId == paperId);
 
                 return Ok(new
                 {
@@ -205,24 +218,311 @@ namespace API.Controllers
         {
             try
             {
-                // Validate paper exists
-                var paper = await _context.Papers.FindAsync(scriptDto.PaperId);
-                if (paper == null)
-                    return BadRequest(new { success = false, message = "Paper not found" });
+                // Resolve ProjectPaper
+                ProjectPaper? projectPaper = null;
+                if (scriptDto.ProjectPaperId.HasValue && scriptDto.ProjectPaperId.Value > 0)
+                {
+                    projectPaper = await _context.ProjectPapers
+                        .Include(pp => pp.Paper)
+                        .Include(pp => pp.Project)
+                        .FirstOrDefaultAsync(pp => pp.Id == scriptDto.ProjectPaperId.Value);
+                }
 
-             
+                if (projectPaper == null && scriptDto.PaperId > 0)
+                {
+                    // Check if scriptDto.PaperId was passed as ProjectPaper.Id
+                    projectPaper = await _context.ProjectPapers
+                        .Include(pp => pp.Paper)
+                        .Include(pp => pp.Project)
+                        .FirstOrDefaultAsync(pp => pp.Id == scriptDto.PaperId);
+
+                    // If not, check if scriptDto.PaperId is Paper.PaperId
+                    if (projectPaper == null)
+                    {
+                        projectPaper = await _context.ProjectPapers
+                            .Include(pp => pp.Paper)
+                            .Include(pp => pp.Project)
+                            .FirstOrDefaultAsync(pp => pp.PaperId == scriptDto.PaperId);
+                    }
+                }
+
+                if (projectPaper == null)
+                {
+                    var paper = await _context.Papers.FindAsync(scriptDto.PaperId);
+                    if (paper == null)
+                    {
+                        return BadRequest(new { success = false, message = "Paper or ProjectPaper not found." });
+                    }
+
+                    projectPaper = await _context.ProjectPapers
+                        .Include(pp => pp.Paper)
+                        .Include(pp => pp.Project)
+                        .FirstOrDefaultAsync(pp => pp.PaperId == paper.PaperId);
+
+                    if (projectPaper == null)
+                    {
+                        return BadRequest(new { success = false, message = $"No active ProjectPaper found for paper '{paper.PaperName}' (ID {paper.PaperId}). Please link paper to a project first." });
+                    }
+                }
+
+                var barcode = !string.IsNullOrWhiteSpace(scriptDto.GeneratedBarcode)
+                    ? scriptDto.GeneratedBarcode
+                    : (!string.IsNullOrWhiteSpace(scriptDto.InBuiltBarCode) ? scriptDto.InBuiltBarCode : $"SC-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}".Substring(0, 24).ToUpper());
+
                 var script = new Script
                 {
-                    ProjectPaperId = scriptDto.PaperId,
-                    CleanPdfUrl = scriptDto.CleanPdfUrl,
-                    RollNumber = scriptDto.RollNumber,
+                    ProjectPaperId = projectPaper.Id,
+                    ProjectId = projectPaper.ProjectId,
+                    InBuiltBarcode = scriptDto.InBuiltBarCode,
+                    GeneratedBarcode = barcode,
+                    CleanPdfUrl = scriptDto.CleanPdfUrl ?? "",
+                    RollNumber = scriptDto.RollNumber ?? barcode,
                     Status = ScriptStatus.pending,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
                 };
 
                 _context.Scripts.Add(script);
                 await _context.SaveChangesAsync();
 
+                scriptDto.Id = script.Id;
+                scriptDto.ProjectPaperId = projectPaper.Id;
+                scriptDto.ProjectId = projectPaper.ProjectId;
+                scriptDto.PaperId = projectPaper.PaperId;
+                scriptDto.GeneratedBarcode = barcode;
+
+                // As soon as scripts get uploaded/created, trigger auto-allocation if every paper for that project is assigned
+                int? targetUniId = projectPaper.Paper?.UniversityId ?? projectPaper.Project?.UniversityId;
+                if (targetUniId.HasValue && targetUniId.Value > 0)
+                {
+                    _dailyAllocationService.TriggerAutoAllocationBackground(targetUniId.Value);
+                }
+
                 return CreatedAtAction(nameof(GetScript), new { id = script.Id }, scriptDto);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("bulk")]
+        [HttpPost("bulk-create")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> BulkCreateScripts([FromBody] List<ScriptDto> scriptDtos)
+        {
+            try
+            {
+                if (scriptDtos == null || !scriptDtos.Any())
+                {
+                    return BadRequest(new { success = false, message = "No scripts provided." });
+                }
+
+                var allProjectPapers = await _context.ProjectPapers
+                    .Include(pp => pp.Paper)
+                    .Include(pp => pp.Project)
+                    .ToListAsync();
+
+                var createdScripts = new List<Script>();
+                var targetUniIds = new HashSet<int>();
+
+                foreach (var dto in scriptDtos)
+                {
+                    ProjectPaper? pp = null;
+                    if (dto.ProjectPaperId.HasValue && dto.ProjectPaperId.Value > 0)
+                    {
+                        pp = allProjectPapers.FirstOrDefault(p => p.Id == dto.ProjectPaperId.Value);
+                    }
+                    if (pp == null && dto.PaperId > 0)
+                    {
+                        pp = allProjectPapers.FirstOrDefault(p => p.Id == dto.PaperId) 
+                             ?? allProjectPapers.FirstOrDefault(p => p.PaperId == dto.PaperId);
+                    }
+
+                    if (pp == null) continue;
+
+                    var barcode = !string.IsNullOrWhiteSpace(dto.GeneratedBarcode)
+                        ? dto.GeneratedBarcode
+                        : (!string.IsNullOrWhiteSpace(dto.InBuiltBarCode) ? dto.InBuiltBarCode : $"SC-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}".Substring(0, 24).ToUpper());
+
+                    var script = new Script
+                    {
+                        ProjectPaperId = pp.Id,
+                        ProjectId = pp.ProjectId,
+                        InBuiltBarcode = dto.InBuiltBarCode,
+                        GeneratedBarcode = barcode,
+                        CleanPdfUrl = dto.CleanPdfUrl ?? "",
+                        RollNumber = dto.RollNumber ?? barcode,
+                        Status = ScriptStatus.pending,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    createdScripts.Add(script);
+
+                    int? uniId = pp.Paper?.UniversityId ?? pp.Project?.UniversityId;
+                    if (uniId.HasValue && uniId.Value > 0)
+                    {
+                        targetUniIds.Add(uniId.Value);
+                    }
+                }
+
+                if (!createdScripts.Any())
+                {
+                    return BadRequest(new { success = false, message = "No valid scripts could be mapped to existing project papers." });
+                }
+
+                await _context.Scripts.AddRangeAsync(createdScripts);
+                await _context.SaveChangesAsync();
+
+                // Trigger auto allocation for all affected universities as soon as scripts are uploaded
+                foreach (var uniId in targetUniIds)
+                {
+                    _dailyAllocationService.TriggerAutoAllocationBackground(uniId);
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    count = createdScripts.Count,
+                    message = $"Successfully uploaded {createdScripts.Count} scripts and triggered auto-allocation for eligible projects."
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("upload")]
+        [HttpPost("bulk-upload")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<IActionResult> UploadScripts(
+            [FromQuery] int? projectId,
+            [FromQuery] int? paperId,
+            [FromQuery] int? projectPaperId,
+            List<IFormFile> files)
+        {
+            try
+            {
+                if (files == null || !files.Any())
+                {
+                    return BadRequest(new { success = false, message = "No files uploaded." });
+                }
+
+                ProjectPaper? targetProjectPaper = null;
+                if (projectPaperId.HasValue && projectPaperId.Value > 0)
+                {
+                    targetProjectPaper = await _context.ProjectPapers
+                        .Include(pp => pp.Paper)
+                        .Include(pp => pp.Project)
+                        .FirstOrDefaultAsync(pp => pp.Id == projectPaperId.Value);
+                }
+                else if (paperId.HasValue && paperId.Value > 0)
+                {
+                    var ppQuery = _context.ProjectPapers
+                        .Include(pp => pp.Paper)
+                        .Include(pp => pp.Project)
+                        .Where(pp => pp.PaperId == paperId.Value || pp.Id == paperId.Value);
+
+                    if (projectId.HasValue && projectId.Value > 0)
+                    {
+                        ppQuery = ppQuery.Where(pp => pp.ProjectId == projectId.Value);
+                    }
+
+                    targetProjectPaper = await ppQuery.FirstOrDefaultAsync();
+                }
+
+                var basePath = _configuration["StorageSettings:BasePath"] 
+                    ?? _configuration["StorageSettings:BaseOsmPath"] 
+                    ?? Path.Combine(_environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "storage");
+
+                var uploadedScripts = new List<Script>();
+                var targetUniIds = new HashSet<int>();
+
+                foreach (var file in files)
+                {
+                    if (file == null || file.Length == 0) continue;
+
+                    var originalFileName = Path.GetFileName(file.FileName);
+                    var fileNameWithoutExt = Path.GetFileNameWithoutExtension(originalFileName)?.Trim() ?? "";
+
+                    var pp = targetProjectPaper;
+                    if (pp == null)
+                    {
+                        pp = await _context.ProjectPapers
+                            .Include(pp => pp.Paper)
+                            .Include(pp => pp.Project)
+                            .FirstOrDefaultAsync(p => (!projectId.HasValue || p.ProjectId == projectId.Value) &&
+                                                      ((p.CatchNo != null && fileNameWithoutExt.Contains(p.CatchNo)) ||
+                                                       (p.Paper != null && fileNameWithoutExt.Contains(p.Paper.PaperCode))));
+                    }
+
+                    if (pp == null) continue;
+
+                    var pId = pp.ProjectId;
+                    var papId = pp.PaperId;
+                    var targetFolder = Path.Combine(basePath, "osm", pId.ToString(), papId.ToString(), "cleancopies");
+                    if (!Directory.Exists(targetFolder))
+                    {
+                        Directory.CreateDirectory(targetFolder);
+                    }
+
+                    var uniqueFileName = $"{Guid.NewGuid():N}_{originalFileName}";
+                    var filePath = Path.Combine(targetFolder, uniqueFileName);
+                    var fileUrl = $"/osm/{pId}/{papId}/cleancopies/{uniqueFileName}";
+
+                    using (var fileStream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await file.CopyToAsync(fileStream);
+                    }
+
+                    var barcode = fileNameWithoutExt.Length >= 6 
+                        ? fileNameWithoutExt 
+                        : $"SC-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}".Substring(0, 24).ToUpper();
+
+                    var script = new Script
+                    {
+                        ProjectPaperId = pp.Id,
+                        ProjectId = pp.ProjectId,
+                        InBuiltBarcode = barcode,
+                        GeneratedBarcode = barcode,
+                        CleanPdfUrl = fileUrl,
+                        RollNumber = barcode,
+                        Status = ScriptStatus.pending,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    uploadedScripts.Add(script);
+
+                    int? uniId = pp.Paper?.UniversityId ?? pp.Project?.UniversityId;
+                    if (uniId.HasValue && uniId.Value > 0)
+                    {
+                        targetUniIds.Add(uniId.Value);
+                    }
+                }
+
+                if (!uploadedScripts.Any())
+                {
+                    return BadRequest(new { success = false, message = "Could not map uploaded files to any project paper. Please specify projectPaperId or paperId." });
+                }
+
+                await _context.Scripts.AddRangeAsync(uploadedScripts);
+                await _context.SaveChangesAsync();
+
+                // Trigger auto allocation for all affected universities as soon as scripts are uploaded
+                foreach (var uniId in targetUniIds)
+                {
+                    _dailyAllocationService.TriggerAutoAllocationBackground(uniId);
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    count = uploadedScripts.Count,
+                    message = $"Uploaded {uploadedScripts.Count} scripts and triggered auto-allocation for eligible projects."
+                });
             }
             catch (Exception ex)
             {
@@ -280,6 +580,7 @@ namespace API.Controllers
                 {
                     ScriptId = id,
                     ExaminerId = request.ExaminerId,
+                    ProjectId = script.ProjectId ?? script.ProjectPaper?.ProjectId,
                     AllocatedAt = DateTime.UtcNow,
                     Status = AllocationStatus.allocated,
                     AssignmentStatus = true
@@ -390,6 +691,8 @@ namespace API.Controllers
                         GeneratedBarcode = s.GeneratedBarcode,
                         InBuiltBarCode = s.InBuiltBarcode,
                         PaperId = s.ProjectPaper.PaperId,
+                        ProjectPaperId = s.ProjectPaperId,
+                        ProjectId = s.ProjectId ?? s.ProjectPaper?.ProjectId,
                         CleanPdfUrl = s.CleanPdfUrl,
                         Status = s.Status,
                         IsReEvaluationRequested = s.IsReEvaluationRequested,
@@ -441,6 +744,8 @@ namespace API.Controllers
                     GeneratedBarcode = s.GeneratedBarcode,
                     CleanPdfUrl = s.CleanPdfUrl,
                     PaperId = s.ProjectPaper.PaperId,
+                    ProjectPaperId = s.ProjectPaperId,
+                    ProjectId = s.ProjectId ?? s.ProjectPaper?.ProjectId,
                     InBuiltBarCode = s.InBuiltBarcode,
                     Status = s.Status,
                     IsReEvaluationRequested = s.IsReEvaluationRequested,
@@ -576,18 +881,59 @@ namespace API.Controllers
                     })
                     .ToListAsync();
 
-                // Grouped summary by paper (for convenient rendering in Script Allocation UI table)
-                var paperIds = await query
-                    .Where(s => s.ProjectPaper != null)
-                    .Select(s => s.ProjectPaper.PaperId)
-                    .Distinct()
-                    .ToListAsync();
+                // Grouped summary by paper (for convenient rendering in Script Allocation UI table):
+                // Include all active project papers for this project (or all papers that have scripts)
+                // so that the allocation table remains visible with full counts even when all scripts are allocated.
+                List<int> paperIds;
+                if (paperId.HasValue && paperId.Value > 0)
+                {
+                    paperIds = new List<int> { paperId.Value };
+                }
+                else if (projectId.HasValue && projectId.Value > 0)
+                {
+                    paperIds = await _context.ProjectPapers
+                        .Where(pp => pp.ProjectId == projectId.Value && pp.IsActive)
+                        .Select(pp => pp.PaperId)
+                        .Distinct()
+                        .ToListAsync();
+                }
+                else
+                {
+                    var allScriptsPaperQuery = _context.Scripts
+                        .Include(s => s.ProjectPaper)
+                            .ThenInclude(pp => pp.Paper)
+                        .AsQueryable();
+
+                    if (targetUniversityId.HasValue && targetUniversityId.Value > 0)
+                    {
+                        allScriptsPaperQuery = allScriptsPaperQuery.Where(s => s.ProjectPaper != null && 
+                                                                               s.ProjectPaper.Paper != null && 
+                                                                               s.ProjectPaper.Paper.UniversityId == targetUniversityId.Value);
+                    }
+
+                    paperIds = await allScriptsPaperQuery
+                        .Where(s => s.ProjectPaper != null)
+                        .Select(s => s.ProjectPaper.PaperId)
+                        .Distinct()
+                        .ToListAsync();
+                }
 
                 var papersSummary = new List<object>();
                 if (paperIds.Count > 0)
                 {
-                    papersSummary = await _context.Papers
-                        .Where(p => paperIds.Contains(p.PaperId))
+                    var papersQuery = _context.Papers
+                        .Where(p => paperIds.Contains(p.PaperId));
+
+                    if (!string.IsNullOrWhiteSpace(search))
+                    {
+                        var sLower = search.ToLower();
+                        papersQuery = papersQuery.Where(p => 
+                            p.PaperCode.ToLower().Contains(sLower) || 
+                            p.PaperName.ToLower().Contains(sLower) ||
+                            p.ProjectPapers.Any(pp => (!projectId.HasValue || pp.ProjectId == projectId.Value) && pp.CatchNo != null && pp.CatchNo.ToLower().Contains(sLower)));
+                    }
+
+                    papersSummary = await papersQuery
                         .Select(p => new
                         {
                             paperId = p.PaperId,
@@ -603,7 +949,7 @@ namespace API.Controllers
                             allocatedScripts = _context.Allocations.Count(a => a.Script.ProjectPaper.PaperId == p.PaperId && a.AssignmentStatus && (!projectId.HasValue || a.Script.ProjectPaper.ProjectId == projectId.Value)),
                             pendingScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (!projectId.HasValue || s.ProjectPaper.ProjectId == projectId.Value) && !_context.Allocations.Any(a => a.ScriptId == s.Id && a.AssignmentStatus)),
                             isSectionsConfigured = _context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && (!projectId.HasValue || pps.ProjectPaper.ProjectId == projectId.Value)) || _context.Sections.Any(sec => sec.PaperId == p.PaperId),
-                            expertsCount = _context.PaperExaminers.Count(pe => pe.PaperId == p.PaperId)
+                            expertsCount = _context.PaperExaminers.Count(pe => pe.ProjectPaper != null && pe.ProjectPaper.PaperId == p.PaperId && (!projectId.HasValue || pe.ProjectPaper.ProjectId == projectId.Value))
                         })
                         .ToListAsync<object>();
                 }
