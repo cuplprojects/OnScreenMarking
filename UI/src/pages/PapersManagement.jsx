@@ -560,7 +560,11 @@ export default function PapersManagement({ isTab = false }) {
             isActive: fullPaper.isActive,
             questionPaperPdfUrl: fullPaper.questionPaperPdfUrl || "",
         });
-        if (fullPaper.subjectPapers && fullPaper.subjectPapers.length > 0) {
+        if (fullPaper.subjectIds && fullPaper.subjectIds.length > 0) {
+            setSelectedSubjects(fullPaper.subjectIds);
+        } else if (paper.subjectIds && paper.subjectIds.length > 0) {
+            setSelectedSubjects(paper.subjectIds);
+        } else if (fullPaper.subjectPapers && fullPaper.subjectPapers.length > 0) {
             setSelectedSubjects(fullPaper.subjectPapers.map(sp => sp.subjectId));
         } else if (paper.subjectId) {
             setSelectedSubjects([paper.subjectId]);
@@ -1515,7 +1519,7 @@ export default function PapersManagement({ isTab = false }) {
 
         {showForm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-gray-100 relative max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200 p-4 md:p-6">
+            <div className="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-gray-100 relative max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200 p-4 md:p-6">
               
               {/* Modal Header */}
               <div className="flex items-center justify-between border-b border-gray-100 pb-3.5 mb-5">
@@ -1541,6 +1545,26 @@ export default function PapersManagement({ isTab = false }) {
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Project Select (Only shown if page is not already scoped to a specific project) */}
+                {!projectId && (
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                      Project <span className="text-red-500">*</span>
+                    </label>
+                    <select 
+                      value={formData.projectId} 
+                      onChange={(e) => handleProjectChange(e.target.value)} 
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                      required
+                    >
+                      <option value="">Select Project</option>
+                      {projects.map((p) => (
+                        <option key={p.projectId} value={p.projectId}>{p.projectName}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {/* Row 1: Code, Name, Catch No */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                   <div>
@@ -1581,10 +1605,10 @@ export default function PapersManagement({ isTab = false }) {
                   </div>
                 </div>
 
-                {/* Row 2: Subjects Multi-Select Dropdown & Project Select (if no project in URL context) */}
-                <div className={`grid grid-cols-1 ${!projectId ? 'sm:grid-cols-2' : ''} gap-3.5`}>
+                {/* Row 2: Subjects, Paper Number, Max Marks, Total Questions in ONE Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
                   {/* Multi-Select Subjects Dropdown */}
-                  <div className="relative" ref={subjectDropdownRef}>
+                  <div className="sm:col-span-5 relative" ref={subjectDropdownRef}>
                     <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
                       Subjects ({selectedSubjects.length} selected) <span className="text-red-500">*</span>
                     </label>
@@ -1605,11 +1629,11 @@ export default function PapersManagement({ isTab = false }) {
                           </span>
                         )}
                       </span>
-                      <ChevronDown size={14} className={`text-gray-400 transition-transform ${isSubjectDropdownOpen ? "rotate-180" : ""}`} />
+                      <ChevronDown size={14} className={`text-gray-400 transition-transform shrink-0 ml-1 ${isSubjectDropdownOpen ? "rotate-180" : ""}`} />
                     </button>
 
                     {isSubjectDropdownOpen && (
-                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2.5 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
+                      <div className="absolute left-0 top-full mt-1 w-72 sm:w-80 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2.5 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
                         <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
                           <Search size={13} className="text-gray-400" />
                           <input 
@@ -1678,30 +1702,49 @@ export default function PapersManagement({ isTab = false }) {
                     )}
                   </div>
 
-                  {/* Project Select (Only shown if page is not already scoped to a specific project) */}
-                  {!projectId && (
-                    <div>
-                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
-                        Project <span className="text-red-500">*</span>
-                      </label>
-                      <select 
-                        value={formData.projectId} 
-                        onChange={(e) => handleProjectChange(e.target.value)} 
-                        className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                        required
-                      >
-                        <option value="">Select Project</option>
-                        {projects.map((p) => (
-                          <option key={p.projectId} value={p.projectId}>{p.projectName}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                  {/* Paper Number */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Paper Number</label>
+                    <input 
+                      type="number" 
+                      value={formData.paperNumber} 
+                      onChange={(e) => setFormData({ ...formData, paperNumber: e.target.value })} 
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                      placeholder="1"
+                      min="1" 
+                    />
+                  </div>
+
+                  {/* Max Marks */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Max Marks</label>
+                    <input 
+                      type="number" 
+                      value={formData.maxMarks} 
+                      onChange={(e) => setFormData({ ...formData, maxMarks: e.target.value })} 
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                      placeholder="100"
+                      min="0" 
+                    />
+                  </div>
+
+                  {/* Total Questions */}
+                  <div className="sm:col-span-3">
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Total Questions</label>
+                    <input 
+                      type="number" 
+                      value={formData.totalQuestions} 
+                      onChange={(e) => setFormData({ ...formData, totalQuestions: e.target.value })} 
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                      placeholder="10"
+                      min="0" 
+                    />
+                  </div>
                 </div>
 
                 {/* Selected Subjects Badges Display (Quick View) */}
                 {selectedSubjects.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
                     {selectedSubjects.map(subId => {
                       const sub = subjects.find(s => s.subjectId === subId);
                       if (!sub) return null;
@@ -1723,43 +1766,6 @@ export default function PapersManagement({ isTab = false }) {
                     })}
                   </div>
                 )}
-
-                {/* Row 3: Paper Number, Max Marks, Total Questions */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                  <div>
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Paper Number</label>
-                    <input 
-                      type="number" 
-                      value={formData.paperNumber} 
-                      onChange={(e) => setFormData({ ...formData, paperNumber: e.target.value })} 
-                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      placeholder="1"
-                      min="1" 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Max Marks</label>
-                    <input 
-                      type="number" 
-                      value={formData.maxMarks} 
-                      onChange={(e) => setFormData({ ...formData, maxMarks: e.target.value })} 
-                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      placeholder="100"
-                      min="0" 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Total Questions</label>
-                    <input 
-                      type="number" 
-                      value={formData.totalQuestions} 
-                      onChange={(e) => setFormData({ ...formData, totalQuestions: e.target.value })} 
-                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      placeholder="10"
-                      min="0" 
-                    />
-                  </div>
-                </div>
 
                 {/* Row 4: Description */}
                 <div>
@@ -2098,7 +2104,14 @@ export default function PapersManagement({ isTab = false }) {
                           </div>
                         </td>
                         <td className="px-5 py-2.5">
-                          <span className="text-gray-700 block truncate max-w-[150px]">{paper.subjectName}</span>
+                          <span 
+                            className="text-gray-700 block truncate max-w-[180px]"
+                            title={paper.subjectNames && paper.subjectNames.length > 0 ? paper.subjectNames.join(', ') : (paper.subjectName || '')}
+                          >
+                            {paper.subjectNames && paper.subjectNames.length > 0 
+                              ? paper.subjectNames.join(', ') 
+                              : (paper.subjectName || '-')}
+                          </span>
                           <div className="text-[9px] text-gray-400 uppercase tracking-wider mt-0.5">
                             Max: {paper.maxMarks} | Qs: {paper.totalQuestions} | Catch: {paper.catchNo}
                           </div>
@@ -2858,7 +2871,7 @@ export default function PapersManagement({ isTab = false }) {
 
                             {/* Subject & Catch No */}
                             <td className="px-5 py-3.5">
-                              <div className="text-gray-900 font-bold text-xs">{row.paper.subjectName || "—"}</div>
+                              <div className="text-gray-900 font-bold text-xs">{row.paper.subjectNames?.join(' ') || row.paper.subjectName || "—"}</div>
                               <div className="text-[11px] text-gray-500 font-medium font-mono">
                                 Catch No: {row.paper.catchNo || 'None'}
                               </div>
@@ -3225,7 +3238,7 @@ export default function PapersManagement({ isTab = false }) {
 
                                  {/* Subjects */}
                                  <td className="px-5 py-3.5">
-                                   <div className="text-gray-900 font-bold text-xs">{paper.subjectName || "—"}</div>
+                                   <div className="text-gray-900 font-bold text-xs">{paper.subjectNames?.join(' ') || paper.subjectName || "—"}</div>
                                  </td>
 
                                 {/* Catch No */}
