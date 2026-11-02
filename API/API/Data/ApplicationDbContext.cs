@@ -57,9 +57,57 @@ namespace API.Data
         public DbSet<SubjectPaperRequest> SubjectPaperRequests { get; set; }
         public DbSet<AssignmentType> AssignmentTypes { get; set; }
 
+        protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+        {
+            base.ConfigureConventions(configurationBuilder);
+            configurationBuilder.Properties<decimal>().HavePrecision(10, 2);
+            configurationBuilder.Properties<decimal?>().HavePrecision(10, 2);
+        }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            // Configure decimal precision (10, 2) for all marks & percentage fields
+            modelBuilder.Entity<Paper>()
+                .Property(p => p.MaxMarks)
+                .HasPrecision(10, 2);
+
+            modelBuilder.Entity<SectionMaster>()
+                .Property(sm => sm.TotalMarks)
+                .HasPrecision(10, 2);
+
+            modelBuilder.Entity<Section>()
+                .Property(s => s.TotalMarks)
+                .HasPrecision(10, 2);
+
+            modelBuilder.Entity<Question>()
+                .Property(q => q.Marks)
+                .HasPrecision(10, 2);
+
+            modelBuilder.Entity<QuestionMark>()
+                .Property(qm => qm.MarksAwarded)
+                .HasPrecision(10, 2);
+
+            modelBuilder.Entity<ProjectPaperSection>()
+                .Property(pps => pps.TotalMarks)
+                .HasPrecision(10, 2);
+
+            modelBuilder.Entity<Marking>()
+                .Property(m => m.TotalMarks)
+                .HasPrecision(10, 2);
+
+            modelBuilder.Entity<Marking>()
+                .Property(m => m.Percentage)
+                .HasPrecision(10, 2);
+
+            modelBuilder.Entity<Script>()
+                .Property(s => s.TotalMarks)
+                .HasPrecision(10, 2);
+
+            modelBuilder.Entity<Script>()
+                .Property(s => s.Percentage)
+                .HasPrecision(10, 2);
 
             modelBuilder.Entity<PaperSectionMaster>()
                 .HasIndex(psm => new { psm.PaperId, psm.SectionMasterId })

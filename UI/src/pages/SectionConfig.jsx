@@ -268,6 +268,18 @@ export default function SectionConfig() {
       return;
     }
 
+    // Validate that selected master sections match paper total questions
+    if (selectedPaper && selectedPaper.totalQuestions && overwriteExistingMasters) {
+      const selectedMasters = sectionMasters.filter(m => selectedMasterSectionIds.includes(m.id));
+      const importTotalQ = selectedMasters.reduce((sum, m) => sum + (parseInt(m.totalQuestions, 10) || 0), 0);
+      if (importTotalQ !== selectedPaper.totalQuestions) {
+        message.error(
+          `Incorrect Configuration: Selected master sections have a total of ${importTotalQ} questions, but this paper has ${selectedPaper.totalQuestions} total questions. Total Questions must be ${importTotalQ} only.`
+        );
+        return;
+      }
+    }
+
     setImportingMasters(true);
     try {
       if (isProjectMode) {
@@ -1151,6 +1163,22 @@ export default function SectionConfig() {
                 <p className="text-xs text-gray-600">
                   Choose the predefined Master Sections to create in this paper. Questions and marks will be generated automatically based on the master configuration.
                 </p>
+
+                {(() => {
+                  const selectedMasters = sectionMasters.filter(m => selectedMasterSectionIds.includes(m.id));
+                  const importTotalQ = selectedMasters.reduce((sum, m) => sum + (parseInt(m.totalQuestions, 10) || 0), 0);
+                  const isImportMismatch = selectedPaper && selectedPaper.totalQuestions && selectedMasterSectionIds.length > 0 && importTotalQ !== selectedPaper.totalQuestions;
+                  if (!isImportMismatch) return null;
+                  return (
+                    <div className="flex items-center gap-2.5 p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs animate-in fade-in">
+                      <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                      <div>
+                        <span className="font-extrabold text-amber-950 uppercase tracking-wide text-[11px]">Incorrect Configuration:</span>{" "}
+                        Selected master sections total <strong>{importTotalQ} questions</strong>, but paper requires <strong>{selectedPaper.totalQuestions} questions</strong>.
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
                   {sectionMasters.length === 0 ? (

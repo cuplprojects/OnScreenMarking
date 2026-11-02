@@ -14,6 +14,7 @@ namespace API.Models
         public string PaperCode { get; set; } // e.g., "MATH-2024-P1", "MATH-2024-P2"
         public string PaperName { get; set; } // e.g., "Paper 1", "Paper 2"
         public int PaperNumber { get; set; } // 1, 2, 3, etc.
+        [Column(TypeName = "decimal(10,2)")]
         public decimal MaxMarks { get; set; } = 100;
         public int TotalQuestions { get; set; }
         public string? Description { get; set; }
