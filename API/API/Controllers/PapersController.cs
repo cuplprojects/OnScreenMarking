@@ -223,6 +223,8 @@ namespace API.Controllers
                         isActive = p.IsActive,
                         subjectName = p.SubjectPapers.Select(sp => sp.Subject.SubName).FirstOrDefault() ?? "N/A",
                         subjectId = p.SubjectPapers.Select(sp => sp.SubjectId).FirstOrDefault(),
+                        subjectNames = p.SubjectPapers.Select(sp => sp.Subject.SubName).ToList(),
+                        subjectIds = p.SubjectPapers.Select(sp => sp.SubjectId).ToList(),
                         totalScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || s.ProjectPaper.ProjectId == projectId)),
                         completedScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || s.ProjectPaper.ProjectId == projectId) && s.Status == ScriptStatus.completed),
                         allocatedScripts = _context.Allocations.Count(a => a.Script.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || a.Script.ProjectPaper.ProjectId == projectId) && a.AssignmentStatus),
@@ -549,11 +551,12 @@ namespace API.Controllers
                     });
                 }
 
+                var distinctSubjectIds = paperDto.SubjectIds.Distinct().ToList();
                 var subjects = await _context.Subjects
-                    .Where(s => paperDto.SubjectIds.Contains(s.SubjectId))
+                    .Where(s => distinctSubjectIds.Contains(s.SubjectId))
                     .ToListAsync();
 
-                if (subjects.Count != paperDto.SubjectIds.Count)
+                if (subjects.Count != distinctSubjectIds.Count)
                 {
                     return BadRequest(new
                     {
@@ -591,7 +594,7 @@ namespace API.Controllers
                 await _context.SaveChangesAsync();
 
                 // Create SubjectPaper mappings
-                foreach (var subjectId in paperDto.SubjectIds)
+                foreach (var subjectId in distinctSubjectIds)
                 {
                     _context.SubjectPapers.Add(new SubjectPaper
                     {
