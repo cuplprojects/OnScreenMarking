@@ -111,6 +111,7 @@ namespace API.Controllers
                 if (script == null)
                     return NotFound(new { success = false, message = "Script not found" });
 
+                var alloc = await _context.Allocations.FirstOrDefaultAsync(a => a.ScriptId == id && a.AssignmentStatus);
                 var subjectPaper = script.ProjectPaper?.Paper?.SubjectPapers?.FirstOrDefault();
                 var scriptDto = new ScriptDto
                 {
@@ -128,6 +129,7 @@ namespace API.Controllers
                     Percentage = script.Percentage,
                     Remarks = script.Remarks,
                     SubmittedAt = script.SubmittedAt,
+                    AllocationId = alloc?.AllocationId,
                     PaperName = script.ProjectPaper?.Paper?.PaperName,
                     PaperCode = script.ProjectPaper?.Paper?.PaperCode,
                     SubjectId = subjectPaper?.SubjectId,

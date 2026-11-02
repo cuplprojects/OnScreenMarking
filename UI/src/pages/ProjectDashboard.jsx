@@ -618,8 +618,8 @@ export default function ProjectDashboard() {
                                   {!isAllocateDisabled ? (
                                     <Link 
                                       to={userType === 'admin'
-                                        ? `/admin/allocate-scripts?projectId=${encryptedProjectId}&paperId=${paper.paperId}`
-                                        : `/allocate-scripts?projectId=${encryptedProjectId}&paperId=${paper.paperId}`}
+                                        ? `/admin/allocate-scripts?projectId=${encryptedProjectId}&paperId=${encryptId(paper.paperId)}`
+                                        : `/allocate-scripts?projectId=${encryptedProjectId}&paperId=${encryptId(paper.paperId)}`}
                                       title="Allocate Scripts: Allocate pending scripts to examiners"
                                       className="p-1.5 text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200/80 rounded-lg transition-all block shadow-2xs"
                                     >
@@ -678,8 +678,8 @@ export default function ProjectDashboard() {
                                       onClick={(e) => {
                                         e.preventDefault();
                                         window.location.href = userType === 'admin' 
-                                          ? `/admin/papers?projectId=${encryptedProjectId}&action=assign&paperId=${paper.paperId}`
-                                          : `/papers?projectId=${encryptedProjectId}&action=assign&paperId=${paper.paperId}`;
+                                          ? `/admin/papers?projectId=${encryptedProjectId}&action=assign&paperId=${encryptId(paper.paperId)}`
+                                          : `/papers?projectId=${encryptedProjectId}&action=assign&paperId=${encryptId(paper.paperId)}`;
                                       }}
                                       title="Assign Examiners: Assign examiners to evaluate scripts"
                                       className="p-1.5 text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200/80 rounded-lg transition-all block shadow-2xs cursor-pointer"

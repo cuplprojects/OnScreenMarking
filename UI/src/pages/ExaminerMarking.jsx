@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ChevronDown,
   ChevronUp,
@@ -28,6 +28,7 @@ import apiCall from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import message from "../services/messageService";
 import { MarkingStatus } from "../constants/enums";
+import { decryptId, encryptId } from "../utils/encryption";
 
 // Helper to extract landmarks from an image URL or base64
 const extractImageLandmarks = async (imageSrc, landmarker) => {
@@ -119,18 +120,24 @@ const ExaminerMarking = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   
-  // Get parameters from location state or URL params (fallback to URL params on refresh)
+  const { scriptId: routeScriptId } = useParams();
+  
+  // Get parameters from route param /marking/:scriptId, location state, or URL search params (decrypts if encrypted)
   const queryParams = new URLSearchParams(location.search);
-  const paperId = location.state?.paperId || queryParams.get('paperId');
-  const projectPaperId = location.state?.projectPaperId || queryParams.get('projectPaperId');
-  const scriptId = location.state?.scriptId || queryParams.get('scriptId');
-  const allocationId = location.state?.allocationId || queryParams.get('allocationId');
+  const rawScriptId = routeScriptId || location.state?.scriptId || queryParams.get('scriptId');
+  const scriptId = rawScriptId ? decryptId(rawScriptId) : null;
+  const rawPaperId = location.state?.paperId || queryParams.get('paperId');
+  const [paperId, setPaperId] = useState(rawPaperId ? decryptId(rawPaperId) : null);
+  const rawProjectPaperId = location.state?.projectPaperId || queryParams.get('projectPaperId');
+  const [projectPaperId, setProjectPaperId] = useState(rawProjectPaperId ? decryptId(rawProjectPaperId) : null);
+  const rawAllocationId = location.state?.allocationId || queryParams.get('allocationId');
+  const [allocationId, setAllocationId] = useState(rawAllocationId ? decryptId(rawAllocationId) : null);
   const examinerId = location.state?.examinerId || queryParams.get('examinerId') || user?.id;
-  const studentName = location.state?.studentName || queryParams.get('studentName');
-  const rollNo = location.state?.rollNo || queryParams.get('rollNo');
-  const subject = location.state?.subject || queryParams.get('subject');
-  const cleanPdfUrl = location.state?.cleanPdfUrl || queryParams.get('cleanPdfUrl');
-  const rawQpPdfUrl = location.state?.questionPaperPdfUrl || queryParams.get('questionPaperPdfUrl');
+  const [studentName, setStudentName] = useState(location.state?.studentName || queryParams.get('studentName'));
+  const [rollNo, setRollNo] = useState(location.state?.rollNo || queryParams.get('rollNo'));
+  const [subject, setSubject] = useState(location.state?.subject || queryParams.get('subject'));
+  const [cleanPdfUrl, setCleanPdfUrl] = useState(location.state?.cleanPdfUrl || queryParams.get('cleanPdfUrl'));
+  const [rawQpPdfUrl, setRawQpPdfUrl] = useState(location.state?.questionPaperPdfUrl || queryParams.get('questionPaperPdfUrl'));
   const isReadOnly = location.state?.readOnly === true || queryParams.get('readOnly') === 'true';
   const apiBaseUrl = import.meta.env.VITE_API_URL;
   const pdfUrl = scriptId ? `${apiBaseUrl}/Scripts/${scriptId}/pdf` : null;
@@ -595,10 +602,48 @@ const ExaminerMarking = () => {
       }
     };
   }, [loading, stream]); 
+  // Load script details if missing from state (e.g. direct URL visit / refresh)
+  useEffect(() => {
+    if (!scriptId) {
+      setError('No script selected. Please select a script from the Scripts page.');
+      setLoading(false);
+      return;
+    }
+
+    if (paperId && allocationId) {
+      return;
+    }
+
+    const loadScriptData = async () => {
+      try {
+        setLoading(true);
+        const scriptData = await apiCall(`/scripts/${scriptId}`);
+        if (scriptData) {
+          if (!paperId && scriptData.paperId) setPaperId(scriptData.paperId);
+          if (!projectPaperId && scriptData.projectPaperId) setProjectPaperId(scriptData.projectPaperId);
+          if (!allocationId && scriptData.allocationId) setAllocationId(scriptData.allocationId);
+          if (!studentName && (scriptData.studentName || scriptData.rollNumber)) {
+            setStudentName(scriptData.studentName || scriptData.rollNumber);
+          }
+          if (!rollNo && scriptData.rollNumber) setRollNo(scriptData.rollNumber);
+          if (!subject && scriptData.subjectName) setSubject(scriptData.subjectName);
+          if (!rawQpPdfUrl && scriptData.questionPaperPdfUrl) setRawQpPdfUrl(scriptData.questionPaperPdfUrl);
+          if (!cleanPdfUrl && scriptData.cleanPdfUrl) setCleanPdfUrl(scriptData.cleanPdfUrl);
+        }
+      } catch (err) {
+        console.error("Failed to load script details:", err);
+      }
+    };
+
+    loadScriptData();
+  }, [scriptId]);
+
   useEffect(() => {
     if (!paperId) {
-      setError('No paper selected. Please select a script from the Scripts page.');
-      setLoading(false);
+      if (!scriptId) {
+        setError('No paper selected. Please select a script from the Scripts page.');
+        setLoading(false);
+      }
       return;
     }
     fetchPaperData();
@@ -657,7 +702,20 @@ const ExaminerMarking = () => {
 
   const createMarkingSession = async () => {
     try {
-      if (!allocationId || !examinerId) {
+      let currentAllocId = allocationId;
+      if (!currentAllocId && scriptId) {
+        try {
+          const allocRes = await apiCall(`/allocations/script/${scriptId}`);
+          if (allocRes?.allocationId) {
+            currentAllocId = allocRes.allocationId;
+            setAllocationId(currentAllocId);
+          }
+        } catch (allocErr) {
+          console.warn("Failed to fetch script allocation:", allocErr);
+        }
+      }
+
+      if (!currentAllocId || !examinerId) {
         setError('Missing allocation or examiner information');
         return;
       }
@@ -688,7 +746,7 @@ const ExaminerMarking = () => {
 
       // Create a new marking session (or retrieve existing) from markings table
       const markingResponse = await markingService.createMarking(
-        allocationId,
+        currentAllocId,
         examinerId,
         0, // Initial total marks
         remarks

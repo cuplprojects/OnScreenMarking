@@ -119,7 +119,7 @@ export function BreadcrumbProvider({ children }) {
 
     // Add current route if it's not dashboard
     if (path !== '/admin/dashboard' && path !== '/coordinator/dashboard' && path !== '/') {
-      const routeInfo = routeLabels[path];
+      const routeInfo = routeLabels[path] || (path.startsWith('/marking') ? routeLabels['/marking'] : null);
       if (routeInfo) {
         const isConfigPath = isUniversityConfigPath(path);
         const hasUniversitySelected = userType === 'coordinator' ? !!userUniversityId : queryParams.has('universityId');

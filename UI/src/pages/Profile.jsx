@@ -20,10 +20,12 @@ import { useAuth } from '../context/AuthContext';
 import userService from '../services/userService';
 import subjectService from '../services/subjectService';
 import { useBreadcrumb } from '../context/BreadcrumbContext';
+import { decryptId } from '../utils/encryption';
 
 export default function Profile() {
   const [searchParams] = useSearchParams();
-  const queryUserId = searchParams.get('userId');
+  const rawQueryUserId = searchParams.get('userId');
+  const queryUserId = rawQueryUserId ? decryptId(rawQueryUserId) : null;
   const { user: currentUser, userType } = useAuth();
   const { setBreadcrumb } = useBreadcrumb();
 

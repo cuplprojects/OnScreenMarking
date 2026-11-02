@@ -9,6 +9,7 @@ const SECRET_KEY = 'osm-portal-secret-key-2024'; // Change this to environment v
  * @returns {string} - Encrypted ID safe for URLs
  */
 export const encryptId = (id) => {
+  if (id === null || id === undefined || id === '') return '';
   try {
     const str = String(id);
     let encrypted = '';
@@ -32,9 +33,10 @@ export const encryptId = (id) => {
  * @returns {string} - Decrypted ID
  */
 export const decryptId = (encryptedId) => {
+  if (!encryptedId) return '';
   try {
     // Restore base64 padding and characters
-    let base64 = encryptedId.replace(/-/g, '+').replace(/_/g, '/');
+    let base64 = String(encryptedId).replace(/-/g, '+').replace(/_/g, '/');
     const padding = 4 - (base64.length % 4);
     if (padding !== 4) {
       base64 += '='.repeat(padding);
@@ -48,10 +50,20 @@ export const decryptId = (encryptedId) => {
       decrypted += String.fromCharCode(charCode);
     }
     
+    // If decrypted produces numeric digits, it was an encrypted numeric ID
+    if (/^\d+$/.test(decrypted)) {
+      return decrypted;
+    }
+
+    // Fallback: if the input was already a raw numeric ID, preserve it
+    if (/^\d+$/.test(String(encryptedId))) {
+      return String(encryptedId);
+    }
+
     return decrypted;
   } catch (error) {
-    console.error('Decryption error:', error);
-    return encryptedId;
+    // If decryption fails (e.g. invalid base64 characters), return original input
+    return String(encryptedId);
   }
 };
 

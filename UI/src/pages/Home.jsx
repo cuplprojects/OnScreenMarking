@@ -28,6 +28,7 @@ import message from '../services/messageService';
 import { useTable } from '../services/tableService';
 import TablePagination from '../components/TablePagination';
 import ColumnFilter from '../components/ColumnFilter';
+import { encryptId } from '../utils/encryption';
 import { ScriptStatus } from '../constants/enums';
 
 const Home = () => {
@@ -61,24 +62,17 @@ const Home = () => {
   };
 
   const handleStartMarking = (script) => {
-    const queryParams = new URLSearchParams({
-      scriptId: script.id,
-      paperId: script.paperId || '',
-      projectPaperId: script.projectPaperId || '',
-      barCode: script.generatedBarcode || '',
-      allocationId: script.allocationId || '',
-      examinerId: user?.id || '',
-      cleanPdfUrl: script.cleanPdfUrl || script.answerSheetPdfUrl || '',
-      questionPaperPdfUrl: script.questionPaperPdfUrl || ''
-    }).toString();
-
-    navigate(`/marking?${queryParams}`, {
+    navigate(`/marking/${encryptId(script.id)}`, {
       state: {
         scriptId: script.id,
         paperId: script.paperId,
         projectPaperId: script.projectPaperId,
         barCode: script.generatedBarcode,
         allocationId: script.allocationId,
+        examinerId: user?.id,
+        studentName: script.studentName,
+        rollNo: script.rollNumber || script.rollNo,
+        subject: script.subjectName || script.subject,
         cleanPdfUrl: script.cleanPdfUrl || script.answerSheetPdfUrl || '',
         questionPaperPdfUrl: script.questionPaperPdfUrl || ''
       }

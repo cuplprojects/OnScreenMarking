@@ -15,6 +15,10 @@ import {
   Loader,
   Eye,
   EyeOff,
+  ShieldCheck,
+  GraduationCap,
+  CreditCard,
+  Check,
 } from "lucide-react";
 import authService from "../services/authService";
 import universityService from "../services/universityService";
@@ -777,12 +781,6 @@ const Register = () => {
       return;
     }
 
-    if (!passwordRegex.test(formData.password)) {
-      setError(
-        "Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.",
-      );
-      return;
-    }
 
     // Check email and phone verification
     if (!emailVerified) {
@@ -848,36 +846,35 @@ const Register = () => {
 
   if (registered) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-2xl text-center animate-fade-in p-4 md:p-8">
-          <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-green-500 shadow-md">
-            <CheckCircle className="text-green-600" size={48} />
+      <div className="min-h-screen bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center p-4 sm:p-6">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl border border-slate-100 text-center animate-fade-in p-6 sm:p-8">
+          <div className="w-16 h-16 bg-green-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-green-200 shadow-sm text-green-600">
+            <CheckCircle size={36} />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200 mb-3">
+            Application Submitted
+          </span>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
             Registration Successful
           </h1>
-          <p className="text-gray-700 text-lg font-medium mb-4">
-            Awaiting Approval
+          <p className="text-gray-600 text-sm mb-6">
+            Your application has been received and is awaiting coordinator accreditation.
           </p>
-          <div className="bg-teal-50 border border-teal-100 rounded-lg p-5 mb-8 text-left text-sm text-teal-800 leading-relaxed">
-            <p className="font-semibold mb-2">Next Steps:</p>
-            <ul className="list-disc list-inside space-y-1">
-              <li>
-                Your registration has been forwarded to the University
-                Coordinator.
-              </li>
-              <li>
-                Once the coordinator approves your account, you will receive
-                activation status.
-              </li>
-              <li>You can then log in using your email and password.</li>
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6 text-left text-xs text-slate-700 leading-relaxed space-y-2">
+            <p className="font-bold text-slate-900 flex items-center gap-1.5 text-xs">
+              <ShieldCheck size={14} className="text-teal-600" /> Next Verification Steps:
+            </p>
+            <ul className="list-disc list-inside space-y-1 pl-1 text-slate-600">
+              <li>Your application has been routed to the University Examination Cell.</li>
+              <li>Your login password will be delivered to your verified email address upon coordinator approval.</li>
+              <li>You can then log in to the evaluation platform using your email and the provided password.</li>
             </ul>
           </div>
           <button
             onClick={() => navigate("/login")}
-            className="w-full bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white font-semibold py-3 rounded-lg transition-all duration-200 shadow-md"
+            className="w-full bg-teal-700 hover:bg-teal-800 text-white font-semibold py-2.5 rounded-xl transition duration-150 shadow-md text-sm"
           >
-            Return to Login
+            Return to Login Portal
           </button>
         </div>
       </div>
@@ -885,736 +882,771 @@ const Register = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center py-4 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl w-full bg-white rounded-lg shadow-2xl sm:p-6 p-4 md:p-5 my-4">
-        <div className="text-center mb-4">
-          <div className="w-12 h-12 bg-gradient-to-br from-teal-600 to-teal-800 rounded-lg flex items-center justify-center mx-auto mb-2 shadow-lg">
-            <BookOpen className="text-white" size={24} />
-          </div>
-          <h1 className="text-xl font-extrabold text-gray-900 tracking-tight">
-            Examiner Self Registration
-          </h1>
-          <p className="text-gray-600 mt-0.5 text-xs">
-            Join as an On-Screen Marking Examiner
-          </p>
-        </div>
-
-        {error && (
-          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-2.5 rounded-lg flex items-center gap-2.5 text-sm">
-            <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-500" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          {/* University Selection - Full Width */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
-              University *
-            </label>
-            <div className="relative">
-              <Building
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                size={16}
-              />
-              <select
-                required
-                className="w-full pl-10 pr-4 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none text-sm"
-                value={formData.universityId}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    universityId: e.target.value,
-                    subjectId1: "",
-                    subjectId2: "",
-                    subjectId3: "",
-                  })
-                }
-                disabled={loading}
-              >
-                <option value="">Select University</option>
-                {universities.map((uni) => (
-                  <option key={uni.universityId} value={uni.universityId}>
-                    {uni.universityName}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Employee ID, College ID, Aadhar - 3 columns */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            {/* Employee ID */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Employee ID
-              </label>
-              <div className="relative">
-                <Building
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={16}
-                />
-                <input
-                  type="number"
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
-                  placeholder="12345"
-                  value={formData.empId}
-                  onChange={(e) =>
-                    setFormData({ ...formData, empId: e.target.value })
-                  }
-                  disabled={loading}
-                />
+    <div className="min-h-screen bg-gradient-to-br from-teal-600 to-teal-800 py-8 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
+      <div className="max-w-4xl w-full bg-white rounded-2xl shadow-2xl border border-teal-700/20 overflow-hidden my-4">
+        {/* Header Banner */}
+        <div className="bg-gradient-to-r from-teal-700 to-teal-900 px-6 py-6 sm:px-8 text-white relative">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center shadow-inner flex-shrink-0">
+                <BookOpen className="text-white" size={24} />
               </div>
-            </div>
-
-            {/* College ID */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                College ID
-              </label>
-              <div className="relative">
-                <Building
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={16}
-                />
-                <input
-                  type="number"
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
-                  placeholder="67890"
-                  value={formData.collegeId}
-                  onChange={(e) =>
-                    setFormData({ ...formData, collegeId: e.target.value })
-                  }
-                  disabled={loading}
-                />
-              </div>
-            </div>
-
-            {/* Aadhar Number */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Aadhar (12 Digits)
-              </label>
-              <div className="relative">
-                <User
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={16}
-                />
-                <input
-                  type="text"
-                  maxLength={12}
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
-                  placeholder="123456789012"
-                  value={formData.aadharNo}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/\D/g, "");
-                    setFormData({ ...formData, aadharNo: val });
-                  }}
-                  disabled={loading}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Experience and Primary Subject - 2 columns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {/* Experience */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Evaluation Experience (Years)
-              </label>
-              <div className="relative">
-                <BookOpen
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={16}
-                />
-                <input
-                  type="text"
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
-                  placeholder="e.g. 5 Years"
-                  value={formData.experience}
-                  onChange={(e) =>
-                    setFormData({ ...formData, experience: e.target.value })
-                  }
-                  disabled={loading}
-                />
-              </div>
-            </div>
-
-            {/* Primary Subject */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Primary Subject Area *
-              </label>
-              <div className="relative">
-                <BookOpen
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={16}
-                />
-                <select
-                  required
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none text-sm disabled:bg-gray-50 disabled:cursor-not-allowed"
-                  value={formData.subjectId1}
-                  onChange={(e) =>
-                    setFormData({ ...formData, subjectId1: e.target.value })
-                  }
-                  disabled={loading || !formData.universityId}
-                >
-                  <option value="">Select Primary Subject</option>
-                  {subjects.map((sub) => (
-                    <option key={sub.subjectId} value={sub.subjectId}>
-                      {sub.subName} ({sub.subCode})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Secondary Subject, Tertiary Subject - 2 columns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {/* Secondary Subject */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Secondary Subject (Optional)
-              </label>
-              <div className="relative">
-                <BookOpen
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={16}
-                />
-                <select
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none text-sm disabled:bg-gray-50 disabled:cursor-not-allowed text-sm"
-                  value={formData.subjectId2}
-                  onChange={(e) =>
-                    setFormData({ ...formData, subjectId2: e.target.value })
-                  }
-                  disabled={loading || !formData.universityId}
-                >
-                  <option value="">Select Secondary</option>
-                  {subjects
-                    .filter((sub) => sub.subjectId.toString() !== formData.subjectId1)
-                    .map((sub) => (
-                      <option key={sub.subjectId} value={sub.subjectId}>
-                        {sub.subName} ({sub.subCode})
-                      </option>
-                    ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Tertiary Subject */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Tertiary Subject (Optional)
-              </label>
-              <div className="relative">
-                <BookOpen
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={16}
-                />
-                <select
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none text-sm disabled:bg-gray-50 disabled:cursor-not-allowed text-sm"
-                  value={formData.subjectId3}
-                  onChange={(e) =>
-                    setFormData({ ...formData, subjectId3: e.target.value })
-                  }
-                  disabled={loading || !formData.universityId}
-                >
-                  <option value="">Select Tertiary</option>
-                  {subjects
-                    .filter(
-                      (sub) =>
-                        sub.subjectId.toString() !== formData.subjectId1 &&
-                        sub.subjectId.toString() !== formData.subjectId2
-                    )
-                    .map((sub) => (
-                      <option key={sub.subjectId} value={sub.subjectId}>
-                        {sub.subName} ({sub.subCode})
-                      </option>
-                    ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Name and Email in one row - 2 columns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {/* Name */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Full Name *
-              </label>
-              <div className="relative">
-                <User
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={16}
-                />
-                <input
-                  type="text"
-                  required
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
-                  placeholder="Prof. John Doe"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  disabled={loading}
-                />
-              </div>
-            </div>
-
-            {/* Email */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Email * {emailVerified && <span className="text-green-600 text-sm">✓ Verified</span>}
-              </label>
-              <div className="flex gap-1.5">
-                <div className="relative flex-1">
-                  <Mail
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                    size={16}
-                  />
-                  <input
-                    type="email"
-                    required
-                    className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all disabled:bg-gray-50 text-sm"
-                    placeholder="john.doe@uni.edu"
-                    value={formData.email}
-                    onChange={(e) => {
-                      setFormData({ ...formData, email: e.target.value });
-                      setEmailVerified(false);
-                      setShowEmailOtp(false);
-                    }}
-                    disabled={loading || emailVerified}
-                  />
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-teal-500/20 text-teal-200 border border-teal-400/30">
+                    Faculty Accreditation
+                  </span>
                 </div>
-                {!emailVerified && !showEmailOtp && (
-                  <button
-                    type="button"
-                    onClick={handleSendEmailOtp}
-                    disabled={otpLoading || !formData.email}
-                    className="bg-teal-600 hover:bg-teal-700 text-white py-1.5 px-3 rounded-lg text-xs font-semibold transition disabled:opacity-50 whitespace-nowrap"
-                  >
-                    Verify
-                  </button>
-                )}
-              </div>
-              {showEmailOtp && !emailVerified && (
-                <div className="flex gap-1.5 mt-1.5">
-                  <input
-                    type="text"
-                    maxLength={6}
-                    placeholder="OTP"
-                    value={emailOtp}
-                    onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ""))}
-                    className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm font-bold"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleVerifyEmailOtp}
-                    disabled={otpLoading || emailOtp.length !== 6}
-                    className="bg-green-600 hover:bg-green-700 text-white py-1 px-2 rounded text-xs font-semibold transition disabled:opacity-50"
-                  >
-                    OK
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSendEmailOtp}
-                    disabled={otpLoading || resendTimer > 0}
-                    className="bg-gray-600 hover:bg-gray-700 text-white py-1 px-2 rounded text-xs font-semibold transition disabled:opacity-50"
-                  >
-                    {resendTimer > 0 ? `${resendTimer}s` : "Resend"}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Password and Phone in one row - 2 columns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {/* Password */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Create Password *
-              </label>
-              <div className="relative">
-                <Lock
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={16}
-                />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  required
-                  className="w-full pl-10 pr-12 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
-                  placeholder="��������"
-                  value={formData.password}
-                  onChange={(e) =>
-                    setFormData({ ...formData, password: e.target.value })
-                  }
-                  disabled={loading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition cursor-pointer"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Phone */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Phone * {phoneVerified && <span className="text-green-600 text-sm">✓ Verified</span>}
-              </label>
-              <div className="flex gap-1.5">
-                <div className="relative flex-1">
-                  <Phone
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                    size={16}
-                  />
-                  <input
-                    type="tel"
-                    maxLength={10}
-                    required
-                    className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all disabled:bg-gray-50 text-sm"
-                    placeholder="9876543210"
-                    value={formData.phone}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, "");
-                      setFormData({ ...formData, phone: value });
-                      setPhoneVerified(false);
-                      setShowPhoneOtp(false);
-                    }}
-                    disabled={loading || phoneVerified}
-                  />
-                </div>
-                {!phoneVerified && !showPhoneOtp && (
-                  <button
-                    type="button"
-                    onClick={handleSendPhoneOtp}
-                    disabled={otpLoading || !formData.phone || formData.phone.length !== 10}
-                    className="bg-teal-600 hover:bg-teal-700 text-white py-1.5 px-3 rounded-lg text-xs font-semibold transition disabled:opacity-50 whitespace-nowrap"
-                  >
-                    Verify
-                  </button>
-                )}
-              </div>
-              {showPhoneOtp && !phoneVerified && (
-                <div className="flex gap-1.5 mt-1.5">
-                  <input
-                    type="text"
-                    maxLength={6}
-                    placeholder="OTP"
-                    value={phoneOtp}
-                    onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, ""))}
-                    className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm font-bold"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleVerifyPhoneOtp}
-                    disabled={otpLoading || phoneOtp.length !== 6}
-                    className="bg-green-600 hover:bg-green-700 text-white py-1 px-2 rounded text-xs font-semibold transition disabled:opacity-50"
-                  >
-                    OK
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSendPhoneOtp}
-                    disabled={otpLoading || resendTimer > 0}
-                    className="bg-gray-600 hover:bg-gray-700 text-white py-1 px-2 rounded text-xs font-semibold transition disabled:opacity-50"
-                  >
-                    {resendTimer > 0 ? `${resendTimer}s` : "Resend"}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
-              Address
-            </label>
-            <div className="relative">
-              <MapPin
-                className="absolute left-3 top-3 text-gray-400"
-                size={16}
-              />
-              <textarea
-                rows={2}
-                className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
-                placeholder="Department of CS, Building 3, CBC Campus"
-                value={formData.address}
-                onChange={(e) =>
-                  setFormData({ ...formData, address: e.target.value })
-                }
-                disabled={loading}
-              />
-            </div>
-          </div>
-
-          {/* Profile Picture Camera Module */}
-          <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-              Profile Verification Photo *
-            </label>
-
-            {showCamera ? (
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-2.5">
-                  {/* Camera view screen */}
-                  <div className="md:col-span-3 relative rounded-lg overflow-hidden bg-black shadow-inner border border-gray-300 flex items-center justify-center" style={{ minHeight: '260px' }}>
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-full object-cover"
-                      style={{ minHeight: '260px', transform: 'scaleX(-1)' }}
-                    />
-                    <canvas ref={canvasRef} style={{ display: 'none' }} width="640" height="480" />
-                    
-                    {/* Smart Auto-Capture Status Overlay */}
-                    <div className="absolute top-3 left-3 right-3 bg-gray-900/90 text-white py-2 px-3 rounded-lg flex items-center justify-between text-xs border border-white/10 shadow-lg select-none z-10">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                          isLandmarkerLoaded 
-                            ? (hasMultipleFaces 
-                                ? 'bg-red-500 animate-pulse' 
-                                : (faceValidation.isCentered && faceValidation.isProperDistance && faceValidation.isFacingForward && faceValidation.isGoodLighting && faceValidation.isSharp 
-                                   ? 'bg-green-500 animate-pulse' 
-                                   : 'bg-yellow-500 animate-pulse')) 
-                            : 'bg-amber-500 animate-pulse'
-                        }`} />
-                        <span className="font-semibold text-gray-100">
-                          {isLandmarkerLoaded 
-                            ? (hasMultipleFaces ? 'Multiple people detected!' : `Blink twice to auto-capture (${blinkCount}/2)`) 
-                            : 'Loading smart auto-capture...'}
-                        </span>
-                      </div>
-                      {isLandmarkerLoaded && (
-                        <span className={`font-bold px-2 py-0.5 rounded border text-[10px] ${
-                          hasMultipleFaces 
-                            ? "bg-red-500/20 text-red-300 border-red-500/30"
-                            : lastActionText === "Blink!" 
-                            ? "bg-amber-500/20 text-amber-300 border-amber-500/30 animate-ping" 
-                            : lastActionText.startsWith("Blink") 
-                            ? "bg-green-500/20 text-green-300 border-green-500/30" 
-                            : "bg-teal-600/20 text-teal-400 border-teal-500/30"
-                        }`}>
-                          {hasMultipleFaces ? "Warning" : lastActionText}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Multi-Face Block Overlay */}
-                    {hasMultipleFaces && (
-                      <div className="absolute inset-0 bg-red-950/85 flex flex-col items-center justify-center p-4 text-center select-none animate-fade-in z-20">
-                        <span className="text-3xl mb-2">??</span>
-                        <h4 className="font-extrabold text-red-200 text-sm">Multiple People Detected!</h4>
-                        <p className="text-xs text-red-300 mt-1 max-w-[200px]">
-                          Please ensure only one person is in the camera frame to proceed.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Quality Checklist Panel */}
-                  <div className="md:col-span-2 bg-white border border-gray-200 rounded-lg p-4 flex flex-col justify-between shadow-sm">
-                    <div>
-                      <h5 className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 bg-teal-700 rounded-full" />
-                        Quality Checklist
-                      </h5>
-                      
-                      <div className="space-y-2.5">
-                        <div className="flex items-center justify-between text-xs py-1 border-b border-gray-50">
-                          <span className="text-gray-600">Face Detected</span>
-                          <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
-                            faceValidation.hasFace 
-                              ? "bg-green-50 text-green-700" 
-                              : "bg-red-50 text-red-700"
-                          }`}>
-                            {faceValidation.hasFace ? "Yes" : "No"}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between text-xs py-1 border-b border-gray-50">
-                          <span className="text-gray-600">Centered Alignment</span>
-                          <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
-                            !faceValidation.hasFace ? "bg-gray-100 text-gray-400" :
-                            faceValidation.isCentered 
-                              ? "bg-green-50 text-green-700" 
-                              : "bg-yellow-50 text-yellow-700"
-                          }`}>
-                            {!faceValidation.hasFace ? "Waiting" : faceValidation.isCentered ? "Good" : "Adjust"}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between text-xs py-1 border-b border-gray-50">
-                          <span className="text-gray-600">Proper Distance</span>
-                          <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
-                            !faceValidation.hasFace ? "bg-gray-100 text-gray-400" :
-                            faceValidation.isProperDistance 
-                              ? "bg-green-50 text-green-700" 
-                              : "bg-yellow-50 text-yellow-700"
-                          }`}>
-                            {!faceValidation.hasFace ? "Waiting" : faceValidation.isProperDistance ? "Good" : "Adjust"}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between text-xs py-1 border-b border-gray-50">
-                          <span className="text-gray-600">Facing Straight</span>
-                          <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
-                            !faceValidation.hasFace ? "bg-gray-100 text-gray-400" :
-                            faceValidation.isFacingForward 
-                              ? "bg-green-50 text-green-700" 
-                              : "bg-yellow-50 text-yellow-700"
-                          }`}>
-                            {!faceValidation.hasFace ? "Waiting" : faceValidation.isFacingForward ? "Good" : "Adjust"}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between text-xs py-1 border-b border-gray-50">
-                          <span className="text-gray-600">Good Lighting</span>
-                          <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
-                            !faceValidation.hasFace ? "bg-gray-100 text-gray-400" :
-                            faceValidation.isGoodLighting 
-                              ? "bg-green-50 text-green-700" 
-                              : "bg-red-50 text-red-700"
-                          }`}>
-                            {!faceValidation.hasFace ? "Waiting" : faceValidation.isGoodLighting ? "Good" : "Check Light"}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between text-xs py-1 border-b border-gray-50">
-                          <span className="text-gray-600">Sharp & Clear</span>
-                          <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
-                            !faceValidation.hasFace ? "bg-gray-100 text-gray-400" :
-                            faceValidation.isSharp 
-                              ? "bg-green-50 text-green-700" 
-                              : "bg-red-50 text-red-700"
-                          }`}>
-                            {!faceValidation.hasFace ? "Waiting" : faceValidation.isSharp ? "Sharp" : "Blurry"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="text-[10px] text-gray-400 leading-tight mt-3 bg-gray-50 p-2 rounded">
-                      ?? Ensure you are in a well-lit room, facing forward, and hold still for auto-capture.
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => capturePhoto(true)}
-                    className="flex-1 bg-teal-700 hover:bg-teal-800 text-white py-2.5 rounded-lg font-semibold shadow-md transition flex items-center justify-center gap-2"
-                  >
-                    <Camera size={16} />
-                    Take Snapshot
-                  </button>
-                  <button
-                    type="button"
-                    onClick={stopCamera}
-                    className="bg-gray-200 hover:bg-gray-300 text-gray-800 py-2.5 rounded-md font-semibold transition flex items-center justify-center gap-2 md:px-6 px-4"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : formData.profileImage ? (
-              <div className="space-y-3">
-                <div className="relative rounded-lg overflow-hidden border border-gray-300 shadow-md max-w-sm mx-auto">
-                  <img
-                    src={formData.profileImage}
-                    alt="Captured Profile"
-                    className="w-full object-cover rounded-lg"
-                    style={{ maxHeight: "200px" }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setFormData({ ...formData, profileImage: "" })
-                    }
-                    className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full p-1.5 shadow-lg transition"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2.5">
-                  <button
-                    type="button"
-                    onClick={startCamera}
-                    className="flex-1 bg-teal-700 hover:bg-teal-800 text-white py-2 rounded-md font-semibold transition flex items-center justify-center gap-2"
-                  >
-                    <Camera size={16} />
-                    Retake photo
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg bg-white hover:bg-gray-50 transition cursor-pointer p-4 md:p-8">
-                <Camera className="text-gray-400 mb-2" size={36} />
-                <p className="text-sm text-gray-600 font-semibold mb-2">
-                  Capture or upload verification picture
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mt-0.5">
+                  Examiner Self-Registration
+                </h1>
+                <p className="text-teal-100/80 text-xs mt-0.5">
+                  On-Screen Evaluation & Digital Marking Portal
                 </p>
-                <p className="text-xs text-gray-400 mb-4">
-                  Required for coordinator validation
-                </p>
-
-                <div className="flex gap-2.5">
-                  <button
-                    type="button"
-                    onClick={startCamera}
-                    className="bg-teal-700 hover:bg-teal-800 text-white px-5 py-2 rounded-md text-sm font-semibold transition-all shadow-md flex items-center gap-2"
-                  >
-                    <Camera size={16} />
-                    Use Webcam
-                  </button>
-                  <label className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-5 py-2 rounded-lg text-sm font-semibold border border-gray-300 transition cursor-pointer flex items-center">
-                    Upload File
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleFileChange}
-                    />
-                  </label>
-                </div>
               </div>
-            )}
-          </div>
-
-          <div className="pt-4 flex gap-2.5">
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-2 rounded-lg transition-all duration-200 shadow-md flex items-center justify-center gap-2 text-sm"
-            >
-              {loading ? (
-                <>
-                  <Loader className="animate-spin" size={16} />
-                  Submitting...
-                </>
-              ) : (
-                "Register Account"
-              )}
-            </button>
+            </div>
             <button
               type="button"
               onClick={() => navigate("/login")}
-              className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg border border-gray-300 transition px-4 text-sm"
+              className="self-start sm:self-auto text-xs font-medium text-teal-100 hover:text-white bg-white/10 hover:bg-white/20 px-3.5 py-1.5 rounded-lg border border-white/15 transition flex items-center gap-1.5"
             >
-              Cancel
+              Already registered? Login
             </button>
           </div>
-        </form>
+        </div>
+
+        <div className="p-6 sm:p-8">
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-start gap-3 text-sm shadow-sm">
+              <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-500 mt-0.5" />
+              <div>
+                <p className="font-semibold text-red-800 text-xs">Registration Issue</p>
+                <p className="text-xs text-red-700 mt-0.5">{error}</p>
+              </div>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* ========================================================================= */}
+            {/* SECTION 1: BASIC & PERSONAL DETAILS (FIRST)                               */}
+            {/* ========================================================================= */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2.5 pb-2 border-b border-gray-200">
+                <div className="w-6 h-6 rounded-md bg-teal-50 text-teal-700 border border-teal-200 flex items-center justify-center text-xs font-bold">
+                  1
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 tracking-wide">
+                    Personal & Account Information
+                  </h3>
+                  <p className="text-[11px] text-gray-500">
+                    Your legal identity, primary contact information, and security credentials
+                  </p>
+                </div>
+              </div>
+
+              {/* Full Name & Aadhaar */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Full Name */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Full Name <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                    <input
+                      type="text"
+                      required
+                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition text-sm shadow-sm"
+                      placeholder="e.g. Dr. Jane Smith"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+
+                {/* Aadhaar Number */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Aadhaar Number <span className="text-gray-400 text-[10px] font-normal">(12 Digits)</span>
+                  </label>
+                  <div className="relative">
+                    <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                    <input
+                      type="text"
+                      maxLength={12}
+                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition text-sm shadow-sm"
+                      placeholder="12-digit Aadhaar UID"
+                      value={formData.aadharNo}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, "");
+                        setFormData({ ...formData, aadharNo: val });
+                      }}
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Email & Phone with OTP Verification */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Email Address */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-gray-700">
+                      Official Email Address <span className="text-red-500">*</span>
+                    </label>
+                    {emailVerified && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+                        <Check size={12} /> Verified
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                      <input
+                        type="email"
+                        required
+                        className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition text-sm shadow-sm disabled:bg-gray-50"
+                        placeholder="examiner@university.edu"
+                        value={formData.email}
+                        onChange={(e) => {
+                          setFormData({ ...formData, email: e.target.value });
+                          setEmailVerified(false);
+                          setShowEmailOtp(false);
+                        }}
+                        disabled={loading || emailVerified}
+                      />
+                    </div>
+                    {!emailVerified && !showEmailOtp && (
+                      <button
+                        type="button"
+                        onClick={handleSendEmailOtp}
+                        disabled={otpLoading || !formData.email}
+                        className="bg-teal-700 hover:bg-teal-800 text-white px-3.5 py-2 rounded-lg text-xs font-semibold transition disabled:opacity-50 whitespace-nowrap shadow-sm"
+                      >
+                        Verify OTP
+                      </button>
+                    )}
+                  </div>
+                  {showEmailOtp && !emailVerified && (
+                    <div className="flex items-center gap-2 mt-2 bg-slate-50 border border-slate-200 p-2 rounded-lg">
+                      <input
+                        type="text"
+                        maxLength={6}
+                        placeholder="6-digit OTP"
+                        value={emailOtp}
+                        onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ""))}
+                        className="w-28 px-3 py-1.5 border border-gray-300 rounded-md text-center text-sm font-bold tracking-widest bg-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleVerifyEmailOtp}
+                        disabled={otpLoading || emailOtp.length !== 6}
+                        className="bg-green-600 hover:bg-green-700 text-white py-1.5 px-3 rounded-md text-xs font-semibold transition disabled:opacity-50"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSendEmailOtp}
+                        disabled={otpLoading || resendTimer > 0}
+                        className="text-xs text-teal-700 hover:text-teal-900 font-semibold px-2 py-1 disabled:text-gray-400"
+                      >
+                        {resendTimer > 0 ? `Resend (${resendTimer}s)` : "Resend"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Mobile Phone */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-gray-700">
+                      Mobile Number <span className="text-red-500">*</span>
+                    </label>
+                    {phoneVerified && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+                        <Check size={12} /> Verified
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                      <input
+                        type="tel"
+                        maxLength={10}
+                        required
+                        className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition text-sm shadow-sm disabled:bg-gray-50"
+                        placeholder="10-digit mobile number"
+                        value={formData.phone}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, "");
+                          setFormData({ ...formData, phone: value });
+                          setPhoneVerified(false);
+                          setShowPhoneOtp(false);
+                        }}
+                        disabled={loading || phoneVerified}
+                      />
+                    </div>
+                    {!phoneVerified && !showPhoneOtp && (
+                      <button
+                        type="button"
+                        onClick={handleSendPhoneOtp}
+                        disabled={otpLoading || !formData.phone || formData.phone.length !== 10}
+                        className="bg-teal-700 hover:bg-teal-800 text-white px-3.5 py-2 rounded-lg text-xs font-semibold transition disabled:opacity-50 whitespace-nowrap shadow-sm"
+                      >
+                        Verify OTP
+                      </button>
+                    )}
+                  </div>
+                  {showPhoneOtp && !phoneVerified && (
+                    <div className="flex items-center gap-2 mt-2 bg-slate-50 border border-slate-200 p-2 rounded-lg">
+                      <input
+                        type="text"
+                        maxLength={6}
+                        placeholder="6-digit OTP"
+                        value={phoneOtp}
+                        onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, ""))}
+                        className="w-28 px-3 py-1.5 border border-gray-300 rounded-md text-center text-sm font-bold tracking-widest bg-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleVerifyPhoneOtp}
+                        disabled={otpLoading || phoneOtp.length !== 6}
+                        className="bg-green-600 hover:bg-green-700 text-white py-1.5 px-3 rounded-md text-xs font-semibold transition disabled:opacity-50"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSendPhoneOtp}
+                        disabled={otpLoading || resendTimer > 0}
+                        className="text-xs text-teal-700 hover:text-teal-900 font-semibold px-2 py-1 disabled:text-gray-400"
+                      >
+                        {resendTimer > 0 ? `Resend (${resendTimer}s)` : "Resend"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Correspondence / Department Address */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Correspondence / Department Address
+                </label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                  <textarea
+                    rows={2}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition text-sm shadow-sm resize-none"
+                    placeholder="Department of Examination, Building, Campus/City"
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ========================================================================= */}
+            {/* SECTION 2: ACADEMIC & INSTITUTIONAL AFFILIATION                            */}
+            {/* ========================================================================= */}
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center gap-2.5 pb-2 border-b border-gray-200">
+                <div className="w-6 h-6 rounded-md bg-teal-50 text-teal-700 border border-teal-200 flex items-center justify-center text-xs font-bold">
+                  2
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 tracking-wide">
+                    Academic & Institutional Affiliation
+                  </h3>
+                  <p className="text-[11px] text-gray-500">
+                    Your institutional appointment, college records, and faculty identification
+                  </p>
+                </div>
+              </div>
+
+              {/* University Dropdown - Full Width */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Affiliated University <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <select
+                    required
+                    className="w-full pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition text-sm shadow-sm appearance-none"
+                    value={formData.universityId}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        universityId: e.target.value,
+                        subjectId1: "",
+                        subjectId2: "",
+                        subjectId3: "",
+                      })
+                    }
+                    disabled={loading}
+                  >
+                    <option value="">-- Select University --</option>
+                    {universities.map((uni) => (
+                      <option key={uni.universityId} value={uni.universityId}>
+                        {uni.universityName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* College ID, Employee ID, Evaluation Experience - 3 Columns */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* College ID */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    College / Institute ID
+                  </label>
+                  <div className="relative">
+                    <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                    <input
+                      type="number"
+                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition text-sm shadow-sm"
+                      placeholder="e.g. 67890"
+                      value={formData.collegeId}
+                      onChange={(e) => setFormData({ ...formData, collegeId: e.target.value })}
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+
+                {/* Employee ID */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Faculty / Employee ID
+                  </label>
+                  <div className="relative">
+                    <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                    <input
+                      type="number"
+                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition text-sm shadow-sm"
+                      placeholder="e.g. 12345"
+                      value={formData.empId}
+                      onChange={(e) => setFormData({ ...formData, empId: e.target.value })}
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+
+                {/* Evaluation Experience */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Evaluation Experience
+                  </label>
+                  <div className="relative">
+                    <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                    <input
+                      type="text"
+                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition text-sm shadow-sm"
+                      placeholder="e.g. 5 Years"
+                      value={formData.experience}
+                      onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ========================================================================= */}
+            {/* SECTION 3: SUBJECT SPECIALIZATION                                         */}
+            {/* ========================================================================= */}
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center gap-2.5 pb-2 border-b border-gray-200">
+                <div className="w-6 h-6 rounded-md bg-teal-50 text-teal-700 border border-teal-200 flex items-center justify-center text-xs font-bold">
+                  3
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 tracking-wide">
+                    Subject Specialization
+                  </h3>
+                  <p className="text-[11px] text-gray-500">
+                    Primary subject qualification and elective areas for answer script evaluation
+                  </p>
+                </div>
+              </div>
+
+              {/* Primary Subject */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Primary Subject Area <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <select
+                    required
+                    className="w-full pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition text-sm shadow-sm appearance-none disabled:bg-gray-50 disabled:cursor-not-allowed"
+                    value={formData.subjectId1}
+                    onChange={(e) => setFormData({ ...formData, subjectId1: e.target.value })}
+                    disabled={loading || !formData.universityId}
+                  >
+                    <option value="">
+                      {formData.universityId ? "-- Select Primary Subject --" : "Select university first"}
+                    </option>
+                    {subjects.map((sub) => (
+                      <option key={sub.subjectId} value={sub.subjectId}>
+                        {sub.subName} ({sub.subCode})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Secondary & Tertiary Subjects - 2 Columns */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Secondary Subject */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Secondary Subject <span className="text-gray-400 text-[10px] font-normal">(Optional)</span>
+                  </label>
+                  <div className="relative">
+                    <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                    <select
+                      className="w-full pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition text-sm shadow-sm appearance-none disabled:bg-gray-50 disabled:cursor-not-allowed"
+                      value={formData.subjectId2}
+                      onChange={(e) => setFormData({ ...formData, subjectId2: e.target.value })}
+                      disabled={loading || !formData.universityId}
+                    >
+                      <option value="">-- None / Select Secondary --</option>
+                      {subjects
+                        .filter((sub) => sub.subjectId.toString() !== formData.subjectId1)
+                        .map((sub) => (
+                          <option key={sub.subjectId} value={sub.subjectId}>
+                            {sub.subName} ({sub.subCode})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Tertiary Subject */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Tertiary Subject <span className="text-gray-400 text-[10px] font-normal">(Optional)</span>
+                  </label>
+                  <div className="relative">
+                    <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                    <select
+                      className="w-full pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition text-sm shadow-sm appearance-none disabled:bg-gray-50 disabled:cursor-not-allowed"
+                      value={formData.subjectId3}
+                      onChange={(e) => setFormData({ ...formData, subjectId3: e.target.value })}
+                      disabled={loading || !formData.universityId}
+                    >
+                      <option value="">-- None / Select Tertiary --</option>
+                      {subjects
+                        .filter(
+                          (sub) =>
+                            sub.subjectId.toString() !== formData.subjectId1 &&
+                            sub.subjectId.toString() !== formData.subjectId2
+                        )
+                        .map((sub) => (
+                          <option key={sub.subjectId} value={sub.subjectId}>
+                            {sub.subName} ({sub.subCode})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ========================================================================= */}
+            {/* SECTION 4: IDENTITY VERIFICATION & PROFILE PHOTO                          */}
+            {/* ========================================================================= */}
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center gap-2.5 pb-2 border-b border-gray-200">
+                <div className="w-6 h-6 rounded-md bg-teal-50 text-teal-700 border border-teal-200 flex items-center justify-center text-xs font-bold">
+                  4
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 tracking-wide">
+                    Identity Verification Photo
+                  </h3>
+                  <p className="text-[11px] text-gray-500">
+                    Live webcam snapshot or portrait photograph for evaluator accreditation badge
+                  </p>
+                </div>
+              </div>
+
+              {/* Profile Picture Camera Module */}
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-semibold text-gray-700">
+                    Profile Verification Photograph <span className="text-red-500">*</span>
+                  </label>
+                  {formData.profileImage && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+                      <Check size={12} /> Photo Attached
+                    </span>
+                  )}
+                </div>
+
+                {showCamera ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                      {/* Camera view screen */}
+                      <div className="md:col-span-3 relative rounded-xl overflow-hidden bg-black shadow-inner border border-gray-300 flex items-center justify-center" style={{ minHeight: '260px' }}>
+                        <video
+                          ref={videoRef}
+                          autoPlay
+                          playsInline
+                          muted
+                          className="w-full h-full object-cover"
+                          style={{ minHeight: '260px', transform: 'scaleX(-1)' }}
+                        />
+                        <canvas ref={canvasRef} style={{ display: 'none' }} width="640" height="480" />
+                        
+                        {/* Smart Auto-Capture Status Overlay */}
+                        <div className="absolute top-3 left-3 right-3 bg-gray-900/90 text-white py-2 px-3 rounded-lg flex items-center justify-between text-xs border border-white/10 shadow-lg select-none z-10">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              isLandmarkerLoaded 
+                                ? (hasMultipleFaces 
+                                    ? 'bg-red-500 animate-pulse' 
+                                    : (faceValidation.isCentered && faceValidation.isProperDistance && faceValidation.isFacingForward && faceValidation.isGoodLighting && faceValidation.isSharp 
+                                       ? 'bg-green-500 animate-pulse' 
+                                       : 'bg-yellow-500 animate-pulse')) 
+                                : 'bg-amber-500 animate-pulse'
+                            }`} />
+                            <span className="font-semibold text-gray-100">
+                              {isLandmarkerLoaded 
+                                ? (hasMultipleFaces ? 'Multiple people detected!' : `Blink twice to auto-capture (${blinkCount}/2)`) 
+                                : 'Loading smart auto-capture...'}
+                            </span>
+                          </div>
+                          {isLandmarkerLoaded && (
+                            <span className={`font-bold px-2 py-0.5 rounded border text-[10px] ${
+                              hasMultipleFaces 
+                                ? "bg-red-500/20 text-red-300 border-red-500/30"
+                                : lastActionText === "Blink!" 
+                                ? "bg-amber-500/20 text-amber-300 border-amber-500/30 animate-ping" 
+                                : lastActionText.startsWith("Blink") 
+                                ? "bg-green-500/20 text-green-300 border-green-500/30" 
+                                : "bg-teal-600/20 text-teal-400 border-teal-500/30"
+                            }`}>
+                              {hasMultipleFaces ? "Warning" : lastActionText}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Multi-Face Block Overlay */}
+                        {hasMultipleFaces && (
+                          <div className="absolute inset-0 bg-red-950/85 flex flex-col items-center justify-center p-4 text-center select-none animate-fade-in z-20">
+                            <AlertCircle className="text-red-400 mb-2" size={32} />
+                            <h4 className="font-extrabold text-red-200 text-sm">Multiple People Detected!</h4>
+                            <p className="text-xs text-red-300 mt-1 max-w-[220px]">
+                              Please ensure only one person is in the camera frame to proceed.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Quality Checklist Panel */}
+                      <div className="md:col-span-2 bg-white border border-gray-200 rounded-xl p-4 flex flex-col justify-between shadow-sm">
+                        <div>
+                          <h5 className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-2 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 bg-teal-600 rounded-full" />
+                            Live Quality Verification
+                          </h5>
+                          
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-xs py-1 border-b border-gray-100">
+                              <span className="text-gray-600">Face Detected</span>
+                              <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
+                                faceValidation.hasFace ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                              }`}>
+                                {faceValidation.hasFace ? "Yes" : "No"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs py-1 border-b border-gray-100">
+                              <span className="text-gray-600">Centered Alignment</span>
+                              <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
+                                !faceValidation.hasFace ? "bg-gray-100 text-gray-400" :
+                                faceValidation.isCentered ? "bg-green-50 text-green-700" : "bg-yellow-50 text-yellow-700"
+                              }`}>
+                                {!faceValidation.hasFace ? "Waiting" : faceValidation.isCentered ? "Good" : "Adjust"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs py-1 border-b border-gray-100">
+                              <span className="text-gray-600">Proper Distance</span>
+                              <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
+                                !faceValidation.hasFace ? "bg-gray-100 text-gray-400" :
+                                faceValidation.isProperDistance ? "bg-green-50 text-green-700" : "bg-yellow-50 text-yellow-700"
+                              }`}>
+                                {!faceValidation.hasFace ? "Waiting" : faceValidation.isProperDistance ? "Good" : "Adjust"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs py-1 border-b border-gray-100">
+                              <span className="text-gray-600">Facing Straight</span>
+                              <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
+                                !faceValidation.hasFace ? "bg-gray-100 text-gray-400" :
+                                faceValidation.isFacingForward ? "bg-green-50 text-green-700" : "bg-yellow-50 text-yellow-700"
+                              }`}>
+                                {!faceValidation.hasFace ? "Waiting" : faceValidation.isFacingForward ? "Good" : "Adjust"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs py-1 border-b border-gray-100">
+                              <span className="text-gray-600">Good Lighting</span>
+                              <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
+                                !faceValidation.hasFace ? "bg-gray-100 text-gray-400" :
+                                faceValidation.isGoodLighting ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                              }`}>
+                                {!faceValidation.hasFace ? "Waiting" : faceValidation.isGoodLighting ? "Good" : "Check Light"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs py-1 border-b border-gray-100">
+                              <span className="text-gray-600">Sharp & Clear</span>
+                              <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
+                                !faceValidation.hasFace ? "bg-gray-100 text-gray-400" :
+                                faceValidation.isSharp ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                              }`}>
+                                {!faceValidation.hasFace ? "Waiting" : faceValidation.isSharp ? "Sharp" : "Blurry"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-[10px] text-gray-500 leading-tight mt-3 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                          Ensure you are in a well-lit room, looking straight at the camera. Blink twice to capture automatically.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => capturePhoto(true)}
+                        className="flex-1 bg-teal-700 hover:bg-teal-800 text-white py-2.5 rounded-lg font-semibold shadow-md transition flex items-center justify-center gap-2 text-sm"
+                      >
+                        <Camera size={16} />
+                        Take Snapshot Now
+                      </button>
+                      <button
+                        type="button"
+                        onClick={stopCamera}
+                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 py-2.5 rounded-lg font-semibold transition flex items-center justify-center gap-2 px-6 text-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : formData.profileImage ? (
+                  <div className="space-y-3">
+                    <div className="relative rounded-xl overflow-hidden border border-gray-300 shadow-md max-w-xs mx-auto bg-black">
+                      <img
+                        src={formData.profileImage}
+                        alt="Captured Profile"
+                        className="w-full object-cover"
+                        style={{ maxHeight: "220px" }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, profileImage: "" })}
+                        className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full p-1.5 shadow-lg transition"
+                        title="Remove photo"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                    <div className="flex justify-center">
+                      <button
+                        type="button"
+                        onClick={startCamera}
+                        className="bg-teal-700 hover:bg-teal-800 text-white px-5 py-2 rounded-lg font-semibold transition shadow-sm flex items-center gap-2 text-sm"
+                      >
+                        <Camera size={16} />
+                        Retake Photo
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl bg-white hover:bg-gray-50/50 transition p-6 sm:p-8 text-center">
+                    <div className="w-14 h-14 rounded-full bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 mb-3">
+                      <Camera size={28} />
+                    </div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-1">
+                      Capture or Upload Profile Verification Picture
+                    </h4>
+                    <p className="text-xs text-gray-500 max-w-md mb-4">
+                      Required for official examiner identification and coordinator approval.
+                    </p>
+
+                    <div className="flex flex-wrap gap-3 justify-center">
+                      <button
+                        type="button"
+                        onClick={startCamera}
+                        className="bg-teal-700 hover:bg-teal-800 text-white px-5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all shadow-md flex items-center gap-2"
+                      >
+                        <Camera size={16} />
+                        Use Live Camera
+                      </button>
+                      <label className="bg-white hover:bg-gray-100 text-gray-700 px-5 py-2 rounded-lg text-xs sm:text-sm font-semibold border border-gray-300 transition cursor-pointer flex items-center shadow-sm">
+                        Upload Image File
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleFileChange}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Formal Declaration Notice */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 flex items-start gap-2.5">
+              <ShieldCheck className="text-teal-700 flex-shrink-0 mt-0.5" size={16} />
+              <span>
+                <strong>Official Declaration:</strong> By submitting this application, you certify that all information provided is accurate and authentic. Account activation requires administrative verification by your assigned University Coordinator.
+              </span>
+            </div>
+
+            {/* Form Actions */}
+            <div className="pt-2 flex flex-col sm:flex-row gap-3">
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 bg-gradient-to-r from-teal-700 to-teal-800 hover:from-teal-800 hover:to-teal-900 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-3 rounded-xl transition duration-150 shadow-md flex items-center justify-center gap-2 text-sm"
+              >
+                {loading ? (
+                  <>
+                    <Loader className="animate-spin" size={18} />
+                    Submitting Application...
+                  </>
+                ) : (
+                  "Complete & Submit Registration"
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/login")}
+                className="bg-white hover:bg-gray-100 text-gray-700 font-semibold py-3 px-6 rounded-xl border border-gray-300 transition text-sm shadow-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

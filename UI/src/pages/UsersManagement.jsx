@@ -28,6 +28,7 @@ import userService from "../services/userService";
 import universityService from "../services/universityService";
 import subjectService from "../services/subjectService";
 import roleService from "../services/roleService";
+import { encryptId } from "../utils/encryption";
 import AssignRoleModal from "../components/RoleManagement/AssignRoleModal";
 import departmentService from "../services/departmentService";
 import AddUserModal from "../components/AddUserModal";
@@ -402,7 +403,7 @@ export default function UsersManagement() {
                     {users.map((user) => (
                       <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
                         <td className="py-2.5 md:px-6 px-4">
-                          <Link to={`/profile?userId=${user.id}`} title="View Detailed Profile">
+                          <Link to={`/profile?userId=${encryptId(user.id)}`} title="View Detailed Profile">
                             {user.profileImage ? (
                               <div className="relative group w-8 h-8 rounded-xl overflow-hidden border border-gray-250/70 shadow-sm shrink-0">
                                 <img src={user.profileImage} alt={user.name} className="w-full h-full object-cover transition group-hover:scale-105" />

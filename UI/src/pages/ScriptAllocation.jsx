@@ -60,6 +60,8 @@ export default function ScriptAllocation({ isTab = false }) {
   const [searchParams] = useSearchParams();
   const encryptedProjectId = searchParams.get('projectId');
   const projectId = encryptedProjectId ? decryptId(encryptedProjectId) : null;
+  const rawPaperId = searchParams.get('paperId');
+  const paperIdFromUrl = rawPaperId ? decryptId(rawPaperId) : null;
   const universityIdFromUrl = searchParams.get('universityId');
   const { userType, universityId: userUniversityId } = useAuth();
   const activeUniversityId = userType === 'coordinator' ? userUniversityId : universityIdFromUrl;

@@ -295,6 +295,10 @@ function AppRoutes() {
             element={hasPermission("READ_SCRIPT") ? <Scripts /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
+            path="/marking/:scriptId" 
+            element={hasPermission("READ_MARKING") ? <ExaminerMarking /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+          <Route 
             path="/marking" 
             element={hasPermission("READ_MARKING") ? <ExaminerMarking /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
