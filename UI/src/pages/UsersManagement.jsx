@@ -100,7 +100,11 @@ export default function UsersManagement() {
 
   // Define fetch function for useTable to load users with search, role and tab filters
   const fetchFn = useCallback(async (params) => {
-    return await userService.getAllUsers(activeUniversityId, { ...params, activeTab });
+    const fetchParams = { ...params, activeTab };
+    if (activeTab === "pending") {
+      delete fetchParams.isActive;
+    }
+    return await userService.getAllUsers(activeUniversityId, fetchParams);
   }, [activeUniversityId, activeTab]);
 
   // Centralized hook for users table states
@@ -137,11 +141,13 @@ export default function UsersManagement() {
 
   // Calculate quick count of total pending approvals globally
   const [pendingCount, setPendingCount] = useState(0);
+  const [totalUsersCount, setTotalUsersCount] = useState(0);
   
   const fetchGlobalCounts = useCallback(() => {
     userService.getUserCounts(activeUniversityId)
       .then(response => {
         setPendingCount(response.pendingUsers || 0);
+        setTotalUsersCount(response.totalUsers || 0);
       })
       .catch(console.error);
   }, [activeUniversityId]);
@@ -296,7 +302,7 @@ export default function UsersManagement() {
                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-black ${
                   activeTab === "all" ? "bg-teal-100 text-teal-800" : "bg-gray-100 text-gray-600"
                 }`}>
-                  {totalCount}
+                  {totalUsersCount || (activeTab === "all" ? totalCount : 0)}
                 </span>
               </button>
 
@@ -375,16 +381,18 @@ export default function UsersManagement() {
                       <th className="py-2.5 text-center cursor-pointer hover:text-gray-700 transition-colors md:px-6 px-4" onClick={() => handleSort('isActive')}>
                         <div className="flex items-center justify-center gap-1">
                           Status {sortField === 'isActive' ? (sortOrder === 'asc' ? <ArrowUp size={12}/> : <ArrowDown size={12}/>) : <ArrowUpDown size={12} className="text-gray-300"/>}
-                          <ColumnFilter 
-                            columnKey="isActive" 
-                            currentFilter={filters.isActive} 
-                            setFilter={setFilter}
-                            options={[
-                              { label: 'All Status', value: '' },
-                              { label: 'Active', value: 'true' },
-                              { label: 'Inactive', value: 'false' }
-                            ]}
-                          />
+                          {activeTab !== "pending" && (
+                            <ColumnFilter 
+                              columnKey="isActive" 
+                              currentFilter={filters.isActive} 
+                              setFilter={setFilter}
+                              options={[
+                                { label: 'All Status', value: '' },
+                                { label: 'Active', value: 'true' },
+                                { label: 'Inactive', value: 'false' }
+                              ]}
+                            />
+                          )}
                         </div>
                       </th>
                       <th className="py-2.5 text-right md:px-6 px-4">Actions</th>
@@ -492,12 +500,20 @@ export default function UsersManagement() {
                             </select>
                           ) : (
                             <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-[9px] uppercase tracking-wider border ${
-                              user.isActive
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                                : "bg-rose-50 text-rose-700 border-rose-100"
+                              !user.isApproved
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : user.isActive
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                  : "bg-rose-50 text-rose-700 border-rose-100"
                             }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${user.isActive ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`}></span>
-                              {user.isActive ? "Active" : "Pending / Inactive"}
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                !user.isApproved
+                                  ? "bg-amber-500 animate-pulse"
+                                  : user.isActive
+                                    ? "bg-emerald-500"
+                                    : "bg-rose-500"
+                              }`}></span>
+                              {!user.isApproved ? "Pending Approval" : user.isActive ? "Active" : "Inactive"}
                             </span>
                           )}
                         </td>
@@ -530,15 +546,27 @@ export default function UsersManagement() {
                               </button>
                             )
                           ) : (
-                            hasPermission('UPDATE_USER') && (
-                              <button
-                                onClick={() => handleEditClick(user)}
-                                className="p-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg transition-colors"
-                                title="Edit"
-                              >
-                                <Edit2 size={16} />
-                              </button>
-                            )
+                            <div className="flex items-center justify-end gap-1.5">
+                              {!user.isApproved && hasPermission('UPDATE_USER') && (
+                                <button
+                                  onClick={() => handleApprove(user.id)}
+                                  className="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl text-[10px] uppercase tracking-wider transition cursor-pointer inline-flex items-center gap-1 shadow-sm"
+                                  title="Approve User"
+                                >
+                                  <UserCheck size={11} />
+                                  <span>Approve</span>
+                                </button>
+                              )}
+                              {hasPermission('UPDATE_USER') && (
+                                <button
+                                  onClick={() => handleEditClick(user)}
+                                  className="p-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg transition-colors"
+                                  title="Edit"
+                                >
+                                  <Edit2 size={16} />
+                                </button>
+                              )}
+                            </div>
                           )}
                         </td>
                       </tr>

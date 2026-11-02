@@ -175,13 +175,24 @@ function ManagePaperSectionsModal({ isOpen, onClose, paper, masterSections = [],
         <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 p-4 md:p-6">
           <div className="flex items-center justify-between">
             <label className="text-xs font-black uppercase text-gray-500 tracking-wider">Available Section Masters</label>
-            <button
-              type="button"
-              onClick={handleSelectAll}
-              className="text-xs font-bold text-teal-700 hover:underline"
-            >
-              {selectedIds.length === masterSections.length ? "Deselect All" : "Select All"}
-            </button>
+            <div className="flex items-center gap-2">
+              {selectedIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds([])}
+                  className="text-xs font-bold text-red-600 hover:underline cursor-pointer"
+                >
+                  Remove All / Clear
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleSelectAll}
+                className="text-xs font-bold text-teal-700 hover:underline cursor-pointer"
+              >
+                {selectedIds.length === masterSections.length ? "Deselect All" : "Select All"}
+              </button>
+            </div>
           </div>
 
           {loading ? (
@@ -256,9 +267,9 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
     paperCode: '',
     paperName: '',
     catchNo: '',
-    paperNumber: 1,
-    maxMarks: 100,
-    totalQuestions: 10,
+    paperNumber: '',
+    maxMarks: '',
+    totalQuestions: '',
     subjectIds: [],
     masterSectionIds: [],
     isActive: true
@@ -318,9 +329,9 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
         paperCode: '',
         paperName: '',
         catchNo: '',
-        paperNumber: 1,
-        maxMarks: 100,
-        totalQuestions: 10,
+        paperNumber: '',
+        maxMarks: '',
+        totalQuestions: '',
         subjectIds: [],
         masterSectionIds: [],
         isActive: true
@@ -344,17 +355,34 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
       return;
     }
 
-    if (paperLimitQuestions > 0 && currentTotalQuestions > paperLimitQuestions) {
-      message.error(`Total selected section questions (${currentTotalQuestions}) exceeds paper total questions (${paperLimitQuestions}).`);
+    const totalQ = parseInt(formData.totalQuestions, 10);
+    if (!formData.totalQuestions || isNaN(totalQ) || totalQ <= 0) {
+      message.error("Total Questions must be greater than 0");
       return;
     }
 
-    if (paperLimitMarks > 0 && currentTotalMarks > paperLimitMarks) {
-      message.error(`Total selected section marks (${currentTotalMarks}) exceeds paper max marks (${paperLimitMarks}).`);
+    const maxM = parseFloat(formData.maxMarks);
+    if (!formData.maxMarks || isNaN(maxM) || maxM <= 0) {
+      message.error("Max Marks must be greater than 0");
       return;
     }
 
-    onSubmit(formData);
+    if (totalQ > 0 && currentTotalQuestions > totalQ) {
+      message.error(`Total selected section questions (${currentTotalQuestions}) exceeds paper total questions (${totalQ}).`);
+      return;
+    }
+
+    if (maxM > 0 && currentTotalMarks > maxM) {
+      message.error(`Total selected section marks (${currentTotalMarks}) exceeds paper max marks (${maxM}).`);
+      return;
+    }
+
+    onSubmit({
+      ...formData,
+      paperNumber: formData.paperNumber ? parseInt(formData.paperNumber, 10) : 1,
+      maxMarks: maxM,
+      totalQuestions: totalQ
+    });
   };
 
   const toggleSubject = (subId) => {
@@ -462,32 +490,34 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
               <input
                 type="number"
                 min="1"
-                required
                 value={formData.paperNumber}
-                onChange={e => setFormData({ ...formData, paperNumber: parseInt(e.target.value) })}
+                onChange={e => setFormData({ ...formData, paperNumber: e.target.value })}
+                placeholder="e.g. 1"
                 className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 px-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Max Marks</label>
+              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Max Marks *</label>
               <input
                 type="number"
                 step="0.01"
                 min="0.01"
                 required
                 value={formData.maxMarks}
-                onChange={e => setFormData({ ...formData, maxMarks: parseFloat(e.target.value) || e.target.value })}
+                onChange={e => setFormData({ ...formData, maxMarks: e.target.value })}
+                placeholder="e.g. 100"
                 className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 px-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Total Qs</label>
+              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Total Qs *</label>
               <input
                 type="number"
                 min="1"
                 required
                 value={formData.totalQuestions}
-                onChange={e => setFormData({ ...formData, totalQuestions: parseInt(e.target.value) })}
+                onChange={e => setFormData({ ...formData, totalQuestions: e.target.value })}
+                placeholder="e.g. 10"
                 className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 px-4 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
               />
             </div>
@@ -585,29 +615,40 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
                     Marks: <span className={paperLimitMarks > 0 && currentTotalMarks > paperLimitMarks ? "text-red-600 font-bold" : "text-teal-700 font-bold"}>{currentTotalMarks}</span>/{paperLimitMarks || '∞'}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (formData.masterSectionIds.length === masterSections.length) {
-                      setFormData({ ...formData, masterSectionIds: [] });
-                    } else {
-                      const sumQuestions = masterSections.reduce((sum, s) => sum + (s.totalQuestions || 0), 0);
-                      const sumMarks = masterSections.reduce((sum, s) => sum + (s.totalMarks || 0), 0);
-                      if (paperLimitQuestions > 0 && sumQuestions > paperLimitQuestions) {
-                        message.error(`Cannot select all: Total questions (${sumQuestions}) exceeds paper question limit (${paperLimitQuestions}).`);
-                        return;
+                <div className="flex items-center gap-2">
+                  {formData.masterSectionIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, masterSectionIds: [] })}
+                      className="text-[10px] font-bold text-red-600 hover:underline cursor-pointer"
+                    >
+                      Remove All / Clear
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (formData.masterSectionIds.length === masterSections.length) {
+                        setFormData({ ...formData, masterSectionIds: [] });
+                      } else {
+                        const sumQuestions = masterSections.reduce((sum, s) => sum + (s.totalQuestions || 0), 0);
+                        const sumMarks = masterSections.reduce((sum, s) => sum + (s.totalMarks || 0), 0);
+                        if (paperLimitQuestions > 0 && sumQuestions > paperLimitQuestions) {
+                          message.error(`Cannot select all: Total questions (${sumQuestions}) exceeds paper question limit (${paperLimitQuestions}).`);
+                          return;
+                        }
+                        if (paperLimitMarks > 0 && sumMarks > paperLimitMarks) {
+                          message.error(`Cannot select all: Total marks (${sumMarks}) exceeds paper max marks limit (${paperLimitMarks}).`);
+                          return;
+                        }
+                        setFormData({ ...formData, masterSectionIds: masterSections.map(m => m.id) });
                       }
-                      if (paperLimitMarks > 0 && sumMarks > paperLimitMarks) {
-                        message.error(`Cannot select all: Total marks (${sumMarks}) exceeds paper max marks limit (${paperLimitMarks}).`);
-                        return;
-                      }
-                      setFormData({ ...formData, masterSectionIds: masterSections.map(m => m.id) });
-                    }
-                  }}
-                  className="text-[10px] font-bold text-teal-700 hover:underline cursor-pointer"
-                >
-                  {formData.masterSectionIds.length === masterSections.length ? "Deselect All" : "Select All"}
-                </button>
+                    }}
+                    className="text-[10px] font-bold text-teal-700 hover:underline cursor-pointer"
+                  >
+                    {formData.masterSectionIds.length === masterSections.length ? "Deselect All" : "Select All"}
+                  </button>
+                </div>
               </div>
               <div className="bg-gray-50/50 border border-gray-200 rounded-xl p-2 max-h-36 overflow-y-auto space-y-1 custom-scrollbar">
                 {masterSections.map(m => {
@@ -827,8 +868,8 @@ export default function MasterPapersManagement() {
         savedPaperId = created?.paperId || created?.id;
       }
 
-      if (savedPaperId && data.masterSectionIds) {
-        await sectionService.savePaperMasterSections(savedPaperId, data.masterSectionIds);
+      if (savedPaperId && data.masterSectionIds !== undefined) {
+        await sectionService.savePaperMasterSections(savedPaperId, data.masterSectionIds || []);
       }
 
       message.success(editingData ? "Paper updated successfully!" : "Academic paper created successfully!");

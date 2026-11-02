@@ -198,7 +198,7 @@ export default function CoordinatorDashboard() {
           </div>
           <p className="text-gray-605 text-sm mb-6">{error}</p>
           <button
-            onClick={fetchUniversityData}
+            onClick={fetchBaseData}
             className="w-full bg-teal-700 text-white font-bold py-2.5 rounded-md hover:shadow-lg transition-all"
           >
             Try Again

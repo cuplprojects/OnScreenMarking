@@ -866,10 +866,13 @@ namespace API.Controllers
                 if (paper == null)
                     return NotFound(new { success = false, message = "Paper not found" });
 
+                List<SectionMaster> masterSections = new List<SectionMaster>();
                 if (request.MasterSectionIds != null && request.MasterSectionIds.Any())
                 {
-                    var masterSections = await _context.SectionMasters
+                    masterSections = await _context.SectionMasters
                         .Where(sm => request.MasterSectionIds.Contains(sm.Id))
+                        .OrderBy(sm => sm.StartQuestion)
+                        .ThenBy(sm => sm.Id)
                         .ToListAsync();
 
                     int sumQuestions = masterSections.Sum(sm => sm.TotalQuestions);
@@ -892,8 +895,9 @@ namespace API.Controllers
                     }
                 }
 
-                var existing = await _context.PaperSectionMasters.Where(psm => psm.PaperId == request.PaperId).ToListAsync();
-                _context.PaperSectionMasters.RemoveRange(existing);
+                // 1. Update PaperSectionMaster mappings
+                var existingPsm = await _context.PaperSectionMasters.Where(psm => psm.PaperId == request.PaperId).ToListAsync();
+                _context.PaperSectionMasters.RemoveRange(existingPsm);
 
                 if (request.MasterSectionIds != null && request.MasterSectionIds.Any())
                 {
@@ -908,8 +912,142 @@ namespace API.Controllers
                     }
                 }
 
+                // 2. Synchronize Sections and Questions for the Paper (Sections table)
+                var existingSections = await _context.Sections
+                    .Include(s => s.Questions)
+                    .Where(s => s.PaperId == request.PaperId && s.SectionMasterId != null)
+                    .ToListAsync();
+
+                foreach (var s in existingSections)
+                {
+                    _context.Questions.RemoveRange(s.Questions);
+                }
+                _context.Sections.RemoveRange(existingSections);
                 await _context.SaveChangesAsync();
-                return Ok(new { success = true, message = "Paper master section mapping saved successfully" });
+
+                if (masterSections.Any())
+                {
+                    int currentMaxQ = 0;
+                    var otherSections = await _context.Sections.Where(s => s.PaperId == request.PaperId).ToListAsync();
+                    if (otherSections.Any())
+                    {
+                        currentMaxQ = otherSections.Max(s => s.EndQuestion);
+                    }
+
+                    foreach (var master in masterSections)
+                    {
+                        int totalQ = master.TotalQuestions > 0 ? master.TotalQuestions : (master.EndQuestion >= master.StartQuestion ? master.EndQuestion - master.StartQuestion + 1 : 1);
+                        int startQ = master.StartQuestion > 0 ? master.StartQuestion : (currentMaxQ > 0 ? currentMaxQ + 1 : 1);
+                        int endQ = master.EndQuestion >= startQ ? master.EndQuestion : startQ + totalQ - 1;
+                        currentMaxQ = endQ;
+
+                        var newSection = new Section
+                        {
+                            PaperId = request.PaperId,
+                            SectionMasterId = master.Id,
+                            Name = master.Name,
+                            Description = master.Description ?? "",
+                            TotalQuestions = totalQ,
+                            TotalMarks = master.TotalMarks,
+                            StartQuestion = startQ,
+                            EndQuestion = endQ,
+                            MaxQuestionsToAttempt = master.MaxQuestionsToAttempt > 0 ? master.MaxQuestionsToAttempt : totalQ,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        _context.Sections.Add(newSection);
+                        await _context.SaveChangesAsync();
+
+                        decimal marksPerQ = totalQ > 0 ? Math.Round(master.TotalMarks / totalQ, 2) : 1;
+                        var questions = new List<Question>();
+                        for (int qNo = startQ; qNo <= endQ; qNo++)
+                        {
+                            questions.Add(new Question
+                            {
+                                SectionId = newSection.Id,
+                                QuestionNo = qNo.ToString(),
+                                Marks = marksPerQ,
+                                Type = "MCQ",
+                                IsOptional = false,
+                                CreatedAt = DateTime.UtcNow
+                            });
+                        }
+                        _context.Questions.AddRange(questions);
+                        await _context.SaveChangesAsync();
+                    }
+                }
+
+                // 3. Synchronize ProjectPaperSections and Questions for any ProjectPapers linked to this Paper
+                var projectPapers = await _context.ProjectPapers
+                    .Where(pp => pp.PaperId == request.PaperId)
+                    .ToListAsync();
+
+                foreach (var pp in projectPapers)
+                {
+                    var existingPps = await _context.ProjectPaperSections
+                        .Include(pps => pps.Questions)
+                        .Where(pps => pps.ProjectPaperId == pp.Id)
+                        .ToListAsync();
+
+                    foreach (var pps in existingPps)
+                    {
+                        _context.Questions.RemoveRange(pps.Questions);
+                    }
+                    _context.ProjectPaperSections.RemoveRange(existingPps);
+                    await _context.SaveChangesAsync();
+
+                    if (masterSections.Any())
+                    {
+                        foreach (var master in masterSections)
+                        {
+                            int totalQ = master.TotalQuestions > 0 ? master.TotalQuestions : (master.EndQuestion >= master.StartQuestion ? master.EndQuestion - master.StartQuestion + 1 : 1);
+                            int startQ = master.StartQuestion > 0 ? master.StartQuestion : 1;
+                            int endQ = master.EndQuestion >= startQ ? master.EndQuestion : startQ + totalQ - 1;
+
+                            var newPps = new ProjectPaperSection
+                            {
+                                ProjectPaperId = pp.Id,
+                                SectionMasterId = master.Id,
+                                Name = master.Name,
+                                Description = master.Description ?? "",
+                                StartQuestion = startQ,
+                                EndQuestion = endQ,
+                                TotalQuestions = totalQ,
+                                TotalMarks = master.TotalMarks,
+                                MaxQuestionsToAttempt = master.MaxQuestionsToAttempt > 0 ? master.MaxQuestionsToAttempt : totalQ,
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow
+                            };
+                            _context.ProjectPaperSections.Add(newPps);
+                            await _context.SaveChangesAsync();
+
+                            decimal marksPerQ = totalQ > 0 ? Math.Round(master.TotalMarks / totalQ, 2) : 1;
+                            var ppsQuestions = new List<Question>();
+                            for (int i = startQ; i <= endQ; i++)
+                            {
+                                ppsQuestions.Add(new Question
+                                {
+                                    ProjectPaperSectionId = newPps.Id,
+                                    QuestionNo = i.ToString(),
+                                    Marks = marksPerQ,
+                                    Type = "MCQ",
+                                    IsOptional = false,
+                                    CreatedAt = DateTime.UtcNow
+                                });
+                            }
+                            _context.Questions.AddRange(ppsQuestions);
+                            await _context.SaveChangesAsync();
+                        }
+                        pp.IsSectionConfigured = true;
+                    }
+                    else
+                    {
+                        pp.IsSectionConfigured = false;
+                    }
+                    pp.UpdatedAt = DateTime.UtcNow;
+                }
+
+                await _context.SaveChangesAsync();
+                return Ok(new { success = true, message = "Paper master section mapping and questions updated successfully" });
             }
             catch (Exception ex)
             {

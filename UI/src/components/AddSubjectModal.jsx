@@ -62,13 +62,14 @@ export default function AddSubjectModal({
         payload.departmentId = parseInt(deptId, 10);
       }
 
+      let res;
       if (editingId) {
-        await subjectService.updateSubject(editingId, payload);
+        res = await subjectService.updateSubject(editingId, payload);
       } else {
-        await subjectService.createSubject(payload);
+        res = await subjectService.createSubject(payload);
       }
 
-      onSuccess(editingId ? 'Subject updated successfully' : 'Subject created successfully');
+      onSuccess(res?.message || (editingId ? 'Subject updated successfully' : 'Subject created successfully'), res);
       onClose();
     } catch (err) {
       setError(err.message || 'Failed to save subject');

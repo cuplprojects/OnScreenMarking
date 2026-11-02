@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useConfigHeader } from '../context/ConfigHeaderContext';
@@ -32,6 +32,8 @@ export default function SubjectManagement() {
   const [departments, setDepartments] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [highlightedSubjectId, setHighlightedSubjectId] = useState(null);
+  const highlightedRowRef = useRef(null);
   
   const [formData, setFormData] = useState({
     subName: '',
@@ -160,11 +162,20 @@ export default function SubjectManagement() {
     
   };
 
-  const handleSuccess = (msg) => {
+  const handleSuccess = (msg, res) => {
     message.success(msg);
+    const newSubjectId = res?.subjectId || res?.data?.subjectId || res?.subject?.subjectId || res?.id || res?.data?.id || editingId;
+    if (newSubjectId) {
+      setHighlightedSubjectId(Number(newSubjectId));
+    }
     refresh();
-    
   };
+
+  useEffect(() => {
+    if (highlightedSubjectId && highlightedRowRef.current) {
+      highlightedRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [highlightedSubjectId, subjects]);
 
   const handleDelete = async (subjectId) => {
     if (!window.confirm('Are you sure you want to delete this subject? It will be marked as inactive.')) {
@@ -286,20 +297,47 @@ export default function SubjectManagement() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-xs">
-                  {subjects.map((subject) => (
-                    <tr key={subject.subjectId} className="hover:bg-gray-50/50 transition-colors">
+                  {subjects.map((subject) => {
+                    const isRecentlyAdded = highlightedSubjectId != null && Number(subject.subjectId) === Number(highlightedSubjectId);
+                    return (
+                    <tr 
+                      key={subject.subjectId} 
+                      ref={isRecentlyAdded ? highlightedRowRef : null}
+                      className={`transition-all duration-300 ${
+                        isRecentlyAdded 
+                          ? 'bg-teal-50/80 hover:bg-teal-50 border-l-4 border-l-teal-600 shadow-2xs' 
+                          : 'hover:bg-gray-50/50'
+                      }`}
+                    >
                       <td className="py-2.5 md:px-6 px-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 bg-gray-50 rounded-xl flex items-center justify-center text-gray-600 font-extrabold shadow-sm">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-extrabold shadow-sm transition-colors ${
+                            isRecentlyAdded ? 'bg-teal-600 text-white' : 'bg-gray-50 text-gray-600'
+                          }`}>
                             <BookOpen size={18} />
                           </div>
                           <div>
-                            <span className="font-extrabold text-gray-900 tracking-tight block">{subject.subName}</span>
+                            <div className="flex items-center gap-2">
+                              <span className={`font-extrabold tracking-tight block ${
+                                isRecentlyAdded ? 'text-teal-950 font-black' : 'text-gray-900'
+                              }`}>
+                                {subject.subName}
+                              </span>
+                              {isRecentlyAdded && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-teal-100 text-teal-800 border border-teal-200 shadow-2xs animate-pulse">
+                                  Newly Added
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
                       <td className="py-2.5 md:px-6 px-4">
-                        <span className="px-2.5 py-1 bg-gray-100 border border-gray-200 text-gray-700 rounded-md font-bold text-[10px] tracking-wide">
+                        <span className={`px-2.5 py-1 rounded-md font-bold text-[10px] tracking-wide border ${
+                          isRecentlyAdded 
+                            ? 'bg-teal-100/70 border-teal-200 text-teal-800' 
+                            : 'bg-gray-100 border-gray-200 text-gray-700'
+                        }`}>
                           {subject.subCode || 'N/A'}
                         </span>
                       </td>
@@ -348,7 +386,8 @@ export default function SubjectManagement() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
 
