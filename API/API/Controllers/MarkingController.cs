@@ -320,7 +320,7 @@ namespace API.Controllers
                                 if (int.TryParse(prop.Name, out int qId))
                                 {
                                     var item = prop.Value;
-                                    decimal marksAwarded = item.TryGetProperty("marksAwarded", out var mp) && mp.ValueKind == JsonValueKind.Number ? mp.GetDecimal() : 0;
+                                    decimal marksAwarded = item.TryGetProperty("marksAwarded", out var mp) && mp.ValueKind == JsonValueKind.Number ? Math.Round(mp.GetDecimal(), 2, MidpointRounding.AwayFromZero) : 0;
                                     bool isSkipped = item.TryGetProperty("isSkipped", out var sp) && (sp.ValueKind == JsonValueKind.True || sp.ValueKind == JsonValueKind.False) && sp.GetBoolean();
                                     string remarks = item.TryGetProperty("remarks", out var rp) && rp.ValueKind == JsonValueKind.String ? rp.GetString() ?? "" : "";
                                     bool isAttempted = item.TryGetProperty("isAttempted", out var ap) && (ap.ValueKind == JsonValueKind.True || ap.ValueKind == JsonValueKind.False) && ap.GetBoolean();
@@ -336,7 +336,7 @@ namespace API.Controllers
                                 int qId = item.TryGetProperty("questionId", out var qp) && qp.ValueKind == JsonValueKind.Number ? qp.GetInt32() : 0;
                                 if (qId > 0)
                                 {
-                                    decimal marksAwarded = item.TryGetProperty("marksAwarded", out var mp) && mp.ValueKind == JsonValueKind.Number ? mp.GetDecimal() : 0;
+                                    decimal marksAwarded = item.TryGetProperty("marksAwarded", out var mp) && mp.ValueKind == JsonValueKind.Number ? Math.Round(mp.GetDecimal(), 2, MidpointRounding.AwayFromZero) : 0;
                                     bool isSkipped = item.TryGetProperty("isSkipped", out var sp) && (sp.ValueKind == JsonValueKind.True || sp.ValueKind == JsonValueKind.False) && sp.GetBoolean();
                                     string remarks = item.TryGetProperty("remarks", out var rp) && rp.ValueKind == JsonValueKind.String ? rp.GetString() ?? "" : "";
                                     bool isAttempted = item.TryGetProperty("isAttempted", out var ap) && (ap.ValueKind == JsonValueKind.True || ap.ValueKind == JsonValueKind.False) && ap.GetBoolean();
@@ -355,7 +355,7 @@ namespace API.Controllers
                             {
                                 if (existingMap.TryGetValue(qm.QuestionId, out var existingQm))
                                 {
-                                    existingQm.MarksAwarded = qm.MarksAwarded;
+                                    existingQm.MarksAwarded = Math.Round(qm.MarksAwarded, 2, MidpointRounding.AwayFromZero);
                                     existingQm.IsSkipped = qm.IsSkipped;
                                     existingQm.Remarks = qm.Remarks ?? "";
                                     existingQm.IsAttempted = qm.IsAttempted;
@@ -367,7 +367,7 @@ namespace API.Controllers
                                     {
                                         MarkingId = marking.Id,
                                         QuestionId = qm.QuestionId,
-                                        MarksAwarded = qm.MarksAwarded,
+                                        MarksAwarded = Math.Round(qm.MarksAwarded, 2, MidpointRounding.AwayFromZero),
                                         IsSkipped = qm.IsSkipped,
                                         Remarks = qm.Remarks ?? "",
                                         IsAttempted = qm.IsAttempted
@@ -926,7 +926,7 @@ namespace API.Controllers
                     {
                         MarkingId = markingId,
                         QuestionId = qm.QuestionId,
-                        MarksAwarded = qm.MarksAwarded,
+                        MarksAwarded = Math.Round(qm.MarksAwarded, 2, MidpointRounding.AwayFromZero),
                         IsSkipped = qm.IsSkipped,
                         Remarks = qm.Remarks ?? "",
                         IsAttempted = qm.IsAttempted
@@ -941,8 +941,8 @@ namespace API.Controllers
                 decimal maxMarks = marking.Script?.ProjectPaper?.Paper?.MaxMarks ?? 100;
                 if (maxMarks <= 0) maxMarks = 100;
 
-                marking.TotalMarks = totalMarks;
-                marking.Percentage = (totalMarks / maxMarks) * 100;
+                marking.TotalMarks = Math.Round(totalMarks, 2, MidpointRounding.AwayFromZero);
+                marking.Percentage = Math.Round((totalMarks / maxMarks) * 100, 2, MidpointRounding.AwayFromZero);
                 marking.UpdatedAt = DateTime.UtcNow;
 
                 _context.Markings.Update(marking);
@@ -983,7 +983,7 @@ namespace API.Controllers
                     {
                         QuestionId = qm.QuestionId,
                         QuestionNo = qm.Question.QuestionNo,
-                        MarksAwarded = qm.MarksAwarded,
+                        MarksAwarded = Math.Round(qm.MarksAwarded, 2, MidpointRounding.AwayFromZero),
                         IsSkipped = qm.IsSkipped,
                         Remarks = qm.Remarks,
                         IsAttempted = qm.IsAttempted

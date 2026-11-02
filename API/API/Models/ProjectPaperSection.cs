@@ -28,7 +28,7 @@ namespace API.Models
 
         public int TotalQuestions { get; set; }
 
-        [Column(TypeName = "decimal(18,2)")]
+        [Column(TypeName = "decimal(10,2)")]
         public decimal TotalMarks { get; set; }
 
         public int StartQuestion { get; set; } // e.g. 1

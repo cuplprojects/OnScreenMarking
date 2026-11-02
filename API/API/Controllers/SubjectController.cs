@@ -342,8 +342,8 @@ namespace API.Controllers
         }
         [HttpPost]
         [Authorize(Roles = "admin,coordinator")]
-        public async Task<ActionResult<Subject>> CreateSubject(
-     [FromBody] SubjectDto subjectDto)
+        public async Task<IActionResult> CreateSubject(
+            [FromBody] SubjectDto subjectDto)
         {
             try
             {
@@ -430,7 +430,24 @@ namespace API.Controllers
                 return CreatedAtAction(
                     nameof(GetSubject),
                     new { id = subject.SubjectId },
-                    subject);
+                    new
+                    {
+                        success = true,
+                        message = "Subject created successfully",
+                        subjectId = subject.SubjectId,
+                        subName = subject.SubName,
+                        subCode = subject.SubCode,
+                        universityId = subject.UniversityId,
+                        status = subject.Status,
+                        data = new
+                        {
+                            subjectId = subject.SubjectId,
+                            subName = subject.SubName,
+                            subCode = subject.SubCode,
+                            universityId = subject.UniversityId,
+                            status = subject.Status
+                        }
+                    });
             }
             catch (Exception ex)
             {
@@ -464,7 +481,22 @@ namespace API.Controllers
                 _context.Subjects.Update(subject);
                 await _context.SaveChangesAsync();
 
-                return Ok(new { success = true, message = "Subject updated successfully" });
+                return Ok(new
+                {
+                    success = true,
+                    message = "Subject updated successfully",
+                    subjectId = subject.SubjectId,
+                    subName = subject.SubName,
+                    subCode = subject.SubCode,
+                    data = new
+                    {
+                        subjectId = subject.SubjectId,
+                        subName = subject.SubName,
+                        subCode = subject.SubCode,
+                        universityId = subject.UniversityId,
+                        status = subject.Status
+                    }
+                });
             }
             catch (Exception ex)
             {

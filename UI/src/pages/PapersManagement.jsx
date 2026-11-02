@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+﻿import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { 
   FileText, Plus, Edit2, UserPlus, X, Search, CheckCircle2, Trash2, 
@@ -356,9 +356,6 @@ export default function PapersManagement({ isTab = false }) {
       try {
         const masters = await sectionService.getSectionMasters();
         setSectionMasters(masters || []);
-        if (masters && masters.length > 0) {
-          setSelectedMasterSectionIds(masters.map(m => m.id));
-        }
       } catch (masterErr) {
         console.error("Failed to load section masters", masterErr);
       }
@@ -370,7 +367,16 @@ export default function PapersManagement({ isTab = false }) {
   };
 
   useEffect(() => {
-    if (searchParams.get("add") === "true") setShowForm(true);
+    if (searchParams.get("add") === "true") {
+      setFormData({
+        paperCode: "", paperName: "", paperNumber: "", maxMarks: "", totalQuestions: "", description: "",
+        catchNo: "", projectId: projectId || "", isActive: true, questionPaperPdfUrl: "",
+      });
+      setSelectedSubjects([]);
+      setSelectedMasterSectionIds([]);
+      setEditingId(null);
+      setShowForm(true);
+    }
     if (subjectId) setSelectedSubjects([parseInt(subjectId, 10)]);
   }, [searchParams]);
 
@@ -524,10 +530,22 @@ export default function PapersManagement({ isTab = false }) {
       return message.error("Max Marks must be greater than 0");
     }
 
+    // Check that Total Questions matches the sum of selected Master Sections' questions
+    if (selectedMasterSectionIds && selectedMasterSectionIds.length > 0) {
+      const selectedMasters = sectionMasters.filter(m => selectedMasterSectionIds.includes(m.id));
+      const masterTotalQuestions = selectedMasters.reduce((sum, m) => sum + (parseInt(m.totalQuestions, 10) || 0), 0);
+      if (totalQ !== masterTotalQuestions) {
+        return message.error(
+          `Incorrect Configuration: Selected master sections have a total of ${masterTotalQuestions} questions. Total Questions must be ${masterTotalQuestions} only.`
+        );
+      }
+    }
+
     try {
       const payload = {
         ...formData,
         subjectIds: selectedSubjects.map(id => parseInt(id, 10)),
+        masterSectionIds: selectedMasterSectionIds || [],
         projectId: parseInt(targetProjectId, 10),
         universityId: activeUniversityId ? parseInt(activeUniversityId, 10) : undefined,
         paperNumber: paperNum,
@@ -547,7 +565,10 @@ export default function PapersManagement({ isTab = false }) {
         try {
           await sectionService.savePaperMasterSections(savedPaperId, selectedMasterSectionIds || []);
         } catch (secErr) {
-          console.error("Failed to map master sections to paper", secErr);
+          const errMsg = secErr.response?.data?.message || secErr.message || "Failed to map master sections to paper";
+          message.error(errMsg);
+          refreshTable();
+          return;
         }
       }
 
@@ -555,7 +576,8 @@ export default function PapersManagement({ isTab = false }) {
       refreshTable();
       message.success("Paper and sections saved successfully");
     } catch (err) {
-      message.error("Error saving paper");
+      const errMsg = err.response?.data?.message || err.message || "Error saving paper";
+      message.error(errMsg);
     }
   };
 
@@ -574,7 +596,11 @@ export default function PapersManagement({ isTab = false }) {
             isActive: fullPaper.isActive,
             questionPaperPdfUrl: fullPaper.questionPaperPdfUrl || "",
         });
-        if (fullPaper.subjectPapers && fullPaper.subjectPapers.length > 0) {
+        if (fullPaper.subjectIds && fullPaper.subjectIds.length > 0) {
+            setSelectedSubjects(fullPaper.subjectIds);
+        } else if (paper.subjectIds && paper.subjectIds.length > 0) {
+            setSelectedSubjects(paper.subjectIds);
+        } else if (fullPaper.subjectPapers && fullPaper.subjectPapers.length > 0) {
             setSelectedSubjects(fullPaper.subjectPapers.map(sp => sp.subjectId));
         } else if (paper.subjectId) {
             setSelectedSubjects([paper.subjectId]);
@@ -1530,9 +1556,16 @@ export default function PapersManagement({ isTab = false }) {
         <>
         {/* Heading is now handled by ProjectConfigHeader in ProjectDashboard */}
 
-        {showForm && (
+        {showForm && (() => {
+          const selectedMasterSections = sectionMasters.filter(m => selectedMasterSectionIds.includes(m.id));
+          const masterTotalQuestions = selectedMasterSections.reduce((sum, m) => sum + (parseInt(m.totalQuestions, 10) || 0), 0);
+          const masterTotalMarks = selectedMasterSections.reduce((sum, m) => sum + (parseFloat(m.totalMarks) || 0), 0);
+          const parsedFormTotalQ = parseInt(formData.totalQuestions, 10);
+          const isQuestionMismatch = selectedMasterSectionIds.length > 0 && !isNaN(parsedFormTotalQ) && parsedFormTotalQ !== masterTotalQuestions;
+
+          return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-gray-100 relative max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200 p-4 md:p-6">
+            <div className="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-gray-100 relative max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200 p-4 md:p-6">
               
               {/* Modal Header */}
               <div className="flex items-center justify-between border-b border-gray-100 pb-3.5 mb-5">
@@ -1557,7 +1590,27 @@ export default function PapersManagement({ isTab = false }) {
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
+                {/* Project Select (Only shown if page is not already scoped to a specific project) */}
+                {!projectId && (
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                      Project <span className="text-red-500">*</span>
+                    </label>
+                    <select 
+                      value={formData.projectId} 
+                      onChange={(e) => handleProjectChange(e.target.value)} 
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                      required
+                    >
+                      <option value="">Select Project</option>
+                      {projects.map((p) => (
+                        <option key={p.projectId} value={p.projectId}>{p.projectName}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {/* Row 1: Code, Name, Catch No */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                   <div>
@@ -1569,7 +1622,8 @@ export default function PapersManagement({ isTab = false }) {
                       value={formData.paperCode} 
                       onChange={(e) => setFormData({ ...formData, paperCode: e.target.value })} 
                       className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      placeholder="e.g. MATH-101"
+                      placeholder=""
+                      autoComplete="off"
                       required 
                     />
                   </div>
@@ -1582,7 +1636,8 @@ export default function PapersManagement({ isTab = false }) {
                       value={formData.paperName} 
                       onChange={(e) => setFormData({ ...formData, paperName: e.target.value })} 
                       className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      placeholder="e.g. Mathematics-I"
+                      placeholder=""
+                      autoComplete="off"
                       required 
                     />
                   </div>
@@ -1593,40 +1648,57 @@ export default function PapersManagement({ isTab = false }) {
                       value={formData.catchNo} 
                       onChange={(e) => setFormData({ ...formData, catchNo: e.target.value })} 
                       className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      placeholder="e.g. C-4501"
+                      placeholder=""
+                      autoComplete="off"
                     />
                   </div>
                 </div>
 
-                {/* Row 2: Subjects Multi-Select Dropdown & Project Select (if no project in URL context) */}
-                <div className={`grid grid-cols-1 ${!projectId ? 'sm:grid-cols-2' : ''} gap-3.5`}>
+                {/* Row 2: Subjects, Paper Number, Max Marks, Total Questions in ONE Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-start">
                   {/* Multi-Select Subjects Dropdown */}
-                  <div className="relative" ref={subjectDropdownRef}>
+                  <div className="sm:col-span-5 relative" ref={subjectDropdownRef}>
                     <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
                       Subjects ({selectedSubjects.length} selected) <span className="text-red-500">*</span>
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => setIsSubjectDropdownOpen(!isSubjectDropdownOpen)}
-                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium flex items-center justify-between shadow-2xs"
+                    <div
+                      onClick={() => setIsSubjectDropdownOpen(prev => !prev)}
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-2.5 py-1.5 rounded-lg hover:border-gray-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-teal-500 transition-all outline-none font-medium flex items-center justify-between gap-1.5 min-h-[38px] shadow-2xs cursor-pointer select-none"
                     >
-                      <span className="truncate">
+                      <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
                         {selectedSubjects.length === 0 ? (
-                          <span className="text-gray-400 font-normal">Select subjects...</span>
+                          <span className="text-gray-400 font-normal py-0.5">Select subjects...</span>
                         ) : (
-                          <span className="text-teal-800 font-semibold">
-                            {selectedSubjects.length === 1 
-                              ? subjects.find(s => s.subjectId === selectedSubjects[0])?.subjectName || "1 Subject Selected"
-                              : `${selectedSubjects.length} Subjects Selected`
-                            }
-                          </span>
+                          selectedSubjects.map(subId => {
+                            const sub = subjects.find(s => s.subjectId === subId);
+                            if (!sub) return null;
+                            return (
+                              <span
+                                key={subId}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-[10px] font-semibold animate-in fade-in"
+                              >
+                                <span>{sub.subjectName}</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleSubject(subId);
+                                  }}
+                                  className="text-teal-600 hover:text-teal-900 hover:bg-teal-100 rounded-full p-0.5 transition-colors cursor-pointer"
+                                  title="Remove subject"
+                                >
+                                  <X size={10} />
+                                </button>
+                              </span>
+                            );
+                          })
                         )}
-                      </span>
-                      <ChevronDown size={14} className={`text-gray-400 transition-transform ${isSubjectDropdownOpen ? "rotate-180" : ""}`} />
-                    </button>
+                      </div>
+                      <ChevronDown size={14} className={`text-gray-400 transition-transform shrink-0 ml-1 ${isSubjectDropdownOpen ? "rotate-180" : ""}`} />
+                    </div>
 
                     {isSubjectDropdownOpen && (
-                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2.5 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
+                      <div className="absolute left-0 top-full mt-1 w-72 sm:w-80 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2.5 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
                         <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
                           <Search size={13} className="text-gray-400" />
                           <input 
@@ -1695,92 +1767,90 @@ export default function PapersManagement({ isTab = false }) {
                     )}
                   </div>
 
-                  {/* Project Select (Only shown if page is not already scoped to a specific project) */}
-                  {!projectId && (
-                    <div>
-                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
-                        Project <span className="text-red-500">*</span>
-                      </label>
-                      <select 
-                        value={formData.projectId} 
-                        onChange={(e) => handleProjectChange(e.target.value)} 
-                        className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                        required
-                      >
-                        <option value="">Select Project</option>
-                        {projects.map((p) => (
-                          <option key={p.projectId} value={p.projectId}>{p.projectName}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
-
-                {/* Selected Subjects Badges Display (Quick View) */}
-                {selectedSubjects.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {selectedSubjects.map(subId => {
-                      const sub = subjects.find(s => s.subjectId === subId);
-                      if (!sub) return null;
-                      return (
-                        <span 
-                          key={subId} 
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-[10px] font-semibold"
-                        >
-                          {sub.subjectName}
-                          <button 
-                            type="button" 
-                            onClick={() => toggleSubject(subId)}
-                            className="hover:text-teal-900 transition-colors"
-                          >
-                            <X size={10} />
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Row 3: Paper Number, Max Marks, Total Questions */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                  <div>
+                  {/* Paper Number */}
+                  <div className="sm:col-span-2">
                     <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Paper Number</label>
                     <input 
                       type="number" 
                       value={formData.paperNumber} 
                       onChange={(e) => setFormData({ ...formData, paperNumber: e.target.value })} 
                       className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      placeholder="e.g. 1"
+                      placeholder=""
+                      autoComplete="off"
                       min="1" 
                     />
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Max Marks <span className="text-red-500">*</span></label>
+
+                  {/* Max Marks */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                      Max Marks <span className="text-red-500">*</span>
+                    </label>
                     <input 
                       type="number" 
                       value={formData.maxMarks} 
                       onChange={(e) => setFormData({ ...formData, maxMarks: e.target.value })} 
                       className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      placeholder="e.g. 100"
+                      placeholder=""
+                      autoComplete="off"
                       min="1" 
                       required
                     />
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Total Questions <span className="text-red-500">*</span></label>
+
+                  {/* Total Questions */}
+                  <div className="sm:col-span-3">
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1 whitespace-nowrap">
+                      Total Questions <span className="text-red-500">*</span>
+                    </label>
                     <input 
                       type="number" 
                       value={formData.totalQuestions} 
                       onChange={(e) => setFormData({ ...formData, totalQuestions: e.target.value })} 
-                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      placeholder="e.g. 10"
+                      className={`w-full text-xs px-3 py-2 rounded-lg outline-none font-medium transition-all ${
+                        isQuestionMismatch
+                          ? "bg-amber-50/70 border-2 border-amber-400 text-amber-900 focus:ring-2 focus:ring-amber-500"
+                          : "bg-gray-50/70 border border-gray-200 text-gray-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      }`}
+                      placeholder=""
+                      autoComplete="off"
                       min="1" 
                       required
                     />
+                    {selectedMasterSectionIds.length > 0 && (
+                      <p className={`mt-1 text-[10px] ${isQuestionMismatch ? "text-amber-600 font-bold" : "text-gray-500 font-medium"}`}>
+                        Master: {masterTotalQuestions}Q
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                {/* Row 4: Description */}
+                {/* Master Sections Question Count Mismatch Alert */}
+                {isQuestionMismatch && (
+                  <div className="flex items-start sm:items-center justify-between gap-3 p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs shadow-2xs animate-in fade-in">
+                    <div className="flex items-start sm:items-center gap-2.5">
+                      <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+                      <div>
+                        <span className="font-extrabold text-amber-950 uppercase tracking-wide text-[11px]">Incorrect Configuration:</span>{" "}
+                        Selected master sections have a total of <span className="font-extrabold text-amber-950 underline">{masterTotalQuestions} questions</span>, but Total Questions is set to <span className="font-extrabold text-amber-950">{formData.totalQuestions}</span>.
+                        <div className="text-[11px] text-amber-800 mt-0.5">
+                          Total Questions must be <strong>{masterTotalQuestions}</strong> only when importing these master sections.
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, totalQuestions: String(masterTotalQuestions) }))}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg transition-colors shrink-0 cursor-pointer shadow-xs whitespace-nowrap"
+                      title={`Click to set Total Questions to ${masterTotalQuestions}`}
+                    >
+                      Set to {masterTotalQuestions}Q
+                    </button>
+                  </div>
+                )}
+
+
+                {/* Row 3: Description */}
                 <div>
                   <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Description</label>
                   <input 
@@ -1788,7 +1858,8 @@ export default function PapersManagement({ isTab = false }) {
                     value={formData.description} 
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })} 
                     className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                    placeholder="Brief description or guidelines (optional)..." 
+                    placeholder="" 
+                    autoComplete="off"
                   />
                 </div>
 
@@ -1797,16 +1868,17 @@ export default function PapersManagement({ isTab = false }) {
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600">
-                        Master Sections ({selectedMasterSectionIds.length} selected)
+                        Master Sections ({selectedMasterSectionIds.length} selected
+                        {selectedMasterSectionIds.length > 0 && ` • Total: ${masterTotalQuestions} Questions, ${masterTotalMarks} Marks`})
                       </label>
                       <div className="flex items-center gap-2">
-                        {selectedMasterSectionIds.length > 0 && (
+                        {selectedMasterSectionIds.length > 0 && selectedMasterSectionIds.length < sectionMasters.length && (
                           <button
                             type="button"
                             onClick={() => setSelectedMasterSectionIds([])}
                             className="text-[10px] font-bold text-red-600 hover:underline cursor-pointer"
                           >
-                            Remove All / Clear
+                            Clear
                           </button>
                         )}
                         <button
@@ -1824,32 +1896,6 @@ export default function PapersManagement({ isTab = false }) {
                         </button>
                       </div>
                     </div>
-
-                    {/* Selected Master Section Badges with Quick Remove */}
-                    {selectedMasterSectionIds.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mb-2">
-                        {selectedMasterSectionIds.map(mId => {
-                          const m = sectionMasters.find(s => s.id === mId);
-                          if (!m) return null;
-                          return (
-                            <span
-                              key={mId}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-[10px] font-semibold"
-                            >
-                              {m.name} ({m.totalMarks}M)
-                              <button
-                                type="button"
-                                onClick={() => setSelectedMasterSectionIds(prev => prev.filter(id => id !== mId))}
-                                className="text-teal-600 hover:text-red-600 transition-colors cursor-pointer"
-                                title="Remove this master section"
-                              >
-                                <X size={10} />
-                              </button>
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
 
                     <div className="bg-gray-50/70 border border-gray-200 rounded-lg p-2 max-h-[85px] overflow-y-auto custom-scrollbar">
                       <div className="grid sm:grid-cols-3 gap-2 grid-cols-1 md:grid-cols-2">
@@ -1874,7 +1920,7 @@ export default function PapersManagement({ isTab = false }) {
                                 }}
                                 className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300"
                               />
-                              <span className="truncate text-[11px]">{m.name} ({m.totalMarks}M)</span>
+                              <span className="truncate text-[11px]">{m.name} ({m.totalQuestions || 0}Q • {m.totalMarks}M)</span>
                             </label>
                           );
                         })}
@@ -1903,7 +1949,7 @@ export default function PapersManagement({ isTab = false }) {
               </form>
             </div>
           </div>
-        )}
+        ); })()}
 
         {/* Papers Main Table Area */}
         <div className={`bg-white rounded-xl border border-gray-100 shadow-sm ${activeInnerTab === 'bulk-assign' ? 'overflow-visible' : 'overflow-hidden'}`}>
@@ -2156,7 +2202,14 @@ export default function PapersManagement({ isTab = false }) {
                           </div>
                         </td>
                         <td className="px-5 py-2.5">
-                          <span className="text-gray-700 block truncate max-w-[150px]">{paper.subjectName}</span>
+                          <span 
+                            className="text-gray-700 block truncate max-w-[180px]"
+                            title={paper.subjectNames && paper.subjectNames.length > 0 ? paper.subjectNames.join(', ') : (paper.subjectName || '')}
+                          >
+                            {paper.subjectNames && paper.subjectNames.length > 0 
+                              ? paper.subjectNames.join(', ') 
+                              : (paper.subjectName || '-')}
+                          </span>
                           <div className="text-[9px] text-gray-400 uppercase tracking-wider mt-0.5">
                             Max: {paper.maxMarks} | Qs: {paper.totalQuestions} | Catch: {paper.catchNo}
                           </div>
@@ -2916,7 +2969,7 @@ export default function PapersManagement({ isTab = false }) {
 
                             {/* Subject & Catch No */}
                             <td className="px-5 py-3.5">
-                              <div className="text-gray-900 font-bold text-xs">{row.paper.subjectName || "—"}</div>
+                              <div className="text-gray-900 font-bold text-xs">{row.paper.subjectNames?.join(' ') || row.paper.subjectName || "—"}</div>
                               <div className="text-[11px] text-gray-500 font-medium font-mono">
                                 Catch No: {row.paper.catchNo || 'None'}
                               </div>
@@ -3283,7 +3336,7 @@ export default function PapersManagement({ isTab = false }) {
 
                                  {/* Subjects */}
                                  <td className="px-5 py-3.5">
-                                   <div className="text-gray-900 font-bold text-xs">{paper.subjectName || "—"}</div>
+                                   <div className="text-gray-900 font-bold text-xs">{paper.subjectNames?.join(' ') || paper.subjectName || "—"}</div>
                                  </td>
 
                                 {/* Catch No */}

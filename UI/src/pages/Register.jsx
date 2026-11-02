@@ -5,7 +5,6 @@ import {
   X,
   CheckCircle,
   Mail,
-  Lock,
   User,
   Phone,
   MapPin,
@@ -87,9 +86,7 @@ const calculateSharpness = (canvas) => {
 
 const Register = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  
+  const [loading, setLoading] = useState(false);  
   const [registered, setRegistered] = useState(false);
 
   const [universities, setUniversities] = useState([]);
@@ -103,12 +100,9 @@ const Register = () => {
   const [showPhoneOtp, setShowPhoneOtp] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
-  const [showPassword, setShowPassword] = useState(false);
-
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    password: "",
     userType: "examiner", // Always examiner
     universityId: "",
     fname: "",
@@ -163,9 +157,6 @@ const Register = () => {
         setUniversities(data);
       } catch (err) {
         console.error("Failed to fetch universities:", err);
-        message.error(
-          "Failed to fetch university details. Please check if the API is running.",
-        );
       }
     };
     fetchUniversities();
@@ -266,9 +257,7 @@ const Register = () => {
   const startCamera = async () => {
     try {
       if (!navigator?.mediaDevices?.getUserMedia && !navigator?.getUserMedia && !navigator?.webkitGetUserMedia && !navigator?.mozGetUserMedia) {
-        const msg = "Camera access is not supported in this browser or requires a secure HTTPS/localhost connection.";
-        setError(msg);
-        message.error(msg);
+        message.error("Camera access is not supported in this browser or requires a secure HTTPS/localhost connection.");
         return;
       }
 
@@ -358,8 +347,6 @@ const Register = () => {
 
       setVideoStream(stream);
       setShowCamera(true);
-      setError("");
-
       if (!landmarkerRef.current || !detectorRef.current) {
         setIsLandmarkerLoaded(false);
         try {
@@ -419,7 +406,6 @@ const Register = () => {
         errMsg = err.message;
       }
       
-      setError(errMsg);
       message.error(errMsg);
     }
   };
@@ -663,7 +649,7 @@ const Register = () => {
       setShowEmailOtp(true);
       setResendTimer(60);
     } catch (err) {
-      message.error(err.message || "Failed to send OTP");
+      console.error("Failed to send email OTP:", err);
     } finally {
       setOtpLoading(false);
     }
@@ -683,7 +669,7 @@ const Register = () => {
       setShowEmailOtp(false);
       setEmailOtp("");
     } catch (err) {
-      message.error(err.message || "Invalid OTP");
+      console.error("Failed to verify email OTP:", err);
     } finally {
       setOtpLoading(false);
     }
@@ -705,14 +691,12 @@ const Register = () => {
       // For development - show OTP since SMS is not configured
       if (response.otp) {
         console.log("Phone OTP:", response.otp);
-        message.success(`OTP sent! (Dev Mode: ${response.otp})`);
-        // Also show an alert for easier testing
-        alert(`Phone OTP for testing: ${response.otp}\n\nNote: In production, this will be sent via SMS.`);
+        message.success(`OTP sent! (Dev Mode: ${response.otp})`, 8000);
       } else {
         message.success("OTP sent to your phone successfully");
       }
     } catch (err) {
-      message.error(err.message || "Failed to send OTP");
+      console.error("Failed to send phone OTP:", err);
     } finally {
       setOtpLoading(false);
     }
@@ -732,7 +716,7 @@ const Register = () => {
       setShowPhoneOtp(false);
       setPhoneOtp("");
     } catch (err) {
-      message.error(err.message || "Invalid OTP");
+      console.error("Failed to verify phone OTP:", err);
     } finally {
       setOtpLoading(false);
     }
@@ -753,10 +737,9 @@ const Register = () => {
     if (
       !formData.name ||
       !formData.email ||
-      !formData.password ||
       !formData.universityId
     ) {
-      setError("Please fill in all required fields marked with *");
+      message.error("Please fill in all required fields marked with *");
       return;
     }
 
@@ -767,12 +750,8 @@ const Register = () => {
     // Phone regex validation
     const phoneRegex = /^[0-9]{10}$/;
 
-    // Strong password validation
-    const passwordRegex =
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-
     if (!emailRegex.test(formData.email)) {
-      setError("Please enter a valid email address.");
+      message.error("Please enter a valid email address.");
       return;
     }
 
@@ -784,27 +763,27 @@ const Register = () => {
 
     // Check email and phone verification
     if (!emailVerified) {
-      setError("Please verify your email address before submitting.");
+      message.error("Please verify your email address before submitting.");
       return;
     }
 
     if (!phoneVerified) {
-      setError("Please verify your phone number before submitting.");
+      message.error("Please verify your phone number before submitting.");
       return;
     }
 
     if (!formData.profileImage) {
-      setError("Please capture or upload a profile picture.");
+      message.error("Please capture or upload a profile picture.");
       return;
     }
 
     if (!formData.subjectId1) {
-      setError("Primary Subject Area is required.");
+      message.error("Primary Subject Area is required.");
       return;
     }
 
     if (formData.aadharNo && !/^[0-9]{12}$/.test(formData.aadharNo)) {
-      setError("Aadhar number must contain exactly 12 numeric digits.");
+      message.error("Aadhar number must contain exactly 12 numeric digits.");
       return;
     }
 
@@ -814,7 +793,7 @@ const Register = () => {
       const payload = {
         name: formData.name,
         email: formData.email,
-        password: formData.password,
+        password: "",
         userType: "examiner",
         universityId: parseInt(formData.universityId, 10),
         fname: formData.fname || formData.name,
@@ -834,10 +813,6 @@ const Register = () => {
       await authService.register(payload);
       setRegistered(true);
     } catch (err) {
-      setError(
-        err.message ||
-          "Registration failed. The email might already be registered.",
-      );
       console.error("Registration error:", err);
     } finally {
       setLoading(false);

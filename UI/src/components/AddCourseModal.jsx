@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, ChevronDown, Search, Check } from 'lucide-react';
 import courseService from '../services/courseService';
 import subjectService from '../services/subjectService';
@@ -21,6 +21,17 @@ export default function AddCourseModal({
   const [error, setError] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [subjectSearch, setSubjectSearch] = useState('');
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const filteredSubjects = subjects.filter(s => s.subName.toLowerCase().includes(subjectSearch.toLowerCase()));
 
@@ -187,31 +198,53 @@ export default function AddCourseModal({
           </div>
 
           {/* Subjects Checklist */}
-          <div className="relative">
-            <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Linked Subjects ({selectedSubjects.length} selected)</label>
+          <div className="relative" ref={dropdownRef}>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider">
+                Linked Subjects ({selectedSubjects.length} selected)
+              </label>
+              {selectedSubjects.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedSubjects([])}
+                  className="text-[10px] font-bold text-teal-700 hover:text-teal-800 uppercase hover:underline cursor-pointer"
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
+
             <div
-              className="w-full bg-gray-50/50 border border-gray-200 rounded-xl text-xs font-medium flex flex-wrap gap-1 p-1.5 focus-within:ring-2 focus-within:ring-teal-500/20 focus-within:border-teal-600 transition min-h-[42px] cursor-text"
+              className={`w-full bg-gray-50/50 border rounded-xl text-xs font-medium flex flex-wrap gap-1.5 p-2 transition min-h-[44px] cursor-text ${
+                isDropdownOpen 
+                  ? 'border-teal-500 ring-2 ring-teal-500/20 bg-white' 
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
               onClick={() => setIsDropdownOpen(true)}
             >
               {selectedSubjects.map(id => {
                 const subject = subjects.find(s => s.subjectId === id);
                 return subject ? (
-                  <span key={id} className="flex items-center gap-1 bg-teal-100 text-teal-700 px-2 py-1 rounded-md text-xs font-bold border border-teal-200/50 shadow-sm animate-fade-in-up">
-                    {subject.subName}
+                  <span key={id} className="inline-flex items-center gap-1.5 bg-teal-50 text-teal-800 px-2.5 py-1 rounded-lg text-xs font-bold border border-teal-200/80 shadow-2xs animate-fade-in">
+                    <span>{subject.subName}</span>
+                    {subject.subCode && (
+                      <span className="text-[10px] text-teal-600 font-mono font-medium">({subject.subCode})</span>
+                    )}
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleSubject(id);
                       }}
-                      className="hover:bg-teal-200 p-0.5 rounded-full transition-colors cursor-pointer"
+                      className="hover:bg-teal-200/60 p-0.5 rounded-full transition-colors cursor-pointer text-teal-600 hover:text-teal-800"
+                      title="Remove"
                     >
-                      <X size={12} className="text-teal-600" />
+                      <X size={12} />
                     </button>
                   </span>
                 ) : null;
               })}
-              <div className="flex-1 min-w-[120px] flex items-center">
+              <div className="flex-1 min-w-[140px] flex items-center justify-between gap-1">
                 <input
                   type="text"
                   value={subjectSearch}
@@ -220,46 +253,84 @@ export default function AddCourseModal({
                     setIsDropdownOpen(true);
                   }}
                   onFocus={() => setIsDropdownOpen(true)}
-                  placeholder={selectedSubjects.length === 0 ? "Search and map subjects..." : ""}
-                  className="w-full bg-transparent border-none focus:outline-none text-gray-900 text-xs font-medium min-w-[120px]"
+                  placeholder={selectedSubjects.length === 0 ? "Search and map subjects..." : "Type to filter subjects..."}
+                  className="w-full bg-transparent border-none focus:outline-none text-gray-900 text-xs font-medium placeholder:text-gray-400 py-1"
                 />
-                <ChevronDown size={14} className={`text-gray-400 mr-2 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsDropdownOpen(prev => !prev);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 p-0.5 transition-colors cursor-pointer shrink-0"
+                >
+                  <ChevronDown size={15} className={`transition-transform duration-200 ${isDropdownOpen ? 'rotate-180 text-teal-600' : ''}`} />
+                </button>
               </div>
             </div>
 
             {isDropdownOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)} />
-                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-48 overflow-y-auto top-full custom-scrollbar py-1">
+              <div className="mt-1.5 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden transition-all animate-fade-in-up">
+                {/* Quick action bar */}
+                <div className="flex items-center justify-between px-3.5 py-2 bg-gray-50/80 border-b border-gray-100 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                  <span>{filteredSubjects.length} Available Subject{filteredSubjects.length !== 1 ? 's' : ''}</span>
+                  {filteredSubjects.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const allFilteredIds = filteredSubjects.map(s => s.subjectId);
+                        const allSelected = allFilteredIds.every(id => selectedSubjects.includes(id));
+                        if (allSelected) {
+                          setSelectedSubjects(prev => prev.filter(id => !allFilteredIds.includes(id)));
+                        } else {
+                          setSelectedSubjects(prev => Array.from(new Set([...prev, ...allFilteredIds])));
+                        }
+                      }}
+                      className="text-teal-700 hover:text-teal-800 text-[10px] font-black uppercase hover:underline cursor-pointer"
+                    >
+                      {filteredSubjects.every(s => selectedSubjects.includes(s.subjectId)) ? 'Deselect All' : 'Select All'}
+                    </button>
+                  )}
+                </div>
+
+                {/* Scrollable checklist */}
+                <div className="max-h-48 overflow-y-auto custom-scrollbar divide-y divide-gray-100/80">
                   {filteredSubjects.length === 0 ? (
-                    <div className="p-3 text-center text-xs font-semibold text-gray-400 flex flex-col items-center gap-1">
+                    <div className="p-4 text-center text-xs font-semibold text-gray-400 flex flex-col items-center gap-1.5">
                       <Search size={16} className="opacity-50" />
-                      No subjects found
+                      <span>No subjects found matching "{subjectSearch}"</span>
                     </div>
                   ) : (
                     filteredSubjects.map(subject => {
                       const isSelected = selectedSubjects.includes(subject.subjectId);
                       return (
-                        <div
+                        <label
                           key={subject.subjectId}
-                          onClick={() => {
-                            toggleSubject(subject.subjectId);
-                            setSubjectSearch('');
-                          }}
-                          className={`flex items-center justify-between px-4 py-2.5 cursor-pointer text-xs font-semibold hover:bg-gray-50 transition-colors ${
-                            isSelected ? 'bg-teal-50/50 text-teal-700' : 'text-gray-700'
+                          className={`flex items-center justify-between px-3.5 py-2.5 cursor-pointer text-xs font-semibold transition-colors ${
+                            isSelected ? 'bg-teal-50/60 text-teal-900' : 'text-gray-700 hover:bg-gray-50'
                           }`}
                         >
-                          <div className="flex flex-col">
-                            <span>{subject.subName}</span>
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSubject(subject.subjectId)}
+                              className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500 accent-teal-600 cursor-pointer shrink-0"
+                            />
+                            <span className="truncate">{subject.subName}</span>
                           </div>
-                          {isSelected && <Check size={14} className="text-teal-700" />}
-                        </div>
+                          {subject.subCode && (
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 shrink-0 ml-2 border border-gray-200/60">
+                              {subject.subCode}
+                            </span>
+                          )}
+                        </label>
                       );
                     })
                   )}
                 </div>
-              </>
+              </div>
             )}
           </div>
 
