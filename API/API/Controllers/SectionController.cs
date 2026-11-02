@@ -111,7 +111,7 @@ namespace API.Controllers
                     Name = dto.Name.Trim(),
                     Description = dto.Description ?? "",
                     TotalQuestions = totalQ,
-                    TotalMarks = dto.TotalMarks,
+                    TotalMarks = Math.Round(dto.TotalMarks, 2, MidpointRounding.AwayFromZero),
                     StartQuestion = dto.StartQuestion,
                     EndQuestion = dto.EndQuestion,
                     MaxQuestionsToAttempt = dto.MaxQuestionsToAttempt > 0 ? dto.MaxQuestionsToAttempt : totalQ,
@@ -151,7 +151,7 @@ namespace API.Controllers
                 master.Name = dto.Name.Trim();
                 master.Description = dto.Description ?? "";
                 master.TotalQuestions = totalQ;
-                master.TotalMarks = dto.TotalMarks;
+                master.TotalMarks = Math.Round(dto.TotalMarks, 2, MidpointRounding.AwayFromZero);
                 master.StartQuestion = dto.StartQuestion;
                 master.EndQuestion = dto.EndQuestion;
                 master.MaxQuestionsToAttempt = dto.MaxQuestionsToAttempt > 0 ? dto.MaxQuestionsToAttempt : totalQ;
@@ -277,7 +277,7 @@ namespace API.Controllers
                         Name = masterName,
                         Description = sectionDto.Description,
                         TotalQuestions = sectionDto.TotalQuestions,
-                        TotalMarks = sectionDto.TotalMarks,
+                        TotalMarks = Math.Round(sectionDto.TotalMarks, 2, MidpointRounding.AwayFromZero),
                         StartQuestion = sectionDto.StartQuestion,
                         EndQuestion = sectionDto.EndQuestion,
                         MaxQuestionsToAttempt = sectionDto.MaxQuestionsToAttempt,
@@ -294,7 +294,7 @@ namespace API.Controllers
                     Name = sectionDto.Name,
                     Description = sectionDto.Description,
                     TotalQuestions = sectionDto.TotalQuestions,
-                    TotalMarks = sectionDto.TotalMarks,
+                    TotalMarks = Math.Round(sectionDto.TotalMarks, 2, MidpointRounding.AwayFromZero),
                     StartQuestion = sectionDto.StartQuestion,
                     EndQuestion = sectionDto.EndQuestion,
                     MaxQuestionsToAttempt = sectionDto.MaxQuestionsToAttempt,
@@ -320,7 +320,7 @@ namespace API.Controllers
                         {
                             SectionId = section.Id,
                             QuestionNo = questionDto.QuestionNo,
-                            Marks = questionDto.Marks,
+                            Marks = Math.Round(questionDto.Marks, 2, MidpointRounding.AwayFromZero),
                             Type = questionDto.Type,
                             IsOptional = questionDto.IsOptional,
                             OptionalGroupCode = questionDto.OptionalGroupCode,
@@ -332,7 +332,7 @@ namespace API.Controllers
                 else
                 {
                     // Auto-create questions with default values (fallback)
-                    decimal marksPerQuestion = (decimal)sectionDto.TotalMarks / sectionDto.TotalQuestions;
+                    decimal marksPerQuestion = sectionDto.TotalQuestions > 0 ? Math.Round((decimal)sectionDto.TotalMarks / sectionDto.TotalQuestions, 2, MidpointRounding.AwayFromZero) : 0;
 
                     for (int i = sectionDto.StartQuestion; i <= sectionDto.EndQuestion; i++)
                     {
@@ -380,7 +380,7 @@ namespace API.Controllers
                         Name = masterName,
                         Description = sectionDto.Description,
                         TotalQuestions = sectionDto.TotalQuestions,
-                        TotalMarks = sectionDto.TotalMarks,
+                        TotalMarks = Math.Round(sectionDto.TotalMarks, 2, MidpointRounding.AwayFromZero),
                         StartQuestion = sectionDto.StartQuestion,
                         EndQuestion = sectionDto.EndQuestion,
                         MaxQuestionsToAttempt = sectionDto.MaxQuestionsToAttempt,
@@ -394,7 +394,7 @@ namespace API.Controllers
                 section.Name = sectionDto.Name;
                 section.Description = sectionDto.Description;
                 section.TotalQuestions = sectionDto.TotalQuestions;
-                section.TotalMarks = sectionDto.TotalMarks;
+                section.TotalMarks = Math.Round(sectionDto.TotalMarks, 2, MidpointRounding.AwayFromZero);
                 section.StartQuestion = sectionDto.StartQuestion;
                 section.EndQuestion = sectionDto.EndQuestion;
                 section.MaxQuestionsToAttempt = sectionDto.MaxQuestionsToAttempt;
@@ -412,7 +412,7 @@ namespace API.Controllers
                         var existingQuestion = existingQuestions.FirstOrDefault(q => q.QuestionNo == questionDto.QuestionNo);
                         if (existingQuestion != null)
                         {
-                            existingQuestion.Marks = questionDto.Marks;
+                            existingQuestion.Marks = Math.Round(questionDto.Marks, 2, MidpointRounding.AwayFromZero);
                             existingQuestion.Type = questionDto.Type;
                             existingQuestion.IsOptional = questionDto.IsOptional;
                             existingQuestion.OptionalGroupCode = questionDto.OptionalGroupCode;
@@ -424,7 +424,7 @@ namespace API.Controllers
                             {
                                 SectionId = id,
                                 QuestionNo = questionDto.QuestionNo,
-                                Marks = questionDto.Marks,
+                                Marks = Math.Round(questionDto.Marks, 2, MidpointRounding.AwayFromZero),
                                 Type = questionDto.Type,
                                 IsOptional = questionDto.IsOptional,
                                 OptionalGroupCode = questionDto.OptionalGroupCode,
@@ -508,7 +508,7 @@ namespace API.Controllers
                             Name = masterName,
                             Description = request.SectionDetails.Description,
                             TotalQuestions = request.SectionDetails.TotalQuestions > 0 ? request.SectionDetails.TotalQuestions : calculatedTotalQuestions,
-                            TotalMarks = request.SectionDetails.TotalMarks,
+                            TotalMarks = Math.Round(request.SectionDetails.TotalMarks, 2, MidpointRounding.AwayFromZero),
                             StartQuestion = request.SectionDetails.StartQuestion,
                             EndQuestion = request.SectionDetails.EndQuestion,
                             MaxQuestionsToAttempt = request.SectionDetails.MaxQuestionsToAttempt,
@@ -525,7 +525,7 @@ namespace API.Controllers
                         Name = request.SectionDetails.Name,
                         Description = request.SectionDetails.Description,
                         TotalQuestions = request.SectionDetails.TotalQuestions > 0 ? request.SectionDetails.TotalQuestions : calculatedTotalQuestions,
-                        TotalMarks = request.SectionDetails.TotalMarks,
+                        TotalMarks = Math.Round(request.SectionDetails.TotalMarks, 2, MidpointRounding.AwayFromZero),
                         StartQuestion = request.SectionDetails.StartQuestion,
                         EndQuestion = request.SectionDetails.EndQuestion,
                         MaxQuestionsToAttempt = request.SectionDetails.MaxQuestionsToAttempt,
@@ -546,7 +546,7 @@ namespace API.Controllers
                             {
                                 SectionId = section.Id,
                                 QuestionNo = questionDto.QuestionNo,
-                                Marks = questionDto.Marks,
+                                Marks = Math.Round(questionDto.Marks, 2, MidpointRounding.AwayFromZero),
                                 Type = questionDto.Type ?? "MCQ",
                                 IsOptional = questionDto.IsOptional,
                                 OptionalGroupCode = questionDto.OptionalGroupCode,
@@ -556,7 +556,7 @@ namespace API.Controllers
                     }
                     else
                     {
-                        decimal marksPerQuestion = section.TotalQuestions > 0 ? (decimal)section.TotalMarks / section.TotalQuestions : 0;
+                        decimal marksPerQuestion = section.TotalQuestions > 0 ? Math.Round((decimal)section.TotalMarks / section.TotalQuestions, 2, MidpointRounding.AwayFromZero) : 0;
                         for (int i = section.StartQuestion; i <= section.EndQuestion; i++)
                         {
                             questions.Add(new Question
@@ -626,7 +626,7 @@ namespace API.Controllers
                                 Name = masterName,
                                 Description = sourceSection.Description,
                                 TotalQuestions = sourceSection.TotalQuestions,
-                                TotalMarks = sourceSection.TotalMarks,
+                                TotalMarks = Math.Round(sourceSection.TotalMarks, 2, MidpointRounding.AwayFromZero),
                                 StartQuestion = sourceSection.StartQuestion,
                                 EndQuestion = sourceSection.EndQuestion,
                                 MaxQuestionsToAttempt = sourceSection.MaxQuestionsToAttempt,
@@ -643,7 +643,7 @@ namespace API.Controllers
                             Name = sourceSection.Name,
                             Description = sourceSection.Description,
                             TotalQuestions = sourceSection.TotalQuestions,
-                            TotalMarks = sourceSection.TotalMarks,
+                            TotalMarks = Math.Round(sourceSection.TotalMarks, 2, MidpointRounding.AwayFromZero),
                             StartQuestion = sourceSection.StartQuestion,
                             EndQuestion = sourceSection.EndQuestion,
                             MaxQuestionsToAttempt = sourceSection.MaxQuestionsToAttempt,
@@ -657,7 +657,7 @@ namespace API.Controllers
                         {
                             SectionId = newSection.Id,
                             QuestionNo = q.QuestionNo,
-                            Marks = q.Marks,
+                            Marks = Math.Round(q.Marks, 2, MidpointRounding.AwayFromZero),
                             Type = q.Type,
                             IsOptional = q.IsOptional,
                             OptionalGroupCode = q.OptionalGroupCode,
@@ -707,7 +707,7 @@ namespace API.Controllers
                 if (question == null)
                     return NotFound(new { success = false, message = "Question not found" });
 
-                question.Marks = questionDto.Marks;
+                question.Marks = Math.Round(questionDto.Marks, 2, MidpointRounding.AwayFromZero);
                 question.Type = questionDto.Type;
                 question.IsOptional = questionDto.IsOptional;
                 question.OptionalGroupCode = questionDto.OptionalGroupCode;
@@ -793,7 +793,7 @@ namespace API.Controllers
                             Name = master.Name,
                             Description = master.Description ?? "",
                             TotalQuestions = totalQ,
-                            TotalMarks = master.TotalMarks,
+                            TotalMarks = Math.Round(master.TotalMarks, 2, MidpointRounding.AwayFromZero),
                             StartQuestion = startQ,
                             EndQuestion = endQ,
                             MaxQuestionsToAttempt = master.MaxQuestionsToAttempt > 0 ? master.MaxQuestionsToAttempt : totalQ,
@@ -804,7 +804,7 @@ namespace API.Controllers
                         await _context.SaveChangesAsync();
 
                         // Create questions
-                        decimal marksPerQ = totalQ > 0 ? (decimal)master.TotalMarks / totalQ : 1;
+                        decimal marksPerQ = totalQ > 0 ? Math.Round((decimal)master.TotalMarks / totalQ, 2, MidpointRounding.AwayFromZero) : 1;
                         var questions = new List<Question>();
                         for (int qNo = startQ; qNo <= endQ; qNo++)
                         {
@@ -878,11 +878,11 @@ namespace API.Controllers
                     int sumQuestions = masterSections.Sum(sm => sm.TotalQuestions);
                     decimal sumMarks = masterSections.Sum(sm => sm.TotalMarks);
 
-                    if (paper.TotalQuestions > 0 && sumQuestions > paper.TotalQuestions)
+                    if (paper.TotalQuestions > 0 && sumQuestions != paper.TotalQuestions)
                     {
                         return BadRequest(new { 
                             success = false, 
-                            message = $"Selected sections total questions ({sumQuestions}) exceeds paper total questions limit ({paper.TotalQuestions})." 
+                            message = $"Incorrect configuration: Selected master sections have a total of {sumQuestions} questions. Total Questions must be {sumQuestions} only." 
                         });
                     }
 
@@ -948,7 +948,7 @@ namespace API.Controllers
                             Name = master.Name,
                             Description = master.Description ?? "",
                             TotalQuestions = totalQ,
-                            TotalMarks = master.TotalMarks,
+                            TotalMarks = Math.Round(master.TotalMarks, 2, MidpointRounding.AwayFromZero),
                             StartQuestion = startQ,
                             EndQuestion = endQ,
                             MaxQuestionsToAttempt = master.MaxQuestionsToAttempt > 0 ? master.MaxQuestionsToAttempt : totalQ,
@@ -1012,7 +1012,7 @@ namespace API.Controllers
                                 StartQuestion = startQ,
                                 EndQuestion = endQ,
                                 TotalQuestions = totalQ,
-                                TotalMarks = master.TotalMarks,
+                                TotalMarks = Math.Round(master.TotalMarks, 2, MidpointRounding.AwayFromZero),
                                 MaxQuestionsToAttempt = master.MaxQuestionsToAttempt > 0 ? master.MaxQuestionsToAttempt : totalQ,
                                 CreatedAt = DateTime.UtcNow,
                                 UpdatedAt = DateTime.UtcNow

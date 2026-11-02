@@ -576,12 +576,42 @@ namespace API.Controllers
                     });
                 }
 
+                // If master sections provided, validate that their total questions matches paper total questions
+                if (paperDto.MasterSectionIds != null && paperDto.MasterSectionIds.Any())
+                {
+                    var mappedSections = await _context.SectionMasters
+                        .Where(sm => paperDto.MasterSectionIds.Contains(sm.Id))
+                        .ToListAsync();
+
+                    if (mappedSections.Any())
+                    {
+                        int sumQuestions = mappedSections.Sum(sm => sm.TotalQuestions);
+                        decimal sumMarks = mappedSections.Sum(sm => sm.TotalMarks);
+
+                        if (paperDto.TotalQuestions > 0 && sumQuestions != paperDto.TotalQuestions)
+                        {
+                            return BadRequest(new { 
+                                success = false, 
+                                message = $"Incorrect configuration: Selected master sections have a total of {sumQuestions} questions. Total Questions must be {sumQuestions} only." 
+                            });
+                        }
+
+                        if (paperDto.MaxMarks > 0 && sumMarks > paperDto.MaxMarks)
+                        {
+                            return BadRequest(new { 
+                                success = false, 
+                                message = $"Cannot set max marks to {paperDto.MaxMarks}. Selected master sections require {sumMarks} marks." 
+                            });
+                        }
+                    }
+                }
+
                 var paper = new Paper
                 {
                     PaperCode = paperDto.PaperCode,
                     PaperName = paperDto.PaperName,
                     PaperNumber = paperDto.PaperNumber,
-                    MaxMarks = paperDto.MaxMarks,
+                    MaxMarks = Math.Round(paperDto.MaxMarks, 2, MidpointRounding.AwayFromZero),
                     TotalQuestions = paperDto.TotalQuestions,
                     Description = paperDto.Description,
                     UniversityId = resolvedUniversityId,
@@ -741,7 +771,7 @@ namespace API.Controllers
                                 Name = master.Name,
                                 Description = master.Description ?? "",
                                 TotalQuestions = totalQ,
-                                TotalMarks = master.TotalMarks > 0 ? master.TotalMarks : 100,
+                                TotalMarks = Math.Round(master.TotalMarks > 0 ? master.TotalMarks : 100, 2, MidpointRounding.AwayFromZero),
                                 StartQuestion = startQ,
                                 EndQuestion = endQ,
                                 MaxQuestionsToAttempt = master.MaxQuestionsToAttempt > 0 ? master.MaxQuestionsToAttempt : totalQ,
@@ -752,7 +782,7 @@ namespace API.Controllers
                             sectionsConfiguredCount++;
 
                             // Generate default Question items for this section
-                            decimal marksPerQ = totalQ > 0 ? (decimal)newSec.TotalMarks / totalQ : 1;
+                            decimal marksPerQ = totalQ > 0 ? Math.Round((decimal)newSec.TotalMarks / totalQ, 2, MidpointRounding.AwayFromZero) : 1;
                             var questions = new List<Question>();
                             for (int qNo = startQ; qNo <= endQ; qNo++)
                             {
@@ -812,11 +842,11 @@ namespace API.Controllers
                     });
                 }
 
-                // Validate if reducing TotalQuestions or MaxMarks conflicts with currently mapped master sections
-                if (paper.PaperSectionMasters != null && paper.PaperSectionMasters.Any())
+                // Validate if TotalQuestions or MaxMarks conflicts with mapped master sections
+                if ((paper.PaperSectionMasters != null && paper.PaperSectionMasters.Any()) || (paperDto.MasterSectionIds != null && paperDto.MasterSectionIds.Any()))
                 {
                     List<SectionMaster> mappedSections;
-                    if (paperDto.MasterSectionIds != null)
+                    if (paperDto.MasterSectionIds != null && paperDto.MasterSectionIds.Any())
                     {
                         mappedSections = await _context.SectionMasters
                             .Where(sm => paperDto.MasterSectionIds.Contains(sm.Id))
@@ -830,30 +860,33 @@ namespace API.Controllers
                             .ToList();
                     }
 
-                    int sumQuestions = mappedSections.Sum(sm => sm.TotalQuestions);
-                    decimal sumMarks = mappedSections.Sum(sm => sm.TotalMarks);
-
-                    if (paperDto.TotalQuestions > 0 && sumQuestions > paperDto.TotalQuestions)
+                    if (mappedSections.Any())
                     {
-                        return BadRequest(new { 
-                            success = false, 
-                            message = $"Cannot reduce total questions to {paperDto.TotalQuestions}. Mapped sections require at least {sumQuestions} questions." 
-                        });
-                    }
+                        int sumQuestions = mappedSections.Sum(sm => sm.TotalQuestions);
+                        decimal sumMarks = mappedSections.Sum(sm => sm.TotalMarks);
 
-                    if (paperDto.MaxMarks > 0 && sumMarks > paperDto.MaxMarks)
-                    {
-                        return BadRequest(new { 
-                            success = false, 
-                            message = $"Cannot reduce max marks to {paperDto.MaxMarks}. Mapped sections require at least {sumMarks} marks." 
-                        });
+                        if (paperDto.TotalQuestions > 0 && sumQuestions != paperDto.TotalQuestions)
+                        {
+                            return BadRequest(new { 
+                                success = false, 
+                                message = $"Incorrect configuration: Selected master sections have a total of {sumQuestions} questions. Total Questions must be {sumQuestions} only." 
+                            });
+                        }
+
+                        if (paperDto.MaxMarks > 0 && sumMarks > paperDto.MaxMarks)
+                        {
+                            return BadRequest(new { 
+                                success = false, 
+                                message = $"Cannot set max marks to {paperDto.MaxMarks}. Mapped sections require at least {sumMarks} marks." 
+                            });
+                        }
                     }
                 }
 
                 if (!string.IsNullOrEmpty(paperDto.PaperCode)) paper.PaperCode = paperDto.PaperCode;
                 paper.PaperName = paperDto.PaperName;
                 paper.PaperNumber = paperDto.PaperNumber;
-                paper.MaxMarks = paperDto.MaxMarks;
+                paper.MaxMarks = Math.Round(paperDto.MaxMarks, 2, MidpointRounding.AwayFromZero);
                 paper.TotalQuestions = paperDto.TotalQuestions;
                 paper.Description = paperDto.Description;
                 paper.IsActive = paperDto.IsActive;

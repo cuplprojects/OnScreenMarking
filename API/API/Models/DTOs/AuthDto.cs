@@ -3,15 +3,15 @@ namespace API.Models.DTOs
     public class LoginRequest
     {
         public string Email { get; set; }
-        public string Password { get; set; }
+        public string? Password { get; set; }
     }
 
     public class RegisterRequest
     {
         public string Name { get; set; }
         public string Email { get; set; }
-        public string Password { get; set; }
-        public string UserType { get; set; } // examiner, coordinator, admin
+        public string? Password { get; set; } = null;
+        public string? UserType { get; set; } // examiner, coordinator, admin
         public int? UniversityId { get; set; }
         public int? SubjectId1 { get; set; }
         public int? SubjectId2 { get; set; }
@@ -22,9 +22,9 @@ namespace API.Models.DTOs
         public string? PanNo { get; set; }
         public int? CollegeId { get; set; }
         public string? Experience { get; set; }
-        public string Phone { get; set; }
-        public string Address { get; set; }
-        public string ProfileImage { get; set; } // Base64 encoded image or image URL
+        public string? Phone { get; set; }
+        public string? Address { get; set; }
+        public string? ProfileImage { get; set; } // Base64 encoded image or image URL
     }
 
     public class AuthResponse

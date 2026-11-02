@@ -5,16 +5,12 @@ import {
   X,
   CheckCircle,
   Mail,
-  Lock,
   User,
   Phone,
   MapPin,
   Building,
-  BookOpen,
-  AlertCircle,
-  Loader,
-  Eye,
-  EyeOff,
+  BookOpen,  Loader,
+  ChevronDown,
 } from "lucide-react";
 import authService from "../services/authService";
 import universityService from "../services/universityService";
@@ -83,9 +79,7 @@ const calculateSharpness = (canvas) => {
 
 const Register = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  
+  const [loading, setLoading] = useState(false);  
   const [registered, setRegistered] = useState(false);
 
   const [universities, setUniversities] = useState([]);
@@ -99,12 +93,9 @@ const Register = () => {
   const [showPhoneOtp, setShowPhoneOtp] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
-  const [showPassword, setShowPassword] = useState(false);
-
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    password: "",
     userType: "examiner", // Always examiner
     universityId: "",
     fname: "",
@@ -159,9 +150,6 @@ const Register = () => {
         setUniversities(data);
       } catch (err) {
         console.error("Failed to fetch universities:", err);
-        message.error(
-          "Failed to fetch university details. Please check if the API is running.",
-        );
       }
     };
     fetchUniversities();
@@ -262,9 +250,7 @@ const Register = () => {
   const startCamera = async () => {
     try {
       if (!navigator?.mediaDevices?.getUserMedia && !navigator?.getUserMedia && !navigator?.webkitGetUserMedia && !navigator?.mozGetUserMedia) {
-        const msg = "Camera access is not supported in this browser or requires a secure HTTPS/localhost connection.";
-        setError(msg);
-        message.error(msg);
+        message.error("Camera access is not supported in this browser or requires a secure HTTPS/localhost connection.");
         return;
       }
 
@@ -354,8 +340,6 @@ const Register = () => {
 
       setVideoStream(stream);
       setShowCamera(true);
-      setError("");
-
       if (!landmarkerRef.current || !detectorRef.current) {
         setIsLandmarkerLoaded(false);
         try {
@@ -415,7 +399,6 @@ const Register = () => {
         errMsg = err.message;
       }
       
-      setError(errMsg);
       message.error(errMsg);
     }
   };
@@ -659,7 +642,7 @@ const Register = () => {
       setShowEmailOtp(true);
       setResendTimer(60);
     } catch (err) {
-      message.error(err.message || "Failed to send OTP");
+      console.error("Failed to send email OTP:", err);
     } finally {
       setOtpLoading(false);
     }
@@ -679,7 +662,7 @@ const Register = () => {
       setShowEmailOtp(false);
       setEmailOtp("");
     } catch (err) {
-      message.error(err.message || "Invalid OTP");
+      console.error("Failed to verify email OTP:", err);
     } finally {
       setOtpLoading(false);
     }
@@ -701,14 +684,12 @@ const Register = () => {
       // For development - show OTP since SMS is not configured
       if (response.otp) {
         console.log("Phone OTP:", response.otp);
-        message.success(`OTP sent! (Dev Mode: ${response.otp})`);
-        // Also show an alert for easier testing
-        alert(`Phone OTP for testing: ${response.otp}\n\nNote: In production, this will be sent via SMS.`);
+        message.success(`OTP sent! (Dev Mode: ${response.otp})`, 8000);
       } else {
         message.success("OTP sent to your phone successfully");
       }
     } catch (err) {
-      message.error(err.message || "Failed to send OTP");
+      console.error("Failed to send phone OTP:", err);
     } finally {
       setOtpLoading(false);
     }
@@ -728,7 +709,7 @@ const Register = () => {
       setShowPhoneOtp(false);
       setPhoneOtp("");
     } catch (err) {
-      message.error(err.message || "Invalid OTP");
+      console.error("Failed to verify phone OTP:", err);
     } finally {
       setOtpLoading(false);
     }
@@ -749,10 +730,9 @@ const Register = () => {
     if (
       !formData.name ||
       !formData.email ||
-      !formData.password ||
       !formData.universityId
     ) {
-      setError("Please fill in all required fields marked with *");
+      message.error("Please fill in all required fields marked with *");
       return;
     }
 
@@ -763,50 +743,39 @@ const Register = () => {
     // Phone regex validation
     const phoneRegex = /^[0-9]{10}$/;
 
-    // Strong password validation
-    const passwordRegex =
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-
     if (!emailRegex.test(formData.email)) {
-      setError("Please enter a valid email address.");
+      message.error("Please enter a valid email address.");
       return;
     }
 
     if (formData.phone && !phoneRegex.test(formData.phone)) {
-      setError("Phone number must contain exactly 10 numeric digits.");
-      return;
-    }
-
-    if (!passwordRegex.test(formData.password)) {
-      setError(
-        "Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.",
-      );
+      message.error("Phone number must contain exactly 10 numeric digits.");
       return;
     }
 
     // Check email and phone verification
     if (!emailVerified) {
-      setError("Please verify your email address before submitting.");
+      message.error("Please verify your email address before submitting.");
       return;
     }
 
     if (!phoneVerified) {
-      setError("Please verify your phone number before submitting.");
+      message.error("Please verify your phone number before submitting.");
       return;
     }
 
     if (!formData.profileImage) {
-      setError("Please capture or upload a profile picture.");
+      message.error("Please capture or upload a profile picture.");
       return;
     }
 
     if (!formData.subjectId1) {
-      setError("Primary Subject Area is required.");
+      message.error("Primary Subject Area is required.");
       return;
     }
 
     if (formData.aadharNo && !/^[0-9]{12}$/.test(formData.aadharNo)) {
-      setError("Aadhar number must contain exactly 12 numeric digits.");
+      message.error("Aadhar number must contain exactly 12 numeric digits.");
       return;
     }
 
@@ -816,7 +785,7 @@ const Register = () => {
       const payload = {
         name: formData.name,
         email: formData.email,
-        password: formData.password,
+        password: "",
         userType: "examiner",
         universityId: parseInt(formData.universityId, 10),
         fname: formData.fname || formData.name,
@@ -836,10 +805,6 @@ const Register = () => {
       await authService.register(payload);
       setRegistered(true);
     } catch (err) {
-      setError(
-        err.message ||
-          "Registration failed. The email might already be registered.",
-      );
       console.error("Registration error:", err);
     } finally {
       setLoading(false);
@@ -885,32 +850,27 @@ const Register = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-600 to-teal-800 flex items-center justify-center py-4 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl w-full bg-white rounded-lg shadow-2xl sm:p-6 p-4 md:p-5 my-4">
-        <div className="text-center mb-4">
-          <div className="w-12 h-12 bg-gradient-to-br from-teal-600 to-teal-800 rounded-lg flex items-center justify-center mx-auto mb-2 shadow-lg">
-            <BookOpen className="text-white" size={24} />
+    <div className="min-h-screen bg-gradient-to-br from-teal-700 to-teal-900 flex items-center justify-center py-6 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl w-full bg-white rounded-2xl shadow-2xl border border-teal-800/10 sm:p-7 p-4 md:p-6 my-4">
+        <div className="text-center mb-5">
+          <div className="w-12 h-12 bg-teal-50 border border-teal-200 text-teal-700 rounded-xl flex items-center justify-center mx-auto mb-2.5 shadow-2xs">
+            <BookOpen size={24} />
           </div>
-          <h1 className="text-xl font-extrabold text-gray-900 tracking-tight">
+          <h1 className="text-xl font-black text-gray-900 tracking-tight">
             Examiner Self Registration
           </h1>
-          <p className="text-gray-600 mt-0.5 text-xs">
+          <p className="text-gray-500 mt-0.5 text-xs font-medium">
             Join as an On-Screen Marking Examiner
           </p>
         </div>
 
-        {error && (
-          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-2.5 rounded-lg flex items-center gap-2.5 text-sm">
-            <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-500" />
-            <span>{error}</span>
-          </div>
-        )}
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+
+        <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
           {/* University Selection - Full Width */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
-              University *
+            <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+              University <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <Building
@@ -919,7 +879,7 @@ const Register = () => {
               />
               <select
                 required
-                className="w-full pl-10 pr-4 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none text-sm"
+                className="w-full pl-9 pr-8 py-2 border border-gray-200 bg-gray-50/60 focus:bg-white rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-900 outline-none transition-all appearance-none text-xs sm:text-sm font-medium cursor-pointer"
                 value={formData.universityId}
                 onChange={(e) =>
                   setFormData({
@@ -939,14 +899,15 @@ const Register = () => {
                   </option>
                 ))}
               </select>
+              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             </div>
           </div>
 
           {/* Employee ID, College ID, Aadhar - 3 columns */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Employee ID */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
                 Employee ID
               </label>
               <div className="relative">
@@ -956,8 +917,9 @@ const Register = () => {
                 />
                 <input
                   type="number"
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
-                  placeholder="12345"
+                  className="w-full pl-9 pr-3 py-2 border border-gray-200 bg-gray-50/60 focus:bg-white rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-900 outline-none transition-all text-xs sm:text-sm font-medium"
+                  placeholder=""
+                  autoComplete="off"
                   value={formData.empId}
                   onChange={(e) =>
                     setFormData({ ...formData, empId: e.target.value })
@@ -969,7 +931,7 @@ const Register = () => {
 
             {/* College ID */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
                 College ID
               </label>
               <div className="relative">
@@ -979,8 +941,9 @@ const Register = () => {
                 />
                 <input
                   type="number"
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
-                  placeholder="67890"
+                  className="w-full pl-9 pr-3 py-2 border border-gray-200 bg-gray-50/60 focus:bg-white rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-900 outline-none transition-all text-xs sm:text-sm font-medium"
+                  placeholder=""
+                  autoComplete="off"
                   value={formData.collegeId}
                   onChange={(e) =>
                     setFormData({ ...formData, collegeId: e.target.value })
@@ -992,7 +955,7 @@ const Register = () => {
 
             {/* Aadhar Number */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
                 Aadhar (12 Digits)
               </label>
               <div className="relative">
@@ -1003,8 +966,9 @@ const Register = () => {
                 <input
                   type="text"
                   maxLength={12}
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
-                  placeholder="123456789012"
+                  className="w-full pl-9 pr-3 py-2 border border-gray-200 bg-gray-50/60 focus:bg-white rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-900 outline-none transition-all text-xs sm:text-sm font-medium"
+                  placeholder=""
+                  autoComplete="off"
                   value={formData.aadharNo}
                   onChange={(e) => {
                     const val = e.target.value.replace(/\D/g, "");
@@ -1017,10 +981,10 @@ const Register = () => {
           </div>
 
           {/* Experience and Primary Subject - 2 columns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Experience */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
                 Evaluation Experience (Years)
               </label>
               <div className="relative">
@@ -1030,8 +994,9 @@ const Register = () => {
                 />
                 <input
                   type="text"
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
-                  placeholder="e.g. 5 Years"
+                  className="w-full pl-9 pr-3 py-2 border border-gray-200 bg-gray-50/60 focus:bg-white rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-900 outline-none transition-all text-xs sm:text-sm font-medium"
+                  placeholder=""
+                  autoComplete="off"
                   value={formData.experience}
                   onChange={(e) =>
                     setFormData({ ...formData, experience: e.target.value })
@@ -1043,8 +1008,8 @@ const Register = () => {
 
             {/* Primary Subject */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Primary Subject Area *
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                Primary Subject Area <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <BookOpen
@@ -1053,7 +1018,7 @@ const Register = () => {
                 />
                 <select
                   required
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none text-sm disabled:bg-gray-50 disabled:cursor-not-allowed"
+                  className="w-full pl-9 pr-8 py-2 border border-gray-200 bg-gray-50/60 focus:bg-white rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-900 outline-none transition-all appearance-none text-xs sm:text-sm font-medium disabled:bg-gray-100 disabled:cursor-not-allowed cursor-pointer"
                   value={formData.subjectId1}
                   onChange={(e) =>
                     setFormData({ ...formData, subjectId1: e.target.value })
@@ -1067,15 +1032,16 @@ const Register = () => {
                     </option>
                   ))}
                 </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
             </div>
           </div>
 
           {/* Secondary Subject, Tertiary Subject - 2 columns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Secondary Subject */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
                 Secondary Subject (Optional)
               </label>
               <div className="relative">
@@ -1084,7 +1050,7 @@ const Register = () => {
                   size={16}
                 />
                 <select
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none text-sm disabled:bg-gray-50 disabled:cursor-not-allowed text-sm"
+                  className="w-full pl-9 pr-8 py-2 border border-gray-200 bg-gray-50/60 focus:bg-white rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-900 outline-none transition-all appearance-none text-xs sm:text-sm font-medium disabled:bg-gray-100 disabled:cursor-not-allowed cursor-pointer"
                   value={formData.subjectId2}
                   onChange={(e) =>
                     setFormData({ ...formData, subjectId2: e.target.value })
@@ -1100,12 +1066,13 @@ const Register = () => {
                       </option>
                     ))}
                 </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
             </div>
 
             {/* Tertiary Subject */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
                 Tertiary Subject (Optional)
               </label>
               <div className="relative">
@@ -1114,7 +1081,7 @@ const Register = () => {
                   size={16}
                 />
                 <select
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all appearance-none text-sm disabled:bg-gray-50 disabled:cursor-not-allowed text-sm"
+                  className="w-full pl-9 pr-8 py-2 border border-gray-200 bg-gray-50/60 focus:bg-white rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-900 outline-none transition-all appearance-none text-xs sm:text-sm font-medium disabled:bg-gray-100 disabled:cursor-not-allowed cursor-pointer"
                   value={formData.subjectId3}
                   onChange={(e) =>
                     setFormData({ ...formData, subjectId3: e.target.value })
@@ -1134,42 +1101,44 @@ const Register = () => {
                       </option>
                     ))}
                 </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
             </div>
           </div>
 
-          {/* Name and Email in one row - 2 columns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {/* Name */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Full Name *
-              </label>
-              <div className="relative">
-                <User
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={16}
-                />
-                <input
-                  type="text"
-                  required
-                  className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
-                  placeholder="Prof. John Doe"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  disabled={loading}
-                />
-              </div>
+          {/* Full Name - Full Width */}
+          <div>
+            <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+              Full Name <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <User
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                size={16}
+              />
+              <input
+                type="text"
+                required
+                className="w-full pl-9 pr-3 py-2 border border-gray-200 bg-gray-50/60 focus:bg-white rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-900 outline-none transition-all text-xs sm:text-sm font-medium"
+                placeholder=""
+                autoComplete="off"
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
+                disabled={loading}
+              />
             </div>
+          </div>
 
+          {/* Email & Phone Verification in one row - 2 columns */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Email */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Email * {emailVerified && <span className="text-green-600 text-sm">✓ Verified</span>}
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                Email <span className="text-red-500">*</span> {emailVerified && <span className="text-green-600 font-bold ml-1 text-xs">✓ Verified</span>}
               </label>
-              <div className="flex gap-1.5">
+              <div className="flex gap-2">
                 <div className="relative flex-1">
                   <Mail
                     className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -1178,8 +1147,9 @@ const Register = () => {
                   <input
                     type="email"
                     required
-                    className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all disabled:bg-gray-50 text-sm"
-                    placeholder="john.doe@uni.edu"
+                    className="w-full pl-9 pr-3 py-2 border border-gray-200 bg-gray-50/60 focus:bg-white rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-900 outline-none transition-all disabled:bg-gray-100 text-xs sm:text-sm font-medium"
+                    placeholder=""
+                    autoComplete="off"
                     value={formData.email}
                     onChange={(e) => {
                       setFormData({ ...formData, email: e.target.value });
@@ -1194,27 +1164,27 @@ const Register = () => {
                     type="button"
                     onClick={handleSendEmailOtp}
                     disabled={otpLoading || !formData.email}
-                    className="bg-teal-600 hover:bg-teal-700 text-white py-1.5 px-3 rounded-lg text-xs font-semibold transition disabled:opacity-50 whitespace-nowrap"
+                    className="bg-teal-600 hover:bg-teal-700 text-white px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-xs disabled:opacity-50 whitespace-nowrap cursor-pointer flex items-center justify-center uppercase tracking-wider"
                   >
                     Verify
                   </button>
                 )}
               </div>
               {showEmailOtp && !emailVerified && (
-                <div className="flex gap-1.5 mt-1.5">
+                <div className="flex gap-1.5 mt-2">
                   <input
                     type="text"
                     maxLength={6}
                     placeholder="OTP"
                     value={emailOtp}
                     onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ""))}
-                    className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm font-bold"
+                    className="w-20 px-2 py-1.5 border border-gray-200 bg-white rounded-lg text-center text-xs font-bold focus:ring-2 focus:ring-teal-500 outline-none"
                   />
                   <button
                     type="button"
                     onClick={handleVerifyEmailOtp}
                     disabled={otpLoading || emailOtp.length !== 6}
-                    className="bg-green-600 hover:bg-green-700 text-white py-1 px-2 rounded text-xs font-semibold transition disabled:opacity-50"
+                    className="bg-green-600 hover:bg-green-700 text-white py-1.5 px-3 rounded-lg text-xs font-bold transition disabled:opacity-50 cursor-pointer"
                   >
                     OK
                   </button>
@@ -1222,55 +1192,20 @@ const Register = () => {
                     type="button"
                     onClick={handleSendEmailOtp}
                     disabled={otpLoading || resendTimer > 0}
-                    className="bg-gray-600 hover:bg-gray-700 text-white py-1 px-2 rounded text-xs font-semibold transition disabled:opacity-50"
+                    className="bg-gray-600 hover:bg-gray-700 text-white py-1.5 px-3 rounded-lg text-xs font-bold transition disabled:opacity-50 cursor-pointer"
                   >
                     {resendTimer > 0 ? `${resendTimer}s` : "Resend"}
                   </button>
                 </div>
               )}
             </div>
-          </div>
-
-          {/* Password and Phone in one row - 2 columns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {/* Password */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Create Password *
-              </label>
-              <div className="relative">
-                <Lock
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={16}
-                />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  required
-                  className="w-full pl-10 pr-12 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
-                  placeholder="��������"
-                  value={formData.password}
-                  onChange={(e) =>
-                    setFormData({ ...formData, password: e.target.value })
-                  }
-                  disabled={loading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition cursor-pointer"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
 
             {/* Phone */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Phone * {phoneVerified && <span className="text-green-600 text-sm">✓ Verified</span>}
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                Phone <span className="text-red-500">*</span> {phoneVerified && <span className="text-green-600 font-bold ml-1 text-xs">✓ Verified</span>}
               </label>
-              <div className="flex gap-1.5">
+              <div className="flex gap-2">
                 <div className="relative flex-1">
                   <Phone
                     className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -1280,8 +1215,9 @@ const Register = () => {
                     type="tel"
                     maxLength={10}
                     required
-                    className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all disabled:bg-gray-50 text-sm"
-                    placeholder="9876543210"
+                    className="w-full pl-9 pr-3 py-2 border border-gray-200 bg-gray-50/60 focus:bg-white rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-900 outline-none transition-all disabled:bg-gray-100 text-xs sm:text-sm font-medium"
+                    placeholder=""
+                    autoComplete="off"
                     value={formData.phone}
                     onChange={(e) => {
                       const value = e.target.value.replace(/\D/g, "");
@@ -1297,27 +1233,27 @@ const Register = () => {
                     type="button"
                     onClick={handleSendPhoneOtp}
                     disabled={otpLoading || !formData.phone || formData.phone.length !== 10}
-                    className="bg-teal-600 hover:bg-teal-700 text-white py-1.5 px-3 rounded-lg text-xs font-semibold transition disabled:opacity-50 whitespace-nowrap"
+                    className="bg-teal-600 hover:bg-teal-700 text-white px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-xs disabled:opacity-50 whitespace-nowrap cursor-pointer flex items-center justify-center uppercase tracking-wider"
                   >
                     Verify
                   </button>
                 )}
               </div>
               {showPhoneOtp && !phoneVerified && (
-                <div className="flex gap-1.5 mt-1.5">
+                <div className="flex gap-1.5 mt-2">
                   <input
                     type="text"
                     maxLength={6}
                     placeholder="OTP"
                     value={phoneOtp}
                     onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, ""))}
-                    className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm font-bold"
+                    className="w-20 px-2 py-1.5 border border-gray-200 bg-white rounded-lg text-center text-xs font-bold focus:ring-2 focus:ring-teal-500 outline-none"
                   />
                   <button
                     type="button"
                     onClick={handleVerifyPhoneOtp}
                     disabled={otpLoading || phoneOtp.length !== 6}
-                    className="bg-green-600 hover:bg-green-700 text-white py-1 px-2 rounded text-xs font-semibold transition disabled:opacity-50"
+                    className="bg-green-600 hover:bg-green-700 text-white py-1.5 px-3 rounded-lg text-xs font-bold transition disabled:opacity-50 cursor-pointer"
                   >
                     OK
                   </button>
@@ -1325,7 +1261,7 @@ const Register = () => {
                     type="button"
                     onClick={handleSendPhoneOtp}
                     disabled={otpLoading || resendTimer > 0}
-                    className="bg-gray-600 hover:bg-gray-700 text-white py-1 px-2 rounded text-xs font-semibold transition disabled:opacity-50"
+                    className="bg-gray-600 hover:bg-gray-700 text-white py-1.5 px-3 rounded-lg text-xs font-bold transition disabled:opacity-50 cursor-pointer"
                   >
                     {resendTimer > 0 ? `${resendTimer}s` : "Resend"}
                   </button>
@@ -1335,7 +1271,7 @@ const Register = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
+            <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
               Address
             </label>
             <div className="relative">
@@ -1345,8 +1281,9 @@ const Register = () => {
               />
               <textarea
                 rows={2}
-                className="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white text-gray-900 outline-none transition-all text-sm"
-                placeholder="Department of CS, Building 3, CBC Campus"
+                className="w-full pl-9 pr-3 py-2 border border-gray-200 bg-gray-50/60 focus:bg-white rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-900 outline-none transition-all text-xs sm:text-sm font-medium"
+                placeholder=""
+                autoComplete="off"
                 value={formData.address}
                 onChange={(e) =>
                   setFormData({ ...formData, address: e.target.value })
@@ -1357,9 +1294,9 @@ const Register = () => {
           </div>
 
           {/* Profile Picture Camera Module */}
-          <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-              Profile Verification Photo *
+          <div className="bg-gray-50/70 rounded-xl p-3 sm:p-4 border border-gray-200">
+            <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-2">
+              Profile Verification Photo <span className="text-red-500">*</span>
             </label>
 
             {showCamera ? (
@@ -1559,25 +1496,25 @@ const Register = () => {
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg bg-white hover:bg-gray-50 transition cursor-pointer p-4 md:p-8">
-                <Camera className="text-gray-400 mb-2" size={36} />
-                <p className="text-sm text-gray-600 font-semibold mb-2">
+              <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 hover:border-teal-400 rounded-xl bg-white hover:bg-gray-50/70 transition p-4 md:p-6 text-center cursor-pointer">
+                <Camera className="text-teal-600/70 mb-2" size={34} />
+                <p className="text-xs sm:text-sm text-gray-700 font-bold mb-1">
                   Capture or upload verification picture
                 </p>
-                <p className="text-xs text-gray-400 mb-4">
+                <p className="text-[11px] text-gray-400 mb-3.5">
                   Required for coordinator validation
                 </p>
 
-                <div className="flex gap-2.5">
+                <div className="flex flex-wrap items-center justify-center gap-2.5">
                   <button
                     type="button"
                     onClick={startCamera}
-                    className="bg-teal-700 hover:bg-teal-800 text-white px-5 py-2 rounded-md text-sm font-semibold transition-all shadow-md flex items-center gap-2"
+                    className="bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer uppercase tracking-wider"
                   >
-                    <Camera size={16} />
+                    <Camera size={14} />
                     Use Webcam
                   </button>
-                  <label className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-5 py-2 rounded-lg text-sm font-semibold border border-gray-300 transition cursor-pointer flex items-center">
+                  <label className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-xs font-bold border border-gray-200 transition cursor-pointer flex items-center uppercase tracking-wider">
                     Upload File
                     <input
                       type="file"
@@ -1591,11 +1528,11 @@ const Register = () => {
             )}
           </div>
 
-          <div className="pt-4 flex gap-2.5">
+          <div className="pt-2 flex gap-3">
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-2 rounded-lg transition-all duration-200 shadow-md flex items-center justify-center gap-2 text-sm"
+              className="flex-1 bg-teal-700 hover:bg-teal-800 disabled:bg-gray-400 text-white font-bold py-2.5 rounded-xl transition shadow-sm flex items-center justify-center gap-2 text-xs uppercase tracking-wider cursor-pointer"
             >
               {loading ? (
                 <>
@@ -1609,7 +1546,7 @@ const Register = () => {
             <button
               type="button"
               onClick={() => navigate("/login")}
-              className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg border border-gray-300 transition px-4 text-sm"
+              className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl border border-gray-200 transition px-6 text-xs uppercase tracking-wider cursor-pointer"
             >
               Cancel
             </button>

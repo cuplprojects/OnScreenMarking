@@ -27,13 +27,27 @@ const notify = (text, type = 'info', duration = null) => {
   if (!text) return;
   const strText = String(text).trim();
   const effectiveDuration = duration && duration > 0 ? duration : getDefaultDuration(type, strText);
-  const key = `${type}:${strText.toLowerCase()}`;
   const now = Date.now();
+  const lower = strText.toLowerCase();
 
-  // Deduplicate identical messages sent within 1500ms
-  if (recentMessages.has(key) && (now - recentMessages.get(key) < 1500)) {
-    return;
+  // Deduplicate identical or substring messages of the same type sent within 2500ms
+  for (const [k, time] of recentMessages.entries()) {
+    if (now - time < 2500) {
+      const colonIdx = k.indexOf(':');
+      const prevType = k.substring(0, colonIdx);
+      const prevMsg = k.substring(colonIdx + 1);
+      if (prevType === type) {
+        if (
+          lower === prevMsg ||
+          (lower.length > 5 && prevMsg.length > 5 && (lower.includes(prevMsg) || prevMsg.includes(lower)))
+        ) {
+          return;
+        }
+      }
+    }
   }
+
+  const key = `${type}:${lower}`;
   recentMessages.set(key, now);
 
   // Periodic cleanup

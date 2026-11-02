@@ -240,6 +240,70 @@ namespace API.Controllers
             }
         }
 
+        [HttpGet("pending-approvals")]
+        public async Task<IActionResult> GetPendingApprovals([FromQuery] int? universityId = null)
+        {
+            if (!await HasPermissionAsync("READ_USER"))
+            {
+                return StatusCode(403, new { success = false, message = "You do not have permission to view pending approvals." });
+            }
+
+            try
+            {
+                var query = _context.Users
+                    .AsNoTracking()
+                    .Include(u => u.University)
+                    .Where(u => u.IsApproved == false && u.UserType.ToLower() != "admin");
+
+                int? effectiveUniId = universityId;
+                if (!effectiveUniId.HasValue || effectiveUniId.Value <= 0)
+                {
+                    var userType = User.FindFirst("userType")?.Value?.ToLower();
+                    var userIdStr = User.FindFirst("id")?.Value;
+                    if (userType == "coordinator" && !string.IsNullOrEmpty(userIdStr) && int.TryParse(userIdStr, out int currentUserId))
+                    {
+                        var currentUser = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == currentUserId);
+                        if (currentUser?.UniversityId.HasValue == true)
+                        {
+                            effectiveUniId = currentUser.UniversityId.Value;
+                        }
+                    }
+                }
+
+                if (effectiveUniId.HasValue && effectiveUniId.Value > 0)
+                {
+                    query = query.Where(u => u.UniversityId == effectiveUniId.Value);
+                }
+
+                var pendingUsers = await query
+                    .OrderByDescending(u => u.CreatedAt)
+                    .Select(u => new
+                    {
+                        u.Id,
+                        u.Name,
+                        u.Email,
+                        u.UserType,
+                        u.ProfileImage,
+                        u.UniversityId,
+                        UniversityName = u.University != null ? u.University.UniversityName : null,
+                        u.CreatedAt,
+                        u.Phone
+                    })
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    success = true,
+                    count = pendingUsers.Count,
+                    items = pendingUsers
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
 
         [HttpGet("examiners/workload")]
         public async Task<IActionResult> GetExaminersWorkload([FromQuery] int universityId)

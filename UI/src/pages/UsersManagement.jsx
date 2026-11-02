@@ -43,7 +43,8 @@ export default function UsersManagement() {
   const universityIdFromUrl = searchParams.get("universityId");
   const activeUniversityId = userType === "coordinator" ? userUniversityId : universityIdFromUrl;
 
-  const [activeTab, setActiveTab] = useState("all"); // "all", "pending"
+  const tabFromUrl = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState(tabFromUrl === "pending" ? "pending" : "all");
   const [universities, setUniversities] = useState([]);
   const [departments, setDepartments] = useState([]);
   
@@ -139,6 +140,18 @@ export default function UsersManagement() {
     }
   }, [error, setError]);
 
+  // Synchronize URL tab and search query
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "pending" || tab === "all") {
+      setActiveTab(tab);
+    }
+    const searchQuery = searchParams.get("search");
+    if (searchQuery !== null && searchQuery !== undefined) {
+      setSearch(searchQuery);
+    }
+  }, [searchParams, setSearch]);
+
   // Calculate quick count of total pending approvals globally
   const [pendingCount, setPendingCount] = useState(0);
   const [totalUsersCount, setTotalUsersCount] = useState(0);
@@ -221,8 +234,9 @@ export default function UsersManagement() {
       message.success("Examiner approved and activated successfully!");
       refreshUsers();
       fetchGlobalCounts();
+      window.dispatchEvent(new Event('pending-approvals-updated'));
     } catch (err) {
-      setError(err.message || "Failed to approve examiner.");
+      message.error(err.message || "Failed to approve examiner.");
     }
   };
 

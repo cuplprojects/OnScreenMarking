@@ -39,6 +39,11 @@ const userService = {
     return apiCall(url);
   },
 
+  getPendingApprovals: async (universityId) => {
+    const url = universityId ? `/users/pending-approvals?universityId=${universityId}` : '/users/pending-approvals';
+    return apiCall(url, { hideErrorToast: true });
+  },
+
   createUser: async (userData) => {
     return apiCall('/Auth/register', {
       method: 'POST',

@@ -1,18 +1,60 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { LogOut, Bell, Settings, BookMarked, Menu, User, ChevronDown, Home, ChevronRight } from 'lucide-react';
+import { LogOut, Bell, Settings, BookMarked, Menu, User, ChevronDown, Home, ChevronRight, UserCheck, CheckCircle, Loader } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBreadcrumb } from '../context/BreadcrumbContext';
+import userService from '../services/userService';
 import NavDrawer from './NavDrawer';
 
 const Navbar = () => {
   const navigate = useNavigate();
-  const { user, userType, logout } = useAuth();
+  const { user, userType, universityId, hasPermission, logout } = useAuth();
   const { breadcrumbs } = useBreadcrumb();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const profileRef = useRef(null);
+
+  // Pending Approvals Notifications state
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [pendingApprovals, setPendingApprovals] = useState([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const notificationsRef = useRef(null);
+
+  const canManageUsers = userType === 'admin' || userType === 'coordinator' || (typeof hasPermission === 'function' && hasPermission('READ_USER'));
+
+  const fetchPendingApprovals = useCallback(async () => {
+    if (!canManageUsers) return;
+    try {
+      setLoadingNotifications(true);
+      const res = await userService.getPendingApprovals(userType === 'coordinator' ? universityId : null);
+      if (res && res.success) {
+        setPendingApprovals(res.items || []);
+        setPendingCount(res.count ?? (res.items?.length || 0));
+      } else if (Array.isArray(res)) {
+        setPendingApprovals(res);
+        setPendingCount(res.length);
+      }
+    } catch (err) {
+      console.error('Failed to fetch pending approvals:', err);
+    } finally {
+      setLoadingNotifications(false);
+    }
+  }, [canManageUsers, userType, universityId]);
+
+  useEffect(() => {
+    if (canManageUsers) {
+      fetchPendingApprovals();
+      const handleUpdate = () => fetchPendingApprovals();
+      window.addEventListener('pending-approvals-updated', handleUpdate);
+      const interval = setInterval(fetchPendingApprovals, 60000);
+      return () => {
+        window.removeEventListener('pending-approvals-updated', handleUpdate);
+        clearInterval(interval);
+      };
+    }
+  }, [canManageUsers, fetchPendingApprovals]);
 
   const confirmLogout = () => {
     setProfileOpen(false);
@@ -29,10 +71,24 @@ const Navbar = () => {
       if (profileRef.current && !profileRef.current.contains(event.target)) {
         setProfileOpen(false);
       }
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
+        setNotificationsOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const handleRequestClick = (req) => {
+    setNotificationsOpen(false);
+    const searchTarget = req.name || req.email || '';
+    navigate(`/admin/users?tab=pending&search=${encodeURIComponent(searchTarget)}`);
+  };
+
+  const handleViewAllClick = () => {
+    setNotificationsOpen(false);
+    navigate('/admin/users?tab=pending');
+  };
 
   const initials = user?.name
     ? user.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
@@ -107,14 +163,124 @@ const Navbar = () => {
 
         {/* ── Right: Actions ── */}
         <div className="flex items-center gap-1">
-          {/* Notifications */}
-          <button
-            className="relative w-9 h-9 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-all"
-            title="Notifications"
-          >
-            <Bell size={17} />
-            <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-teal-500 rounded-full ring-1 ring-white" />
-          </button>
+          {/* Notifications Dropdown */}
+          <div className="relative" ref={notificationsRef}>
+            <button
+              onClick={() => {
+                setNotificationsOpen(!notificationsOpen);
+                if (!notificationsOpen) fetchPendingApprovals();
+              }}
+              className={`relative w-9 h-9 flex items-center justify-center rounded-lg transition-all ${
+                notificationsOpen
+                  ? 'text-teal-700 bg-teal-50 ring-1 ring-teal-200'
+                  : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100/70'
+              }`}
+              title={canManageUsers ? `${pendingCount} Pending Approvals` : "Notifications"}
+              aria-label="Pending approval notifications"
+            >
+              <Bell size={18} className={pendingCount > 0 ? 'text-teal-700' : ''} />
+              {canManageUsers && pendingCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-xs ring-2 ring-white animate-pulse">
+                  {pendingCount > 99 ? '99+' : pendingCount}
+                </span>
+              )}
+            </button>
+
+            {notificationsOpen && (
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-150/80 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                {/* Header */}
+                <div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-teal-50/40 border-b border-gray-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center">
+                      <UserCheck size={15} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-gray-900 tracking-tight">Pending Approvals</h4>
+                      <p className="text-[10px] text-gray-500 font-medium">Examiner registration requests</p>
+                    </div>
+                  </div>
+                  {pendingCount > 0 && (
+                    <span className="text-[10px] font-extrabold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                      {pendingCount} Pending
+                    </span>
+                  )}
+                </div>
+
+                {/* Content */}
+                <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
+                  {loadingNotifications && pendingApprovals.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400 text-xs flex flex-col items-center gap-2">
+                      <Loader size={18} className="animate-spin text-teal-600" />
+                      <span>Checking pending requests...</span>
+                    </div>
+                  ) : pendingApprovals.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <div className="w-12 h-12 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center mx-auto mb-2.5">
+                        <CheckCircle size={22} />
+                      </div>
+                      <p className="text-xs font-bold text-gray-800">No Pending Requests</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">All examiner accounts are approved.</p>
+                    </div>
+                  ) : (
+                    pendingApprovals.map((req) => {
+                      const reqInitials = req.name
+                        ? req.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
+                        : 'U';
+                      return (
+                        <div
+                          key={req.id}
+                          onClick={() => handleRequestClick(req)}
+                          className="p-3 hover:bg-teal-50/50 transition-colors flex items-center gap-3 cursor-pointer group"
+                        >
+                          {req.profileImage ? (
+                            <img
+                              src={req.profileImage}
+                              alt={req.name}
+                              className="w-10 h-10 rounded-xl object-cover border border-gray-200 shrink-0 shadow-2xs group-hover:scale-105 transition-transform"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-800 font-black text-xs flex items-center justify-center shrink-0 border border-teal-200/80 shadow-2xs">
+                              {reqInitials}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-1">
+                              <p className="text-xs font-bold text-gray-900 truncate group-hover:text-teal-800 transition-colors">
+                                {req.name}
+                              </p>
+                              <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200/60 px-1.5 py-0.2 rounded shrink-0">
+                                Pending
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-gray-500 truncate">{req.email}</p>
+                            {req.universityName && (
+                              <p className="text-[10px] text-gray-400 truncate mt-0.5">
+                                {req.universityName}
+                              </p>
+                            )}
+                          </div>
+                          <ChevronRight size={14} className="text-gray-300 group-hover:text-teal-600 transition-colors shrink-0" />
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Footer */}
+                {canManageUsers && (
+                  <div className="p-2.5 bg-gray-50/80 border-t border-gray-100 text-center">
+                    <button
+                      onClick={handleViewAllClick}
+                      className="w-full py-1.5 px-3 text-xs font-bold text-teal-700 hover:text-teal-800 hover:bg-teal-50 rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <span>Manage All Pending Approvals</span>
+                      <ChevronRight size={13} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Settings */}
           <Link
