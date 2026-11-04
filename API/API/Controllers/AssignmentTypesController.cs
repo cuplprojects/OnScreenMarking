@@ -27,6 +27,20 @@ namespace API.Controllers
             _dailyAllocationService = dailyAllocationService;
         }
 
+        private async Task<bool> HasPermissionAsync(string permission)
+        {
+            var userType = User.FindFirst("userType")?.Value;
+            if (string.IsNullOrEmpty(userType)) return false;
+
+            var role = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName.ToLower() == userType.ToLower());
+            if (role == null)
+            {
+                return userType.Equals("admin", StringComparison.OrdinalIgnoreCase);
+            }
+
+            return role.PermissionsList.Contains(permission);
+        }
+
         /// <summary>
         /// GET /api/AssignmentTypes
         /// Lists all assignment types with DailyLimit and TimePerCopy
@@ -253,11 +267,20 @@ namespace API.Controllers
         [HttpGet("configuration")]
         [HttpGet("settings")]
         [HttpGet("/api/settings/assignment-configuration")]
-        [Authorize(Roles = "admin,Admin,coordinator,Coordinator")]
+        [Authorize]
         public async Task<IActionResult> GetAssignmentConfiguration([FromQuery] int? universityId = null)
         {
             try
             {
+                var userType = User.FindFirst("userType")?.Value ?? "";
+                bool isPrivilegedRole = userType.Equals("admin", StringComparison.OrdinalIgnoreCase) || 
+                                       userType.Equals("coordinator", StringComparison.OrdinalIgnoreCase);
+
+                if (!isPrivilegedRole && !await HasPermissionAsync("MANAGE_SETTINGS"))
+                {
+                    return StatusCode(403, new { success = false, message = "You do not have permission to view settings." });
+                }
+
                 int? targetUniId = await GetTargetUniversityIdAsync(universityId);
 
                 string universityName = null;
@@ -335,11 +358,20 @@ namespace API.Controllers
         [HttpPost("configuration")]
         [HttpPost("settings")]
         [HttpPost("/api/settings/assignment-configuration")]
-        [Authorize(Roles = "admin,Admin,coordinator,Coordinator")]
+        [Authorize]
         public async Task<IActionResult> SaveAssignmentConfiguration([FromBody] AssignmentConfigurationDto dto)
         {
             try
             {
+                var userType = User.FindFirst("userType")?.Value ?? "";
+                bool isPrivilegedRole = userType.Equals("admin", StringComparison.OrdinalIgnoreCase) || 
+                                       userType.Equals("coordinator", StringComparison.OrdinalIgnoreCase);
+
+                if (!isPrivilegedRole && !await HasPermissionAsync("MANAGE_SETTINGS"))
+                {
+                    return StatusCode(403, new { success = false, message = "You do not have permission to manage settings." });
+                }
+
                 if (dto == null)
                 {
                     return BadRequest(new { success = false, message = "Invalid configuration data" });

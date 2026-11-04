@@ -110,7 +110,7 @@ namespace API.Data
                 .HasPrecision(10, 2);
 
             modelBuilder.Entity<PaperSectionMaster>()
-                .HasIndex(psm => new { psm.PaperId, psm.SectionMasterId })
+                .HasIndex(psm => new { psm.PaperId, psm.BatchId })
                 .IsUnique();
 
             // University configuration
@@ -303,11 +303,7 @@ namespace API.Data
             // ProjectPaperSection configuration
             modelBuilder.Entity<ProjectPaperSection>()
                 .HasKey(pps => pps.Id);
-            modelBuilder.Entity<ProjectPaperSection>()
-                .HasOne(pps => pps.SectionMaster)
-                .WithMany()
-                .HasForeignKey(pps => pps.SectionMasterId)
-                .OnDelete(DeleteBehavior.SetNull);
+            
             modelBuilder.Entity<ProjectPaperSection>()
                 .HasMany(pps => pps.Questions)
                 .WithOne(q => q.ProjectPaperSection)
@@ -317,11 +313,7 @@ namespace API.Data
             // Section configuration
             modelBuilder.Entity<Section>()
                 .HasKey(s => s.Id);
-            modelBuilder.Entity<Section>()
-                .HasOne(s => s.SectionMaster)
-                .WithMany()
-                .HasForeignKey(s => s.SectionMasterId)
-                .OnDelete(DeleteBehavior.SetNull);
+            
             modelBuilder.Entity<Section>()
                 .HasMany(s => s.Questions)
                 .WithOne(q => q.Section)
@@ -333,7 +325,7 @@ namespace API.Data
             modelBuilder.Entity<SectionMaster>()
                 .HasKey(sm => sm.Id);
             modelBuilder.Entity<SectionMaster>()
-                .HasIndex(sm => sm.Name)
+                .HasIndex(sm => new { sm.BatchId, sm.Name })
                 .IsUnique();
 
             // Question configuration
@@ -345,6 +337,13 @@ namespace API.Data
                 .HasForeignKey(q => q.SectionId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<Question>()
+                .HasOne(q => q.QuestionType)
+                .WithMany()
+                .HasForeignKey(q => q.TypeId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
+
             modelBuilder.Entity<Question>()
                 .HasOne(q => q.ProjectPaperSection)
                 .WithMany(pps => pps.Questions)

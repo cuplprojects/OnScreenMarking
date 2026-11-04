@@ -8,18 +8,30 @@ namespace API.Models
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public int EventID { get; set; }
+        public int Id { get; set; }
 
-        public string Event { get; set; }
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 
-        public string Category { get; set; }
+        public string Method { get; set; } = string.Empty;
 
-        public int EventTriggeredBy { get; set; }
+        public string Path { get; set; } = string.Empty;
 
-        public DateTime LoggedAt { get; set; } = TimeZoneInfo.ConvertTime(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("India Standard Time"));
+        public string QueryString { get; set; } = string.Empty;
 
-        public string OldValue { get; set; }
+        public string Headers { get; set; } = string.Empty;
 
-        public string NewValue { get; set; }
+        public string Body { get; set; } = string.Empty;
+
+        public string? UserId { get; set; }
+
+        public string Message { get; set; } = string.Empty;
+
+        public string IpAddress { get; set; } = string.Empty;
+
+        // Legacy column compatibility for MySQL tables
+        public string? Event { get; set; } = string.Empty;
+        public string? Category { get; set; } = string.Empty;
+        public string? OldValue { get; set; } = string.Empty;
+        public string? NewValue { get; set; } = string.Empty;
     }
 }

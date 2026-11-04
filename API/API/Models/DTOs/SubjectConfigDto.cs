@@ -45,6 +45,7 @@ namespace API.Models.DTOs
     {
         public int Id { get; set; }
         public int PaperId { get; set; }
+        public int BatchId { get; set; } = 1;
         public string Name { get; set; }
         public string Description { get; set; }
         public int TotalQuestions { get; set; }
@@ -62,7 +63,8 @@ namespace API.Models.DTOs
         public int? ProjectPaperSectionId { get; set; }
         public string QuestionNo { get; set; }
         public decimal Marks { get; set; }
-        public string Type { get; set; }
+        public int? TypeId { get; set; }
+        public string Type { get; set; } = "MCQ";
         public bool IsOptional { get; set; }
         public string? OptionalGroupCode { get; set; }
     }

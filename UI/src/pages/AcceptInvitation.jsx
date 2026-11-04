@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Camera, X, CheckCircle, Mail, Lock, User, Phone, MapPin, Building, BookOpen, AlertCircle, Loader, AlertTriangle } from 'lucide-react';
 import authService from '../services/authService';
 import message from '../services/messageService';
+import { setSessionId } from '../services/api';
 
 // Helper to calculate average brightness of canvas image data (0-255)
 const calculateBrightness = (canvas) => {
@@ -618,18 +619,9 @@ const AcceptInvitation = () => {
 
       const data = await authService.acceptInvitation(payload);
 
-      // Store token and user info (Log user in instantly!)
-      sessionStorage.setItem('token', data.token);
-      sessionStorage.setItem('userType', data.user.userType);
-      sessionStorage.setItem('userName', data.user.name);
-      sessionStorage.setItem('userId', data.user.id);
-      sessionStorage.setItem('userEmail', data.user.email);
-      sessionStorage.setItem('profileImage', data.user.profileImage || '');
-      if (data.user.universityId) {
-        sessionStorage.setItem('universityId', data.user.universityId);
-      }
-      if (data.user.subjectId1) {
-        sessionStorage.setItem('subjectId1', data.user.subjectId1);
+      // Session cookie is set automatically by server in response
+      if (data?.token) {
+        setSessionId(data.token);
       }
 
       setSuccess(true);

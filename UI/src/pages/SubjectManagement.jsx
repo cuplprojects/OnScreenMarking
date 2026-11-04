@@ -177,6 +177,17 @@ export default function SubjectManagement() {
     }
   }, [highlightedSubjectId, subjects]);
 
+  // Clear highlighted/newly added status after 30 seconds
+  useEffect(() => {
+    if (!highlightedSubjectId) return;
+
+    const timer = setTimeout(() => {
+      setHighlightedSubjectId(null);
+    }, 30000);
+
+    return () => clearTimeout(timer);
+  }, [highlightedSubjectId]);
+
   const handleDelete = async (subjectId) => {
     if (!window.confirm('Are you sure you want to delete this subject? It will be marked as inactive.')) {
       return;
@@ -202,9 +213,10 @@ export default function SubjectManagement() {
       searchPlaceholder: 'Search subjects…',
       actionLabel: 'Add Subject',
       onAction: () => setShowForm(true),
+      count: totalCount,
     });
     return () => setConfigHeader(null);
-  }, [search, setSearch, setConfigHeader]);
+  }, [search, setSearch, setConfigHeader, totalCount]);
 
   return (
     <div className="w-full space-y-3">

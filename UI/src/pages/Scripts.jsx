@@ -79,12 +79,12 @@ const Scripts = () => {
     navigate(`/marking/${encryptId(script.id)}`, {
       state: {
         scriptId: script.id,
-        paperId: script.paperId,
-        projectPaperId: script.projectPaperId,
-        barCode: script.generatedBarcode,
-        allocationId: script.allocationId,
+        paperId: script.paperId || script.PaperId,
+        projectPaperId: script.projectPaperId || script.ProjectPaperId,
+        barCode: script.generatedBarcode || script.GeneratedBarcode,
+        allocationId: script.allocationId || script.AllocationId,
         examinerId: user?.id,
-        studentName: script.studentName,
+        studentName: script.studentName || script.StudentName,
         rollNo: script.rollNumber || script.rollNo,
         subject: script.subjectName || script.subject,
         cleanPdfUrl: script.cleanPdfUrl || script.answerSheetPdfUrl || '',
@@ -115,8 +115,8 @@ const Scripts = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-64px)] bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4 overflow-hidden flex flex-col">
-      <div className="w-full flex-1 flex flex-col gap-4 min-h-0">
+    <div className="min-h-[calc(100vh-64px)] bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4 pb-10 flex flex-col">
+      <div className="w-full flex flex-col gap-4">
       
         {/* Header & Controls */}
         <div className="bg-white px-4 py-2.5 rounded-xl border border-gray-100 shadow-sm shrink-0">
@@ -170,21 +170,21 @@ const Scripts = () => {
         </div>
 
         {/* Scripts Data Table */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden animate-fade-in">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col overflow-hidden animate-fade-in">
         {loading && scripts.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-12 text-gray-400 font-bold text-xs gap-3">
+          <div className="flex flex-col items-center justify-center p-12 text-gray-400 font-bold text-xs gap-3">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
             <span>Fetching allocated scripts...</span>
           </div>
         ) : scripts.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-gray-450 space-y-2">
+          <div className="flex flex-col items-center justify-center py-12 text-center text-gray-450 space-y-2">
             <FileText size={38} className="mx-auto text-gray-305 opacity-80" />
             <p className="text-xs font-bold uppercase tracking-wider">No matching scripts found</p>
             <p className="text-[10px] text-gray-400">Try adjusting your search query or status filter</p>
           </div>
         ) : (
-          <div className="flex-1 overflow-auto min-h-0 bg-white relative">
-            <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left min-w-[900px] border-collapse">
+          <div className="overflow-x-auto bg-white relative">
+            <table className="w-full text-left min-w-[900px] border-collapse">
               <thead className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none sticky top-0 z-10 shadow-sm">
                 <tr>
                   <SortHeader label="Barcode / Script ID" field="barcode" />

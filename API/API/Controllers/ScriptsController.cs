@@ -267,6 +267,11 @@ namespace API.Controllers
                     }
                 }
 
+                if (projectPaper.Project != null && !projectPaper.Project.IsActive)
+                {
+                    return BadRequest(new { success = false, message = "Cannot add scripts to an inactive project." });
+                }
+
                 var barcode = !string.IsNullOrWhiteSpace(scriptDto.GeneratedBarcode)
                     ? scriptDto.GeneratedBarcode
                     : (!string.IsNullOrWhiteSpace(scriptDto.InBuiltBarCode) ? scriptDto.InBuiltBarCode : $"SC-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}".Substring(0, 24).ToUpper());
@@ -342,6 +347,7 @@ namespace API.Controllers
                     }
 
                     if (pp == null) continue;
+                    if (pp.Project != null && !pp.Project.IsActive) continue;
 
                     var barcode = !string.IsNullOrWhiteSpace(dto.GeneratedBarcode)
                         ? dto.GeneratedBarcode
@@ -435,6 +441,20 @@ namespace API.Controllers
                     targetProjectPaper = await ppQuery.FirstOrDefaultAsync();
                 }
 
+                if (projectId.HasValue && projectId.Value > 0)
+                {
+                    var proj = await _context.Projects.FindAsync(projectId.Value);
+                    if (proj != null && !proj.IsActive)
+                    {
+                        return BadRequest(new { success = false, message = "Cannot upload scripts for an inactive project." });
+                    }
+                }
+
+                if (targetProjectPaper?.Project != null && !targetProjectPaper.Project.IsActive)
+                {
+                    return BadRequest(new { success = false, message = "Cannot upload scripts for an inactive project." });
+                }
+
                 var basePath = _configuration["StorageSettings:BasePath"] 
                     ?? _configuration["StorageSettings:BaseOsmPath"] 
                     ?? Path.Combine(_environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "storage");
@@ -461,6 +481,7 @@ namespace API.Controllers
                     }
 
                     if (pp == null) continue;
+                    if (pp.Project != null && !pp.Project.IsActive) continue;
 
                     var pId = pp.ProjectId;
                     var papId = pp.PaperId;

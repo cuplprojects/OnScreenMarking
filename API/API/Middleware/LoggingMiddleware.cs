@@ -1,12 +1,16 @@
-using Microsoft.AspNetCore.Http;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using API.Data;
-using API.Services;
-using System.IdentityModel.Tokens.Jwt;
+using System;
+using System.IO;
+using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using API.Models;
+using API.Services;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace API.Middleware
 {
@@ -25,64 +29,104 @@ namespace API.Middleware
 
         public async Task InvokeAsync(HttpContext context)
         {
-            // Only log POST, PUT, PATCH requests
-            if (!ShouldLogRequest(context.Request.Method))
+            var method = context.Request.Method;
+            bool isTargetMethod = method.Equals("POST", StringComparison.OrdinalIgnoreCase) ||
+                                 method.Equals("PUT", StringComparison.OrdinalIgnoreCase) ||
+                                 method.Equals("PATCH", StringComparison.OrdinalIgnoreCase);
+
+            // If not POST/PUT/PATCH, still catch any unhandled exceptions to record ErrorLogs
+            if (!isTargetMethod)
             {
-                await _next(context);
+                try
+                {
+                    await _next(context);
+                }
+                catch (Exception ex)
+                {
+                    await LogErrorAsync(context, ex, 500);
+                    throw;
+                }
                 return;
             }
 
-            // Special handling for Login endpoint (no token required)
-            bool isLoginEndpoint = context.Request.Path.StartsWithSegments("/api/auth/login", StringComparison.OrdinalIgnoreCase);
-
-            // Get user ID from Bearer token (not required for login)
-            var userId = GetUserIdFromToken(context);
-
-            // For non-login endpoints, skip logging if no token
-            if (!isLoginEndpoint && userId == null)
-            {
-                await _next(context);
-                return;
-            }
-
-            // Capture request body for logging
-            var originalBodyStream = context.Response.Body;
+            // Capture request details for POST, PUT, PATCH
+            var path = context.Request.Path.Value ?? string.Empty;
+            var queryString = context.Request.QueryString.HasValue ? context.Request.QueryString.Value : string.Empty;
+            var ipAddress = GetClientIpAddress(context);
+            var headers = SerializeHeaders(context.Request.Headers);
             var requestBody = await ReadRequestBodyAsync(context.Request);
+
+            // Execute the pipeline and capture response
+            var originalBodyStream = context.Response.Body;
+            using var responseBodyStream = new MemoryStream();
+            context.Response.Body = responseBodyStream;
 
             try
             {
-                // Create a new memory stream for the response
-                using var responseBody = new MemoryStream();
-                context.Response.Body = responseBody;
-
-                // Continue to the next middleware
                 await _next(context);
 
-                // Read response body
-                var responseBodyText = await ReadResponseBodyAsync(responseBody);
+                var statusCode = context.Response.StatusCode;
 
-                // For login endpoint, extract userId from response
-                if (isLoginEndpoint && userId == null)
+                // Extract User ID after authentication has run
+                var userId = GetUserId(context);
+
+                // If this is a login request and context.User wasn't set beforehand, check response body
+                if (string.IsNullOrEmpty(userId) && path.Contains("/login", StringComparison.OrdinalIgnoreCase))
                 {
-                    userId = ExtractUserIdFromLoginResponse(responseBodyText);
+                    responseBodyStream.Seek(0, SeekOrigin.Begin);
+                    var responseText = await new StreamReader(responseBodyStream).ReadToEndAsync();
+                    responseBodyStream.Seek(0, SeekOrigin.Begin);
+                    userId = ExtractUserIdFromResponse(responseText);
                 }
 
-                // Log successful event (only if we have a userId)
-                if (userId.HasValue)
+                // If error status code (>= 400), log to ErrorLogs
+                if (statusCode >= 400)
                 {
-                    await LogEventAsync(context, userId.Value, requestBody, responseBodyText, context.Response.StatusCode, isLoginEndpoint);
+                    responseBodyStream.Seek(0, SeekOrigin.Begin);
+                    var errorResponseText = await new StreamReader(responseBodyStream).ReadToEndAsync();
+                    responseBodyStream.Seek(0, SeekOrigin.Begin);
+
+                    var errorMessage = ExtractErrorMessage(errorResponseText, $"{method} {path} returned status {statusCode}");
+
+                    using var scope = _serviceScopeFactory.CreateScope();
+                    var loggingService = scope.ServiceProvider.GetRequiredService<ILoggingService>();
+                    await loggingService.LogErrorAsync(
+                        method: method,
+                        path: path,
+                        queryString: queryString,
+                        statusCode: statusCode,
+                        message: errorMessage,
+                        stackTrace: string.Empty,
+                        innerException: null
+                    );
+                }
+                else
+                {
+                    // Success event log
+                    var eventMessage = $"Executed {method} {path} successfully ({statusCode})";
+                    using var scope = _serviceScopeFactory.CreateScope();
+                    var loggingService = scope.ServiceProvider.GetRequiredService<ILoggingService>();
+                    await loggingService.LogEventAsync(
+                        method: method,
+                        path: path,
+                        queryString: queryString,
+                        headers: headers,
+                        body: SanitizeBody(requestBody),
+                        userId: userId,
+                        message: eventMessage,
+                        ipAddress: ipAddress
+                    );
                 }
 
-                // Copy the response back to the original stream
-                responseBody.Seek(0, SeekOrigin.Begin);
-                await responseBody.CopyToAsync(originalBodyStream);
+                // Copy the response stream back to client
+                responseBodyStream.Seek(0, SeekOrigin.Begin);
+                await responseBodyStream.CopyToAsync(originalBodyStream);
             }
             catch (Exception ex)
             {
-                // Log error
-                await LogErrorAsync(context, ex);
+                await LogErrorAsync(context, ex, 500);
 
-                // Restore the original response body stream
+                // Restore response stream
                 context.Response.Body = originalBodyStream;
                 throw;
             }
@@ -92,48 +136,96 @@ namespace API.Middleware
             }
         }
 
-        private static bool ShouldLogRequest(string method)
-        {
-            return method.Equals("POST", StringComparison.OrdinalIgnoreCase) ||
-                   method.Equals("PUT", StringComparison.OrdinalIgnoreCase) ||
-                   method.Equals("PATCH", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static int? GetUserIdFromToken(HttpContext context)
+        private async Task LogErrorAsync(HttpContext context, Exception exception, int statusCode)
         {
             try
             {
-                var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
-                if (authHeader == null || !authHeader.StartsWith("Bearer "))
-                    return null;
+                var method = context.Request.Method;
+                var path = context.Request.Path.Value ?? string.Empty;
+                var queryString = context.Request.QueryString.HasValue ? context.Request.QueryString.Value : string.Empty;
 
-                var token = authHeader.Substring("Bearer ".Length).Trim();
-                var handler = new JwtSecurityTokenHandler();
+                using var scope = _serviceScopeFactory.CreateScope();
+                var loggingService = scope.ServiceProvider.GetRequiredService<ILoggingService>();
 
-                if (!handler.CanReadToken(token))
-                    return null;
-
-                var jsonToken = handler.ReadJwtToken(token);
-
-                // Try to get user ID from different possible claim types
-                var userIdClaim = jsonToken.Claims.FirstOrDefault(c =>
-                    c.Type == ClaimTypes.NameIdentifier ||
-                    c.Type == "sub" ||
-                    c.Type == "userId" ||
-                    c.Type == "id" ||
-                    c.Type == ClaimTypes.Name);
-
-                if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
-                {
-                    return userId;
-                }
-
-                return null;
+                await loggingService.LogErrorAsync(
+                    method: method,
+                    path: path,
+                    queryString: queryString,
+                    statusCode: statusCode,
+                    message: exception.Message,
+                    stackTrace: exception.StackTrace ?? string.Empty,
+                    innerException: exception.InnerException?.ToString()
+                );
             }
-            catch (Exception)
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to log unhandled error to ErrorLogs");
+            }
+        }
+
+        private static string GetUserId(HttpContext context)
+        {
+            try
+            {
+                var id = context.User?.FindFirst("id")?.Value ??
+                         context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
+                         context.User?.FindFirst("sub")?.Value;
+
+                if (!string.IsNullOrEmpty(id)) return id;
+
+                var email = context.User?.FindFirst("email")?.Value ??
+                            context.User?.FindFirst(ClaimTypes.Email)?.Value;
+
+                if (!string.IsNullOrEmpty(email)) return email;
+
+                return context.User?.Identity?.Name;
+            }
+            catch
             {
                 return null;
             }
+        }
+
+        private static string GetClientIpAddress(HttpContext context)
+        {
+            try
+            {
+                var forwarded = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(forwarded))
+                {
+                    return forwarded.Split(',')[0].Trim();
+                }
+
+                return context.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+            }
+            catch
+            {
+                return "Unknown";
+            }
+        }
+
+        private static string SerializeHeaders(IHeaderDictionary headers)
+        {
+            try
+            {
+                var safeHeaders = headers.ToDictionary(
+                    h => h.Key,
+                    h => IsSensitiveHeader(h.Key) ? "***" : h.Value.ToString()
+                );
+                return JsonSerializer.Serialize(safeHeaders);
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static bool IsSensitiveHeader(string headerKey)
+        {
+            return headerKey.Equals("Cookie", StringComparison.OrdinalIgnoreCase) ||
+                   headerKey.Equals("Authorization", StringComparison.OrdinalIgnoreCase) ||
+                   headerKey.Equals("X-Session-Id", StringComparison.OrdinalIgnoreCase) ||
+                   headerKey.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase);
         }
 
         private static async Task<string> ReadRequestBodyAsync(HttpRequest request)
@@ -141,11 +233,20 @@ namespace API.Middleware
             try
             {
                 request.EnableBuffering();
-                var buffer = new byte[Convert.ToInt32(request.ContentLength ?? 0)];
-                await request.Body.ReadAsync(buffer, 0, buffer.Length);
-                var bodyAsText = Encoding.UTF8.GetString(buffer);
+                if (!request.Body.CanRead) return string.Empty;
+
                 request.Body.Position = 0;
-                return bodyAsText;
+                using var reader = new StreamReader(request.Body, Encoding.UTF8, leaveOpen: true);
+                var body = await reader.ReadToEndAsync();
+                request.Body.Position = 0;
+
+                // Truncate excessively large payloads (e.g. > 64KB)
+                if (body.Length > 65536)
+                {
+                    body = body.Substring(0, 65536) + " [TRUNCATED]";
+                }
+
+                return body;
             }
             catch
             {
@@ -153,290 +254,50 @@ namespace API.Middleware
             }
         }
 
-        private static async Task<string> ReadResponseBodyAsync(MemoryStream responseBody)
+        private static string SanitizeBody(string body)
         {
+            if (string.IsNullOrWhiteSpace(body)) return string.Empty;
             try
             {
-                responseBody.Seek(0, SeekOrigin.Begin);
-                var responseBodyText = await new StreamReader(responseBody).ReadToEndAsync();
-                responseBody.Seek(0, SeekOrigin.Begin);
-                return responseBodyText;
+                // Mask sensitive field values like passwords
+                body = Regex.Replace(body, @"(""(?:password|passwordHash|autoGeneratedPassword|oldPassword|newPassword)""\s*:\s*"")[^""]*("")", "$1***$2", RegexOptions.IgnoreCase);
+                return body;
             }
             catch
             {
-                return string.Empty;
+                return body;
             }
         }
 
-        private async Task LogEventAsync(HttpContext context, int userId, string requestBody, string responseBody, int statusCode, bool isLoginEndpoint = false)
+        private static string ExtractUserIdFromResponse(string responseText)
         {
+            if (string.IsNullOrWhiteSpace(responseText)) return null;
             try
             {
-                using var scope = _serviceScopeFactory.CreateScope();
-                var loggingService = scope.ServiceProvider.GetRequiredService<ILoggingService>();
-
-                var controllerName = GetControllerName(context);
-                var actionName = GetActionName(context);
-                var method = context.Request.Method;
-                var path = context.Request.Path;
-                var eventMessage = $"{method} {path} - {controllerName}.{actionName}";
-
-                // For successful requests, log the event
-                if (statusCode >= 200 && statusCode < 300)
+                using var doc = JsonDocument.Parse(responseText);
+                if (doc.RootElement.TryGetProperty("user", out var userProp) &&
+                    userProp.TryGetProperty("id", out var idProp))
                 {
-                    string oldValue = null;
-                    string newValue = null;
-
-                    if (isLoginEndpoint)
-                    {
-                        oldValue = null;
-                        newValue = SanitizeRequestBody(requestBody);
-                    }
-                    else if (method.Equals("POST", StringComparison.OrdinalIgnoreCase))
-                    {
-                        oldValue = null;
-                        newValue = SanitizeRequestBody(responseBody);
-                    }
-                    else if (method.Equals("PUT", StringComparison.OrdinalIgnoreCase) ||
-                             method.Equals("PATCH", StringComparison.OrdinalIgnoreCase))
-                    {
-                        oldValue = await GetOldValueFromDatabase(context, controllerName);
-                        newValue = SanitizeRequestBody(requestBody);
-                    }
-
-                    loggingService.LogEvent(
-                        message: eventMessage,
-                        category: controllerName,
-                        triggeredBy: userId,
-                        oldValue: oldValue,
-                        newValue: newValue);
+                    return idProp.ToString();
                 }
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to log event for user {UserId}", userId);
-            }
+            catch {}
+            return null;
         }
 
-        private async Task LogErrorAsync(HttpContext context, Exception exception)
+        private static string ExtractErrorMessage(string responseText, string fallback)
         {
+            if (string.IsNullOrWhiteSpace(responseText)) return fallback;
             try
             {
-                using var scope = _serviceScopeFactory.CreateScope();
-                var loggingService = scope.ServiceProvider.GetRequiredService<ILoggingService>();
-
-                var controllerName = GetControllerName(context);
-                var actionName = GetActionName(context);
-                var method = context.Request.Method;
-                var path = context.Request.Path;
-                var errorLocation = $"{controllerName}.{actionName}";
-                var errorMessage = $"{method} {path} - {exception.Message}";
-
-                loggingService.LogError(
-                    error: exception.GetType().Name,
-                    errorMessage: errorMessage,
-                    controller: errorLocation);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to log error");
-            }
-        }
-
-        private static string GetControllerName(HttpContext context)
-        {
-            try
-            {
-                var routeData = context.GetRouteData();
-                return routeData?.Values["controller"]?.ToString() ?? "Unknown";
-            }
-            catch
-            {
-                return "Unknown";
-            }
-        }
-
-        private static string GetActionName(HttpContext context)
-        {
-            try
-            {
-                var routeData = context.GetRouteData();
-                return routeData?.Values["action"]?.ToString() ?? "Unknown";
-            }
-            catch
-            {
-                return "Unknown";
-            }
-        }
-
-        private static string SanitizeRequestBody(string requestBody)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(requestBody))
-                    return null;
-
-                // Limit the size of logged request body
-                if (requestBody.Length > 1000)
+                using var doc = JsonDocument.Parse(responseText);
+                if (doc.RootElement.TryGetProperty("message", out var msgProp))
                 {
-                    requestBody = requestBody.Substring(0, 1000) + "... [truncated]";
-                }
-
-                // Try to parse as JSON and remove sensitive fields
-                try
-                {
-                    var jsonDoc = JsonDocument.Parse(requestBody);
-                    var sanitized = SanitizeJsonElement(jsonDoc.RootElement);
-                    return JsonSerializer.Serialize(sanitized);
-                }
-                catch
-                {
-                    return requestBody;
+                    return msgProp.GetString() ?? fallback;
                 }
             }
-            catch
-            {
-                return "[Error reading request body]";
-            }
-        }
-
-        private static object SanitizeJsonElement(JsonElement element)
-        {
-            switch (element.ValueKind)
-            {
-                case JsonValueKind.Object:
-                    var obj = new Dictionary<string, object>();
-                    foreach (var property in element.EnumerateObject())
-                    {
-                        if (IsSensitiveField(property.Name))
-                        {
-                            obj[property.Name] = "[HIDDEN]";
-                        }
-                        else
-                        {
-                            obj[property.Name] = SanitizeJsonElement(property.Value);
-                        }
-                    }
-                    return obj;
-
-                case JsonValueKind.Array:
-                    return element.EnumerateArray().Select(SanitizeJsonElement).ToArray();
-
-                case JsonValueKind.String:
-                    return element.GetString();
-
-                case JsonValueKind.Number:
-                    return element.TryGetInt32(out int intValue) ? intValue : element.GetDouble();
-
-                case JsonValueKind.True:
-                case JsonValueKind.False:
-                    return element.GetBoolean();
-
-                case JsonValueKind.Null:
-                    return null;
-
-                default:
-                    return element.ToString();
-            }
-        }
-
-        private static bool IsSensitiveField(string fieldName)
-        {
-            var sensitiveFields = new[]
-            {
-                "password", "pwd", "pass", "secret", "token", "key", "auth",
-                "temppassword", "permpassword", "hashedotp", "otp", "autogeneratedpassword"
-            };
-
-            return sensitiveFields.Any(field =>
-                fieldName.Contains(field, StringComparison.OrdinalIgnoreCase));
-        }
-
-        private static int? ExtractUserIdFromLoginResponse(string responseBody)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(responseBody))
-                    return null;
-
-                var jsonDoc = JsonDocument.Parse(responseBody);
-
-                if (jsonDoc.RootElement.TryGetProperty("user", out JsonElement userElement))
-                {
-                    if (userElement.TryGetProperty("id", out JsonElement idElement) ||
-                        userElement.TryGetProperty("Id", out idElement))
-                    {
-                        if (idElement.TryGetInt32(out int userId))
-                        {
-                            return userId;
-                        }
-                    }
-                }
-
-                return null;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private async Task<string> GetOldValueFromDatabase(HttpContext context, string controllerName)
-        {
-            try
-            {
-                var pathSegments = context.Request.Path.Value?.Split('/', StringSplitOptions.RemoveEmptyEntries);
-                if (pathSegments == null || pathSegments.Length < 3)
-                    return null;
-
-                int id = 0;
-                bool idFound = false;
-
-                for (int i = pathSegments.Length - 1; i >= 0; i--)
-                {
-                    if (int.TryParse(pathSegments[i], out id))
-                    {
-                        idFound = true;
-                        break;
-                    }
-                }
-
-                if (!idFound)
-                    return null;
-
-                using var scope = _serviceScopeFactory.CreateScope();
-                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-                // Map controller names to their corresponding entities
-                var normalizedControllerName = controllerName.ToLowerInvariant();
-
-                object entity = normalizedControllerName switch
-                {
-                    "user" => await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id),
-                    "paper" => await dbContext.Papers.AsNoTracking().FirstOrDefaultAsync(x => x.PaperId == id),
-                    "script" => await dbContext.Scripts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id),
-                    "marking" => await dbContext.Markings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id),
-                    _ => null
-                };
-
-                if (entity == null)
-                    return null;
-
-                var options = new JsonSerializerOptions
-                {
-                    WriteIndented = false,
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                    ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles
-                };
-
-                var serializedEntity = JsonSerializer.Serialize(entity, options);
-                return SanitizeRequestBody(serializedEntity);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to get old value from database for controller {ControllerName}", controllerName);
-                return null;
-            }
+            catch {}
+            return responseText.Length > 200 ? responseText.Substring(0, 200) : responseText;
         }
     }
 }

@@ -10,6 +10,8 @@ namespace API.Models
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int Id { get; set; }
         
+        public int BatchId { get; set; } = 1;
+
         [Required]
         public string Name { get; set; }
         

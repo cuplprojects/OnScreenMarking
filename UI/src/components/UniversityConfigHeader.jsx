@@ -54,6 +54,8 @@ export default function UniversityConfigHeader() {
 
   // ── University dropdown state ──────────────────────────────────────────
   const [universities, setUniversities]   = useState([]);
+  const [activeUni, setActiveUni]         = useState(null);
+  const [uniStats, setUniStats]           = useState(null);
   const [searchQuery, setSearchQuery]     = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedId, setSelectedId]       = useState(urlUniversityId);
@@ -76,6 +78,32 @@ export default function UniversityConfigHeader() {
       setSelectedId(urlUniversityId);
     }
   }, [urlUniversityId, location.pathname]);
+
+  // Load university details and stats whenever selectedId changes
+  useEffect(() => {
+    if (!selectedId) {
+      setActiveUni(null);
+      setUniStats(null);
+      return;
+    }
+
+    const found = universities.find(u => String(u.universityId) === String(selectedId));
+    if (found) {
+      setActiveUni(found);
+    } else {
+      universityService.getUniversityById(selectedId)
+        .then(u => {
+          if (u) setActiveUni(u);
+        })
+        .catch(err => console.error('Failed to fetch university details:', err));
+    }
+
+    apiCall(`/stats/counts?universityId=${selectedId}`)
+      .then(counts => {
+        if (counts) setUniStats(counts);
+      })
+      .catch(err => console.error('Failed to fetch university stats:', err));
+  }, [selectedId, universities]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -159,6 +187,7 @@ export default function UniversityConfigHeader() {
   const handleSelectUniversity = (uni) => {
     const newId = String(uni.universityId);
     setSelectedId(newId);
+    setActiveUni(uni);
     setUniOpen(false);
     setSearchQuery('');
     setSkip(0);
@@ -177,9 +206,52 @@ export default function UniversityConfigHeader() {
     navigate(url);
   };
 
-  const selectedUni     = universities.find(u => String(u.universityId) === selectedId);
+  const currentUni      = activeUni || universities.find(u => String(u.universityId) === selectedId);
   const selectedSection = SECTIONS.find(s => s.id === currentSection) || SECTIONS[0];
   const SectionIcon     = selectedSection.icon;
+
+  const getSectionInfo = () => {
+    const pageCount = headerExtras?.count ?? headerExtras?.totalCount;
+    let count = pageCount;
+    let unit = 'Items';
+
+    switch (currentSection) {
+      case 'departments':
+        if (count === undefined || count === null) count = uniStats?.departments ?? currentUni?.departments?.length ?? 0;
+        unit = 'Depts';
+        break;
+      case 'courses':
+        if (count === undefined || count === null) count = uniStats?.courses ?? 0;
+        unit = 'Courses';
+        break;
+      case 'subjects':
+        if (count === undefined || count === null) count = uniStats?.subjects ?? 0;
+        unit = 'Subjects';
+        break;
+      case 'sessions':
+        if (count === undefined || count === null) count = uniStats?.sessions ?? 0;
+        unit = 'Sessions';
+        break;
+      case 'projects':
+        if (count === undefined || count === null) count = uniStats?.projects?.length ?? currentUni?.projects?.length ?? 0;
+        unit = 'Projects';
+        break;
+      case 'master-papers':
+        if (count === undefined || count === null) count = uniStats?.papers ?? 0;
+        unit = 'Papers';
+        break;
+      case 'section-masters':
+        if (count === undefined || count === null) count = uniStats?.sectionMasters ?? 0;
+        unit = 'Section Masters';
+        break;
+      default:
+        if (count === undefined || count === null) count = uniStats?.departments ?? currentUni?.departments?.length ?? 0;
+        unit = 'Depts';
+        break;
+    }
+
+    return `${count} ${unit}`;
+  };
 
   const initials = (name) =>
     name ? name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() : '?';
@@ -191,7 +263,7 @@ export default function UniversityConfigHeader() {
 
         {/* University avatar */}
         <div className="w-10 h-10 bg-teal-700 rounded-xl flex items-center justify-center text-white shrink-0 text-sm font-bold shadow-sm">
-          {selectedUni ? initials(selectedUni.universityName) : <School size={15} />}
+          {currentUni ? initials(currentUni.universityName) : <School size={15} />}
         </div>
 
         {/* University dropdown trigger */}
@@ -203,13 +275,14 @@ export default function UniversityConfigHeader() {
           >
             <div className="text-left">
               <p className="text-sm font-black text-gray-900 leading-tight truncate max-w-[200px]">
-                {selectedUni ? selectedUni.universityName : 'Select a university'}
+                {currentUni ? currentUni.universityName : 'Select a university'}
               </p>
               <p className="text-[11px] text-gray-500 mt-1 font-medium">
-                {selectedUni
-                  ? <><span>{selectedUni.departments?.length ?? 0} Depts</span>
-                      <span className={`ml-2 font-bold ${selectedUni.isActive ? 'text-emerald-600' : 'text-red-500'}`}>
-                        ● {selectedUni.isActive ? 'Active' : 'Inactive'}
+                {currentUni
+                  ? <>
+                      <span>{getSectionInfo()}</span>
+                      <span className={`ml-2 font-bold ${currentUni.isActive ? 'text-emerald-600' : 'text-red-500'}`}>
+                        ● {currentUni.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </>
                   : 'Click to choose'

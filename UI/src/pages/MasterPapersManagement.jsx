@@ -274,6 +274,7 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
     masterSectionIds: [],
     isActive: true
   });
+  const [previewBatchId, setPreviewBatchId] = useState(null);
 
   const [modalSubjects, setModalSubjects] = useState(subjects);
   const [subjectSearch, setSubjectSearch] = useState('');
@@ -350,6 +351,10 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!formData.catchNo || !formData.catchNo.trim()) {
+      message.error("Catch number is required");
+      return;
+    }
     if (formData.subjectIds.length === 0) {
       message.error("Please select at least one subject");
       return;
@@ -428,24 +433,34 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
 
   if (!isOpen) return null;
 
+  // Group masterSections by batchId
+  const batchMap = {};
+  masterSections.forEach(sm => {
+    const bId = sm.batchId || 1;
+    if (!batchMap[bId]) batchMap[bId] = [];
+    batchMap[bId].push(sm);
+  });
+  const availableBatches = Object.keys(batchMap).map(Number).sort((a, b) => a - b);
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 select-none">
-      <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-hidden border border-gray-100 shadow-2xl flex flex-col animate-scale-up">
-        
-        {/* Modal Header */}
-        <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-          <div>
-            <h3 className="text-lg font-black text-gray-900 tracking-tight leading-none">
-              {initialData ? 'Edit Academic Paper' : 'Add New Academic Paper'}
-            </h3>
-          </div>
-          <button 
-            onClick={onClose}
-            className="p-1.5 bg-white hover:bg-gray-100 border border-gray-200 text-gray-500 rounded-md transition cursor-pointer"
-          >
-            <X size={18} />
-          </button>
+    <div className="w-full bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col overflow-hidden sticky top-6 max-h-[calc(100vh-3rem)] animate-in fade-in duration-200">
+      {/* Panel Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/70 shrink-0">
+        <div>
+          <h3 className="text-base font-extrabold text-gray-900 leading-tight">
+            {initialData ? 'Edit Academic Paper' : 'Add New Academic Paper'}
+          </h3>
+          <p className="text-xs text-gray-500 font-medium">Configure paper details & import sections by Batch ID</p>
         </div>
+        <button 
+          type="button"
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 p-2 rounded-xl transition cursor-pointer"
+          title="Close Panel"
+        >
+          <X size={18} />
+        </button>
+      </div>
 
         {/* Modal Form */}
         <form id="master-paper-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto space-y-5 p-4 md:p-6">
@@ -462,9 +477,12 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Catch No.</label>
+              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">
+                Catch No. <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
+                required
                 value={formData.catchNo}
                 onChange={e => setFormData({ ...formData, catchNo: e.target.value })}
                 className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-teal-600 font-medium transition"
@@ -711,7 +729,6 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
             {initialData ? 'Update Paper' : 'Create Paper'}
           </button>
         </div>
-      </div>
     </div>
   );
 }
@@ -823,9 +840,10 @@ export default function MasterPapersManagement() {
       searchPlaceholder: 'Search papers by code or name…',
       actionLabel: 'Add Academic Paper',
       onAction: () => setShowForm(true),
+      count: totalCount,
     });
     return () => setConfigHeader(null);
-  }, [search, setSearch, setConfigHeader]);
+  }, [search, setSearch, setConfigHeader, totalCount]);
 
   const handleEdit = (paper) => {
     setEditingData({
@@ -884,16 +902,6 @@ export default function MasterPapersManagement() {
 
   return (
     <div className="w-full space-y-3">
-      {/* Modal for adding/editing master paper */}
-      <MasterPaperModal
-        isOpen={showForm}
-        onClose={() => { setShowForm(false); setEditingData(null); }}
-        onSubmit={handleSubmit}
-        initialData={editingData}
-        subjects={subjects}
-        masterSections={masterSections}
-      />
-
       {/* Modal for configuring paper sections */}
       <ManagePaperSectionsModal
         isOpen={!!sectionsPaperModal}
@@ -903,8 +911,11 @@ export default function MasterPapersManagement() {
         onSaved={refresh}
       />
 
-      {/* Papers List Table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      {/* Screen Divided Layout */}
+      <div className={showForm ? "grid grid-cols-1 xl:grid-cols-12 gap-5 items-start" : "w-full"}>
+        {/* Left Column: Papers List Table */}
+        <div className={showForm ? "xl:col-span-7 space-y-3 min-w-0" : "w-full space-y-3 min-w-0"}>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           {loading && papers.length === 0 ? (
             <div className="p-12 text-center text-gray-450 font-bold text-xs flex flex-col items-center gap-3">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
@@ -1024,7 +1035,23 @@ export default function MasterPapersManagement() {
               />
             </div>
           )}
+          </div>
         </div>
+
+        {/* Right Column: Edit / Add Master Paper Panel */}
+        {showForm && (
+          <div className="xl:col-span-5 min-w-0">
+            <MasterPaperModal
+              isOpen={showForm}
+              onClose={() => { setShowForm(false); setEditingData(null); }}
+              onSubmit={handleSubmit}
+              initialData={editingData}
+              subjects={subjects}
+              masterSections={masterSections}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

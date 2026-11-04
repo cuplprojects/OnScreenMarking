@@ -14,6 +14,38 @@ namespace API.Controllers
     {
         private readonly ApplicationDbContext _context;
 
+        private async Task<(int? typeId, string typeName)> ResolveQuestionTypeAsync(int? dtoTypeId, string? dtoTypeName)
+        {
+            if (dtoTypeId.HasValue && dtoTypeId.Value > 0)
+            {
+                var qt = await _context.QuestionTypes.FindAsync(dtoTypeId.Value);
+                if (qt != null)
+                {
+                    return (qt.QuestionTypeId, qt.QuestionTypeName);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(dtoTypeName))
+            {
+                var trimmed = dtoTypeName.Trim();
+                var qt = await _context.QuestionTypes.FirstOrDefaultAsync(t => t.QuestionTypeName.ToLower() == trimmed.ToLower());
+                if (qt != null)
+                {
+                    return (qt.QuestionTypeId, qt.QuestionTypeName);
+                }
+                return (null, trimmed);
+            }
+
+            var defQt = await _context.QuestionTypes.FirstOrDefaultAsync(t => t.QuestionTypeName == "MCQ") 
+                     ?? await _context.QuestionTypes.FirstOrDefaultAsync();
+            if (defQt != null)
+            {
+                return (defQt.QuestionTypeId, defQt.QuestionTypeName);
+            }
+
+            return (null, "MCQ");
+        }
+
         public SectionController(ApplicationDbContext context)
         {
             _context = context;
@@ -101,13 +133,15 @@ namespace API.Controllers
                 if (string.IsNullOrWhiteSpace(dto.Name))
                     return BadRequest(new { success = false, message = "Section name is required" });
 
-                var exists = await _context.SectionMasters.AnyAsync(sm => sm.Name.ToLower() == dto.Name.Trim().ToLower());
+                int assignedBatchId = dto.BatchId > 0 ? dto.BatchId : (await _context.SectionMasters.MaxAsync(sm => (int?)sm.BatchId) ?? 0) + 1;
+                var exists = await _context.SectionMasters.AnyAsync(sm => sm.BatchId == assignedBatchId && sm.Name.ToLower() == dto.Name.Trim().ToLower());
                 if (exists)
-                    return BadRequest(new { success = false, message = "A section master with this name already exists" });
+                    return BadRequest(new { success = false, message = $"A section with name '{dto.Name}' already exists in Batch #{assignedBatchId}" });
 
                 int totalQ = dto.TotalQuestions > 0 ? dto.TotalQuestions : (dto.EndQuestion >= dto.StartQuestion ? dto.EndQuestion - dto.StartQuestion + 1 : 1);
                 var master = new SectionMaster
                 {
+                    BatchId = assignedBatchId,
                     Name = dto.Name.Trim(),
                     Description = dto.Description ?? "",
                     TotalQuestions = totalQ,
@@ -129,6 +163,75 @@ namespace API.Controllers
             }
         }
 
+        [HttpPost("Masters/Batch")]
+        [Authorize(Roles = "admin,coordinator")]
+        public async Task<ActionResult> CreateSectionMastersBatch([FromBody] BatchSectionMasterDto dto)
+        {
+            try
+            {
+                if (dto == null || dto.Sections == null || !dto.Sections.Any())
+                    return BadRequest(new { success = false, message = "At least one section is required" });
+
+                int assignedBatchId = (dto.BatchId.HasValue && dto.BatchId.Value > 0)
+                    ? dto.BatchId.Value
+                    : (await _context.SectionMasters.MaxAsync(sm => (int?)sm.BatchId) ?? 0) + 1;
+
+                // Check for duplicates within the submitted list itself
+                var duplicateInList = dto.Sections
+                    .Where(s => !string.IsNullOrWhiteSpace(s.Name))
+                    .GroupBy(m => m.Name.Trim().ToLower())
+                    .FirstOrDefault(g => g.Count() > 1);
+
+                if (duplicateInList != null)
+                {
+                    return BadRequest(new { success = false, message = $"Duplicate section name '{duplicateInList.Key}' found in the submitted batch" });
+                }
+
+                var newMasters = new List<SectionMaster>();
+
+                foreach (var s in dto.Sections)
+                {
+                    if (string.IsNullOrWhiteSpace(s.Name))
+                        return BadRequest(new { success = false, message = "All sections must have a valid name" });
+
+                    // Check for duplicate name within this batch in database
+                    var existsInDb = await _context.SectionMasters.AnyAsync(sm => 
+                        sm.BatchId == assignedBatchId && sm.Name.ToLower() == s.Name.Trim().ToLower());
+                    if (existsInDb)
+                        return BadRequest(new { success = false, message = $"Section '{s.Name}' already exists in Batch #{assignedBatchId}" });
+
+                    int totalQ = s.TotalQuestions > 0 ? s.TotalQuestions : (s.EndQuestion >= s.StartQuestion ? s.EndQuestion - s.StartQuestion + 1 : 1);
+
+                    newMasters.Add(new SectionMaster
+                    {
+                        BatchId = assignedBatchId,
+                        Name = s.Name.Trim(),
+                        Description = s.Description ?? "",
+                        TotalQuestions = totalQ,
+                        TotalMarks = Math.Round(s.TotalMarks, 2, MidpointRounding.AwayFromZero),
+                        StartQuestion = s.StartQuestion,
+                        EndQuestion = s.EndQuestion,
+                        MaxQuestionsToAttempt = s.MaxQuestionsToAttempt > 0 ? s.MaxQuestionsToAttempt : totalQ,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+
+                _context.SectionMasters.AddRange(newMasters);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { 
+                    success = true, 
+                    message = $"Successfully created {newMasters.Count} section(s) for Batch #{assignedBatchId}",
+                    batchId = assignedBatchId,
+                    sections = newMasters
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpPut("Masters/{id}")]
         [Authorize(Roles = "admin,coordinator")]
         public async Task<IActionResult> UpdateSectionMaster(int id, [FromBody] SectionMasterDto dto)
@@ -142,12 +245,14 @@ namespace API.Controllers
                 if (string.IsNullOrWhiteSpace(dto.Name))
                     return BadRequest(new { success = false, message = "Section name is required" });
 
-                var duplicate = await _context.SectionMasters.AnyAsync(sm => sm.Id != id && sm.Name.ToLower() == dto.Name.Trim().ToLower());
+                int targetBatchId = dto.BatchId > 0 ? dto.BatchId : master.BatchId;
+                var duplicate = await _context.SectionMasters.AnyAsync(sm => sm.Id != id && sm.BatchId == targetBatchId && sm.Name.ToLower() == dto.Name.Trim().ToLower());
                 if (duplicate)
-                    return BadRequest(new { success = false, message = "Another section master with this name already exists" });
+                    return BadRequest(new { success = false, message = $"Another section master with name '{dto.Name}' already exists in Batch #{targetBatchId}" });
 
                 int totalQ = dto.TotalQuestions > 0 ? dto.TotalQuestions : (dto.EndQuestion >= dto.StartQuestion ? dto.EndQuestion - dto.StartQuestion + 1 : 1);
 
+                if (dto.BatchId > 0) { master.BatchId = dto.BatchId; }
                 master.Name = dto.Name.Trim();
                 master.Description = dto.Description ?? "";
                 master.TotalQuestions = totalQ;
@@ -177,11 +282,7 @@ namespace API.Controllers
                 if (master == null)
                     return NotFound(new { success = false, message = "Section Master not found" });
 
-                var referencingSections = await _context.Sections.Where(s => s.SectionMasterId == id).ToListAsync();
-                foreach (var s in referencingSections)
-                {
-                    s.SectionMasterId = null;
-                }
+
 
                 _context.SectionMasters.Remove(master);
                 await _context.SaveChangesAsync();
@@ -272,8 +373,10 @@ namespace API.Controllers
                 var master = await _context.SectionMasters.FirstOrDefaultAsync(sm => sm.Name == masterName);
                 if (master == null)
                 {
+                    int nextBatchId = sectionDto.BatchId > 0 ? sectionDto.BatchId : (await _context.SectionMasters.MaxAsync(sm => (int?)sm.BatchId) ?? 0) + 1;
                     master = new SectionMaster
                     {
+                        BatchId = nextBatchId,
                         Name = masterName,
                         Description = sectionDto.Description,
                         TotalQuestions = sectionDto.TotalQuestions,
@@ -287,10 +390,13 @@ namespace API.Controllers
                     await _context.SaveChangesAsync();
                 }
 
+                int finalBatchId = sectionDto.BatchId > 0 ? sectionDto.BatchId : master.BatchId;
+                if (finalBatchId <= 0) finalBatchId = 1;
+
                 var section = new Section
                 {
                     PaperId = sectionDto.PaperId,
-                    SectionMasterId = master.Id,
+                    BatchId = finalBatchId,
                     Name = sectionDto.Name,
                     Description = sectionDto.Description,
                     TotalQuestions = sectionDto.TotalQuestions,
@@ -312,16 +418,15 @@ namespace API.Controllers
                     // Use questions from UI
                     foreach (var questionDto in sectionDto.Questions)
                     {
-                        // Validate question type is provided
-                        if (string.IsNullOrEmpty(questionDto.Type))
-                            return BadRequest(new { success = false, message = $"Question {questionDto.QuestionNo} must have a type selected" });
+                        var (qTypeId, qTypeName) = await ResolveQuestionTypeAsync(questionDto.TypeId, questionDto.Type);
 
                         var question = new Question
                         {
                             SectionId = section.Id,
                             QuestionNo = questionDto.QuestionNo,
                             Marks = Math.Round(questionDto.Marks, 2, MidpointRounding.AwayFromZero),
-                            Type = questionDto.Type,
+                            TypeId = qTypeId,
+                            Type = qTypeName,
                             IsOptional = questionDto.IsOptional,
                             OptionalGroupCode = questionDto.OptionalGroupCode,
                             CreatedAt = DateTime.UtcNow
@@ -336,12 +441,14 @@ namespace API.Controllers
 
                     for (int i = sectionDto.StartQuestion; i <= sectionDto.EndQuestion; i++)
                     {
+                        var (defTypeId, defTypeName) = await ResolveQuestionTypeAsync(null, "MCQ");
                         var question = new Question
                         {
                             SectionId = section.Id,
                             QuestionNo = i.ToString(),
                             Marks = marksPerQuestion,
-                            Type = "MCQ", // default type
+                            TypeId = defTypeId,
+                            Type = defTypeName,
                             IsOptional = false,
                             CreatedAt = DateTime.UtcNow
                         };
@@ -375,8 +482,10 @@ namespace API.Controllers
                 var master = await _context.SectionMasters.FirstOrDefaultAsync(sm => sm.Name == masterName);
                 if (master == null)
                 {
+                    int nextBatchId = sectionDto.BatchId > 0 ? sectionDto.BatchId : (await _context.SectionMasters.MaxAsync(sm => (int?)sm.BatchId) ?? 0) + 1;
                     master = new SectionMaster
                     {
+                        BatchId = nextBatchId,
                         Name = masterName,
                         Description = sectionDto.Description,
                         TotalQuestions = sectionDto.TotalQuestions,
@@ -390,7 +499,8 @@ namespace API.Controllers
                     await _context.SaveChangesAsync();
                 }
 
-                section.SectionMasterId = master.Id;
+                section.BatchId = sectionDto.BatchId > 0 ? sectionDto.BatchId : master.BatchId;
+                if (section.BatchId <= 0) section.BatchId = 1;
                 section.Name = sectionDto.Name;
                 section.Description = sectionDto.Description;
                 section.TotalQuestions = sectionDto.TotalQuestions;
@@ -503,8 +613,10 @@ namespace API.Controllers
                     var master = await _context.SectionMasters.FirstOrDefaultAsync(sm => sm.Name == masterName);
                     if (master == null)
                     {
+                        int nextBatchId = request.SectionDetails.BatchId > 0 ? request.SectionDetails.BatchId : (await _context.SectionMasters.MaxAsync(sm => (int?)sm.BatchId) ?? 0) + 1;
                         master = new SectionMaster
                         {
+                            BatchId = nextBatchId,
                             Name = masterName,
                             Description = request.SectionDetails.Description,
                             TotalQuestions = request.SectionDetails.TotalQuestions > 0 ? request.SectionDetails.TotalQuestions : calculatedTotalQuestions,
@@ -518,10 +630,13 @@ namespace API.Controllers
                         await _context.SaveChangesAsync();
                     }
 
+                    int secBatchId = request.SectionDetails.BatchId > 0 ? request.SectionDetails.BatchId : master.BatchId;
+                    if (secBatchId <= 0) secBatchId = 1;
+
                     var section = new Section
                     {
                         PaperId = paperId,
-                        SectionMasterId = master.Id,
+                        BatchId = secBatchId,
                         Name = request.SectionDetails.Name,
                         Description = request.SectionDetails.Description,
                         TotalQuestions = request.SectionDetails.TotalQuestions > 0 ? request.SectionDetails.TotalQuestions : calculatedTotalQuestions,
@@ -621,8 +736,10 @@ namespace API.Controllers
                         var master = await _context.SectionMasters.FirstOrDefaultAsync(sm => sm.Name == masterName);
                         if (master == null)
                         {
+                            int nextBatchId = sourceSection.BatchId > 0 ? sourceSection.BatchId : (await _context.SectionMasters.MaxAsync(sm => (int?)sm.BatchId) ?? 0) + 1;
                             master = new SectionMaster
                             {
+                                BatchId = nextBatchId,
                                 Name = masterName,
                                 Description = sourceSection.Description,
                                 TotalQuestions = sourceSection.TotalQuestions,
@@ -636,10 +753,13 @@ namespace API.Controllers
                             await _context.SaveChangesAsync();
                         }
 
+                        int cBatchId = sourceSection.BatchId > 0 ? sourceSection.BatchId : master.BatchId;
+                        if (cBatchId <= 0) cBatchId = 1;
+
                         var newSection = new Section
                         {
                             PaperId = targetPaperId,
-                            SectionMasterId = master.Id,
+                            BatchId = cBatchId,
                             Name = sourceSection.Name,
                             Description = sourceSection.Description,
                             TotalQuestions = sourceSection.TotalQuestions,
@@ -789,7 +909,7 @@ namespace API.Controllers
                         var newSection = new Section
                         {
                             PaperId = paperId,
-                            SectionMasterId = master.Id,
+                            BatchId = master.BatchId > 0 ? master.BatchId : 1,
                             Name = master.Name,
                             Description = master.Description ?? "",
                             TotalQuestions = totalQ,
@@ -808,12 +928,14 @@ namespace API.Controllers
                         var questions = new List<Question>();
                         for (int qNo = startQ; qNo <= endQ; qNo++)
                         {
+                            var (defTypeId, defTypeName) = await ResolveQuestionTypeAsync(null, "MCQ");
                             questions.Add(new Question
                             {
                                 SectionId = newSection.Id,
                                 QuestionNo = qNo.ToString(),
                                 Marks = marksPerQ,
-                                Type = "MCQ",
+                                TypeId = defTypeId,
+                                Type = defTypeName,
                                 IsOptional = false,
                                 CreatedAt = DateTime.UtcNow
                             });
@@ -839,10 +961,15 @@ namespace API.Controllers
         {
             try
             {
-                var mappings = await _context.PaperSectionMasters
-                    .Include(psm => psm.SectionMaster)
+                var batchIds = await _context.PaperSectionMasters
                     .Where(psm => psm.PaperId == paperId)
-                    .Select(psm => psm.SectionMaster)
+                    .Select(psm => psm.BatchId)
+                    .Distinct()
+                    .ToListAsync();
+
+                var mappings = await _context.SectionMasters
+                    .Where(sm => batchIds.Contains(sm.BatchId))
+                    .OrderBy(sm => sm.StartQuestion)
                     .ToListAsync();
 
                 return Ok(mappings);
@@ -899,23 +1026,27 @@ namespace API.Controllers
                 var existingPsm = await _context.PaperSectionMasters.Where(psm => psm.PaperId == request.PaperId).ToListAsync();
                 _context.PaperSectionMasters.RemoveRange(existingPsm);
 
-                if (request.MasterSectionIds != null && request.MasterSectionIds.Any())
+                var targetBatchIds = masterSections.Select(sm => sm.BatchId).Distinct().ToList();
+                if (request.BatchIds != null && request.BatchIds.Any())
                 {
-                    foreach (var mId in request.MasterSectionIds.Distinct())
+                    targetBatchIds.AddRange(request.BatchIds.Where(b => b > 0));
+                    targetBatchIds = targetBatchIds.Distinct().ToList();
+                }
+
+                foreach (var bId in targetBatchIds)
+                {
+                    _context.PaperSectionMasters.Add(new PaperSectionMaster
                     {
-                        _context.PaperSectionMasters.Add(new PaperSectionMaster
-                        {
-                            PaperId = request.PaperId,
-                            SectionMasterId = mId,
-                            CreatedAt = DateTime.UtcNow
-                        });
-                    }
+                        PaperId = request.PaperId,
+                        BatchId = bId,
+                        CreatedAt = DateTime.UtcNow
+                    });
                 }
 
                 // 2. Synchronize Sections and Questions for the Paper (Sections table)
                 var existingSections = await _context.Sections
                     .Include(s => s.Questions)
-                    .Where(s => s.PaperId == request.PaperId && s.SectionMasterId != null)
+                    .Where(s => s.PaperId == request.PaperId)
                     .ToListAsync();
 
                 foreach (var s in existingSections)
@@ -944,7 +1075,7 @@ namespace API.Controllers
                         var newSection = new Section
                         {
                             PaperId = request.PaperId,
-                            SectionMasterId = master.Id,
+                            BatchId = master.BatchId > 0 ? master.BatchId : 1,
                             Name = master.Name,
                             Description = master.Description ?? "",
                             TotalQuestions = totalQ,
@@ -961,12 +1092,14 @@ namespace API.Controllers
                         var questions = new List<Question>();
                         for (int qNo = startQ; qNo <= endQ; qNo++)
                         {
+                            var (defTypeId, defTypeName) = await ResolveQuestionTypeAsync(null, "MCQ");
                             questions.Add(new Question
                             {
                                 SectionId = newSection.Id,
                                 QuestionNo = qNo.ToString(),
                                 Marks = marksPerQ,
-                                Type = "MCQ",
+                                TypeId = defTypeId,
+                                Type = defTypeName,
                                 IsOptional = false,
                                 CreatedAt = DateTime.UtcNow
                             });
@@ -1006,7 +1139,7 @@ namespace API.Controllers
                             var newPps = new ProjectPaperSection
                             {
                                 ProjectPaperId = pp.Id,
-                                SectionMasterId = master.Id,
+                                BatchId = master.BatchId > 0 ? master.BatchId : 1,
                                 Name = master.Name,
                                 Description = master.Description ?? "",
                                 StartQuestion = startQ,
@@ -1060,6 +1193,7 @@ namespace API.Controllers
     {
         public int PaperId { get; set; }
         public List<int> MasterSectionIds { get; set; } = new List<int>();
+        public List<int> BatchIds { get; set; } = new List<int>();
     }
 
     public class BulkSectionDto
@@ -1082,8 +1216,15 @@ namespace API.Controllers
         public bool OverwriteExisting { get; set; } = false;
     }
 
+    public class BatchSectionMasterDto
+    {
+        public int? BatchId { get; set; }
+        public List<SectionMasterDto> Sections { get; set; } = new List<SectionMasterDto>();
+    }
+
     public class SectionMasterDto
     {
+        public int BatchId { get; set; } = 0;
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }
         public int TotalQuestions { get; set; }

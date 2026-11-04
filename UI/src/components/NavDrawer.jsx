@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   X, LayoutDashboard, School, Building2, GraduationCap, BookOpen,
   Calendar, FileText, Layers, Zap, Users, Shield, Activity, PenTool,
-  BarChart3, BookMarked, Settings2, Briefcase, Upload, Folder, FileCheck
+  BarChart3, BookMarked, Settings, Settings2, Briefcase, Upload, Folder, FileCheck
 } from 'lucide-react';
 import { encryptId } from '../utils/encryption';
 
@@ -82,6 +82,9 @@ function useNavGroups(userType, hasPermission) {
     if (hasPermission('READ_ROLE')) {
       ops.items.push({ label: 'Roles & Permissions', path: '/admin/role-management', icon: Shield });
     }
+    if (hasPermission('MANAGE_SETTINGS')) {
+      ops.items.push({ label: 'Settings', path: '/settings', icon: Settings });
+    }
     if (ops.items.length > 0) groups.push(ops);
 
     return groups;
@@ -122,6 +125,9 @@ function useNavGroups(userType, hasPermission) {
     if (hasPermission('READ_ROLE')) {
       ops.items.push({ label: 'Roles & Permissions', path: '/admin/role-management', icon: Shield });
     }
+    if (hasPermission('MANAGE_SETTINGS')) {
+      ops.items.push({ label: 'Settings', path: '/settings', icon: Settings });
+    }
     if (ops.items.length > 0) groups.push(ops);
     return groups;
   }
@@ -142,6 +148,9 @@ function useNavGroups(userType, hasPermission) {
     }
     if (hasPermission('VIEW_REPORTS')) {
       work.items.push({ label: 'Reports', path: '/reports', icon: BarChart3 });
+    }
+    if (hasPermission('MANAGE_SETTINGS')) {
+      work.items.push({ label: 'Settings', path: '/settings', icon: Settings });
     }
     if (work.items.length > 0) groups.push(work);
     return groups;

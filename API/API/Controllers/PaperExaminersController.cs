@@ -700,6 +700,12 @@ namespace API.Controllers
                 if (assignment == null)
                     return NotFound(new { success = false, message = "Assignment not found" });
 
+                var targetPp = await _context.ProjectPapers.Include(p => p.Project).FirstOrDefaultAsync(p => p.Id == assignment.ProjectPaperId);
+                if (targetPp?.Project != null && !targetPp.Project.IsActive)
+                {
+                    return BadRequest(new { success = false, message = "Cannot update assignments for an inactive project." });
+                }
+
                 int newExaminerId = dto.ResolvedNewExaminerId;
                 if (newExaminerId <= 0)
                     return BadRequest(new { success = false, message = "Valid new examiner ID is required." });
@@ -889,6 +895,11 @@ namespace API.Controllers
                     return NotFound(new { success = false, message = "Project paper not found" });
                 }
 
+                if (projectPaper.Project != null && !projectPaper.Project.IsActive)
+                {
+                    return BadRequest(new { success = false, message = "Cannot assign examiners for an inactive project. Please activate the project first." });
+                }
+
                 var examiner = await _context.Users.FindAsync(assignDto.ExaminerId);
                 if (examiner == null)
                 {
@@ -976,6 +987,12 @@ namespace API.Controllers
                 if (assignment == null)
                     return NotFound(new { success = false, message = "Assignment not found" });
 
+                var targetPp = await _context.ProjectPapers.Include(p => p.Project).FirstOrDefaultAsync(p => p.Id == assignment.ProjectPaperId);
+                if (targetPp?.Project != null && !targetPp.Project.IsActive)
+                {
+                    return BadRequest(new { success = false, message = "Cannot remove assignments for an inactive project." });
+                }
+
                 var activeAllocations = await _context.Allocations
                     .Include(a => a.Script)
                     .ThenInclude(s => s.ProjectPaper)
@@ -1062,6 +1079,15 @@ namespace API.Controllers
         {
             try
             {
+                if (request.ProjectId.HasValue && request.ProjectId.Value > 0)
+                {
+                    var proj = await _context.Projects.FindAsync(request.ProjectId.Value);
+                    if (proj != null && !proj.IsActive)
+                    {
+                        return BadRequest(new { success = false, message = "Cannot assign examiners for an inactive project." });
+                    }
+                }
+
                 int assignedCount = 0;
                 var targetProjectPaperIds = new HashSet<int>();
 
@@ -1114,60 +1140,227 @@ namespace API.Controllers
                     }
                 }
 
+                // Resolve any additional PaperIds from CatchNos
+                if (request.CatchNos != null && request.CatchNos.Any())
+                {
+                    foreach (var key in request.CatchNos.Keys)
+                    {
+                        if (int.TryParse(key, out int id) && id > 0)
+                        {
+                            if (request.ProjectId.HasValue && request.ProjectId.Value > 0)
+                            {
+                                var ppIds = await _context.ProjectPapers
+                                    .Where(pp => (pp.PaperId == id || pp.Id == id) && pp.ProjectId == request.ProjectId.Value)
+                                    .Select(pp => pp.Id)
+                                    .ToListAsync();
+                                foreach (var ppid in ppIds) targetProjectPaperIds.Add(ppid);
+                            }
+                            else
+                            {
+                                if (await _context.ProjectPapers.AnyAsync(pp => pp.Id == id))
+                                {
+                                    targetProjectPaperIds.Add(id);
+                                }
+                                else
+                                {
+                                    var ppIds = await _context.ProjectPapers
+                                        .Where(pp => pp.PaperId == id)
+                                        .Select(pp => pp.Id)
+                                        .ToListAsync();
+                                    foreach (var ppid in ppIds) targetProjectPaperIds.Add(ppid);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Resolve any additional PaperIds from PaperUpdates
+                if (request.PaperUpdates != null && request.PaperUpdates.Any())
+                {
+                    foreach (var key in request.PaperUpdates.Keys)
+                    {
+                        if (int.TryParse(key, out int id) && id > 0)
+                        {
+                            if (request.ProjectId.HasValue && request.ProjectId.Value > 0)
+                            {
+                                var ppIds = await _context.ProjectPapers
+                                    .Where(pp => (pp.PaperId == id || pp.Id == id) && pp.ProjectId == request.ProjectId.Value)
+                                    .Select(pp => pp.Id)
+                                    .ToListAsync();
+                                foreach (var ppid in ppIds) targetProjectPaperIds.Add(ppid);
+                            }
+                            else
+                            {
+                                if (await _context.ProjectPapers.AnyAsync(pp => pp.Id == id))
+                                {
+                                    targetProjectPaperIds.Add(id);
+                                }
+                                else
+                                {
+                                    var ppIds = await _context.ProjectPapers
+                                        .Where(pp => pp.PaperId == id)
+                                        .Select(pp => pp.Id)
+                                        .ToListAsync();
+                                    foreach (var ppid in ppIds) targetProjectPaperIds.Add(ppid);
+                                }
+                            }
+                        }
+                    }
+                }
+
                 var pps = await _context.ProjectPapers
                     .Where(pp => targetProjectPaperIds.Contains(pp.Id))
                     .ToListAsync();
                 var ppProjectMap = pps.ToDictionary(pp => pp.Id, pp => pp.ProjectId);
 
-                foreach (var projectPaperId in targetProjectPaperIds)
+                bool catchNosUpdated = false;
+                if (request.CatchNos != null && request.CatchNos.Any())
                 {
-                    foreach (var examinerId in request.ExaminerIds)
+                    foreach (var pp in pps)
                     {
-                        var existing = await _context.PaperExaminers
-                            .FirstOrDefaultAsync(pe => pe.ProjectPaperId == projectPaperId && pe.ExaminerId == examinerId);
-                            
-                        if (existing == null)
+                        string? newCatchNo = null;
+                        if (request.CatchNos.TryGetValue(pp.PaperId.ToString(), out var c1))
                         {
-                            _context.PaperExaminers.Add(new PaperExaminer
-                            {
-                                ProjectPaperId = projectPaperId,
-                                ExaminerId = examinerId,
-                                ProjectId = ppProjectMap.TryGetValue(projectPaperId, out var pId) ? pId : (int?)null,
-                                AssignedAt = DateTime.UtcNow,
-                                IsActive = true
-                            });
-                            assignedCount++;
+                            newCatchNo = c1;
                         }
-                        else if (!existing.IsActive)
+                        else if (request.CatchNos.TryGetValue(pp.Id.ToString(), out var c2))
                         {
-                            existing.IsActive = true;
-                            existing.AssignedAt = DateTime.UtcNow;
-                            _context.PaperExaminers.Update(existing);
-                            assignedCount++;
+                            newCatchNo = c2;
+                        }
+
+                        if (newCatchNo != null && pp.CatchNo != newCatchNo.Trim())
+                        {
+                            pp.CatchNo = newCatchNo.Trim();
+                            pp.UpdatedAt = DateTime.UtcNow;
+                            catchNosUpdated = true;
+                        }
+                    }
+                }
+
+                bool paperDetailsUpdated = false;
+                if (request.PaperUpdates != null && request.PaperUpdates.Any())
+                {
+                    var paperIdsToUpdate = pps.Select(pp => pp.PaperId).Distinct().ToList();
+                    var papers = await _context.Papers.Where(p => paperIdsToUpdate.Contains(p.PaperId)).ToListAsync();
+                    var paperMap = papers.ToDictionary(p => p.PaperId);
+
+                    foreach (var pp in pps)
+                    {
+                        PaperUpdateDetailsDto? update = null;
+                        if (request.PaperUpdates.TryGetValue(pp.PaperId.ToString(), out var u1))
+                            update = u1;
+                        else if (request.PaperUpdates.TryGetValue(pp.Id.ToString(), out var u2))
+                            update = u2;
+
+                        if (update != null)
+                        {
+                            if (!string.IsNullOrWhiteSpace(update.CatchNo) && pp.CatchNo != update.CatchNo.Trim())
+                            {
+                                pp.CatchNo = update.CatchNo.Trim();
+                                pp.UpdatedAt = DateTime.UtcNow;
+                                catchNosUpdated = true;
+                            }
+
+                            if (paperMap.TryGetValue(pp.PaperId, out var paper))
+                            {
+                                bool pChanged = false;
+                                if (!string.IsNullOrWhiteSpace(update.PaperName) && paper.PaperName != update.PaperName.Trim())
+                                {
+                                    paper.PaperName = update.PaperName.Trim();
+                                    pChanged = true;
+                                }
+                                if (update.PaperNumber.HasValue && update.PaperNumber.Value > 0 && paper.PaperNumber != update.PaperNumber.Value)
+                                {
+                                    paper.PaperNumber = update.PaperNumber.Value;
+                                    pChanged = true;
+                                }
+                                if (update.MaxMarks.HasValue && update.MaxMarks.Value > 0 && paper.MaxMarks != update.MaxMarks.Value)
+                                {
+                                    paper.MaxMarks = update.MaxMarks.Value;
+                                    pChanged = true;
+                                }
+                                if (update.TotalQuestions.HasValue && update.TotalQuestions.Value >= 0 && paper.TotalQuestions != update.TotalQuestions.Value)
+                                {
+                                    paper.TotalQuestions = update.TotalQuestions.Value;
+                                    pChanged = true;
+                                }
+                                if (update.Description != null && paper.Description != update.Description)
+                                {
+                                    paper.Description = update.Description;
+                                    pChanged = true;
+                                }
+                                if (pChanged)
+                                {
+                                    paper.UpdatedAt = DateTime.UtcNow;
+                                    paperDetailsUpdated = true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (request.ExaminerIds != null && request.ExaminerIds.Any())
+                {
+                    foreach (var projectPaperId in targetProjectPaperIds)
+                    {
+                        foreach (var examinerId in request.ExaminerIds)
+                        {
+                            var existing = await _context.PaperExaminers
+                                .FirstOrDefaultAsync(pe => pe.ProjectPaperId == projectPaperId && pe.ExaminerId == examinerId);
+                                
+                            if (existing == null)
+                            {
+                                _context.PaperExaminers.Add(new PaperExaminer
+                                {
+                                    ProjectPaperId = projectPaperId,
+                                    ExaminerId = examinerId,
+                                    ProjectId = ppProjectMap.TryGetValue(projectPaperId, out var pId) ? pId : (int?)null,
+                                    AssignedAt = DateTime.UtcNow,
+                                    IsActive = true
+                                });
+                                assignedCount++;
+                            }
+                            else if (!existing.IsActive)
+                            {
+                                existing.IsActive = true;
+                                existing.AssignedAt = DateTime.UtcNow;
+                                _context.PaperExaminers.Update(existing);
+                                assignedCount++;
+                            }
                         }
                     }
                 }
                 
-                if (assignedCount > 0)
+                if (assignedCount > 0 || catchNosUpdated || paperDetailsUpdated)
                 {
-                    foreach (var pp in pps)
+                    if (assignedCount > 0)
                     {
-                        pp.IsExaminerAssigned = true;
-                        pp.UpdatedAt = DateTime.UtcNow;
+                        foreach (var pp in pps)
+                        {
+                            pp.IsExaminerAssigned = true;
+                            pp.UpdatedAt = DateTime.UtcNow;
+                        }
                     }
                     _context.ProjectPapers.UpdateRange(pps);
 
                     await _context.SaveChangesAsync();
 
-                    var uniId = await _context.ProjectPapers
-                        .Where(pp => targetProjectPaperIds.Contains(pp.Id))
-                        .Select(pp => (int?)(pp.Project.UniversityId > 0 ? pp.Project.UniversityId : (pp.Paper != null ? pp.Paper.UniversityId : null)))
-                        .FirstOrDefaultAsync();
+                    if (assignedCount > 0)
+                    {
+                        var uniId = await _context.ProjectPapers
+                            .Where(pp => targetProjectPaperIds.Contains(pp.Id))
+                            .Select(pp => (int?)(pp.Project.UniversityId > 0 ? pp.Project.UniversityId : (pp.Paper != null ? pp.Paper.UniversityId : null)))
+                            .FirstOrDefaultAsync();
 
-                    TriggerAutoAllocationIfEligible(uniId);
+                        TriggerAutoAllocationIfEligible(uniId);
+                    }
                 }
 
-                return Ok(new { success = true, message = $"Successfully assigned {request.ExaminerIds.Count} examiners to {targetProjectPaperIds.Count} project paper(s). ({assignedCount} new assignments)" });
+                var msg = assignedCount > 0
+                    ? $"Successfully assigned {request.ExaminerIds.Count} examiners to {targetProjectPaperIds.Count} project paper(s). ({assignedCount} new assignments)"
+                    : $"Successfully updated {targetProjectPaperIds.Count} paper(s).";
+
+                return Ok(new { success = true, message = msg });
             }
             catch (Exception ex)
             {
@@ -1176,12 +1369,24 @@ namespace API.Controllers
         }
     }
 
+    public class PaperUpdateDetailsDto
+    {
+        public string? PaperName { get; set; }
+        public int? PaperNumber { get; set; }
+        public decimal? MaxMarks { get; set; }
+        public int? TotalQuestions { get; set; }
+        public string? Description { get; set; }
+        public string? CatchNo { get; set; }
+    }
+
     public class BulkAssignRequest
     {
         public List<int>? ProjectPaperIds { get; set; }
         public List<int>? PaperIds { get; set; }
         public List<int> ExaminerIds { get; set; } = new List<int>();
         public int? ProjectId { get; set; }
+        public Dictionary<string, string>? CatchNos { get; set; }
+        public Dictionary<string, PaperUpdateDetailsDto>? PaperUpdates { get; set; }
     }
 
     public class SubjectPaperRequestDto

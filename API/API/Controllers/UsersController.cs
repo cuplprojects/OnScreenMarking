@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using API.Data;
 using API.Models;
 using API.Models.DTOs;
@@ -16,12 +19,28 @@ namespace API.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IEmailService _emailService;
         private readonly IPasswordGenerationService _passwordGenerationService;
+        private readonly IDistributedCache _cache;
+        private readonly IPermissionService _permissionService;
 
-        public UsersController(ApplicationDbContext context, IEmailService emailService, IPasswordGenerationService passwordGenerationService)
+        private static readonly JsonSerializerOptions _jsonOptions = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true,
+            ReferenceHandler = ReferenceHandler.IgnoreCycles
+        };
+
+        public UsersController(
+            ApplicationDbContext context, 
+            IEmailService emailService, 
+            IPasswordGenerationService passwordGenerationService,
+            IDistributedCache cache,
+            IPermissionService permissionService)
         {
             _context = context;
             _emailService = emailService;
             _passwordGenerationService = passwordGenerationService;
+            _cache = cache;
+            _permissionService = permissionService;
         }
 
         private static string HashPassword(string password)
@@ -36,15 +55,21 @@ namespace API.Controllers
         private async Task<bool> HasPermissionAsync(string permission)
         {
             var userType = User.FindFirst("userType")?.Value;
-            if (string.IsNullOrEmpty(userType)) return false;
+            return await _permissionService.HasPermissionAsync(userType, permission);
+        }
 
-            var role = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName.ToLower() == userType.ToLower());
-            if (role == null)
-            {
-                return userType.Equals("admin", StringComparison.OrdinalIgnoreCase);
-            }
+        private async Task<List<int>> GetUserSubjectIdsAsync(int userId, int? s1, int? s2, int? s3)
+        {
+            var subjectIds = await _context.ExaminerExpertises
+                .Where(ee => ee.ExaminerId == userId && ee.IsActive)
+                .Select(ee => ee.SubjectId)
+                .ToListAsync();
 
-            return role.PermissionsList.Contains(permission);
+            if (s1.HasValue && s1.Value > 0 && !subjectIds.Contains(s1.Value)) subjectIds.Add(s1.Value);
+            if (s2.HasValue && s2.Value > 0 && !subjectIds.Contains(s2.Value)) subjectIds.Add(s2.Value);
+            if (s3.HasValue && s3.Value > 0 && !subjectIds.Contains(s3.Value)) subjectIds.Add(s3.Value);
+
+            return subjectIds;
         }
 
         [HttpGet("me")]
@@ -59,6 +84,27 @@ namespace API.Controllers
                 }
 
                 int userId = int.Parse(userIdStr);
+                var cacheKey = $"user_details_{userId}";
+
+                // 1. Check Redis Cache first
+                try
+                {
+                    var cachedJson = await _cache.GetStringAsync(cacheKey);
+                    if (!string.IsNullOrEmpty(cachedJson))
+                    {
+                        var cachedUser = JsonSerializer.Deserialize<UserDto>(cachedJson, _jsonOptions);
+                        if (cachedUser != null)
+                        {
+                            return Ok(cachedUser);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Redis Cache] Cache lookup error for user {userId}: {ex.Message}");
+                }
+
+                // 2. Query Database on cache miss
                 var user = await _context.Users
                     .Include(u => u.University)
                     .FirstOrDefaultAsync(u => u.Id == userId);
@@ -67,6 +113,9 @@ namespace API.Controllers
                 {
                     return NotFound(new { success = false, message = "User not found" });
                 }
+
+                var permissions = await _permissionService.GetRolePermissionsAsync(user.UserType);
+                var subjectIds = await GetUserSubjectIdsAsync(user.Id, user.SubjectId1, user.SubjectId2, user.SubjectId3);
 
                 var userDto = new UserDto
                 {
@@ -89,8 +138,25 @@ namespace API.Controllers
                     ProfileImage = user.ProfileImage,
                     IsActive = user.IsActive,
                     IsApproved = user.IsApproved,
-                    University = user.University != null ? new University { UniversityId = user.University.UniversityId, UniversityName = user.University.UniversityName } : null
+                    University = user.University != null ? new University { UniversityId = user.University.UniversityId, UniversityName = user.University.UniversityName } : null,
+                    UniversityName = user.University?.UniversityName,
+                    SubjectIds = subjectIds,
+                    Permissions = permissions
                 };
+
+                // 3. Cache into Redis
+                try
+                {
+                    var cacheOptions = new DistributedCacheEntryOptions
+                    {
+                        AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(8)
+                    };
+                    await _cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(userDto, _jsonOptions), cacheOptions);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Redis Cache] Failed to cache user {userId} in Redis: {ex.Message}");
+                }
 
                 return Ok(userDto);
             }
@@ -352,6 +418,26 @@ namespace API.Controllers
 
             try
             {
+                var cacheKey = $"user_details_{id}";
+
+                // 1. Check Redis Cache
+                try
+                {
+                    var cachedJson = await _cache.GetStringAsync(cacheKey);
+                    if (!string.IsNullOrEmpty(cachedJson))
+                    {
+                        var cachedUser = JsonSerializer.Deserialize<UserDto>(cachedJson, _jsonOptions);
+                        if (cachedUser != null)
+                        {
+                            return Ok(cachedUser);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Redis Cache] Cache lookup error for user {id}: {ex.Message}");
+                }
+
                 var user = await _context.Users
                     .Include(u => u.University)
                     .FirstOrDefaultAsync(u => u.Id == id);
@@ -360,6 +446,9 @@ namespace API.Controllers
                 {
                     return NotFound(new { success = false, message = "User not found" });
                 }
+
+                var permissions = await _permissionService.GetRolePermissionsAsync(user.UserType);
+                var subjectIds = await GetUserSubjectIdsAsync(user.Id, user.SubjectId1, user.SubjectId2, user.SubjectId3);
 
                 var userDto = new UserDto
                 {
@@ -382,8 +471,25 @@ namespace API.Controllers
                     ProfileImage = user.ProfileImage,
                     IsActive = user.IsActive,
                     IsApproved = user.IsApproved,
-                    University = user.University != null ? new University { UniversityId = user.University.UniversityId, UniversityName = user.University.UniversityName } : null
+                    University = user.University != null ? new University { UniversityId = user.University.UniversityId, UniversityName = user.University.UniversityName } : null,
+                    UniversityName = user.University?.UniversityName,
+                    SubjectIds = subjectIds,
+                    Permissions = permissions
                 };
+
+                // Cache in Redis
+                try
+                {
+                    var cacheOptions = new DistributedCacheEntryOptions
+                    {
+                        AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(8)
+                    };
+                    await _cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(userDto, _jsonOptions), cacheOptions);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Redis Cache] Failed to cache user {id}: {ex.Message}");
+                }
 
                 return Ok(userDto);
             }
@@ -515,6 +621,16 @@ namespace API.Controllers
                 targetUser.UpdatedAt = DateTime.UtcNow;
                 
                 await _context.SaveChangesAsync();
+
+                // Invalidate Redis Cache
+                try
+                {
+                    await _cache.RemoveAsync($"user_details_{targetUser.Id}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Redis Cache] Failed to invalidate cache for user {targetUser.Id}: {ex.Message}");
+                }
 
                 // Initiate email with autogenerated password upon approval
                 if (!string.IsNullOrWhiteSpace(generatedPassword))
@@ -648,6 +764,132 @@ namespace API.Controllers
             }
         }
 
+        [HttpPut("profile")]
+        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request)
+        {
+            try
+            {
+                if (request == null)
+                {
+                    return BadRequest(new { success = false, message = "Invalid request payload" });
+                }
+
+                var userIdStr = User.FindFirst("id")?.Value;
+                if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out int userId))
+                {
+                    return Unauthorized(new { success = false, message = "Invalid token claims" });
+                }
+
+                var user = await _context.Users
+                    .Include(u => u.University)
+                    .FirstOrDefaultAsync(u => u.Id == userId);
+
+                if (user == null)
+                {
+                    return NotFound(new { success = false, message = "User not found" });
+                }
+
+                if (!string.IsNullOrWhiteSpace(request.Name)) user.Name = request.Name.Trim();
+                if (request.Phone != null) user.Phone = request.Phone.Trim();
+                if (request.Address != null) user.Address = request.Address.Trim();
+                if (request.ProfileImage != null) user.ProfileImage = request.ProfileImage;
+                if (request.Fname != null) user.Fname = request.Fname.Trim();
+                if (request.Experience != null) user.Experience = request.Experience.Trim();
+                if (request.AadharNo != null) user.AadharNo = request.AadharNo.Trim();
+                if (request.PanNo != null) user.PanNo = request.PanNo.Trim();
+                if (request.CollegeId.HasValue && request.CollegeId.Value > 0) user.CollegeId = request.CollegeId.Value;
+
+                // Sync Subjects
+                if (request.SubjectIds != null)
+                {
+                    user.SubjectId1 = request.SubjectIds.Count > 0 ? request.SubjectIds[0] : null;
+                    user.SubjectId2 = request.SubjectIds.Count > 1 ? request.SubjectIds[1] : null;
+                    user.SubjectId3 = request.SubjectIds.Count > 2 ? request.SubjectIds[2] : null;
+
+                    var existingExpertise = await _context.ExaminerExpertises
+                        .Where(ee => ee.ExaminerId == user.Id)
+                        .ToListAsync();
+
+                    foreach (var subId in request.SubjectIds)
+                    {
+                        var existing = existingExpertise.FirstOrDefault(ee => ee.SubjectId == subId);
+                        if (existing != null)
+                        {
+                            existing.IsActive = true;
+                        }
+                        else
+                        {
+                            _context.ExaminerExpertises.Add(new ExaminerExpertise
+                            {
+                                ExaminerId = user.Id,
+                                SubjectId = subId,
+                                IsActive = true,
+                                CreatedAt = DateTime.UtcNow
+                            });
+                        }
+                    }
+
+                    foreach (var existing in existingExpertise)
+                    {
+                        if (!request.SubjectIds.Contains(existing.SubjectId))
+                        {
+                            existing.IsActive = false;
+                        }
+                    }
+                }
+
+                user.UpdatedAt = DateTime.UtcNow;
+                _context.Entry(user).State = EntityState.Modified;
+                await _context.SaveChangesAsync();
+
+                // Invalidate Redis Cache
+                try
+                {
+                    await _cache.RemoveAsync($"user_details_{user.Id}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Redis Cache] Failed to invalidate cache for user {user.Id}: {ex.Message}");
+                }
+
+                var permissions = await _permissionService.GetRolePermissionsAsync(user.UserType);
+                var finalSubjectIds = await GetUserSubjectIdsAsync(user.Id, user.SubjectId1, user.SubjectId2, user.SubjectId3);
+
+                var userDto = new UserDto
+                {
+                    Id = user.Id,
+                    Name = user.Name,
+                    Email = user.Email,
+                    UserType = user.UserType,
+                    UniversityId = user.UniversityId,
+                    SubjectId1 = user.SubjectId1,
+                    SubjectId2 = user.SubjectId2,
+                    SubjectId3 = user.SubjectId3,
+                    EmpId = user.EmpId,
+                    Fname = user.Fname,
+                    AadharNo = user.AadharNo,
+                    PanNo = user.PanNo,
+                    CollegeId = user.CollegeId,
+                    Experience = user.Experience,
+                    Phone = user.Phone,
+                    Address = user.Address,
+                    ProfileImage = user.ProfileImage,
+                    IsActive = user.IsActive,
+                    IsApproved = user.IsApproved,
+                    University = user.University != null ? new University { UniversityId = user.University.UniversityId, UniversityName = user.University.UniversityName } : null,
+                    UniversityName = user.University?.UniversityName,
+                    SubjectIds = finalSubjectIds,
+                    Permissions = permissions
+                };
+
+                return Ok(new { success = true, message = "Profile updated successfully", data = userDto });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateUserRequest request)
         {
@@ -688,6 +930,44 @@ namespace API.Controllers
                 if (request.SubjectId1.HasValue) user.SubjectId1 = request.SubjectId1.Value > 0 ? request.SubjectId1.Value : null;
                 if (request.SubjectId2.HasValue) user.SubjectId2 = request.SubjectId2.Value > 0 ? request.SubjectId2.Value : null;
                 if (request.SubjectId3.HasValue) user.SubjectId3 = request.SubjectId3.Value > 0 ? request.SubjectId3.Value : null;
+
+                if (request.SubjectIds != null)
+                {
+                    user.SubjectId1 = request.SubjectIds.Count > 0 ? request.SubjectIds[0] : null;
+                    user.SubjectId2 = request.SubjectIds.Count > 1 ? request.SubjectIds[1] : null;
+                    user.SubjectId3 = request.SubjectIds.Count > 2 ? request.SubjectIds[2] : null;
+
+                    var existingExpertise = await _context.ExaminerExpertises
+                        .Where(ee => ee.ExaminerId == user.Id)
+                        .ToListAsync();
+
+                    foreach (var subId in request.SubjectIds)
+                    {
+                        var existing = existingExpertise.FirstOrDefault(ee => ee.SubjectId == subId);
+                        if (existing != null)
+                        {
+                            existing.IsActive = true;
+                        }
+                        else
+                        {
+                            _context.ExaminerExpertises.Add(new ExaminerExpertise
+                            {
+                                ExaminerId = user.Id,
+                                SubjectId = subId,
+                                IsActive = true,
+                                CreatedAt = DateTime.UtcNow
+                            });
+                        }
+                    }
+
+                    foreach (var existing in existingExpertise)
+                    {
+                        if (!request.SubjectIds.Contains(existing.SubjectId))
+                        {
+                            existing.IsActive = false;
+                        }
+                    }
+                }
                 if (request.EmpId.HasValue) user.EmpId = request.EmpId.Value > 0 ? request.EmpId.Value : null;
                 if (request.CollegeId.HasValue) user.CollegeId = request.CollegeId.Value > 0 ? request.CollegeId.Value : null;
 
@@ -703,6 +983,16 @@ namespace API.Controllers
                 user.UpdatedAt = DateTime.UtcNow;
                 _context.Entry(user).State = EntityState.Modified;
                 await _context.SaveChangesAsync();
+
+                // Invalidate Redis Cache
+                try
+                {
+                    await _cache.RemoveAsync($"user_details_{user.Id}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Redis Cache] Failed to invalidate cache for user {user.Id}: {ex.Message}");
+                }
 
                 return Ok(new { success = true, message = "User updated successfully" });
             }

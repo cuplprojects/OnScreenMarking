@@ -65,12 +65,12 @@ const Home = () => {
     navigate(`/marking/${encryptId(script.id)}`, {
       state: {
         scriptId: script.id,
-        paperId: script.paperId,
-        projectPaperId: script.projectPaperId,
-        barCode: script.generatedBarcode,
-        allocationId: script.allocationId,
+        paperId: script.paperId || script.PaperId,
+        projectPaperId: script.projectPaperId || script.ProjectPaperId,
+        barCode: script.generatedBarcode || script.GeneratedBarcode,
+        allocationId: script.allocationId || script.AllocationId,
         examinerId: user?.id,
-        studentName: script.studentName,
+        studentName: script.studentName || script.StudentName,
         rollNo: script.rollNumber || script.rollNo,
         subject: script.subjectName || script.subject,
         cleanPdfUrl: script.cleanPdfUrl || script.answerSheetPdfUrl || '',
@@ -307,7 +307,7 @@ const Home = () => {
   });
 
   return (
-    <div className="h-[calc(100vh-64px)] bg-gray-50/50 pb-6 w-full flex flex-col lg:px-10 pt-6 space-y-6 overflow-hidden md:px-6 px-4">
+    <div className="min-h-[calc(100vh-64px)] bg-gray-50/50 pb-10 w-full flex flex-col lg:px-10 pt-6 space-y-6 md:px-6 px-4">
       
       <div className="bg-white py-4 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 md:px-6 px-4">
         <div>
@@ -333,10 +333,10 @@ const Home = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-6 items-start flex-1 w-full overflow-hidden">
+      <div className="grid grid-cols-12 gap-6 items-start w-full">
         
         {/* LEFT COLUMN - STATS & REGISTRY (8 Columns) */}
-        <div className="col-span-12 xl:col-span-8 flex flex-col gap-6 h-full overflow-hidden">
+        <div className="col-span-12 xl:col-span-8 flex flex-col gap-6">
           
           {/* Main Single Row Grid of Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -389,7 +389,7 @@ const Home = () => {
 
 
       {/* Interactive Script Control Cockpit */}
-      <div ref={tableRef} className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col min-h-0 overflow-hidden">
+      <div ref={tableRef} className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
         <div className="p-5 border-b border-gray-100 flex flex-col gap-3 shrink-0">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
@@ -469,8 +469,8 @@ const Home = () => {
           </div>
         ) : (
           <>
-            <div className="flex-1 overflow-auto min-h-0">
-              <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left min-w-[900px] relative">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left min-w-[900px] relative">
                 <thead className="bg-gray-50 border-b border-gray-100 sticky top-0 z-10 shadow-sm">
                 <tr>
                   <SortHeader label="Barcode / Script ID" field="barcode" hasFilter={true} />
@@ -478,7 +478,6 @@ const Home = () => {
                   <SortHeader label="Paper Name" field="paperName" hasFilter={true} />
                   <SortHeader label="Status" field="status" />
                   <SortHeader label="Marks Obtained" field="totalMarks" />
-                  <SortHeader label="Last Activity" field="submittedAt" />
                   <th className="px-5 py-3 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Interactive Actions</th>
                 </tr>
               </thead>
@@ -519,9 +518,6 @@ const Home = () => {
                         <span className="text-gray-400 italic">Not evaluated</span>
                       )}
                     </td>
-                    <td className="px-5 py-2.5 text-[10px] text-gray-505 font-medium">
-                      {new Date(script.submittedAt || script.createdAt).toLocaleDateString()} at {new Date(script.submittedAt || script.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </td>
                     <td className="px-5 py-2.5 text-right">
                       <div className="flex justify-end">
                         <div className="relative group/tooltip">
@@ -556,7 +552,7 @@ const Home = () => {
           </div>
 
           {/* Standard centralized pagination service */}
-          <div className="border-t border-gray-100 bg-white mt-auto rounded-b-xl z-10 relative">
+          <div className="border-t border-gray-100 bg-white rounded-b-xl z-10 relative">
             <TablePagination
               page={page}
               totalPages={totalPages}
@@ -572,7 +568,7 @@ const Home = () => {
       </div>
       
       {/* RIGHT COLUMN - SIDEBAR WIDGETS (4 Columns) */}
-      <div className="col-span-12 xl:col-span-4 flex flex-col gap-6 h-full overflow-y-auto pr-1">
+      <div className="col-span-12 xl:col-span-4 flex flex-col gap-6">
         
         {/* Progress Visualizer */}
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">

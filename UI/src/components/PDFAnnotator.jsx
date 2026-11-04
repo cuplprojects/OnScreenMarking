@@ -153,16 +153,13 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
         const formData = new FormData();
         formData.append('file', pdfBlob, `evaluated_${scriptId}.pdf`);
 
-        const token = sessionStorage.getItem('token');
         const uploadUrl = mId 
           ? `${import.meta.env.VITE_API_URL}/upload?markingId=${mId}`
           : `${import.meta.env.VITE_API_URL}/upload`;
 
         const uploadResponse = await fetch(uploadUrl, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          },
+          credentials: 'include',
           body: formData
         });
         
@@ -378,11 +375,8 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
   const loadPdfFromUrl = async (url) => {
     try {
       setLoadingPdf(true);
-      const token = sessionStorage.getItem('token');
       const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        credentials: 'include'
       });
       const arrayBuffer = await response.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;

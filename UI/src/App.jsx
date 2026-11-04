@@ -19,6 +19,7 @@ import MessageContainer from './components/MessageContainer';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
 import AcceptInvitation from './pages/AcceptInvitation';
 import StudentPortal from './pages/StudentPortal';
 
@@ -72,6 +73,7 @@ function AppRoutes() {
       {/* Public Routes */}
       <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} />
       <Route path="/register" element={isAuthenticated ? <Navigate to="/" replace /> : <Register />} />
+      <Route path="/forgot-password" element={isAuthenticated ? <Navigate to="/" replace /> : <ForgotPassword />} />
       <Route path="/accept-invitation" element={<AcceptInvitation />} />
       <Route path="/student-portal" element={<StudentPortal />} />
 
@@ -273,19 +275,19 @@ function AppRoutes() {
           />
           <Route 
             path="/admin/university-settings" 
-            element={<Navigate to="/settings" replace />} 
+            element={hasPermission("MANAGE_SETTINGS") ? <Navigate to="/settings" replace /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/university-settings" 
-            element={<Navigate to="/settings" replace />} 
+            element={hasPermission("MANAGE_SETTINGS") ? <Navigate to="/settings" replace /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/admin/assignment-types" 
-            element={<Navigate to="/settings" replace />} 
+            element={hasPermission("MANAGE_SETTINGS") ? <Navigate to="/settings" replace /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/assignment-types" 
-            element={<Navigate to="/settings" replace />} 
+            element={hasPermission("MANAGE_SETTINGS") ? <Navigate to="/settings" replace /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
 
 
@@ -306,7 +308,10 @@ function AppRoutes() {
             path="/reports" 
             element={hasPermission("VIEW_REPORTS") ? <Reports /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
-          <Route path="/settings" element={<Settings />} />
+          <Route 
+            path="/settings" 
+            element={hasPermission("MANAGE_SETTINGS") ? <Settings /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
           <Route path="/profile" element={<Profile />} />
         </Route>
       </Route>

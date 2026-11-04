@@ -94,25 +94,37 @@ const paperService = {
     });
   },
 
-  // Import papers from another project with optional master section allocation
-  importPapers: async (targetProjectIdOrOptions, sourcePaperIds, masterSectionIds = []) => {
+  // Import papers from another project with configurable options
+  importPapers: async (targetProjectIdOrOptions, sourcePaperIds, masterSectionIds = [], extraOptions = {}) => {
     let targetProjectId = targetProjectIdOrOptions;
     let paperIds = sourcePaperIds;
     let sectionIds = masterSectionIds;
+    let sourceProjectId = extraOptions.sourceProjectId || null;
+    let importCatchNo = extraOptions.importCatchNo ?? true;
+    let importExaminers = extraOptions.importExaminers ?? false;
+    let importSections = extraOptions.importSections ?? true;
 
-    // Support both object parameter { targetProjectId, sourcePaperIds, masterSectionIds } and positional arguments
+    // Support both object parameter and positional arguments
     if (typeof targetProjectIdOrOptions === 'object' && targetProjectIdOrOptions !== null) {
       targetProjectId = targetProjectIdOrOptions.targetProjectId;
+      sourceProjectId = targetProjectIdOrOptions.sourceProjectId || null;
       paperIds = targetProjectIdOrOptions.sourcePaperIds;
       sectionIds = targetProjectIdOrOptions.masterSectionIds || [];
+      importCatchNo = targetProjectIdOrOptions.importCatchNo ?? true;
+      importExaminers = targetProjectIdOrOptions.importExaminers ?? false;
+      importSections = targetProjectIdOrOptions.importSections ?? true;
     }
 
     return apiCall('/papers/import', {
       method: 'POST',
       body: JSON.stringify({
         targetProjectId: Number(targetProjectId),
+        sourceProjectId: sourceProjectId && sourceProjectId !== 'master' ? Number(sourceProjectId) : null,
         sourcePaperIds: Array.isArray(paperIds) ? paperIds.map(Number) : [],
-        masterSectionIds: Array.isArray(sectionIds) ? sectionIds.map(Number) : []
+        masterSectionIds: Array.isArray(sectionIds) ? sectionIds.map(Number) : [],
+        importCatchNo: !!importCatchNo,
+        importExaminers: !!importExaminers,
+        importSections: !!importSections
       }),
     });
   },
@@ -121,13 +133,10 @@ const paperService = {
   uploadQuestionPaper: async (paperId, projectId, file) => {
     const formData = new FormData();
     formData.append('file', file);
-    const token = sessionStorage.getItem('token');
     const query = projectId ? `?projectId=${projectId}` : '';
     const res = await fetch(`${import.meta.env.VITE_API_URL}/papers/${paperId}/question-paper${query}`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
+      credentials: 'include',
       body: formData
     });
     if (!res.ok) {
@@ -155,13 +164,10 @@ const paperService = {
     for (let i = 0; i < files.length; i++) {
       formData.append('files', files[i]);
     }
-    const token = sessionStorage.getItem('token');
     const query = projectId ? `?projectId=${projectId}` : '';
     const res = await fetch(`${import.meta.env.VITE_API_URL}/papers/bulk-upload-question-papers${query}`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
+      credentials: 'include',
       body: formData
     });
     if (!res.ok) {

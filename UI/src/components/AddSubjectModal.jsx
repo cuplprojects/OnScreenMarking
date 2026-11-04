@@ -44,6 +44,10 @@ export default function AddSubjectModal({
       setError('Subject name is required');
       return;
     }
+    if (!subCode.trim()) {
+      setError('Subject code is required');
+      return;
+    }
 
     try {
       setLoading(true);
@@ -119,9 +123,10 @@ export default function AddSubjectModal({
             </div>
 
             <div>
-              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Subject Code</label>
+              <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1.5">Subject Code *</label>
               <input
                 type="text"
+                required
                 value={subCode}
                 onChange={(e) => setSubCode(e.target.value)}
                 placeholder="e.g. CS-201"

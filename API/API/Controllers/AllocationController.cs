@@ -354,14 +354,27 @@ namespace API.Controllers
         }
 
         [HttpGet("script/{scriptId}")]
-        public async Task<ActionResult<Allocation>> GetScriptAllocation(int scriptId)
+        public async Task<ActionResult> GetScriptAllocation(int scriptId)
         {
             try
             {
                 var allocation = await _context.Allocations
-                    .Include(a => a.Script)
-                    .Include(a => a.Examiner)
-                    .FirstOrDefaultAsync(a => a.ScriptId == scriptId && a.AssignmentStatus);
+                    .AsNoTracking()
+                    .Where(a => a.ScriptId == scriptId && a.AssignmentStatus)
+                    .Select(a => new
+                    {
+                        allocationId = a.AllocationId,
+                        scriptId = a.ScriptId,
+                        examinerId = a.ExaminerId,
+                        projectId = a.ProjectId,
+                        status = a.Status,
+                        assignmentStatus = a.AssignmentStatus,
+                        deadline = a.Deadline,
+                        allocatedAt = a.AllocatedAt,
+                        startedAt = a.StartedAt,
+                        submittedAt = a.SubmittedAt
+                    })
+                    .FirstOrDefaultAsync();
 
                 if (allocation == null)
                     return NotFound(new { success = false, message = "No active allocation found for this script" });
@@ -371,7 +384,7 @@ namespace API.Controllers
 
                 if (loggedInUserType == "examiner")
                 {
-                    if (string.IsNullOrEmpty(loggedInUserIdStr) || allocation.ExaminerId != int.Parse(loggedInUserIdStr))
+                    if (string.IsNullOrEmpty(loggedInUserIdStr) || allocation.examinerId != int.Parse(loggedInUserIdStr))
                     {
                         return StatusCode(403, new { success = false, message = "You can only view allocations assigned to you." });
                     }
@@ -478,9 +491,14 @@ namespace API.Controllers
                 if (request.PaperId <= 0)
                     return BadRequest(new { success = false, message = "Valid Paper ID is required" });
 
-                var projectPaper = await _context.ProjectPapers.FirstOrDefaultAsync(pp => pp.PaperId == request.PaperId);
+                var projectPaper = await _context.ProjectPapers
+                    .Include(pp => pp.Project)
+                    .FirstOrDefaultAsync(pp => pp.PaperId == request.PaperId);
                 if (projectPaper == null || string.IsNullOrEmpty(projectPaper.QuestionPaperPdfUrl))
                     return BadRequest(new { success = false, message = "Cannot allocate scripts because the Question Paper PDF is not uploaded for this paper." });
+
+                if (projectPaper.Project != null && !projectPaper.Project.IsActive)
+                    return BadRequest(new { success = false, message = "Cannot allocate scripts for an inactive project. Please activate the project first." });
 
                 // Get pending scripts for this paper
                 var pendingScripts = await _context.Scripts
@@ -720,6 +738,16 @@ namespace API.Controllers
         {
             try
             {
+                var project = await _context.Projects.FindAsync(projectId);
+                if (project == null)
+                {
+                    return NotFound(new { success = false, message = "Project not found." });
+                }
+                if (!project.IsActive)
+                {
+                    return BadRequest(new { success = false, message = "Cannot allocate scripts for an inactive project. Please activate the project first." });
+                }
+
                 var projectPapers = await _context.ProjectPapers
                     .Include(pp => pp.Paper)
                     .Where(pp => pp.ProjectId == projectId && pp.IsActive)
@@ -1036,6 +1064,7 @@ namespace API.Controllers
                         projectPaperId = pe.ProjectPaperId,
                         paperCode = pe.ProjectPaper?.Paper?.PaperCode ?? "",
                         paperName = pe.ProjectPaper?.Paper?.PaperName ?? "",
+                        catchNo = pe.ProjectPaper?.CatchNo ?? "",
                         pendingScripts = paperPending,
                         allocatedCount = allocatedCount,
                         completedCount = completedCount,

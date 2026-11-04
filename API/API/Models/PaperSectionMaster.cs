@@ -11,10 +11,9 @@ namespace API.Models
         public int Id { get; set; }
 
         public int PaperId { get; set; }
-        public Paper Paper { get; set; }
+        public Paper? Paper { get; set; }
 
-        public int SectionMasterId { get; set; }
-        public SectionMaster SectionMaster { get; set; }
+        public int BatchId { get; set; } = 1;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }

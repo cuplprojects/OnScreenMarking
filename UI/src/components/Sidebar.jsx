@@ -48,7 +48,9 @@ const Sidebar = () => {
       if (hasPermission("VIEW_LOGS")) {
         items.push({ icon: <UserCheck size={20} />, label: 'Attendance Audit', path: '/admin/audit' });
       }
-      items.push({ icon: <Settings size={20} />, label: 'Settings', path: '/settings' });
+      if (hasPermission("MANAGE_SETTINGS")) {
+        items.push({ icon: <Settings size={20} />, label: 'Settings', path: '/settings' });
+      }
     } else if (userType === 'coordinator') {
       items.push({ icon: <Home size={20} />, label: 'Dashboard', path: '/coordinator/dashboard' });
       items.push({ icon: <Building2 size={20} />, label: 'Departments', path: '/departments' });
@@ -72,7 +74,9 @@ const Sidebar = () => {
       if (hasPermission("VIEW_LOGS")) {
         items.push({ icon: <UserCheck size={20} />, label: 'Attendance Audit', path: '/admin/audit' });
       }
-      items.push({ icon: <Settings size={20} />, label: 'Settings', path: '/settings' });
+      if (hasPermission("MANAGE_SETTINGS")) {
+        items.push({ icon: <Settings size={20} />, label: 'Settings', path: '/settings' });
+      }
     } else if (userType === 'examiner') {
       items.push({ icon: <Home size={20} />, label: 'Dashboard', path: '/' });
       
@@ -90,7 +94,9 @@ const Sidebar = () => {
         items.push({ icon: <Users size={20} />, label: 'Examiners', path: '/examiners' });
       }
       items.push({ icon: <BookOpen size={20} />, label: 'Subjects', path: '/subjects' });
-      items.push({ icon: <Settings size={20} />, label: 'Settings', path: '/settings' });
+      if (hasPermission("MANAGE_SETTINGS")) {
+        items.push({ icon: <Settings size={20} />, label: 'Settings', path: '/settings' });
+      }
     }
 
     return items;

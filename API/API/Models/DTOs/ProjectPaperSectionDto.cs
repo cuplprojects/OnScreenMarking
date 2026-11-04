@@ -7,7 +7,7 @@ namespace API.Models.DTOs
     {
         public int Id { get; set; }
         public int ProjectPaperId { get; set; }
-        public int? SectionMasterId { get; set; }
+        public int BatchId { get; set; } = 1;
         public string Name { get; set; }
         public string? Description { get; set; }
         public int TotalQuestions { get; set; }
@@ -25,7 +25,7 @@ namespace API.Models.DTOs
         public int ProjectPaperId { get; set; }
         public int? ProjectId { get; set; }
         public int? PaperId { get; set; }
-        public int? SectionMasterId { get; set; }
+        public int BatchId { get; set; } = 0;
         public string Name { get; set; }
         public string? Description { get; set; }
         public int TotalQuestions { get; set; }
@@ -38,6 +38,7 @@ namespace API.Models.DTOs
 
     public class UpdateProjectPaperSectionDto
     {
+        public int BatchId { get; set; } = 0;
         public string Name { get; set; }
         public string? Description { get; set; }
         public int TotalQuestions { get; set; }

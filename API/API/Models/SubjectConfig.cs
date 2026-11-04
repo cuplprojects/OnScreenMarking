@@ -13,8 +13,7 @@ namespace API.Models
         public int PaperId { get; set; }
         public Paper Paper { get; set; }
         
-        public int? SectionMasterId { get; set; }
-        public SectionMaster SectionMaster { get; set; }
+        public int BatchId { get; set; } = 1;
 
         public string Name { get; set; }
         public string Description { get; set; }
@@ -45,7 +44,12 @@ namespace API.Models
         public string QuestionNo { get; set; }
         [Column(TypeName = "decimal(10,2)")]
         public decimal Marks { get; set; }
-        public string Type { get; set; } // MCQ, SA, LA, CS, NP, EXP, RC, WS, LIT, GV
+
+        public int? TypeId { get; set; }
+        [ForeignKey("TypeId")]
+        public QuestionType? QuestionType { get; set; }
+
+        public string Type { get; set; } = "MCQ"; // MCQ, SA, LA, CS, NP, EXP, RC, WS, LIT, GV
         public bool IsOptional { get; set; }
         public string? OptionalGroupCode { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

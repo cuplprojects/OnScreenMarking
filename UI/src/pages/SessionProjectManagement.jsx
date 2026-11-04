@@ -120,9 +120,10 @@ export default function SessionProjectManagement() {
       searchPlaceholder: 'Search sessions…',
       actionLabel: 'Add Session',
       onAction: () => setShowForm(true),
+      count: totalCount,
     });
     return () => setConfigHeader(null);
-  }, [search, setSearch, setConfigHeader]);
+  }, [search, setSearch, setConfigHeader, totalCount]);
 
   return (
     <div className="w-full space-y-3">

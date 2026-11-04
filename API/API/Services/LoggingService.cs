@@ -1,10 +1,15 @@
 using API.Data;
 using API.Models;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Threading.Tasks;
 
 namespace API.Services
 {
     public interface ILoggingService
     {
+        Task LogEventAsync(string method, string path, string queryString, string headers, string body, string userId, string message, string ipAddress);
+        Task LogErrorAsync(string method, string path, string queryString, int statusCode, string message, string stackTrace, string innerException);
         void LogEvent(string message, string category, int triggeredBy, string oldValue = null, string newValue = null);
         void LogError(string error, string errorMessage, string controller);
     }
@@ -20,24 +25,80 @@ namespace API.Services
             _logger = logger;
         }
 
+        public async Task LogEventAsync(string method, string path, string queryString, string headers, string body, string userId, string message, string ipAddress)
+        {
+            try
+            {
+                var eventLog = new EventLog
+                {
+                    Timestamp = DateTime.UtcNow,
+                    Method = method ?? string.Empty,
+                    Path = path ?? string.Empty,
+                    QueryString = queryString ?? string.Empty,
+                    Headers = headers ?? string.Empty,
+                    Body = body ?? string.Empty,
+                    UserId = userId,
+                    Message = message ?? string.Empty,
+                    IpAddress = ipAddress ?? string.Empty,
+                    Event = message ?? method ?? string.Empty,
+                    Category = method ?? string.Empty
+                };
+
+                _context.EventLogs.Add(eventLog);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to asynchronously log event: {Message}", message);
+            }
+        }
+
+        public async Task LogErrorAsync(string method, string path, string queryString, int statusCode, string message, string stackTrace, string innerException)
+        {
+            try
+            {
+                var errorLog = new ErrorLog
+                {
+                    Timestamp = DateTime.UtcNow,
+                    Method = method ?? string.Empty,
+                    Path = path ?? string.Empty,
+                    QueryString = queryString ?? string.Empty,
+                    StatusCode = statusCode,
+                    Message = message ?? string.Empty,
+                    StackTrace = stackTrace ?? string.Empty,
+                    InnerException = innerException,
+                    Error = message ?? string.Empty,
+                    OccuranceSpace = path ?? string.Empty
+                };
+
+                _context.ErrorLogs.Add(errorLog);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to asynchronously log error: {Message}", message);
+            }
+        }
+
         public void LogEvent(string message, string category, int triggeredBy, string oldValue = null, string newValue = null)
         {
             try
             {
                 var eventLog = new EventLog
                 {
-                    Event = message ?? string.Empty,
-                    Category = category ?? string.Empty,
-                    EventTriggeredBy = triggeredBy,
-                    OldValue = oldValue ?? string.Empty,
-                    NewValue = newValue ?? string.Empty,
-                    LoggedAt = TimeZoneInfo.ConvertTime(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("India Standard Time"))
+                    Timestamp = DateTime.UtcNow,
+                    Method = "LEGACY",
+                    Path = category ?? string.Empty,
+                    QueryString = string.Empty,
+                    Headers = string.Empty,
+                    Body = !string.IsNullOrEmpty(newValue) ? newValue : oldValue ?? string.Empty,
+                    UserId = triggeredBy > 0 ? triggeredBy.ToString() : null,
+                    Message = message ?? string.Empty,
+                    IpAddress = string.Empty
                 };
 
                 _context.EventLogs.Add(eventLog);
                 _context.SaveChanges();
-
-                _logger.LogInformation("Event logged: {Message} by user {TriggeredBy}", message, triggeredBy);
             }
             catch (Exception ex)
             {
@@ -51,16 +112,18 @@ namespace API.Services
             {
                 var errorLog = new ErrorLog
                 {
-                    Error = error,
-                    Message = errorMessage,
-                    OccuranceSpace = controller,
-                    LoggedAt = TimeZoneInfo.ConvertTime(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("India Standard Time"))
+                    Timestamp = DateTime.UtcNow,
+                    Method = "LEGACY",
+                    Path = controller ?? string.Empty,
+                    QueryString = string.Empty,
+                    StatusCode = 500,
+                    Message = $"{error}: {errorMessage}",
+                    StackTrace = string.Empty,
+                    InnerException = null
                 };
 
                 _context.ErrorLogs.Add(errorLog);
                 _context.SaveChanges();
-
-                _logger.LogError("Error logged: {Error} in {Controller}", error, controller);
             }
             catch (Exception ex)
             {

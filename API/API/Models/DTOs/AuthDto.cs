@@ -57,6 +57,9 @@ namespace API.Models.DTOs
         public bool IsActive { get; set; } = true;
         public bool IsApproved { get; set; } = false;
         public University University { get; set; }
+        public string? UniversityName { get; set; }
+        public List<int> SubjectIds { get; set; } = new List<int>();
+        public List<string> Permissions { get; set; } = new List<string>();
     }
 
     public class ExaminerExpertiseDto
@@ -86,6 +89,9 @@ namespace API.Models.DTOs
         public bool IsActive { get; set; }
         public List<int>? MasterSectionIds { get; set; }
         public List<string>? MasterSectionNames { get; set; }
+        public int SectionsCount { get; set; }
+        public int ExaminersCount { get; set; }
+        public List<string>? ExaminerNames { get; set; }
     }
 
     public class AcceptInvitationRequest
@@ -132,6 +138,45 @@ namespace API.Models.DTOs
         public int? CollegeId { get; set; }
         public string? Experience { get; set; }
         public bool? IsActive { get; set; }
+        public List<int>? SubjectIds { get; set; }
+    }
+
+    public class ForgotPasswordRequest
+    {
+        public string Email { get; set; } = string.Empty;
+    }
+
+    public class VerifyResetOtpRequest
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Otp { get; set; } = string.Empty;
+    }
+
+    public class ResetPasswordRequest
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Otp { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
+    }
+
+    public class ChangePasswordRequest
+    {
+        public string CurrentPassword { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
+    }
+
+    public class UpdateProfileRequest
+    {
+        public string? Name { get; set; }
+        public string? Phone { get; set; }
+        public string? Address { get; set; }
+        public string? ProfileImage { get; set; }
+        public string? Fname { get; set; }
+        public string? Experience { get; set; }
+        public int? CollegeId { get; set; }
+        public string? AadharNo { get; set; }
+        public string? PanNo { get; set; }
+        public List<int>? SubjectIds { get; set; }
     }
 
     public class SendOtpRequest

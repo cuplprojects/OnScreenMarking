@@ -283,13 +283,15 @@ const Navbar = () => {
           </div>
 
           {/* Settings */}
-          <Link
-            to="/settings"
-            className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-all"
-            title="Settings"
-          >
-            <Settings size={17} />
-          </Link>
+          {hasPermission("MANAGE_SETTINGS") && (
+            <Link
+              to="/settings"
+              className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-all"
+              title="Settings"
+            >
+              <Settings size={17} />
+            </Link>
+          )}
 
           {/* Divider */}
           <div className="w-px h-5 bg-gray-200 mx-1.5" />

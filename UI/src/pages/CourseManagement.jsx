@@ -165,9 +165,10 @@ export default function CourseManagement() {
       searchPlaceholder: 'Search courses…',
       actionLabel: 'Add New Course',
       onAction: handleOpenAddModal,
+      count: totalCount,
     });
     return () => setConfigHeader(null);
-  }, [search, setSearch, setConfigHeader]);
+  }, [search, setSearch, setConfigHeader, totalCount]);
 
   return (
     <div className="w-full space-y-3">

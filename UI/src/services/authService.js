@@ -1,4 +1,4 @@
-﻿import apiCall from './api';
+import apiCall from './api';
 
 const authService = {
   login: async (email, password) => {
@@ -54,15 +54,41 @@ const authService = {
     });
   },
 
-  logout: () => {
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('userType');
-    sessionStorage.removeItem('userName');
-    sessionStorage.removeItem('userId');
-    sessionStorage.removeItem('userEmail');
-    sessionStorage.removeItem('profileImage');
-    sessionStorage.removeItem('universityId');
-    sessionStorage.removeItem('subjectId1');
+  forgotPassword: async (email) => {
+    return apiCall('/Auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+  },
+
+  verifyResetOtp: async (email, otp) => {
+    return apiCall('/Auth/verify-reset-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp })
+    });
+  },
+
+  resetPassword: async (email, otp, newPassword) => {
+    return apiCall('/Auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp, newPassword })
+    });
+  },
+
+  changePassword: async (currentPassword, newPassword) => {
+    return apiCall('/Auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+  },
+
+  logout: async () => {
+    try {
+      await apiCall('/Auth/logout', { method: 'POST', hideErrorToast: true, ignoreAuthRedirect: true });
+    } catch (e) {}
+    try {
+      sessionStorage.clear();
+    } catch (e) {}
   }
 };
 

@@ -1,6 +1,4 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using API.Data;
 using API.Services;
@@ -27,12 +25,40 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     )
 );
 
-// Add Redis Cache
-builder.Services.AddStackExchangeRedisCache(options =>
+// Add Distributed Session Cache (Redis if running, otherwise in-memory distributed cache)
+var redisConn = builder.Configuration.GetConnectionString("RedisConnection");
+bool redisConnected = false;
+
+if (!string.IsNullOrWhiteSpace(redisConn))
 {
-    options.Configuration = builder.Configuration.GetConnectionString("RedisConnection");
-    options.InstanceName = "OSM_";
-});
+    try
+    {
+        var configOptions = StackExchange.Redis.ConfigurationOptions.Parse(redisConn);
+        configOptions.ConnectTimeout = 300;
+        configOptions.AbortOnConnectFail = true;
+        using var testMultiplexer = StackExchange.Redis.ConnectionMultiplexer.Connect(configOptions);
+        redisConnected = testMultiplexer.IsConnected;
+    }
+    catch
+    {
+        redisConnected = false;
+    }
+}
+
+if (redisConnected)
+{
+    Console.WriteLine($"[Cache] Successfully connected to Redis server at {redisConn}");
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConn;
+        options.InstanceName = "OSM_";
+    });
+}
+else
+{
+    Console.WriteLine("[Cache] Redis server is not running on localhost:6379. Using in-memory distributed session cache.");
+    builder.Services.AddDistributedMemoryCache();
+}
 
 // Add Email Service
 builder.Services.AddScoped<IEmailService, EmailService>();
@@ -43,270 +69,129 @@ builder.Services.AddScoped<IPasswordGenerationService, PasswordGenerationService
 // Add Logging Service
 builder.Services.AddScoped<ILoggingService, LoggingService>();
 
+// Add Permission Service (Redis-backed)
+builder.Services.AddScoped<IPermissionService, PermissionService>();
+
 // Add Daily Allocation & Overdue Reassignment Engine + Background Daemon
 builder.Services.AddScoped<IDailyAllocationService, DailyAllocationService>();
 builder.Services.AddHostedService<DailyAllocationBackgroundService>();
 
-// Add CORS
+// Add CORS with credentials support for session cookies
 builder.Services.AddCors(options => {
     options.AddDefaultPolicy(policy => {
-        policy.AllowAnyOrigin()
-          .AllowAnyMethod()
-          .AllowAnyHeader();
+        policy.SetIsOriginAllowed(origin => true)
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
     });
 });
 
-// Add JWT Authentication
+// Add Redis Session Authentication
 builder.Services.AddAuthentication(options => {
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultAuthenticateScheme = RedisSessionAuthenticationHandler.SchemeName;
+    options.DefaultChallengeScheme = RedisSessionAuthenticationHandler.SchemeName;
 })
-  .AddJwtBearer(options => {
-      options.TokenValidationParameters = new TokenValidationParameters
-      {
-          ValidateIssuer = true,
-          ValidateAudience = true,
-          ValidateLifetime = true,
-          ValidateIssuerSigningKey = true,
-          ValidIssuer = builder.Configuration["Jwt:Issuer"],
-          ValidAudience = builder.Configuration["Jwt:Issuer"],
-          IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"])
-          ),
-          RoleClaimType = System.Security.Claims.ClaimTypes.Role
-      };
-  });
+.AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, RedisSessionAuthenticationHandler>(
+    RedisSessionAuthenticationHandler.SchemeName, null
+);
 
 var app = builder.Build();
 
-// Ensure UserType column exists in Invitations table (self-healing migration helper)
-using (var scope = app.Services.CreateScope())
+// Ensure BatchId column exists in SectionMasters, Sections, ProjectPaperSections
+using (var migrationScope = app.Services.CreateScope())
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     try
     {
-        var columnExists = false;
-        using (var command = dbContext.Database.GetDbConnection().CreateCommand())
+        var dbContext = migrationScope.ServiceProvider.GetRequiredService<API.Data.ApplicationDbContext>();
+        var tables = new[] { "SectionMasters", "Sections", "ProjectPaperSections", "PaperSectionMasters" };
+        foreach (var tbl in tables)
         {
-            command.CommandText = "SHOW COLUMNS FROM `Invitations` LIKE 'UserType';";
-            dbContext.Database.OpenConnection();
-            using (var reader = command.ExecuteReader())
-            {
-                columnExists = reader.HasRows;
-            }
-        }
-
-        if (!columnExists)
-        {
-            dbContext.Database.ExecuteSqlRaw("ALTER TABLE `Invitations` ADD COLUMN `UserType` LONGTEXT NOT NULL;");
-            Console.WriteLine("Self-Healing Database: Successfully added UserType column to Invitations table.");
-        }
-        else
-        {
-            Console.WriteLine("Self-Healing Database: UserType column already exists in Invitations table. Skipping alter query.");
-        }
-
-        // Ensure PaperSectionMasters table exists
-        try
-        {
-            var psmTableExists = false;
-            using (var command = dbContext.Database.GetDbConnection().CreateCommand())
-            {
-                command.CommandText = "SHOW TABLES LIKE 'PaperSectionMasters';";
-                using (var reader = command.ExecuteReader())
-                {
-                    psmTableExists = reader.HasRows;
-                }
-            }
-
-            if (!psmTableExists)
-            {
-                dbContext.Database.ExecuteSqlRaw(@"
-                    CREATE TABLE IF NOT EXISTS `PaperSectionMasters` (
-                        `Id` INT NOT NULL AUTO_INCREMENT,
-                        `PaperId` INT NOT NULL,
-                        `SectionMasterId` INT NOT NULL,
-                        `CreatedAt` DATETIME(6) NOT NULL,
-                        PRIMARY KEY (`Id`),
-                        UNIQUE KEY `IX_PaperSectionMasters_PaperId_SectionMasterId` (`PaperId`, `SectionMasterId`),
-                        KEY `IX_PaperSectionMasters_SectionMasterId` (`SectionMasterId`),
-                        CONSTRAINT `FK_PaperSectionMasters_Papers_PaperId` FOREIGN KEY (`PaperId`) REFERENCES `Papers` (`PaperId`) ON DELETE CASCADE,
-                        CONSTRAINT `FK_PaperSectionMasters_SectionMasters_SectionMasterId` FOREIGN KEY (`SectionMasterId`) REFERENCES `SectionMasters` (`Id`) ON DELETE CASCADE
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-                ");
-                Console.WriteLine("Self-Healing Database: Successfully created PaperSectionMasters table.");
-            }
-        }
-        catch (Exception exPsm)
-        {
-            Console.WriteLine($"Self-Healing Database Warning (PaperSectionMasters): {exPsm.Message}");
-        }
-
-        // Ensure TotalMarks columns support decimals up to 2 decimal places
-        try
-        {
-            dbContext.Database.ExecuteSqlRaw("ALTER TABLE `SectionMasters` MODIFY COLUMN `TotalMarks` DECIMAL(10,2) NOT NULL;");
-            dbContext.Database.ExecuteSqlRaw("ALTER TABLE `Sections` MODIFY COLUMN `TotalMarks` DECIMAL(10,2) NOT NULL;");
-            Console.WriteLine("Self-Healing Database: Successfully updated TotalMarks columns to DECIMAL(10,2).");
-        }
-        catch (Exception exMarks)
-        {
-            Console.WriteLine($"Self-Healing Database Note (Decimal TotalMarks): {exMarks.Message}");
-        }
-
-        // Ensure ProjectPapers table has IsSectionConfigured and IsExaminerAssigned columns and accurate values
-        try
-        {
-            var conn = dbContext.Database.GetDbConnection();
-            if (conn.State != System.Data.ConnectionState.Open)
-            {
-                await conn.OpenAsync();
-            }
-
-            // Check if IsSectionConfigured column exists
-            using (var cmd = conn.CreateCommand())
-            {
-                cmd.CommandText = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ProjectPapers' AND COLUMN_NAME = 'IsSectionConfigured';";
-                var count = Convert.ToInt32(await cmd.ExecuteScalarAsync());
-                if (count == 0)
-                {
-                    using var alterCmd = conn.CreateCommand();
-                    alterCmd.CommandText = "ALTER TABLE `ProjectPapers` ADD COLUMN `IsSectionConfigured` TINYINT(1) NOT NULL DEFAULT 0;";
-                    await alterCmd.ExecuteNonQueryAsync();
-                    Console.WriteLine("Self-Healing Database: Successfully added IsSectionConfigured column to ProjectPapers table.");
-                }
-            }
-
-            // Check if IsExaminerAssigned column exists
-            using (var cmd = conn.CreateCommand())
-            {
-                cmd.CommandText = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ProjectPapers' AND COLUMN_NAME = 'IsExaminerAssigned';";
-                var count = Convert.ToInt32(await cmd.ExecuteScalarAsync());
-                if (count == 0)
-                {
-                    using var alterCmd = conn.CreateCommand();
-                    alterCmd.CommandText = "ALTER TABLE `ProjectPapers` ADD COLUMN `IsExaminerAssigned` TINYINT(1) NOT NULL DEFAULT 0;";
-                    await alterCmd.ExecuteNonQueryAsync();
-                    Console.WriteLine("Self-Healing Database: Successfully added IsExaminerAssigned column to ProjectPapers table.");
-                }
-            }
-
-            // Backfill / sync values for all existing ProjectPapers:
-            // If section configured for that project paperid -> 1 else 0
-            // If examiner assigned for that project paperid -> 1 else 0
-            using (var syncCmd = conn.CreateCommand())
-            {
-                syncCmd.CommandText = @"
-                    UPDATE `ProjectPapers` pp
-                    SET pp.`IsSectionConfigured` = CASE 
-                        WHEN EXISTS (
-                            SELECT 1 FROM `ProjectPaperSections` pps WHERE pps.`ProjectPaperId` = pp.`Id`
-                        ) OR EXISTS (
-                            SELECT 1 FROM `Sections` s WHERE s.`PaperId` = pp.`PaperId`
-                        ) THEN 1 
-                        ELSE 0 
-                    END;
-
-                    UPDATE `ProjectPapers` pp
-                    SET pp.`IsExaminerAssigned` = CASE 
-                        WHEN EXISTS (
-                            SELECT 1 FROM `PaperExaminers` pe 
-                            WHERE pe.`ProjectPaperId` = pp.`Id` AND pe.`IsActive` = 1
-                        ) THEN 1 
-                        ELSE 0 
-                    END;
-                ";
-                var updatedRows = await syncCmd.ExecuteNonQueryAsync();
-                Console.WriteLine($"Self-Healing Database: ProjectPapers columns IsSectionConfigured and IsExaminerAssigned verified & synced ({updatedRows} updates applied).");
-            }
-
-            // Ensure ProjectId column exists in Allocations, Markings, Scripts, PaperExaminers and backfill accurate values
             try
             {
-                var targetTables = new[] { "Scripts", "PaperExaminers", "Allocations", "Markings" };
-                foreach (var table in targetTables)
-                {
-                    using var checkCmd = conn.CreateCommand();
-                    checkCmd.CommandText = $"SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{table}' AND COLUMN_NAME = 'ProjectId';";
-                    var count = Convert.ToInt32(await checkCmd.ExecuteScalarAsync());
-                    if (count == 0)
-                    {
-                        using var alterCmd = conn.CreateCommand();
-                        alterCmd.CommandText = $"ALTER TABLE `{table}` ADD COLUMN `ProjectId` INT NULL;";
-                        await alterCmd.ExecuteNonQueryAsync();
-                        Console.WriteLine($"Self-Healing Database: Successfully added ProjectId column to {table} table.");
-                    }
-                }
-
-                // 1. Scripts: from ProjectPapers.ProjectId
-                using (var syncScripts = conn.CreateCommand())
-                {
-                    syncScripts.CommandText = @"
-                        UPDATE `Scripts` s
-                        JOIN `ProjectPapers` pp ON s.`ProjectPaperId` = pp.`Id`
-                        SET s.`ProjectId` = pp.`ProjectId`
-                        WHERE s.`ProjectId` IS NULL OR s.`ProjectId` != pp.`ProjectId`;
-                    ";
-                    var updated = await syncScripts.ExecuteNonQueryAsync();
-                    if (updated > 0) Console.WriteLine($"Self-Healing Database: Backfilled ProjectId on {updated} Scripts.");
-                }
-
-                // 2. PaperExaminers: from ProjectPapers.ProjectId
-                using (var syncPe = conn.CreateCommand())
-                {
-                    syncPe.CommandText = @"
-                        UPDATE `PaperExaminers` pe
-                        JOIN `ProjectPapers` pp ON pe.`ProjectPaperId` = pp.`Id`
-                        SET pe.`ProjectId` = pp.`ProjectId`
-                        WHERE pe.`ProjectId` IS NULL OR pe.`ProjectId` != pp.`ProjectId`;
-                    ";
-                    var updated = await syncPe.ExecuteNonQueryAsync();
-                    if (updated > 0) Console.WriteLine($"Self-Healing Database: Backfilled ProjectId on {updated} PaperExaminers.");
-                }
-
-                // 3. Allocations: from Scripts.ProjectId or ProjectPapers.ProjectId
-                using (var syncAlloc = conn.CreateCommand())
-                {
-                    syncAlloc.CommandText = @"
-                        UPDATE `Allocations` a
-                        JOIN `Scripts` s ON a.`ScriptId` = s.`Id`
-                        JOIN `ProjectPapers` pp ON s.`ProjectPaperId` = pp.`Id`
-                        SET a.`ProjectId` = COALESCE(s.`ProjectId`, pp.`ProjectId`)
-                        WHERE a.`ProjectId` IS NULL OR a.`ProjectId` != COALESCE(s.`ProjectId`, pp.`ProjectId`);
-                    ";
-                    var updated = await syncAlloc.ExecuteNonQueryAsync();
-                    if (updated > 0) Console.WriteLine($"Self-Healing Database: Backfilled ProjectId on {updated} Allocations.");
-                }
-
-                // 4. Markings: from Allocations.ProjectId or Scripts.ProjectId or ProjectPapers.ProjectId
-                using (var syncMark = conn.CreateCommand())
-                {
-                    syncMark.CommandText = @"
-                        UPDATE `Markings` m
-                        JOIN `Scripts` s ON m.`ScriptId` = s.`Id`
-                        JOIN `ProjectPapers` pp ON s.`ProjectPaperId` = pp.`Id`
-                        SET m.`ProjectId` = COALESCE(s.`ProjectId`, pp.`ProjectId`)
-                        WHERE m.`ProjectId` IS NULL OR m.`ProjectId` != COALESCE(s.`ProjectId`, pp.`ProjectId`);
-                    ";
-                    var updated = await syncMark.ExecuteNonQueryAsync();
-                    if (updated > 0) Console.WriteLine($"Self-Healing Database: Backfilled ProjectId on {updated} Markings.");
-                }
-
-                Console.WriteLine("Self-Healing Database: ProjectId columns verified and synced across Allocations, Markings, Scripts, and PaperExaminers.");
+                dbContext.Database.ExecuteSqlRaw($"ALTER TABLE `{tbl}` ADD COLUMN `BatchId` INT NOT NULL DEFAULT 1;");
             }
-            catch (Exception exProjSync)
+            catch
             {
-                Console.WriteLine($"ProjectId sync note: {exProjSync.Message}");
+                try
+                {
+                    dbContext.Database.ExecuteSqlRaw($"UPDATE `{tbl}` SET `BatchId` = 1 WHERE `BatchId` IS NULL OR `BatchId` = 0;");
+                    dbContext.Database.ExecuteSqlRaw($"ALTER TABLE `{tbl}` MODIFY COLUMN `BatchId` INT NOT NULL DEFAULT 1;");
+                }
+                catch { /* Column already updated */ }
             }
         }
-        catch (Exception exSync)
+
+        // Ensure SectionMasterId is nullable in existing tables so EF inserts do not fail
+        foreach (var tbl in new[] { "Sections", "ProjectPaperSections", "PaperSectionMasters" })
         {
-            Console.WriteLine($"ProjectPapers sync error: {exSync.Message}");
+            try
+            {
+                dbContext.Database.ExecuteSqlRaw($"ALTER TABLE `{tbl}` MODIFY COLUMN `SectionMasterId` INT NULL DEFAULT NULL;");
+            }
+            catch { /* Ignore if column does not exist or already nullable */ }
+        }
+
+        // Ensure SectionMasters unique index is on (BatchId, Name) rather than Name alone
+        try
+        {
+            dbContext.Database.ExecuteSqlRaw("ALTER TABLE `SectionMasters` DROP INDEX `IX_SectionMasters_Name`;");
+        }
+        catch { /* Index already dropped or not present */ }
+        try
+        {
+            dbContext.Database.ExecuteSqlRaw("ALTER TABLE `SectionMasters` ADD UNIQUE INDEX `IX_SectionMasters_BatchId_Name` (`BatchId`, `Name`);");
+        }
+        catch { /* Index already exists */ }
+
+        // Ensure Questions TypeId column and seed QuestionTypes
+        try
+        {
+            dbContext.Database.ExecuteSqlRaw("ALTER TABLE `Questions` ADD COLUMN `TypeId` INT NULL;");
+        }
+        catch { /* Column already exists */ }
+
+        try
+        {
+            if (!dbContext.QuestionTypes.Any())
+            {
+                dbContext.QuestionTypes.AddRange(new[]
+                {
+                    new API.Models.QuestionType { QuestionTypeName = "MCQ" },
+                    new API.Models.QuestionType { QuestionTypeName = "SA" },
+                    new API.Models.QuestionType { QuestionTypeName = "LA" },
+                    new API.Models.QuestionType { QuestionTypeName = "Descriptive" }
+                });
+                dbContext.SaveChanges();
+            }
+        }
+        catch { }
+
+        try
+        {
+            dbContext.Database.ExecuteSqlRaw(@"
+                UPDATE `Questions` q
+                INNER JOIN `questiontypes` qt ON LOWER(TRIM(q.`Type`)) = LOWER(TRIM(qt.`Questiontype`))
+                SET q.`TypeId` = qt.`QuestiontypeId`
+                WHERE q.`TypeId` IS NULL;
+            ");
+        }
+        catch { }
+
+        // Seed Coordinator Full Academic Workflow
+        try
+        {
+            var seedController = new API.Controllers.SeedController(dbContext);
+            seedController.SeedCoordinatorFullWorkflow().GetAwaiter().GetResult();
+            Console.WriteLine("[Startup Seed] Coordinator academic workflow successfully populated.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Startup Seed Warning] {ex.Message}");
         }
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Self-Healing Database Warning: {ex.Message}");
+        Console.WriteLine($"[Startup Migration Warning] {ex.Message}");
     }
 }
 
@@ -343,9 +228,9 @@ app.UseStaticFiles();
 // OSM static files are now served dynamically via FilesController.cs
 
 app.UseCors();
-app.UseLoggingMiddleware();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseLoggingMiddleware();
 
 app.MapControllers();
 

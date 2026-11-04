@@ -1,8 +1,8 @@
-﻿import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { 
   FileText, Plus, Edit2, UserPlus, X, Search, CheckCircle2, Trash2, 
-  ChevronRight, ChevronDown, Filter, Users, BookOpen, Layers, Folder, AlertCircle, Copy, Upload, Info, Settings, Loader, FileCheck, Eye, UserCheck, Check, Download, AlertTriangle, Flag
+  ChevronRight, ChevronDown, Filter, Users, BookOpen, Layers, Folder, AlertCircle, Copy, Upload, Info, Settings, Loader, FileCheck, Eye, UserCheck, Check, Download, AlertTriangle, Flag, SlidersHorizontal
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { useAuth } from "../context/AuthContext";
@@ -114,6 +114,13 @@ export default function PapersManagement({ isTab = false }) {
   const [projects, setProjects] = useState([]);
   const [selectedSubjects, setSelectedSubjects] = useState([]);
   const [subjectFilter, setSubjectFilter] = useState("");
+
+  const currentProject = useMemo(() => {
+    if (!projectId) return null;
+    return projects.find(p => String(p.projectId) === String(projectId));
+  }, [projectId, projects]);
+
+  const isProjectInactive = currentProject ? !currentProject.isActive : false;
   
   // Table state & fetch fn
   const fetchFn = useCallback((params) => {
@@ -129,6 +136,10 @@ export default function PapersManagement({ isTab = false }) {
          let url = `/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${encodeURIComponent(searchVal)}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}&statusFilter=${statusFilterVal}`;
          const codeFilterVal = params.paperCode || '';
          if (codeFilterVal) url += `&paperCode=${encodeURIComponent(codeFilterVal)}`;
+         const nameFilterVal = params.paperName || '';
+         if (nameFilterVal) url += `&paperName=${encodeURIComponent(nameFilterVal)}`;
+         const catchFilterVal = params.catchNo || '';
+         if (catchFilterVal) url += `&catchNo=${encodeURIComponent(catchFilterVal)}`;
          const subjectFilterVal = params.subjectName || '';
          if (subjectFilterVal) {
            if (/^\d+$/.test(subjectFilterVal.trim())) {
@@ -197,6 +208,8 @@ export default function PapersManagement({ isTab = false }) {
   const [bulkPapers, setBulkPapers] = useState([]);
   const [bulkExaminers, setBulkExaminers] = useState([]);
   const [assignedExaminersMap, setAssignedExaminersMap] = useState({}); // { [paperId]: [examinerId, ...] }
+  const [catchNoMap, setCatchNoMap] = useState({}); // { [paperId]: catchNo }
+  const [initialCatchNoMap, setInitialCatchNoMap] = useState({});
   const [bulkPaperSearch, setBulkPaperSearch] = useState('');
   const [bulkSubjectFilter, setBulkSubjectFilter] = useState('');
   const [bulkPage, setBulkPage] = useState(1);
@@ -222,6 +235,7 @@ export default function PapersManagement({ isTab = false }) {
   const [showForm, setShowForm] = useState(false);
   const [showBulkConfigModal, setShowBulkConfigModal] = useState(false);
   const [showImportSectionsModal, setShowImportSectionsModal] = useState(false);
+  const [previewBatchId, setPreviewBatchId] = useState(null);
 
   // Form State
   const [editingId, setEditingId] = useState(null);
@@ -246,6 +260,26 @@ export default function PapersManagement({ isTab = false }) {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Inline Edit State
+  const [inlineEditingId, setInlineEditingId] = useState(null);
+  const [inlineFormData, setInlineFormData] = useState({
+    paperCode: "", paperName: "", paperNumber: 1, maxMarks: 100,
+    totalQuestions: 0, description: "", catchNo: "", projectId: projectId || "",
+    isActive: true, subjectIds: []
+  });
+  const [isSavingInline, setIsSavingInline] = useState(false);
+  const [inlineSubjectOpen, setInlineSubjectOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (inlineSubjectOpen && !e.target.closest('.inline-subject-dropdown')) {
+        setInlineSubjectOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [inlineSubjectOpen]);
 
   // Examiner Allocation State
   const [showExaminerModal, setShowExaminerModal] = useState(false);
@@ -272,6 +306,13 @@ export default function PapersManagement({ isTab = false }) {
   const [isConfirmUploading, setIsConfirmUploading] = useState(false);
   const [showBulkConfirmModal, setShowBulkConfirmModal] = useState(false);
   const tableFileInputRef = React.useRef(null);
+
+  // Configurable Import Options State
+  const [importConfig, setImportConfig] = useState({
+    importCatchNo: true,
+    importSections: true,
+    importExaminers: true
+  });
 
   useEffect(() => {
     fetchInitialData();
@@ -411,6 +452,9 @@ export default function PapersManagement({ isTab = false }) {
   // -------------------------------------------------------------
   const handleImportSectionsSubmit = async (e) => {
     e.preventDefault();
+    if (isProjectInactive) {
+      return message.warning("This project is inactive. Configuring sections is not permitted.");
+    }
     if (selectedPaperIds.length === 0) return message.error("Select target papers first");
 
     setImportingSections(true);
@@ -514,6 +558,12 @@ export default function PapersManagement({ isTab = false }) {
   // -------------------------------------------------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isProjectInactive) {
+      return message.warning("This project is inactive. Modifying or adding papers is not permitted.");
+    }
+    if (!formData.catchNo || !formData.catchNo.trim()) {
+      return message.error("Catch Number is required");
+    }
     if (selectedSubjects.length === 0) return message.error("Please select at least one subject");
 
     const targetProjectId = formData.projectId || projectId || (projects.length > 0 ? projects[0].projectId : null);
@@ -578,6 +628,95 @@ export default function PapersManagement({ isTab = false }) {
     } catch (err) {
       const errMsg = err.response?.data?.message || err.message || "Error saving paper";
       message.error(errMsg);
+    }
+  };
+
+  const handleStartInlineEdit = (paper) => {
+    if (isProjectInactive) {
+      return message.warning("This project is inactive. Modifying papers is not permitted.");
+    }
+    setInlineEditingId(paper.paperId);
+    setInlineSubjectOpen(false);
+
+    let initialSubIds = [];
+    if (paper.subjectIds && paper.subjectIds.length > 0) {
+      initialSubIds = paper.subjectIds;
+    } else if (paper.subjectId) {
+      initialSubIds = [paper.subjectId];
+    }
+
+    setInlineFormData({
+      paperCode: paper.paperCode || "",
+      paperName: paper.paperName || "",
+      catchNo: paper.catchNo || "",
+      paperNumber: paper.paperNumber ?? 1,
+      subjectIds: initialSubIds,
+      totalQuestions: paper.totalQuestions ?? 0,
+      maxMarks: paper.maxMarks ?? 100,
+      description: paper.description || "",
+      projectId: paper.projectId ? String(paper.projectId) : (projectId || ""),
+      isActive: paper.isActive ?? true,
+    });
+  };
+
+  const handleCancelInlineEdit = () => {
+    setInlineEditingId(null);
+    setInlineSubjectOpen(false);
+  };
+
+  const handleSaveInlineEdit = async (paperId) => {
+    if (isProjectInactive) {
+      return message.warning("This project is inactive. Modifying papers is not permitted.");
+    }
+    if (!inlineFormData.paperCode || !inlineFormData.paperCode.trim()) {
+      return message.error("Paper Code is required");
+    }
+    if (!inlineFormData.paperName || !inlineFormData.paperName.trim()) {
+      return message.error("Paper Name is required");
+    }
+    if (!inlineFormData.catchNo || !inlineFormData.catchNo.trim()) {
+      return message.error("Catch Number is required");
+    }
+    if (!inlineFormData.subjectIds || inlineFormData.subjectIds.length === 0) {
+      return message.error("Please select at least one subject");
+    }
+    const totalQ = parseInt(inlineFormData.totalQuestions, 10);
+    if (!inlineFormData.totalQuestions || isNaN(totalQ) || totalQ <= 0) {
+      return message.error("Total Questions must be greater than 0");
+    }
+    const maxM = inlineFormData.maxMarks ? parseFloat(inlineFormData.maxMarks) : 0;
+    if (maxM <= 0) {
+      return message.error("Max Marks must be greater than 0");
+    }
+
+    setIsSavingInline(true);
+    try {
+      const payload = {
+        paperId: paperId,
+        paperCode: inlineFormData.paperCode.trim(),
+        paperName: inlineFormData.paperName.trim(),
+        catchNo: inlineFormData.catchNo.trim(),
+        paperNumber: inlineFormData.paperNumber || 1,
+        subjectIds: inlineFormData.subjectIds.map(id => parseInt(id, 10)),
+        totalQuestions: totalQ,
+        maxMarks: maxM,
+        description: inlineFormData.description || "",
+        projectId: projectId ? parseInt(projectId, 10) : undefined,
+        universityId: activeUniversityId ? parseInt(activeUniversityId, 10) : undefined,
+        isActive: inlineFormData.isActive ?? true,
+      };
+
+      await paperService.updatePaper(paperId, payload);
+      message.success("Paper updated successfully");
+      setInlineEditingId(null);
+      setInlineSubjectOpen(false);
+      refreshTable();
+    } catch (err) {
+      console.error("Failed to save inline paper edit:", err);
+      const errMsg = err.response?.data?.message || err.message || "Failed to update paper";
+      message.error(errMsg);
+    } finally {
+      setIsSavingInline(false);
     }
   };
 
@@ -732,6 +871,10 @@ export default function PapersManagement({ isTab = false }) {
   };
 
   const handleDone = async () => {
+    if (isProjectInactive) {
+      message.warning("This project is inactive. Examiner assignments cannot be modified.");
+      return;
+    }
     setAllocationLoading(true);
     try {
       const newAssignments = assignedExaminers.filter(a => a.isNew);
@@ -837,15 +980,22 @@ export default function PapersManagement({ isTab = false }) {
   };
 
   const handleImportPapers = async () => {
+    if (isProjectInactive) {
+      return message.warning("This project is inactive. Importing papers is not permitted.");
+    }
     if (selectedImportPaperIds.length === 0) return;
 
     setImporting(true);
     try {
-      await paperService.importPapers({
+      const res = await paperService.importPapers({
         sourcePaperIds: selectedImportPaperIds,
-        targetProjectId: projectId
+        targetProjectId: projectId,
+        sourceProjectId: selectedSourceProject !== 'master' ? selectedSourceProject : null,
+        importCatchNo: importConfig.importCatchNo,
+        importSections: importConfig.importSections,
+        importExaminers: importConfig.importExaminers
       });
-      message.success(`Successfully imported ${selectedImportPaperIds.length} papers`);
+      message.success(res?.message || `Successfully imported ${selectedImportPaperIds.length} papers`);
       
       // Switch back to papers-sections tab and refresh
       setActiveInnerTab('papers-sections');
@@ -913,6 +1063,10 @@ export default function PapersManagement({ isTab = false }) {
   };
 
   const handleBulkUpload = async () => {
+    if (isProjectInactive) {
+      message.warning("This project is inactive. Uploading question papers is not permitted.");
+      return;
+    }
     if (!projectId) {
       message.error('Please select a project before uploading');
       return;
@@ -999,6 +1153,12 @@ export default function PapersManagement({ isTab = false }) {
       
       setBulkPapers(loadedPapers);
       setBulkExaminers(loadedExaminers);
+      const initialCatches = {};
+      loadedPapers.forEach(p => {
+        initialCatches[p.paperId] = p.catchNo || '';
+      });
+      setCatchNoMap(initialCatches);
+      setInitialCatchNoMap(initialCatches);
     } catch (err) {
       console.error("Failed to load bulk assign data:", err);
       message.error("Failed to load papers or examiners");
@@ -1074,50 +1234,109 @@ export default function PapersManagement({ isTab = false }) {
 
   const handleCancelBulkAssignments = () => {
     setAssignedExaminersMap({});
+    setCatchNoMap({ ...initialCatchNoMap });
     setOpenDropdownPaperId(null);
     setDropdownSearch('');
-    message.info("Pending assignments reset.");
+    message.info("Pending changes reset.");
   };
 
   const handleSaveBulkAssignments = async () => {
-    const entries = Object.entries(assignedExaminersMap).filter(([_, ids]) => ids && ids.length > 0);
-    if (entries.length === 0) {
-      message.warning("Please select an examiner for at least one paper before saving.");
+    const examinerEntries = Object.entries(assignedExaminersMap).filter(([_, ids]) => ids && ids.length > 0);
+    const modifiedCatchEntries = Object.entries(catchNoMap).filter(([pId, val]) => {
+      const initVal = initialCatchNoMap[pId] || '';
+      return val !== undefined && val !== initVal;
+    });
+
+    const touchedPaperIds = new Set([
+      ...examinerEntries.map(([pId]) => parseInt(pId, 10)),
+      ...modifiedCatchEntries.map(([pId]) => parseInt(pId, 10))
+    ]);
+
+    if (touchedPaperIds.size === 0) {
+      message.warning("No changes to save. Please select an examiner or update Catch No for at least one paper.");
       return;
+    }
+
+    // Validate that Catch No is provided and not blank for every touched paper
+    for (const pId of touchedPaperIds) {
+      const paper = bulkPapers.find(p => p.paperId === pId);
+      const currentCatch = (catchNoMap[pId] ?? paper?.catchNo ?? '').trim();
+      if (!currentCatch) {
+        message.error(`Catch Number is required for paper "${paper?.paperCode || paper?.paperName || pId}".`);
+        return;
+      }
     }
 
     setIsBulkAssigning(true);
     try {
+      const catchNosPayload = {};
+      touchedPaperIds.forEach(pId => {
+        const cVal = (catchNoMap[pId] ?? bulkPapers.find(p => p.paperId === pId)?.catchNo ?? '').trim();
+        if (cVal) {
+          catchNosPayload[pId.toString()] = cVal;
+        }
+      });
+
       const examinerToPapers = {};
-      entries.forEach(([paperIdStr, exIds]) => {
-        const pId = parseInt(paperIdStr);
+      examinerEntries.forEach(([paperIdStr, exIds]) => {
+        const pId = parseInt(paperIdStr, 10);
         exIds.forEach(exId => {
           if (!examinerToPapers[exId]) examinerToPapers[exId] = [];
           examinerToPapers[exId].push(pId);
         });
       });
 
-      await Promise.all(
-        Object.entries(examinerToPapers).map(([exIdStr, pIds]) =>
-          apiCall('/paperexaminers/bulk-assign', {
-            method: 'POST',
-            body: {
-              paperIds: pIds,
-              examinerIds: [parseInt(exIdStr)],
-              projectId: projectId ? parseInt(projectId, 10) : null
-            }
+      // Save examiner assignments with their catch numbers
+      if (examinerEntries.length > 0) {
+        await Promise.all(
+          Object.entries(examinerToPapers).map(([exIdStr, pIds]) => {
+            const subCatchNos = {};
+            pIds.forEach(id => {
+              if (catchNosPayload[id.toString()]) subCatchNos[id.toString()] = catchNosPayload[id.toString()];
+            });
+            return apiCall('/paperexaminers/bulk-assign', {
+              method: 'POST',
+              body: {
+                paperIds: pIds,
+                examinerIds: [parseInt(exIdStr, 10)],
+                projectId: projectId ? parseInt(projectId, 10) : null,
+                catchNos: subCatchNos
+              }
+            });
           })
-        )
+        );
+      }
+
+      // Save papers that had Catch No updated but no examiner assigned in this action
+      const catchOnlyPaperIds = [...touchedPaperIds].filter(
+        pId => !examinerEntries.some(([exPId]) => parseInt(exPId, 10) === pId)
       );
 
-      message.success(`Successfully assigned examiners to ${entries.length} paper(s)!`);
+      if (catchOnlyPaperIds.length > 0) {
+        const catchOnlyPayload = {};
+        catchOnlyPaperIds.forEach(id => {
+          if (catchNosPayload[id.toString()]) catchOnlyPayload[id.toString()] = catchNosPayload[id.toString()];
+        });
+        await apiCall('/paperexaminers/bulk-assign', {
+          method: 'POST',
+          body: {
+            paperIds: catchOnlyPaperIds,
+            examinerIds: [],
+            projectId: projectId ? parseInt(projectId, 10) : null,
+            catchNos: catchOnlyPayload
+          }
+        });
+      }
+
+      message.success(`Successfully saved configuration and assignments for ${touchedPaperIds.size} paper(s)!`);
       setAssignedExaminersMap({});
+      setInitialCatchNoMap({ ...catchNoMap });
       setOpenDropdownPaperId(null);
       await loadBulkAssignData();
       refreshTable();
     } catch (err) {
       console.error(err);
-      message.error("Error: " + (err.message || "Failed to save examiner assignments"));
+      message.error("Error: " + (err.message || "Failed to save paper configurations or examiner assignments"));
     } finally {
       setIsBulkAssigning(false);
     }
@@ -1139,27 +1358,29 @@ export default function PapersManagement({ isTab = false }) {
 
       const exportRows = list.map((p, idx) => ({
         "S.No": idx + 1,
-        "Paper ID": p.paperId,
-        "Paper Code": p.paperCode || '',
-        "Paper Name": p.paperName || '',
-        "Subject": p.subjectName || '',
-        "Catch No": p.catchNo || '',
-        "Max Marks": p.maxMarks || '',
-        "Current Status": (p.expertsCount || 0) > 0 ? `Assigned (${p.expertsCount})` : "Unassigned",
-        "Examiner Name": "" // To be filled manually by user
+        "PaperCode": p.paperCode || '',
+        "PaperName": p.paperName || '',
+        "PaperNumber": p.paperNumber ?? '',
+        "Subject": p.subjectNames?.join(', ') || p.subjectName || '',
+        "CatchNo": catchNoMap[p.paperId] ?? p.catchNo ?? '',
+        "MaxMarks": p.maxMarks ?? 100,
+        "TotalQuestions": p.totalQuestions ?? 0,
+        "Description": p.description || '',
+        "ExaminerName": "" // To be filled manually by user
       }));
 
       const ws = XLSX.utils.json_to_sheet(exportRows);
       ws['!cols'] = [
         { wch: 6 },   // S.No
-        { wch: 10 },  // Paper ID
-        { wch: 16 },  // Paper Code
-        { wch: 32 },  // Paper Name
+        { wch: 18 },  // PaperCode
+        { wch: 32 },  // PaperName
+        { wch: 14 },  // PaperNumber
         { wch: 22 },  // Subject
-        { wch: 14 },  // Catch No
-        { wch: 12 },  // Max Marks
-        { wch: 18 },  // Current Status
-        { wch: 30 }   // Examiner Name
+        { wch: 14 },  // CatchNo
+        { wch: 12 },  // MaxMarks
+        { wch: 16 },  // TotalQuestions
+        { wch: 30 },  // Description
+        { wch: 28 }   // ExaminerName
       ];
 
       const wb = XLSX.utils.book_new();
@@ -1221,7 +1442,12 @@ export default function PapersManagement({ isTab = false }) {
 
         const idKey = keys.find(k => /paper\s*id/i.test(k) || /^id$/i.test(k));
         const codeKey = keys.find(k => /paper\s*code/i.test(k) || /^code$/i.test(k));
+        const nameKey = keys.find(k => /paper\s*name/i.test(k) || /^name$/i.test(k));
+        const numberKey = keys.find(k => /paper\s*num(ber)?/i.test(k) || /paper\s*no/i.test(k));
         const catchKey = keys.find(k => /catch/i.test(k));
+        const maxMarksKey = keys.find(k => /max\s*marks/i.test(k));
+        const totalQKey = keys.find(k => /total\s*questions/i.test(k) || /questions/i.test(k));
+        const descKey = keys.find(k => /desc(ription)?/i.test(k));
         const examinerKey = keys.find(k => /examiner(\s*name)?/i.test(k) || /evaluator/i.test(k) || /expert/i.test(k));
 
         if (!examinerKey) {
@@ -1236,6 +1462,11 @@ export default function PapersManagement({ isTab = false }) {
           const rowId = idKey ? row[idKey] : null;
           const rowCode = codeKey ? String(row[codeKey]).trim() : '';
           const rowCatch = catchKey ? String(row[catchKey]).trim() : '';
+          const rowName = nameKey ? String(row[nameKey] || '').trim() : '';
+          const rowNumber = numberKey && row[numberKey] !== '' ? parseInt(row[numberKey], 10) : null;
+          const rowMaxMarks = maxMarksKey && row[maxMarksKey] !== '' ? parseFloat(row[maxMarksKey]) : null;
+          const rowTotalQuestions = totalQKey && row[totalQKey] !== '' ? parseInt(row[totalQKey], 10) : null;
+          const rowDesc = descKey ? String(row[descKey] || '').trim() : '';
           const rawExaminerName = String(row[examinerKey] || '').trim();
 
           // Match paper in bulkPapers
@@ -1255,11 +1486,21 @@ export default function PapersManagement({ isTab = false }) {
             return;
           }
 
+          const baseRow = {
+            key: `row-${rowIndex}-${matchedPaper.paperId}`,
+            paper: matchedPaper,
+            catchNo: rowCatch || matchedPaper.catchNo || '',
+            paperName: rowName || matchedPaper.paperName || '',
+            paperNumber: rowNumber ?? matchedPaper.paperNumber ?? '',
+            maxMarks: rowMaxMarks ?? matchedPaper.maxMarks ?? 100,
+            totalQuestions: rowTotalQuestions ?? matchedPaper.totalQuestions ?? 0,
+            description: rowDesc || matchedPaper.description || '',
+            excelExaminerName: rawExaminerName,
+          };
+
           if (!rawExaminerName) {
             previewRows.push({
-              key: `row-${rowIndex}-${matchedPaper.paperId}`,
-              paper: matchedPaper,
-              excelExaminerName: '',
+              ...baseRow,
               matchStatus: 'empty',
               candidates: [],
               selectedExaminerId: null
@@ -1299,9 +1540,7 @@ export default function PapersManagement({ isTab = false }) {
 
           if (matchingExaminers.length === 1) {
             previewRows.push({
-              key: `row-${rowIndex}-${matchedPaper.paperId}`,
-              paper: matchedPaper,
-              excelExaminerName: rawExaminerName,
+              ...baseRow,
               matchStatus: 'matched',
               candidates: matchingExaminers,
               selectedExaminerId: matchingExaminers[0].id
@@ -1309,18 +1548,14 @@ export default function PapersManagement({ isTab = false }) {
           } else if (matchingExaminers.length > 1) {
             // Multiple examiners have the same name: Coordinator must choose from candidates
             previewRows.push({
-              key: `row-${rowIndex}-${matchedPaper.paperId}`,
-              paper: matchedPaper,
-              excelExaminerName: rawExaminerName,
+              ...baseRow,
               matchStatus: 'multiple',
               candidates: matchingExaminers,
               selectedExaminerId: null
             });
           } else {
             previewRows.push({
-              key: `row-${rowIndex}-${matchedPaper.paperId}`,
-              paper: matchedPaper,
-              excelExaminerName: rawExaminerName,
+              ...baseRow,
               matchStatus: 'not_found',
               candidates: bulkExaminers,
               selectedExaminerId: null
@@ -1366,6 +1601,13 @@ export default function PapersManagement({ isTab = false }) {
   const handleConfirmExcelAssignments = async () => {
     if (!excelPreviewData) return;
 
+    // Validate that all papers have Catch No
+    const missingCatchNo = excelPreviewData.some(r => !r.catchNo || !r.catchNo.toString().trim());
+    if (missingCatchNo) {
+      message.error("Catch number is required for all papers. Please fill in any missing Catch No.");
+      return;
+    }
+
     const rowsToAssign = excelPreviewData.filter(r => r.selectedExaminerId);
 
     if (rowsToAssign.length === 0) {
@@ -1383,6 +1625,25 @@ export default function PapersManagement({ isTab = false }) {
 
     setIsUploadingExcel(true);
     try {
+      const catchNosPayload = {};
+      const paperUpdatesPayload = {};
+      excelPreviewData.forEach(r => {
+        if (r.paper?.paperId) {
+          const pId = r.paper.paperId.toString();
+          if (r.catchNo) {
+            catchNosPayload[pId] = r.catchNo.toString().trim();
+          }
+          paperUpdatesPayload[pId] = {
+            paperName: r.paperName,
+            paperNumber: r.paperNumber ? parseInt(r.paperNumber, 10) : null,
+            maxMarks: r.maxMarks ? parseFloat(r.maxMarks) : null,
+            totalQuestions: r.totalQuestions !== undefined && r.totalQuestions !== '' ? parseInt(r.totalQuestions, 10) : null,
+            description: r.description,
+            catchNo: r.catchNo
+          };
+        }
+      });
+
       const examinerToPapers = {};
       rowsToAssign.forEach(r => {
         const exId = r.selectedExaminerId;
@@ -1392,19 +1653,60 @@ export default function PapersManagement({ isTab = false }) {
       });
 
       await Promise.all(
-        Object.entries(examinerToPapers).map(([exIdStr, pIds]) =>
-          apiCall('/paperexaminers/bulk-assign', {
+        Object.entries(examinerToPapers).map(([exIdStr, pIds]) => {
+          const groupCatchNos = {};
+          const groupPaperUpdates = {};
+          pIds.forEach(id => {
+            const idStr = id.toString();
+            if (catchNosPayload[idStr]) {
+              groupCatchNos[idStr] = catchNosPayload[idStr];
+            }
+            if (paperUpdatesPayload[idStr]) {
+              groupPaperUpdates[idStr] = paperUpdatesPayload[idStr];
+            }
+          });
+          return apiCall('/paperexaminers/bulk-assign', {
             method: 'POST',
             body: {
               paperIds: pIds,
               examinerIds: [parseInt(exIdStr)],
-              projectId: projectId ? parseInt(projectId, 10) : null
+              projectId: projectId ? parseInt(projectId, 10) : null,
+              catchNos: groupCatchNos,
+              paperUpdates: groupPaperUpdates
             }
-          })
-        )
+          });
+        })
       );
 
-      message.success(`Successfully assigned examiners to ${rowsToAssign.length} paper(s) from Excel!`);
+      // Also upsert catch numbers & paper updates for any papers in Excel preview without an examiner assigned
+      const papersWithoutExaminer = excelPreviewData.filter(r => !r.selectedExaminerId && r.paper?.paperId);
+      if (papersWithoutExaminer.length > 0) {
+        const remainingCatchNos = {};
+        const remainingPaperUpdates = {};
+        papersWithoutExaminer.forEach(r => {
+          const idStr = r.paper.paperId.toString();
+          if (r.catchNo) {
+            remainingCatchNos[idStr] = r.catchNo.toString().trim();
+          }
+          if (paperUpdatesPayload[idStr]) {
+            remainingPaperUpdates[idStr] = paperUpdatesPayload[idStr];
+          }
+        });
+        if (Object.keys(remainingCatchNos).length > 0 || Object.keys(remainingPaperUpdates).length > 0) {
+          await apiCall('/paperexaminers/bulk-assign', {
+            method: 'POST',
+            body: {
+              paperIds: papersWithoutExaminer.map(r => r.paper.paperId),
+              examinerIds: [],
+              projectId: projectId ? parseInt(projectId, 10) : null,
+              catchNos: remainingCatchNos,
+              paperUpdates: remainingPaperUpdates
+            }
+          });
+        }
+      }
+
+      message.success(`Successfully assigned examiners and updated paper configuration for ${excelPreviewData.length} paper(s) from Excel!`);
       setExcelPreviewData(null);
       setExcelFileName('');
       await loadBulkAssignData();
@@ -1513,7 +1815,18 @@ export default function PapersManagement({ isTab = false }) {
     }
   }, [bulkPage, totalBulkPages]);
 
-  const pendingAssignedCount = Object.keys(assignedExaminersMap).filter(pId => assignedExaminersMap[pId]?.length > 0).length;
+  const touchedPaperIds = useMemo(() => {
+    const set = new Set();
+    Object.keys(assignedExaminersMap).forEach(pId => {
+      if (assignedExaminersMap[pId]?.length > 0) set.add(pId);
+    });
+    Object.keys(catchNoMap).forEach(pId => {
+      if ((catchNoMap[pId] ?? '') !== (initialCatchNoMap[pId] ?? '')) set.add(pId);
+    });
+    return set;
+  }, [assignedExaminersMap, catchNoMap, initialCatchNoMap]);
+
+  const pendingAssignedCount = touchedPaperIds.size;
 
 
   const SortHeader = ({ label, field, isCenter = false, hasFilter = false, customFilter, filterOptions }) => {
@@ -1544,412 +1857,37 @@ export default function PapersManagement({ isTab = false }) {
         </div>
       )}
 
-      {(!projectId && !isTab) ? (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-16 text-center">
-          <FileText size={48} className="mx-auto text-gray-200 mb-4" />
-          <h3 className="text-xl font-black text-gray-900 mb-2">Select a Project</h3>
-          <p className="text-sm font-semibold text-gray-500">
-            Please select a project from the dropdown above to view its papers and sections.
-          </p>
-        </div>
-      ) : (
-        <>
+      <div className={!isTab ? "px-6 lg:px-10 py-6 space-y-4" : ""}>
+        {(!projectId && !isTab) ? (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-16 text-center">
+            <FileText size={48} className="mx-auto text-gray-200 mb-4" />
+            <h3 className="text-xl font-black text-gray-900 mb-2">Select a Project</h3>
+            <p className="text-sm font-semibold text-gray-500">
+              Please select a project from the dropdown above to view its papers and sections.
+            </p>
+          </div>
+        ) : (
+          <>
         {/* Heading is now handled by ProjectConfigHeader in ProjectDashboard */}
 
-        {showForm && (() => {
-          const selectedMasterSections = sectionMasters.filter(m => selectedMasterSectionIds.includes(m.id));
-          const masterTotalQuestions = selectedMasterSections.reduce((sum, m) => sum + (parseInt(m.totalQuestions, 10) || 0), 0);
-          const masterTotalMarks = selectedMasterSections.reduce((sum, m) => sum + (parseFloat(m.totalMarks) || 0), 0);
-          const parsedFormTotalQ = parseInt(formData.totalQuestions, 10);
-          const isQuestionMismatch = selectedMasterSectionIds.length > 0 && !isNaN(parsedFormTotalQ) && parsedFormTotalQ !== masterTotalQuestions;
+        
 
-          return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-gray-100 relative max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200 p-4 md:p-6">
-              
-              {/* Modal Header */}
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3.5 mb-5">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-teal-100 text-teal-700 rounded-xl flex items-center justify-center shadow-xs">
-                    {editingId ? <Edit2 size={16} /> : <Plus size={16} />}
-                  </div>
-                  <div>
-                    <h2 className="text-base font-bold text-gray-900 leading-tight">
-                      {editingId ? "Edit Paper Configuration" : "Create New Paper"}
-                    </h2>
-                    <p className="text-xs text-gray-500 font-medium">Configure paper metadata and subject mappings</p>
-                  </div>
-                </div>
-                <button 
-                  type="button" 
-                  onClick={handleCancel}
-                  className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1.5 rounded-lg transition-all"
-                  title="Close"
-                >
-                  <X size={18} />
-                </button>
+        <div className={showForm ? "grid grid-cols-1 xl:grid-cols-12 gap-5 items-start" : "w-full"}>
+          <div className={showForm ? "xl:col-span-7 space-y-4 min-w-0" : "w-full space-y-4 min-w-0"}>
+            {isProjectInactive && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl flex items-center justify-between shadow-sm mb-3">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="text-amber-500 shrink-0" size={18} />
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider">Project is Inactive (Read-Only)</p>
+                <p className="text-xs text-amber-700">This project is inactive. No new papers, sections, question papers, or examiner assignments can be added or updated.</p>
               </div>
-
-              <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
-                {/* Project Select (Only shown if page is not already scoped to a specific project) */}
-                {!projectId && (
-                  <div>
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
-                      Project <span className="text-red-500">*</span>
-                    </label>
-                    <select 
-                      value={formData.projectId} 
-                      onChange={(e) => handleProjectChange(e.target.value)} 
-                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      required
-                    >
-                      <option value="">Select Project</option>
-                      {projects.map((p) => (
-                        <option key={p.projectId} value={p.projectId}>{p.projectName}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Row 1: Code, Name, Catch No */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                  <div>
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
-                      Paper Code <span className="text-red-500">*</span>
-                    </label>
-                    <input 
-                      type="text" 
-                      value={formData.paperCode} 
-                      onChange={(e) => setFormData({ ...formData, paperCode: e.target.value })} 
-                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      placeholder=""
-                      autoComplete="off"
-                      required 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
-                      Paper Name <span className="text-red-500">*</span>
-                    </label>
-                    <input 
-                      type="text" 
-                      value={formData.paperName} 
-                      onChange={(e) => setFormData({ ...formData, paperName: e.target.value })} 
-                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      placeholder=""
-                      autoComplete="off"
-                      required 
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Catch Number</label>
-                    <input 
-                      type="text" 
-                      value={formData.catchNo} 
-                      onChange={(e) => setFormData({ ...formData, catchNo: e.target.value })} 
-                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      placeholder=""
-                      autoComplete="off"
-                    />
-                  </div>
-                </div>
-
-                {/* Row 2: Subjects, Paper Number, Max Marks, Total Questions in ONE Row */}
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-start">
-                  {/* Multi-Select Subjects Dropdown */}
-                  <div className="sm:col-span-5 relative" ref={subjectDropdownRef}>
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
-                      Subjects ({selectedSubjects.length} selected) <span className="text-red-500">*</span>
-                    </label>
-                    <div
-                      onClick={() => setIsSubjectDropdownOpen(prev => !prev)}
-                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-2.5 py-1.5 rounded-lg hover:border-gray-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-teal-500 transition-all outline-none font-medium flex items-center justify-between gap-1.5 min-h-[38px] shadow-2xs cursor-pointer select-none"
-                    >
-                      <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
-                        {selectedSubjects.length === 0 ? (
-                          <span className="text-gray-400 font-normal py-0.5">Select subjects...</span>
-                        ) : (
-                          selectedSubjects.map(subId => {
-                            const sub = subjects.find(s => s.subjectId === subId);
-                            if (!sub) return null;
-                            return (
-                              <span
-                                key={subId}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-[10px] font-semibold animate-in fade-in"
-                              >
-                                <span>{sub.subjectName}</span>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleSubject(subId);
-                                  }}
-                                  className="text-teal-600 hover:text-teal-900 hover:bg-teal-100 rounded-full p-0.5 transition-colors cursor-pointer"
-                                  title="Remove subject"
-                                >
-                                  <X size={10} />
-                                </button>
-                              </span>
-                            );
-                          })
-                        )}
-                      </div>
-                      <ChevronDown size={14} className={`text-gray-400 transition-transform shrink-0 ml-1 ${isSubjectDropdownOpen ? "rotate-180" : ""}`} />
-                    </div>
-
-                    {isSubjectDropdownOpen && (
-                      <div className="absolute left-0 top-full mt-1 w-72 sm:w-80 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2.5 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
-                        <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
-                          <Search size={13} className="text-gray-400" />
-                          <input 
-                            type="text" 
-                            placeholder="Search subjects..."
-                            value={subjectSearchText}
-                            onChange={(e) => setSubjectSearchText(e.target.value)}
-                            className="w-full bg-transparent text-xs text-gray-800 outline-none placeholder-gray-400"
-                          />
-                          {subjectSearchText && (
-                            <button type="button" onClick={() => setSubjectSearchText("")} className="text-gray-400 hover:text-gray-600">
-                              <X size={12} />
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="flex items-center justify-between text-[11px] px-1 text-gray-500 font-medium">
-                          <span>{selectedSubjects.length} selected</span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedSubjects(subjects.map(s => s.subjectId))}
-                              className="text-teal-700 hover:underline font-semibold"
-                            >
-                              Select All
-                            </button>
-                            <span>•</span>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedSubjects([])}
-                              className="text-gray-500 hover:underline"
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar pr-1">
-                          {subjects.filter(s => (s.subjectName || "").toLowerCase().includes(subjectSearchText.toLowerCase())).length === 0 ? (
-                            <div className="text-xs text-gray-400 py-2 text-center">No subjects found</div>
-                          ) : (
-                            subjects
-                              .filter(s => (s.subjectName || "").toLowerCase().includes(subjectSearchText.toLowerCase()))
-                              .map(s => {
-                                const isSelected = selectedSubjects.includes(s.subjectId);
-                                return (
-                                  <label 
-                                    key={s.subjectId}
-                                    className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer select-none transition-all ${
-                                      isSelected ? "bg-teal-50 text-teal-900 font-medium" : "hover:bg-gray-50 text-gray-700"
-                                    }`}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={() => toggleSubject(s.subjectId)}
-                                      className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300"
-                                    />
-                                    <span className="truncate">{s.subjectName}</span>
-                                  </label>
-                                );
-                              })
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Paper Number */}
-                  <div className="sm:col-span-2">
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Paper Number</label>
-                    <input 
-                      type="number" 
-                      value={formData.paperNumber} 
-                      onChange={(e) => setFormData({ ...formData, paperNumber: e.target.value })} 
-                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      placeholder=""
-                      autoComplete="off"
-                      min="1" 
-                    />
-                  </div>
-
-                  {/* Max Marks */}
-                  <div className="sm:col-span-2">
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
-                      Max Marks <span className="text-red-500">*</span>
-                    </label>
-                    <input 
-                      type="number" 
-                      value={formData.maxMarks} 
-                      onChange={(e) => setFormData({ ...formData, maxMarks: e.target.value })} 
-                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                      placeholder=""
-                      autoComplete="off"
-                      min="1" 
-                      required
-                    />
-                  </div>
-
-                  {/* Total Questions */}
-                  <div className="sm:col-span-3">
-                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1 whitespace-nowrap">
-                      Total Questions <span className="text-red-500">*</span>
-                    </label>
-                    <input 
-                      type="number" 
-                      value={formData.totalQuestions} 
-                      onChange={(e) => setFormData({ ...formData, totalQuestions: e.target.value })} 
-                      className={`w-full text-xs px-3 py-2 rounded-lg outline-none font-medium transition-all ${
-                        isQuestionMismatch
-                          ? "bg-amber-50/70 border-2 border-amber-400 text-amber-900 focus:ring-2 focus:ring-amber-500"
-                          : "bg-gray-50/70 border border-gray-200 text-gray-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                      }`}
-                      placeholder=""
-                      autoComplete="off"
-                      min="1" 
-                      required
-                    />
-                    {selectedMasterSectionIds.length > 0 && (
-                      <p className={`mt-1 text-[10px] ${isQuestionMismatch ? "text-amber-600 font-bold" : "text-gray-500 font-medium"}`}>
-                        Master: {masterTotalQuestions}Q
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Master Sections Question Count Mismatch Alert */}
-                {isQuestionMismatch && (
-                  <div className="flex items-start sm:items-center justify-between gap-3 p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs shadow-2xs animate-in fade-in">
-                    <div className="flex items-start sm:items-center gap-2.5">
-                      <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
-                      <div>
-                        <span className="font-extrabold text-amber-950 uppercase tracking-wide text-[11px]">Incorrect Configuration:</span>{" "}
-                        Selected master sections have a total of <span className="font-extrabold text-amber-950 underline">{masterTotalQuestions} questions</span>, but Total Questions is set to <span className="font-extrabold text-amber-950">{formData.totalQuestions}</span>.
-                        <div className="text-[11px] text-amber-800 mt-0.5">
-                          Total Questions must be <strong>{masterTotalQuestions}</strong> only when importing these master sections.
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, totalQuestions: String(masterTotalQuestions) }))}
-                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg transition-colors shrink-0 cursor-pointer shadow-xs whitespace-nowrap"
-                      title={`Click to set Total Questions to ${masterTotalQuestions}`}
-                    >
-                      Set to {masterTotalQuestions}Q
-                    </button>
-                  </div>
-                )}
-
-
-                {/* Row 3: Description */}
-                <div>
-                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Description</label>
-                  <input 
-                    type="text" 
-                    value={formData.description} 
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })} 
-                    className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
-                    placeholder="" 
-                    autoComplete="off"
-                  />
-                </div>
-
-                {/* Row 5: Master Section Mappings */}
-                {sectionMasters.length > 0 && (
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600">
-                        Master Sections ({selectedMasterSectionIds.length} selected
-                        {selectedMasterSectionIds.length > 0 && ` • Total: ${masterTotalQuestions} Questions, ${masterTotalMarks} Marks`})
-                      </label>
-                      <div className="flex items-center gap-2">
-                        {selectedMasterSectionIds.length > 0 && selectedMasterSectionIds.length < sectionMasters.length && (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedMasterSectionIds([])}
-                            className="text-[10px] font-bold text-red-600 hover:underline cursor-pointer"
-                          >
-                            Clear
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (selectedMasterSectionIds.length === sectionMasters.length) {
-                              setSelectedMasterSectionIds([]);
-                            } else {
-                              setSelectedMasterSectionIds(sectionMasters.map(m => m.id));
-                            }
-                          }}
-                          className="text-[10px] font-bold text-teal-700 hover:underline cursor-pointer"
-                        >
-                          {selectedMasterSectionIds.length === sectionMasters.length ? "Deselect All" : "Select All"}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="bg-gray-50/70 border border-gray-200 rounded-lg p-2 max-h-[85px] overflow-y-auto custom-scrollbar">
-                      <div className="grid sm:grid-cols-3 gap-2 grid-cols-1 md:grid-cols-2">
-                        {sectionMasters.map((m) => {
-                          const isSelected = selectedMasterSectionIds.includes(m.id);
-                          return (
-                            <label
-                              key={m.id}
-                              className={`flex items-center gap-2 px-2.5 py-1 rounded-md border text-xs cursor-pointer select-none transition-all ${
-                                isSelected
-                                  ? "bg-teal-50 border-teal-300 text-teal-900 font-semibold"
-                                  : "bg-white border-gray-200 text-gray-700 hover:bg-gray-100/50"
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => {
-                                  setSelectedMasterSectionIds(prev =>
-                                    prev.includes(m.id) ? prev.filter(id => id !== m.id) : [...prev, m.id]
-                                  );
-                                }}
-                                className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300"
-                              />
-                              <span className="truncate text-[11px]">{m.name} ({m.totalQuestions || 0}Q • {m.totalMarks}M)</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
-                  <button 
-                    type="button" 
-                    onClick={handleCancel} 
-                    className="px-4 py-2 rounded-lg text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit" 
-                    className="px-5 py-2 rounded-lg text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 shadow-sm transition-all flex items-center gap-1.5"
-                  >
-                    {editingId ? <Edit2 size={13} /> : <Plus size={13} />}
-                    {editingId ? "Update Configuration" : "Save Paper"}
-                  </button>
-                </div>
-              </form>
             </div>
+            <span className="px-2.5 py-1 bg-amber-200 text-amber-800 rounded-full text-[10px] font-black uppercase tracking-wider">
+              Inactive
+            </span>
           </div>
-        ); })()}
+        )}
 
         {/* Papers Main Table Area */}
         <div className={`bg-white rounded-xl border border-gray-100 shadow-sm ${activeInnerTab === 'bulk-assign' ? 'overflow-visible' : 'overflow-hidden'}`}>
@@ -2014,7 +1952,7 @@ export default function PapersManagement({ isTab = false }) {
               {activeInnerTab === 'papers-sections' && (
                 <>
                   {/* Bulk section allocation (shown only when papers selected) */}
-                  {selectedPaperIds.length > 0 && (
+                  {selectedPaperIds.length > 0 && !isProjectInactive && (
                     <button
                       onClick={() => setShowImportSectionsModal(true)}
                       className="animate-in fade-in slide-in-from-right-2 duration-200 bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-[10px] uppercase tracking-wider px-3 py-2 rounded-lg transition-all shadow-sm flex items-center gap-1.5 whitespace-nowrap"
@@ -2039,21 +1977,23 @@ export default function PapersManagement({ isTab = false }) {
                   </div>
 
                   {/* Add Paper */}
-                  <button
-                    onClick={() => {
-                      setFormData({
-                        paperCode: "", paperName: "", paperNumber: "", maxMarks: "", totalQuestions: "", description: "",
-                        catchNo: "", projectId: projectId || "", isActive: true, questionPaperPdfUrl: "",
-                      });
-                      setSelectedSubjects([]);
-                      setSelectedMasterSectionIds([]);
-                      setEditingId(null);
-                      setShowForm(true);
-                    }}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md font-bold text-[10px] uppercase tracking-wider transition-all shadow-sm hover:shadow shrink-0 cursor-pointer whitespace-nowrap"
-                  >
-                    <Plus size={13} /> Add Paper
-                  </button>
+                  {!isProjectInactive && (
+                    <button
+                      onClick={() => {
+                        setFormData({
+                          paperCode: "", paperName: "", paperNumber: "", maxMarks: "", totalQuestions: "", description: "",
+                          catchNo: "", projectId: projectId || "", isActive: true, questionPaperPdfUrl: "",
+                        });
+                        setSelectedSubjects([]);
+                        setSelectedMasterSectionIds([]);
+                        setEditingId(null);
+                        setShowForm(true);
+                      }}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md font-bold text-[10px] uppercase tracking-wider transition-all shadow-sm hover:shadow shrink-0 cursor-pointer whitespace-nowrap"
+                    >
+                      <Plus size={13} /> Add Paper
+                    </button>
+                  )}
                 </>
               )}
 
@@ -2148,7 +2088,7 @@ export default function PapersManagement({ isTab = false }) {
               <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left">
                 <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
                   <tr>
-                    <th className="px-5 py-3.5 w-12 text-center border-b border-gray-100">
+                    <th className="px-3 py-3.5 w-10 text-center border-b border-gray-100">
                       <input 
                         type="checkbox" 
                         checked={selectedPaperIds.length === papers.length && papers.length > 0} 
@@ -2156,9 +2096,14 @@ export default function PapersManagement({ isTab = false }) {
                         className="rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer w-4 h-4"
                       />
                     </th>
-                    <SortHeader label="Code & Name" field="paperCode" hasFilter={true} />
-                    <SortHeader label="Subject & Max" field="subjectName" hasFilter={true} />
-                    <th className="px-5 py-3.5 text-center border-b border-gray-100">Question Paper</th>
+                    <SortHeader label="Paper Code" field="paperCode" hasFilter={true} />
+                    <SortHeader label="Paper Name" field="paperName" hasFilter={true} />
+                    <SortHeader label="Catch No" field="catchNo" hasFilter={true} isCenter={true} />
+                    <SortHeader label="Paper No" field="paperNumber" isCenter={true} />
+                    <SortHeader label="Subject" field="subjectName" hasFilter={true} />
+                    <SortHeader label="Total Qs" field="totalQuestions" isCenter={true} />
+                    <SortHeader label="Max Marks" field="maxMarks" isCenter={true} />
+                    <th className="px-4 py-3.5 text-center border-b border-gray-100">Question Paper</th>
                     <SortHeader 
                       label="Configuration Status" 
                       field="statusFilter" 
@@ -2171,18 +2116,217 @@ export default function PapersManagement({ isTab = false }) {
                         { value: 'ready_for_allocation', label: 'Ready for Script Allocation' }
                       ]} 
                     />
-                    <th className="px-5 py-3.5 text-right border-b border-gray-100">Actions</th>
+                    <th className="px-4 py-3.5 text-right border-b border-gray-100 min-w-[120px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-xs font-bold text-gray-700">
                   {papers.map((paper) => {
                     const isSelected = selectedPaperIds.includes(paper.paperId);
-                    // Determine warning state
-                    const missingQp = paper.isSectionsConfigured && !paper.questionPaperPdfUrl;
+                    const isEditing = inlineEditingId === paper.paperId;
+
+                    if (isEditing) {
+                      return (
+                        <tr key={paper.paperId} className="bg-amber-50/50 border-y-2 border-amber-300 transition-colors animate-in fade-in duration-100">
+                          {/* Checkbox */}
+                          <td className="px-3 py-2 text-center">
+                            <input type="checkbox" disabled className="rounded border-gray-300 text-gray-300 opacity-40 cursor-not-allowed w-4 h-4" />
+                          </td>
+
+                          {/* Paper Code */}
+                          <td className="px-3 py-2">
+                            <input
+                              type="text"
+                              placeholder="Code *"
+                              required
+                              value={inlineFormData.paperCode}
+                              onChange={(e) => setInlineFormData(prev => ({ ...prev, paperCode: e.target.value }))}
+                              className={`w-28 px-2 py-1 text-xs font-mono font-bold bg-white border rounded-md focus:outline-none focus:ring-2 shadow-2xs ${
+                                !inlineFormData.paperCode?.trim() ? 'border-rose-400 focus:ring-rose-400' : 'border-gray-300 focus:ring-teal-500'
+                              }`}
+                              title="Paper Code (Required)"
+                            />
+                          </td>
+
+                          {/* Paper Name */}
+                          <td className="px-3 py-2">
+                            <input
+                              type="text"
+                              placeholder="Paper Name *"
+                              required
+                              value={inlineFormData.paperName}
+                              onChange={(e) => setInlineFormData(prev => ({ ...prev, paperName: e.target.value }))}
+                              className={`w-44 px-2 py-1 text-xs font-semibold bg-white border rounded-md focus:outline-none focus:ring-2 shadow-2xs ${
+                                !inlineFormData.paperName?.trim() ? 'border-rose-400 focus:ring-rose-400' : 'border-gray-300 focus:ring-teal-500'
+                              }`}
+                              title="Paper Name (Required)"
+                            />
+                          </td>
+
+                          {/* Catch No */}
+                          <td className="px-3 py-2 text-center">
+                            <div className="inline-flex flex-col items-center">
+                              <input
+                                type="text"
+                                placeholder="Catch *"
+                                required
+                                value={inlineFormData.catchNo}
+                                onChange={(e) => setInlineFormData(prev => ({ ...prev, catchNo: e.target.value }))}
+                                className={`w-24 px-1.5 py-1 text-xs font-mono font-bold text-center bg-white border rounded-md focus:outline-none focus:ring-2 shadow-2xs ${
+                                  !inlineFormData.catchNo?.trim() ? 'border-rose-400 bg-rose-50/50 text-rose-800 focus:ring-rose-400' : 'border-gray-300 focus:ring-teal-500'
+                                }`}
+                                title="Catch Number (Required)"
+                              />
+                              {!inlineFormData.catchNo?.trim() && (
+                                <span className="text-[9px] text-rose-500 font-bold leading-tight mt-0.5">Required</span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Paper Number */}
+                          <td className="px-3 py-2 text-center">
+                            <input
+                              type="number"
+                              min="1"
+                              value={inlineFormData.paperNumber}
+                              onChange={(e) => setInlineFormData(prev => ({ ...prev, paperNumber: parseInt(e.target.value, 10) || 1 }))}
+                              className="w-14 px-1 py-1 text-xs font-bold text-center bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-2xs"
+                              title="Paper Number"
+                            />
+                          </td>
+
+                          {/* Subject Dropdown */}
+                          <td className="px-3 py-2">
+                            <div className="relative inline-subject-dropdown">
+                              <button
+                                type="button"
+                                onClick={() => setInlineSubjectOpen(prev => !prev)}
+                                className="w-36 flex items-center justify-between gap-1 px-2 py-1 text-xs font-semibold bg-white border border-gray-300 rounded-md hover:border-teal-400 text-left truncate shadow-2xs cursor-pointer"
+                                title="Select Subjects"
+                              >
+                                <span className="truncate">
+                                  {inlineFormData.subjectIds?.length > 0
+                                    ? subjects
+                                        .filter(s => inlineFormData.subjectIds.includes(s.subjectId))
+                                        .map(s => s.subjectName)
+                                        .join(', ') || `${inlineFormData.subjectIds.length} selected`
+                                    : <span className="text-gray-400">Select...</span>}
+                                </span>
+                                <ChevronDown size={12} className="text-gray-400 shrink-0" />
+                              </button>
+
+                              {inlineSubjectOpen && (
+                                <div className="absolute left-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2 max-h-48 overflow-y-auto space-y-1">
+                                  <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1 pb-1 border-b border-gray-100">
+                                    Select Subject(s) <span className="text-rose-500">*</span>
+                                  </div>
+                                  {subjects.map(s => {
+                                    const isChecked = inlineFormData.subjectIds?.includes(s.subjectId);
+                                    return (
+                                      <label key={s.subjectId} className="flex items-center gap-2 px-1.5 py-1 hover:bg-gray-50 rounded cursor-pointer text-xs">
+                                        <input
+                                          type="checkbox"
+                                          checked={isChecked}
+                                          onChange={() => {
+                                            setInlineFormData(prev => {
+                                              const current = prev.subjectIds || [];
+                                              const next = current.includes(s.subjectId)
+                                                ? current.filter(id => id !== s.subjectId)
+                                                : [...current, s.subjectId];
+                                              return { ...prev, subjectIds: next };
+                                            });
+                                          }}
+                                          className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 w-3.5 h-3.5"
+                                        />
+                                        <span className="truncate font-medium text-gray-800">{s.subjectName}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Total Questions */}
+                          <td className="px-3 py-2 text-center">
+                            <input
+                              type="number"
+                              min="1"
+                              value={inlineFormData.totalQuestions}
+                              onChange={(e) => setInlineFormData(prev => ({ ...prev, totalQuestions: parseInt(e.target.value, 10) || 0 }))}
+                              className={`w-16 px-1.5 py-1 text-xs font-bold text-center bg-white border rounded-md focus:outline-none focus:ring-2 shadow-2xs ${
+                                !inlineFormData.totalQuestions || inlineFormData.totalQuestions <= 0 ? 'border-rose-400 focus:ring-rose-400' : 'border-gray-300 focus:ring-teal-500'
+                              }`}
+                              placeholder="Qs *"
+                              title="Total Questions (Required > 0)"
+                            />
+                          </td>
+
+                          {/* Max Marks */}
+                          <td className="px-3 py-2 text-center">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="1"
+                              value={inlineFormData.maxMarks}
+                              onChange={(e) => setInlineFormData(prev => ({ ...prev, maxMarks: parseFloat(e.target.value) || 0 }))}
+                              className={`w-16 px-1.5 py-1 text-xs font-bold text-center bg-white border rounded-md focus:outline-none focus:ring-2 shadow-2xs ${
+                                !inlineFormData.maxMarks || inlineFormData.maxMarks <= 0 ? 'border-rose-400 focus:ring-rose-400' : 'border-gray-300 focus:ring-teal-500'
+                              }`}
+                              placeholder="Marks *"
+                              title="Max Marks (Required > 0)"
+                            />
+                          </td>
+
+                          {/* Question Paper */}
+                          <td className="px-4 py-2 text-center">
+                            <span className="text-[11px] text-gray-400 italic">
+                              {paper.questionPaperPdfUrl ? 'PDF Attached' : 'No PDF'}
+                            </span>
+                          </td>
+
+                          {/* Configuration Status */}
+                          <td className="px-4 py-2 text-center">
+                            <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-full border border-amber-200">
+                              Editing
+                            </span>
+                          </td>
+
+                          {/* Actions: Save & Cancel */}
+                          <td className="px-4 py-2 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleSaveInlineEdit(paper.paperId)}
+                                disabled={isSavingInline}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-extrabold text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 rounded-lg shadow-sm transition-all cursor-pointer"
+                                title="Save Changes"
+                              >
+                                {isSavingInline ? (
+                                  <Loader size={12} className="animate-spin" />
+                                ) : (
+                                  <Check size={13} />
+                                )}
+                                <span>Save</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleCancelInlineEdit}
+                                disabled={isSavingInline}
+                                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg shadow-2xs transition-all cursor-pointer"
+                                title="Cancel Editing"
+                              >
+                                <X size={13} />
+                                <span>Cancel</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
 
                     return (
                       <tr key={paper.paperId} className={`hover:bg-gray-50/50 transition-colors ${isSelected ? 'bg-teal-50/30' : ''}`}>
-                        <td className="px-5 py-2.5 text-center">
+                        <td className="px-3 py-2.5 text-center">
                           <input 
                             type="checkbox" 
                             checked={isSelected}
@@ -2190,31 +2334,45 @@ export default function PapersManagement({ isTab = false }) {
                             className="rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer w-4 h-4"
                           />
                         </td>
-                        <td className="px-5 py-2.5">
-                          <div className="flex items-center gap-3">
-                            {/* <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center font-black shrink-0">
-                              {paper.paperCode.substring(0, 2)}
-                            </div> */}
-                            <div>
-                              <span className="text-gray-900 font-extrabold text-sm block">{paper.paperCode}</span>
-                              <span className="text-sm text-gray-800 font-semibold block">{paper.paperName}</span>
-                            </div>
-                          </div>
+                        <td className="px-4 py-2.5">
+                          <span className="font-mono bg-gray-100 text-gray-800 font-extrabold px-2 py-0.5 rounded text-xs uppercase tracking-wider">
+                            {paper.paperCode}
+                          </span>
                         </td>
-                        <td className="px-5 py-2.5">
+                        <td className="px-4 py-2.5">
+                          <span className="text-gray-900 font-bold text-xs block max-w-[200px] truncate" title={paper.paperName}>
+                            {paper.paperName}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          {paper.catchNo ? (
+                            <span className="inline-block font-mono font-bold text-[11px] bg-blue-50 text-blue-700 border border-blue-200/60 px-2 py-0.5 rounded">
+                              {paper.catchNo}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 italic text-[11px]">None</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-center font-bold text-gray-700 text-xs">
+                          {paper.paperNumber ?? 1}
+                        </td>
+                        <td className="px-4 py-2.5">
                           <span 
-                            className="text-gray-700 block truncate max-w-[180px]"
+                            className="text-gray-700 text-xs font-semibold block truncate max-w-[150px]"
                             title={paper.subjectNames && paper.subjectNames.length > 0 ? paper.subjectNames.join(', ') : (paper.subjectName || '')}
                           >
                             {paper.subjectNames && paper.subjectNames.length > 0 
                               ? paper.subjectNames.join(', ') 
                               : (paper.subjectName || '-')}
                           </span>
-                          <div className="text-[9px] text-gray-400 uppercase tracking-wider mt-0.5">
-                            Max: {paper.maxMarks} | Qs: {paper.totalQuestions} | Catch: {paper.catchNo}
-                          </div>
                         </td>
-                        <td className="px-5 py-2.5 text-center">
+                        <td className="px-4 py-2.5 text-center font-bold text-gray-700 text-xs">
+                          {paper.totalQuestions ?? 0}
+                        </td>
+                        <td className="px-4 py-2.5 text-center font-extrabold text-teal-800 text-xs">
+                          {paper.maxMarks}
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
                           {paper.questionPaperPdfUrl ? (
                             <a
                               href={`${import.meta.env.VITE_API_URL.replace('/api', '')}/${paper.questionPaperPdfUrl.replace(/^\//, '')}`}
@@ -2248,7 +2406,7 @@ export default function PapersManagement({ isTab = false }) {
                             </button>
                           )}
                         </td>
-                        <td className="px-5 py-2.5 text-center">
+                        <td className="px-4 py-2.5 text-center">
                           {(() => {
                             const missingReasons = [];
                             const statusDetails = [];
@@ -2292,25 +2450,12 @@ export default function PapersManagement({ isTab = false }) {
                               statusDetails.push({ label: "Question Paper", ok: true, text: "PDF uploaded" });
                             }
 
-                            let sectionBadge = "Unconfigured";
-                            let sectionBadgeColor = "bg-amber-50 text-amber-700 border-amber-200";
-
-                            if (hasSections && marksMatch) {
-                              sectionBadge = "Configured";
-                              sectionBadgeColor = "bg-emerald-50 text-emerald-700 border-emerald-200";
-                            } else if (hasSections && !marksMatch) {
-                              sectionBadge = `Marks (${paper.configuredMarks || 0}/${paper.maxMarks})`;
-                              sectionBadgeColor = "bg-amber-50 text-amber-700 border-amber-200";
-                            }
-
                             const tooltipTitle = missingReasons.length > 0 
                               ? `Configuration Status:\n• ` + missingReasons.join("\n• ")
                               : "Configuration complete: Sections, Marks, Evaluators and Question Paper are fully configured.";
 
-                            const isFullyReady = missingReasons.length === 0;
-
                             return (
-                              <div className="flex items-center gap-2.5 text-[11px] font-medium text-gray-600" title={tooltipTitle}>
+                              <div className="flex items-center justify-center gap-2 text-[11px] font-medium text-gray-600" title={tooltipTitle}>
                                 <span 
                                   className={`inline-flex items-center gap-1 ${hasSections && marksMatch ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`} 
                                   title={hasSections && marksMatch ? `Sections & Marks: ${paper.sectionsCount || 0} sections, ${paper.configuredMarks}/${paper.maxMarks} marks` : (!hasSections ? 'Sections: 0 created' : `Marks mismatch: ${paper.configuredMarks}/${paper.maxMarks}`)}
@@ -2338,7 +2483,7 @@ export default function PapersManagement({ isTab = false }) {
                             );
                           })()}
                         </td>
-                        <td className="px-5 py-2.5 text-right">
+                        <td className="px-4 py-2.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <div className="relative group/tooltip inline-block">
                               <Link
@@ -2405,6 +2550,68 @@ export default function PapersManagement({ isTab = false }) {
           {/* ── IMPORT FROM PROJECT TAB CONTENT ──────────────────── */}
           {activeInnerTab === 'import-papers' && (
             <>
+              {/* Configurable Import Options Bar */}
+              {selectedSourceProject && (
+                <div className="px-5 py-3 bg-teal-50/50 border-b border-teal-100 flex flex-wrap items-center justify-between gap-3 animate-fade-in">
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="p-1 rounded-md bg-teal-100 text-teal-800">
+                      <SlidersHorizontal size={13} />
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-teal-900">Import Configuration</span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+                    {/* Checkbox 1: Import with Catch No */}
+                    <label className="flex items-center gap-2 cursor-pointer select-none group">
+                      <input
+                        type="checkbox"
+                        checked={importConfig.importCatchNo}
+                        onChange={(e) => setImportConfig(prev => ({ ...prev, importCatchNo: e.target.checked }))}
+                        className="w-4 h-4 rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer"
+                      />
+                      <div className="leading-tight">
+                        <span className="text-xs font-extrabold text-gray-800 group-hover:text-teal-900 transition-colors">
+                          Import with Catch No
+                        </span>
+                        <p className="text-[9.5px] text-gray-400">Include source booklet catch number</p>
+                      </div>
+                    </label>
+
+                    {/* Checkbox 2: Import with Sections */}
+                    <label className="flex items-center gap-2 cursor-pointer select-none group">
+                      <input
+                        type="checkbox"
+                        checked={importConfig.importSections}
+                        onChange={(e) => setImportConfig(prev => ({ ...prev, importSections: e.target.checked }))}
+                        className="w-4 h-4 rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer"
+                      />
+                      <div className="leading-tight">
+                        <span className="text-xs font-extrabold text-gray-800 group-hover:text-teal-900 transition-colors">
+                          Import with Sections
+                        </span>
+                        <p className="text-[9.5px] text-gray-400">Copy configured sections & questions</p>
+                      </div>
+                    </label>
+
+                    {/* Checkbox 3: Import with Examiner */}
+                    <label className="flex items-center gap-2 cursor-pointer select-none group">
+                      <input
+                        type="checkbox"
+                        checked={importConfig.importExaminers}
+                        onChange={(e) => setImportConfig(prev => ({ ...prev, importExaminers: e.target.checked }))}
+                        className="w-4 h-4 rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer"
+                      />
+                      <div className="leading-tight">
+                        <span className="text-xs font-extrabold text-gray-800 group-hover:text-teal-900 transition-colors">
+                          Import with Examiner
+                        </span>
+                        <p className="text-[9.5px] text-gray-400">Replicate assigned examiners</p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              )}
+
               {!selectedSourceProject ? (
                 <div className="p-16 text-center">
                   <FileText size={32} className="mx-auto text-gray-200 mb-2" />
@@ -2438,12 +2645,23 @@ export default function PapersManagement({ isTab = false }) {
                         <th className="px-5 py-3.5 border-b border-gray-100">Paper Code</th>
                         <th className="px-5 py-3.5 border-b border-gray-100">Subjects</th>
                         <th className="px-5 py-3.5 text-center border-b border-gray-100">Max Marks</th>
-                        <th className="px-5 py-3.5 text-center border-b border-gray-100">Sections</th>
+                        {importConfig.importCatchNo && (
+                          <th className="px-5 py-3.5 text-center border-b border-gray-100">Catch No</th>
+                        )}
+                        {importConfig.importSections && (
+                          <th className="px-5 py-3.5 text-center border-b border-gray-100">Sections</th>
+                        )}
+                        {importConfig.importExaminers && (
+                          <th className="px-5 py-3.5 text-center border-b border-gray-100">Examiners</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-xs font-bold text-gray-700">
                       {getFilteredImportPapers().papers.map(paper => {
                         const isSelected = selectedImportPaperIds.includes(paper.paperId);
+                        const secCount = paper.sectionsCount ?? paper.sections?.length ?? 0;
+                        const examCount = paper.examinersCount ?? (paper.examinerNames?.length || 0);
+
                         return (
                           <tr key={paper.paperId} className={`hover:bg-gray-50/50 transition-colors ${isSelected ? 'bg-teal-50/30' : ''}`}>
                             <td className="px-5 py-2.5 text-center">
@@ -2472,9 +2690,43 @@ export default function PapersManagement({ isTab = false }) {
                             <td className="px-5 py-2.5 text-center font-bold text-gray-700">
                               {paper.maxMarks}
                             </td>
-                            <td className="px-5 py-2.5 text-center font-bold text-gray-700">
-                              {paper.sections?.length || 0}
-                            </td>
+                            {importConfig.importCatchNo && (
+                              <td className="px-5 py-2.5 text-center">
+                                {paper.catchNo ? (
+                                  <span className="font-mono bg-blue-50 text-blue-700 border border-blue-200/60 font-extrabold px-2 py-0.5 rounded text-[11px]">
+                                    {paper.catchNo}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 font-medium text-xs">—</span>
+                                )}
+                              </td>
+                            )}
+                            {importConfig.importSections && (
+                              <td className="px-5 py-2.5 text-center">
+                                <span className={`inline-flex items-center gap-1 font-bold text-xs px-2 py-0.5 rounded border ${
+                                  secCount > 0 
+                                    ? 'bg-amber-50 text-amber-800 border-amber-200/60' 
+                                    : 'bg-gray-50 text-gray-400 border-gray-200'
+                                }`}>
+                                  {secCount} {secCount === 1 ? 'Sec' : 'Secs'}
+                                </span>
+                              </td>
+                            )}
+                            {importConfig.importExaminers && (
+                              <td className="px-5 py-2.5 text-center">
+                                {examCount > 0 ? (
+                                  <span 
+                                    title={paper.examinerNames?.join(', ') || `${examCount} Examiner(s)`} 
+                                    className="inline-flex items-center gap-1 font-bold text-xs bg-emerald-50 text-emerald-800 border border-emerald-200/60 px-2 py-0.5 rounded cursor-help"
+                                  >
+                                    <Users size={11} />
+                                    {examCount} {examCount === 1 ? 'Examiner' : 'Examiners'}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 font-medium text-xs">None</span>
+                                )}
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
@@ -2970,8 +3222,28 @@ export default function PapersManagement({ isTab = false }) {
                             {/* Subject & Catch No */}
                             <td className="px-5 py-3.5">
                               <div className="text-gray-900 font-bold text-xs">{row.paper.subjectNames?.join(' ') || row.paper.subjectName || "—"}</div>
-                              <div className="text-[11px] text-gray-500 font-medium font-mono">
-                                Catch No: {row.paper.catchNo || 'None'}
+                              <div className="mt-1 flex items-center gap-1.5">
+                                <span className="text-[11px] text-gray-500 font-semibold whitespace-nowrap">
+                                  Catch No <span className="text-rose-500 font-bold">*</span>:
+                                </span>
+                                <input
+                                  type="text"
+                                  placeholder="Required *"
+                                  required
+                                  value={row.catchNo ?? ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setExcelPreviewData(prev =>
+                                      prev ? prev.map(item => item.key === row.key ? { ...item, catchNo: val } : item) : null
+                                    );
+                                  }}
+                                  className={`w-28 px-2 py-0.5 text-xs font-mono font-bold rounded border transition-all ${
+                                    !row.catchNo || !row.catchNo.toString().trim()
+                                      ? 'border-rose-400 bg-rose-50/50 text-rose-800 focus:ring-1 focus:ring-rose-500'
+                                      : 'border-gray-200 bg-white text-gray-800 hover:border-teal-300 focus:ring-1 focus:ring-teal-500'
+                                  }`}
+                                  title={!row.catchNo || !row.catchNo.toString().trim() ? "Catch number is required" : "Edit catch number"}
+                                />
                               </div>
                             </td>
 
@@ -3255,7 +3527,9 @@ export default function PapersManagement({ isTab = false }) {
                                  />
                                </div>
                              </th>
-                            <th className="px-5 py-3.5 text-center border-b border-gray-100">Catch No</th>
+                            <th className="px-5 py-3.5 text-center border-b border-gray-100 min-w-[140px]">
+                              <span>Catch No <span className="text-rose-500 font-bold">*</span></span>
+                            </th>
                             <th className="px-5 py-3.5 border-b border-gray-100 min-w-[280px]">Assign Examiner</th>
                             <th className="px-5 py-3.5 text-right border-b border-gray-100">Action</th>
                           </tr>
@@ -3339,15 +3613,34 @@ export default function PapersManagement({ isTab = false }) {
                                    <div className="text-gray-900 font-bold text-xs">{paper.subjectNames?.join(' ') || paper.subjectName || "—"}</div>
                                  </td>
 
-                                {/* Catch No */}
+                                {/* Catch No (Editable & Required) */}
                                 <td className="px-5 py-3.5 text-center">
-                                  {paper.catchNo ? (
-                                    <span className="inline-block font-mono font-bold text-[11px] bg-gray-100 text-gray-700 px-2 py-0.5 rounded border border-gray-200">
-                                      {paper.catchNo}
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-400 italic text-[11px]">None</span>
-                                  )}
+                                  <div className="inline-flex flex-col items-center">
+                                    <input
+                                      type="text"
+                                      placeholder="Catch No *"
+                                      required
+                                      value={catchNoMap[paper.paperId] ?? paper.catchNo ?? ''}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setCatchNoMap(prev => ({
+                                          ...prev,
+                                          [paper.paperId]: val
+                                        }));
+                                      }}
+                                      className={`w-28 px-2.5 py-1 text-xs font-mono font-bold text-center rounded-lg border transition-all ${
+                                        !(catchNoMap[paper.paperId] ?? paper.catchNo ?? '').toString().trim()
+                                          ? 'border-rose-400 bg-rose-50/50 text-rose-800 focus:ring-2 focus:ring-rose-400 placeholder:text-rose-300'
+                                          : (catchNoMap[paper.paperId] ?? '') !== (initialCatchNoMap[paper.paperId] ?? '')
+                                          ? 'border-teal-500 bg-teal-50/40 text-teal-900 focus:ring-2 focus:ring-teal-500 shadow-2xs'
+                                          : 'border-gray-200 bg-white text-gray-800 hover:border-gray-300 focus:ring-2 focus:ring-teal-500'
+                                      }`}
+                                      title={!(catchNoMap[paper.paperId] ?? paper.catchNo ?? '').toString().trim() ? "Catch number is required" : "Edit catch number"}
+                                    />
+                                    {!(catchNoMap[paper.paperId] ?? paper.catchNo ?? '').toString().trim() && (
+                                      <span className="text-[10px] text-rose-500 font-bold mt-0.5 leading-none">Required</span>
+                                    )}
+                                  </div>
                                 </td>
 
                                 {/* Examiner Dropdown Column */}
@@ -3497,17 +3790,23 @@ export default function PapersManagement({ isTab = false }) {
 
                                 {/* Action column */}
                                 <td className="px-5 py-3.5 text-right">
-                                  {selectedIds.length > 0 ? (
+                                  {(selectedIds.length > 0 || (catchNoMap[paper.paperId] ?? '') !== (initialCatchNoMap[paper.paperId] ?? '')) ? (
                                     <button
                                       type="button"
-                                      onClick={() => handleClearPaperExaminer(paper.paperId)}
+                                      onClick={() => {
+                                        handleClearPaperExaminer(paper.paperId);
+                                        setCatchNoMap(prev => ({
+                                          ...prev,
+                                          [paper.paperId]: initialCatchNoMap[paper.paperId] ?? ''
+                                        }));
+                                      }}
                                       className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
-                                      title="Reset selection for this paper"
+                                      title="Reset selection & changes for this paper"
                                     >
-                                      Clear
+                                      Reset
                                     </button>
                                   ) : (
-                                    <span className="text-[11px] text-gray-400 italic">Not set</span>
+                                    <span className="text-[11px] text-gray-400 italic">No change</span>
                                   )}
                                 </td>
                               </tr>
@@ -3534,9 +3833,9 @@ export default function PapersManagement({ isTab = false }) {
                       <div className="flex items-center gap-2">
                         <UserCheck size={16} className="text-teal-700" />
                         <span className="text-xs font-extrabold text-gray-900">
-                          Ready to assign <span className="text-teal-700">{pendingAssignedCount} paper{pendingAssignedCount > 1 ? 's' : ''}</span>
+                          Ready to update <span className="text-teal-700">{pendingAssignedCount} paper{pendingAssignedCount > 1 ? 's' : ''}</span>
                         </span>
-                        <span className="text-xs text-gray-500 hidden sm:inline">• Click Save to apply assignments</span>
+                        <span className="text-xs text-gray-500 hidden sm:inline">• Click Save to apply assignments and paper configurations</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -3560,7 +3859,7 @@ export default function PapersManagement({ isTab = false }) {
                           ) : (
                             <>
                               <Check size={14} />
-                              <span>Save Assignments ({pendingAssignedCount})</span>
+                              <span>Save Changes ({pendingAssignedCount})</span>
                             </>
                           )}
                         </button>
@@ -3649,7 +3948,14 @@ export default function PapersManagement({ isTab = false }) {
                               />
                               <div className="flex-1">
                                 <div className="flex items-center justify-between">
-                                  <span className="font-bold text-gray-900 text-sm">{master.name}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-gray-900 text-sm">{master.name}</span>
+                                    {master.batchId && (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.5 bg-teal-50 text-teal-800 border border-teal-200/60 rounded">
+                                        Batch #{master.batchId}
+                                      </span>
+                                    )}
+                                  </div>
                                   <span className="text-[10px] font-extrabold px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md">
                                     {master.totalMarks} Marks
                                   </span>
@@ -3938,6 +4244,491 @@ export default function PapersManagement({ isTab = false }) {
           </div>
         )}
 
+          </div>
+
+          {showForm && (
+            <div className="xl:col-span-5 min-w-0">
+{showForm && (() => {
+          const selectedMasterSections = sectionMasters.filter(m => selectedMasterSectionIds.includes(m.id));
+          const masterTotalQuestions = selectedMasterSections.reduce((sum, m) => sum + (parseInt(m.totalQuestions, 10) || 0), 0);
+          const masterTotalMarks = selectedMasterSections.reduce((sum, m) => sum + (parseFloat(m.totalMarks) || 0), 0);
+          const parsedFormTotalQ = parseInt(formData.totalQuestions, 10);
+          const isQuestionMismatch = selectedMasterSectionIds.length > 0 && !isNaN(parsedFormTotalQ) && parsedFormTotalQ !== masterTotalQuestions;
+
+          // Group sectionMasters by batchId
+          const batchMap = {};
+          sectionMasters.forEach(sm => {
+            const bId = sm.batchId || 1;
+            if (!batchMap[bId]) batchMap[bId] = [];
+            batchMap[bId].push(sm);
+          });
+          const availableBatches = Object.keys(batchMap).map(Number).sort((a, b) => a - b);
+
+          return (
+          <div className="w-full bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col overflow-hidden sticky top-6 max-h-[calc(100vh-3rem)] animate-in fade-in duration-200">
+            {/* Panel Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/70 shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 bg-teal-100 text-teal-800 rounded-xl flex items-center justify-center font-bold shadow-xs">
+                      {editingId ? <Edit2 size={17} /> : <Plus size={17} />}
+                    </div>
+                    <div>
+                      <h2 className="text-base font-extrabold text-gray-900 leading-tight">
+                        {editingId ? "Edit Paper Configuration" : "Add Paper"}
+                      </h2>
+                      <p className="text-xs text-gray-500 font-medium">Configure paper details & import sections by Batch ID</p>
+                    </div>
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={handleCancel}
+                    className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 p-2 rounded-xl transition-all cursor-pointer"
+                    title="Close Drawer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden" autoComplete="off">
+                  {/* Scrollable Body */}
+                  <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+                {/* Project Select (Only shown if page is not already scoped to a specific project) */}
+                {!projectId && (
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                      Project <span className="text-red-500">*</span>
+                    </label>
+                    <select 
+                      value={formData.projectId} 
+                      onChange={(e) => handleProjectChange(e.target.value)} 
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                      required
+                    >
+                      <option value="">Select Project</option>
+                      {projects.map((p) => (
+                        <option key={p.projectId} value={p.projectId}>{p.projectName}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Row 1: Code, Name, Catch No */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                      Paper Code <span className="text-red-500">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      value={formData.paperCode} 
+                      onChange={(e) => setFormData({ ...formData, paperCode: e.target.value })} 
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                      placeholder=""
+                      autoComplete="off"
+                      required 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                      Paper Name <span className="text-red-500">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      value={formData.paperName} 
+                      onChange={(e) => setFormData({ ...formData, paperName: e.target.value })} 
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                      placeholder=""
+                      autoComplete="off"
+                      required 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                      Catch Number <span className="text-red-500">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      value={formData.catchNo} 
+                      onChange={(e) => setFormData({ ...formData, catchNo: e.target.value })} 
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                      placeholder="e.g. 1024"
+                      autoComplete="off"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Row 2: Subjects, Paper Number, Max Marks, Total Questions in ONE Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-start">
+                  {/* Multi-Select Subjects Dropdown */}
+                  <div className="sm:col-span-5 relative" ref={subjectDropdownRef}>
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                      Subjects ({selectedSubjects.length} selected) <span className="text-red-500">*</span>
+                    </label>
+                    <div
+                      onClick={() => setIsSubjectDropdownOpen(prev => !prev)}
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-2.5 py-1.5 rounded-lg hover:border-gray-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-teal-500 transition-all outline-none font-medium flex items-center justify-between gap-1.5 min-h-[38px] shadow-2xs cursor-pointer select-none"
+                    >
+                      <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
+                        {selectedSubjects.length === 0 ? (
+                          <span className="text-gray-400 font-normal py-0.5">Select subjects...</span>
+                        ) : (
+                          selectedSubjects.map(subId => {
+                            const sub = subjects.find(s => s.subjectId === subId);
+                            if (!sub) return null;
+                            return (
+                              <span
+                                key={subId}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-[10px] font-semibold animate-in fade-in"
+                              >
+                                <span>{sub.subjectName}</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleSubject(subId);
+                                  }}
+                                  className="text-teal-600 hover:text-teal-900 hover:bg-teal-100 rounded-full p-0.5 transition-colors cursor-pointer"
+                                  title="Remove subject"
+                                >
+                                  <X size={10} />
+                                </button>
+                              </span>
+                            );
+                          })
+                        )}
+                      </div>
+                      <ChevronDown size={14} className={`text-gray-400 transition-transform shrink-0 ml-1 ${isSubjectDropdownOpen ? "rotate-180" : ""}`} />
+                    </div>
+
+                    {isSubjectDropdownOpen && (
+                      <div className="absolute left-0 top-full mt-1 w-72 sm:w-80 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2.5 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
+                        <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
+                          <Search size={13} className="text-gray-400" />
+                          <input 
+                            type="text" 
+                            placeholder="Search subjects..."
+                            value={subjectSearchText}
+                            onChange={(e) => setSubjectSearchText(e.target.value)}
+                            className="w-full bg-transparent text-xs text-gray-800 outline-none placeholder-gray-400"
+                          />
+                          {subjectSearchText && (
+                            <button type="button" onClick={() => setSubjectSearchText("")} className="text-gray-400 hover:text-gray-600">
+                              <X size={12} />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] px-1 text-gray-500 font-medium">
+                          <span>{selectedSubjects.length} selected</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedSubjects(subjects.map(s => s.subjectId))}
+                              className="text-teal-700 hover:underline font-semibold"
+                            >
+                              Select All
+                            </button>
+                            <span>•</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedSubjects([])}
+                              className="text-gray-500 hover:underline"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar pr-1">
+                          {subjects.filter(s => (s.subjectName || "").toLowerCase().includes(subjectSearchText.toLowerCase())).length === 0 ? (
+                            <div className="text-xs text-gray-400 py-2 text-center">No subjects found</div>
+                          ) : (
+                            subjects
+                              .filter(s => (s.subjectName || "").toLowerCase().includes(subjectSearchText.toLowerCase()))
+                              .map(s => {
+                                const isSelected = selectedSubjects.includes(s.subjectId);
+                                return (
+                                  <label 
+                                    key={s.subjectId}
+                                    className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer select-none transition-all ${
+                                      isSelected ? "bg-teal-50 text-teal-900 font-medium" : "hover:bg-gray-50 text-gray-700"
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => toggleSubject(s.subjectId)}
+                                      className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300"
+                                    />
+                                    <span className="truncate">{s.subjectName}</span>
+                                  </label>
+                                );
+                              })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Paper Number */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Paper Number</label>
+                    <input 
+                      type="number" 
+                      value={formData.paperNumber} 
+                      onChange={(e) => setFormData({ ...formData, paperNumber: e.target.value })} 
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                      placeholder=""
+                      autoComplete="off"
+                      min="1" 
+                    />
+                  </div>
+
+                  {/* Max Marks */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                      Max Marks <span className="text-red-500">*</span>
+                    </label>
+                    <input 
+                      type="number" 
+                      value={formData.maxMarks} 
+                      onChange={(e) => setFormData({ ...formData, maxMarks: e.target.value })} 
+                      className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                      placeholder=""
+                      autoComplete="off"
+                      min="1" 
+                      required
+                    />
+                  </div>
+
+                  {/* Total Questions */}
+                  <div className="sm:col-span-3">
+                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1 whitespace-nowrap">
+                      Total Questions <span className="text-red-500">*</span>
+                    </label>
+                    <input 
+                      type="number" 
+                      value={formData.totalQuestions} 
+                      onChange={(e) => setFormData({ ...formData, totalQuestions: e.target.value })} 
+                      className={`w-full text-xs px-3 py-2 rounded-lg outline-none font-medium transition-all ${
+                        isQuestionMismatch
+                          ? "bg-amber-50/70 border-2 border-amber-400 text-amber-900 focus:ring-2 focus:ring-amber-500"
+                          : "bg-gray-50/70 border border-gray-200 text-gray-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      }`}
+                      placeholder=""
+                      autoComplete="off"
+                      min="1" 
+                      required
+                    />
+                    {selectedMasterSectionIds.length > 0 && (
+                      <p className={`mt-1 text-[10px] ${isQuestionMismatch ? "text-amber-600 font-bold" : "text-gray-500 font-medium"}`}>
+                        Master: {masterTotalQuestions}Q
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Master Sections Question Count Mismatch Alert */}
+                {isQuestionMismatch && (
+                  <div className="flex items-start sm:items-center justify-between gap-3 p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs shadow-2xs animate-in fade-in">
+                    <div className="flex items-start sm:items-center gap-2.5">
+                      <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+                      <div>
+                        <span className="font-extrabold text-amber-950 uppercase tracking-wide text-[11px]">Incorrect Configuration:</span>{" "}
+                        Selected master sections have a total of <span className="font-extrabold text-amber-950 underline">{masterTotalQuestions} questions</span>, but Total Questions is set to <span className="font-extrabold text-amber-950">{formData.totalQuestions}</span>.
+                        <div className="text-[11px] text-amber-800 mt-0.5">
+                          Total Questions must be <strong>{masterTotalQuestions}</strong> only when importing these master sections.
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, totalQuestions: String(masterTotalQuestions) }))}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg transition-colors shrink-0 cursor-pointer shadow-xs whitespace-nowrap"
+                      title={`Click to set Total Questions to ${masterTotalQuestions}`}
+                    >
+                      Set to {masterTotalQuestions}Q
+                    </button>
+                  </div>
+                )}
+
+
+                {/* Row 3: Description */}
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Description</label>
+                  <input 
+                    type="text" 
+                    value={formData.description} 
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })} 
+                    className="w-full bg-gray-50/70 border border-gray-200 text-gray-900 text-xs px-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-medium" 
+                    placeholder="" 
+                    autoComplete="off"
+                  />
+                </div>
+
+                {/* Row 4: Import According to Batch ID (with Section Config Preview) */}
+                {availableBatches.length > 0 && (
+                  <div className="border border-teal-100 bg-teal-50/20 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-extrabold text-teal-950 uppercase tracking-wider block">
+                          Import Sections by Batch ID
+                        </span>
+                        <span className="text-[11px] text-teal-700 font-medium">
+                          Select a batch to import its section template & configuration
+                        </span>
+                      </div>
+                      {selectedMasterSectionIds.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedMasterSectionIds([])}
+                          className="text-[11px] font-bold text-red-600 hover:underline cursor-pointer"
+                        >
+                          Clear Selection
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Batch Cards */}
+                    <div className="space-y-2.5">
+                      {availableBatches.map(bId => {
+                        const bSections = batchMap[bId] || [];
+                        const bTotalQ = bSections.reduce((sum, s) => sum + (parseInt(s.totalQuestions, 10) || 0), 0);
+                        const bTotalM = bSections.reduce((sum, s) => sum + (parseFloat(s.totalMarks) || 0), 0);
+                        const isBatchApplied = bSections.length > 0 && bSections.every(s => selectedMasterSectionIds.includes(s.id));
+                        const isPreviewOpen = previewBatchId === bId;
+
+                        return (
+                          <div
+                            key={bId}
+                            className={`rounded-xl border transition-all ${
+                              isBatchApplied
+                                ? "bg-teal-50/80 border-teal-400 shadow-xs ring-1 ring-teal-400"
+                                : "bg-white border-gray-200 hover:border-teal-200"
+                            }`}
+                          >
+                            <div className="p-3 flex items-center justify-between gap-3 flex-wrap">
+                              <div className="flex items-center gap-2.5">
+                                <span className="font-extrabold text-xs px-2.5 py-1 rounded-lg bg-teal-700 text-white shadow-2xs">
+                                  Batch #{bId}
+                                </span>
+                                <div>
+                                  <span className="font-bold text-xs text-gray-900 block">
+                                    {bSections.map(s => s.name).join(", ")}
+                                  </span>
+                                  <span className="text-[11px] text-gray-500 font-medium">
+                                    {bSections.length} Sections &bull; {bTotalQ} Questions &bull; {bTotalM} Marks
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewBatchId(prev => prev === bId ? null : bId)}
+                                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-teal-800 bg-teal-100/70 hover:bg-teal-100 transition-colors flex items-center gap-1 cursor-pointer"
+                                  title="Preview section configuration inside this batch"
+                                >
+                                  <Eye size={12} />
+                                  {isPreviewOpen ? "Hide Config" : "Preview Config"}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const bSecIds = bSections.map(s => s.id);
+                                    if (isBatchApplied) {
+                                      setSelectedMasterSectionIds(prev => prev.filter(id => !bSecIds.includes(id)));
+                                    } else {
+                                      setSelectedMasterSectionIds(prev => Array.from(new Set([...prev, ...bSecIds])));
+                                      setFormData(prev => ({
+                                        ...prev,
+                                        totalQuestions: String(bTotalQ),
+                                        maxMarks: String(bTotalM)
+                                      }));
+                                    }
+                                  }}
+                                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                    isBatchApplied
+                                      ? "bg-teal-700 text-white shadow-xs"
+                                      : "bg-gray-100 text-gray-700 hover:bg-teal-50 hover:text-teal-800 border border-gray-200"
+                                  }`}
+                                >
+                                  {isBatchApplied ? "✓ Imported" : "Import Batch"}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Preview Section Config Inside This Batch */}
+                            {isPreviewOpen && (
+                              <div className="border-t border-teal-100 p-3.5 bg-teal-50/40 rounded-b-xl space-y-2 animate-in fade-in duration-150">
+                                <div className="text-[10px] font-extrabold uppercase tracking-wider text-teal-900 flex items-center justify-between">
+                                  <span>Section Config Preview for Batch #{bId}:</span>
+                                  <span className="text-teal-700 normal-case">{bSections.length} Sections Configured</span>
+                                </div>
+                                <div className="grid grid-cols-1 gap-2">
+                                  {bSections.map(sec => (
+                                    <div
+                                      key={sec.id}
+                                      className="p-2.5 bg-white rounded-lg border border-teal-100 flex items-center justify-between text-xs shadow-2xs"
+                                    >
+                                      <div>
+                                        <span className="font-extrabold text-gray-900">{sec.name}</span>
+                                        <span className="text-[11px] text-gray-500 ml-2 font-medium">
+                                          Q{sec.startQuestion} - Q{sec.endQuestion}
+                                        </span>
+                                        {sec.description && (
+                                          <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{sec.description}</p>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        <span className="px-2 py-0.5 bg-gray-100 rounded text-gray-700 text-[10px] font-bold">
+                                          {sec.totalQuestions} Questions
+                                        </span>
+                                        <span className="px-2 py-0.5 bg-teal-50 text-teal-800 border border-teal-200/60 rounded text-[10px] font-extrabold">
+                                          {sec.totalMarks} Marks
+                                        </span>
+                                        <span className="text-gray-500 text-[10px] font-semibold">
+                                          Attempt {sec.maxQuestionsToAttempt || sec.totalQuestions}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Drawer Sticky Footer */}
+              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/90 shrink-0">
+                <button 
+                  type="button" 
+                  onClick={handleCancel} 
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-100 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="px-6 py-2.5 rounded-xl text-xs font-extrabold text-white bg-teal-700 hover:bg-teal-800 shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  {editingId ? <Edit2 size={13} /> : <Plus size={13} />}
+                  {editingId ? "Update Configuration" : "Save Paper"}
+                </button>
+              </div>
+            </form>
+          </div>
+    ); })()}
+            </div>
+          )}
+        </div>
         <input
           type="file"
           ref={tableFileInputRef}
@@ -3947,6 +4738,7 @@ export default function PapersManagement({ isTab = false }) {
         />
         </>
       )}
+      </div>
     </div>
   );
 }

@@ -59,20 +59,29 @@ namespace API.Controllers
                     .CountAsync(ds => ds.Department.UniversityId == targetUniversityId && ds.Subject.Status && ds.Department.IsActive);
 
                 var scriptsCount = await _context.Scripts
-                    .CountAsync(s => s.ProjectPaper.Project.UniversityId == targetUniversityId);
+                    .CountAsync(s => s.ProjectPaper.Project.UniversityId == targetUniversityId && s.ProjectPaper.Project.IsActive);
 
                 var completedMarking = await _context.Scripts
-                    .CountAsync(s => s.ProjectPaper.Project.UniversityId == targetUniversityId && s.Status == ScriptStatus.completed);
+                    .CountAsync(s => s.ProjectPaper.Project.UniversityId == targetUniversityId && s.ProjectPaper.Project.IsActive && s.Status == ScriptStatus.completed);
 
                 var unassignedScriptsCount = await _context.Scripts
-                    .CountAsync(s => s.ProjectPaper.Project.UniversityId == targetUniversityId && (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any())));
+                    .CountAsync(s => s.ProjectPaper.Project.UniversityId == targetUniversityId && s.ProjectPaper.Project.IsActive && (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any())));
 
                 var unconfiguredPapersCount = await _context.ProjectPapers
-                    .CountAsync(pp => pp.Project.UniversityId == targetUniversityId && !pp.Paper.Sections.Any());
+                    .CountAsync(pp => pp.Project.UniversityId == targetUniversityId && pp.Project.IsActive && !pp.Paper.Sections.Any());
+
+                var sessionsCount = await _context.Sessions
+                    .CountAsync(s => s.IsActive);
+
+                var papersCount = await _context.Papers
+                    .CountAsync(p => p.UniversityId == targetUniversityId && p.IsActive);
+
+                var sectionMastersCount = await _context.SectionMasters
+                    .CountAsync();
 
                 var projectsStats = await _context.Projects
                     .AsNoTracking()
-                    .Where(p => p.UniversityId == targetUniversityId)
+                    .Where(p => p.UniversityId == targetUniversityId && p.IsActive)
                     .Select(p => new
                     {
                         projectId = p.ProjectId,
@@ -90,6 +99,9 @@ namespace API.Controllers
                     departments = departmentsCount,
                     courses = coursesCount,
                     subjects = subjectsCount,
+                    sessions = sessionsCount,
+                    papers = papersCount,
+                    sectionMasters = sectionMastersCount,
                     scripts = scriptsCount,
                     completedMarking = completedMarking,
                     unassignedScriptsCount = unassignedScriptsCount,
@@ -129,6 +141,7 @@ namespace API.Controllers
                     success = true,
                     projectId = project.ProjectId,
                     projectName = project.ProjectName,
+                    isActive = project.IsActive,
                     papersCount = papersCount,
                     totalScripts = totalScripts,
                     pendingScripts = pendingScripts,

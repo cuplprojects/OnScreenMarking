@@ -125,15 +125,24 @@ namespace API.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<University>> GetUniversity(int id)
+        public async Task<ActionResult<University>> GetUniversity(int id, [FromQuery] bool? activeProjectsOnly = null)
         {
             try
             {
-                var university = await _context.Universities
+                var userType = User.FindFirst("userType")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+                bool filterActive = activeProjectsOnly ?? (userType != null && !userType.Equals("admin", StringComparison.OrdinalIgnoreCase));
+
+                var universityQuery = _context.Universities
                     .Include(u => u.Departments)
-                    .Include(u => u.Projects)
-                    .Include(u => u.AssignmentTypes)
-                    .FirstOrDefaultAsync(u => u.UniversityId == id);
+                    .Include(u => u.AssignmentTypes);
+
+                var university = filterActive
+                    ? await universityQuery
+                        .Include(u => u.Projects.Where(p => p.IsActive))
+                        .FirstOrDefaultAsync(u => u.UniversityId == id)
+                    : await universityQuery
+                        .Include(u => u.Projects)
+                        .FirstOrDefaultAsync(u => u.UniversityId == id);
 
                 if (university == null)
                     return NotFound(new { success = false, message = "University not found" });
@@ -221,7 +230,7 @@ namespace API.Controllers
         }
 
         [HttpGet("current/my-university")]
-        public async Task<ActionResult<University>> GetMyUniversity()
+        public async Task<ActionResult<University>> GetMyUniversity([FromQuery] bool? activeProjectsOnly = null)
         {
             try
             {
@@ -237,11 +246,19 @@ namespace API.Controllers
                 if (user == null || user.UniversityId == null)
                     return NotFound(new { success = false, message = "User not associated with a university" });
 
-                var university = await _context.Universities
+                bool filterActive = activeProjectsOnly ?? (!string.Equals(user.UserType, "admin", StringComparison.OrdinalIgnoreCase));
+
+                var universityQuery = _context.Universities
                     .AsNoTracking()
-                    .Include(u => u.Departments)
-                    .Include(u => u.Projects)
-                    .FirstOrDefaultAsync(u => u.UniversityId == user.UniversityId);
+                    .Include(u => u.Departments);
+
+                var university = filterActive
+                    ? await universityQuery
+                        .Include(u => u.Projects.Where(p => p.IsActive))
+                        .FirstOrDefaultAsync(u => u.UniversityId == user.UniversityId)
+                    : await universityQuery
+                        .Include(u => u.Projects)
+                        .FirstOrDefaultAsync(u => u.UniversityId == user.UniversityId);
 
                 if (university == null)
                     return NotFound(new { success = false, message = "University not found" });
@@ -309,6 +326,20 @@ namespace API.Controllers
             }
         }
 
+        private async Task<bool> HasPermissionAsync(string permission)
+        {
+            var userType = User.FindFirst("userType")?.Value;
+            if (string.IsNullOrEmpty(userType)) return false;
+
+            var role = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName.ToLower() == userType.ToLower());
+            if (role == null)
+            {
+                return userType.Equals("admin", StringComparison.OrdinalIgnoreCase);
+            }
+
+            return role.PermissionsList.Contains(permission);
+        }
+
         // Helper to resolve the active universityId for coordinator or admin
         private async Task<int?> GetTargetUniversityIdAsync(int? queryUniversityId)
         {
@@ -348,11 +379,20 @@ namespace API.Controllers
         /// </summary>
         [HttpGet("assignment-settings")]
         [HttpGet("assignment-type")]
-        [Authorize(Roles = "admin,Admin,coordinator,Coordinator")]
+        [Authorize]
         public async Task<IActionResult> GetAssignmentSettings([FromQuery] int? universityId = null)
         {
             try
             {
+                var userType = User.FindFirst("userType")?.Value ?? "";
+                bool isPrivilegedRole = userType.Equals("admin", StringComparison.OrdinalIgnoreCase) || 
+                                       userType.Equals("coordinator", StringComparison.OrdinalIgnoreCase);
+
+                if (!isPrivilegedRole && !await HasPermissionAsync("MANAGE_SETTINGS"))
+                {
+                    return StatusCode(403, new { success = false, message = "You do not have permission to view settings." });
+                }
+
                 int? targetUniversityId = await GetTargetUniversityIdAsync(universityId);
 
                 var query = _context.Universities
@@ -435,11 +475,20 @@ namespace API.Controllers
         [HttpPost("assignment-setting")]
         [HttpPost("assignment-type")]
         [HttpPut("assignment-type")]
-        [Authorize(Roles = "admin,Admin,coordinator,Coordinator")]
+        [Authorize]
         public async Task<IActionResult> SetAssignmentSetting([FromBody] UniversityAssignmentSettingDto dto)
         {
             try
             {
+                var userType = User.FindFirst("userType")?.Value ?? "";
+                bool isPrivilegedRole = userType.Equals("admin", StringComparison.OrdinalIgnoreCase) || 
+                                       userType.Equals("coordinator", StringComparison.OrdinalIgnoreCase);
+
+                if (!isPrivilegedRole && !await HasPermissionAsync("MANAGE_SETTINGS"))
+                {
+                    return StatusCode(403, new { success = false, message = "You do not have permission to manage settings." });
+                }
+
                 if (dto == null || dto.AssignmentTypeId <= 0)
                 {
                     return BadRequest(new { success = false, message = "Assignment Type is required" });

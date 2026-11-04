@@ -86,7 +86,7 @@ export default function CoordinatorDashboard() {
       setLoading(true);
       setError(null);
 
-      const uniData = await apiCall('/universities/current/my-university');
+      const uniData = await apiCall('/universities/current/my-university?activeProjectsOnly=true');
       setUniversity(uniData);
 
       const sessionsRes = await apiCall('/session?pageSize=0');
@@ -152,13 +152,18 @@ export default function CoordinatorDashboard() {
 
       setExaminers(examinersWithWorkload);
 
-      // Filter projects locally
-      const rawProjects = university.projects || [];
+      // Filter projects locally - only active projects should be visible on coordinator dashboard
+      const rawProjects = (university.projects || []).filter(p => p.isActive);
       const sessIdNum = parseInt(selectedSessionId || '0', 10);
       const filteredProj = sessIdNum
         ? rawProjects.filter(p => p.sessionId === sessIdNum)
         : rawProjects;
       setActiveProjects(filteredProj);
+
+      if (selectedProjectId && !filteredProj.some(p => p.projectId.toString() === selectedProjectId)) {
+        setSelectedProjectId('');
+        sessionStorage.removeItem('selectedProjectId');
+      }
 
       setStats({
         departments: countsData.departments,
@@ -438,8 +443,8 @@ export default function CoordinatorDashboard() {
                       <div className="mt-5 flex gap-2">
                         <Link 
                           to={userType === 'admin' 
-                            ? `/admin/papers?projectId=${encryptId(project.projectId.toString())}` 
-                            : `/papers?projectId=${encryptId(project.projectId.toString())}`}
+                            ? `/admin/project-dashboard?projectId=${encryptId(project.projectId.toString())}&tab=papers&add=true` 
+                            : `/project-dashboard?projectId=${encryptId(project.projectId.toString())}&tab=papers&add=true`}
                           onClick={(e) => {
                             e.stopPropagation();
                             sessionStorage.setItem('selectedProjectId', project.projectId.toString());
@@ -507,43 +512,6 @@ export default function CoordinatorDashboard() {
               />
             </div>
           </div>
-
-          {/* Compact Metadata Details Card */}
-          <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
-            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">University Profile</h3>
-            <div className="flex flex-col gap-1.5">
-              
-              {/* University Name Subcard */}
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-gray-100 border-l-[3px] border-l-teal-500 shadow-sm">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="p-2 rounded-lg bg-teal-50 text-teal-700 shrink-0">
-                    <Building2 size={14} />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="text-[11px] font-bold text-gray-900 truncate">University Name</h4>
-                    <p className="text-[9px] text-gray-500 mt-0.5 truncate font-medium">{university?.universityName || 'Loading...'}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Active Configs Subcard */}
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-gray-100 border-l-[3px] border-l-teal-500 shadow-sm">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="p-2 rounded-lg bg-teal-50 text-teal-700 shrink-0">
-                    <Layers size={14} />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="text-[11px] font-bold text-gray-900 truncate">Active Configs</h4>
-                    <p className="text-[9px] text-gray-500 mt-0.5 truncate font-medium">
-                      {stats.departments} Departments | {stats.subjects} Subjects
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
         </div>
       </div>
 

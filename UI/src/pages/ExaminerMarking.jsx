@@ -479,15 +479,14 @@ const ExaminerMarking = () => {
         landmarkerRef.current = localLandmarker;
         setIsLandmarkerLoaded(true);
 
-        let profileImageBase64 = sessionStorage.getItem("profileImage") || user?.profileImage;
+        let profileImageBase64 = user?.profileImage;
         if (!profileImageBase64 && examinerId) {
           try {
             console.log(`OSM Proctoring: Profile image not found locally. Fetching details for user: ${examinerId}...`);
             const fetchedUser = await userService.getUserById(examinerId);
             if (fetchedUser && fetchedUser.profileImage) {
               profileImageBase64 = fetchedUser.profileImage;
-              sessionStorage.setItem("profileImage", profileImageBase64);
-              console.log("OSM Proctoring: Successfully fetched and cached profile image from DB.");
+              console.log("OSM Proctoring: Successfully fetched profile image.");
             } else {
               console.warn("OSM Proctoring: Fetched user does not have a profile image.");
             }
@@ -621,7 +620,8 @@ const ExaminerMarking = () => {
         if (scriptData) {
           if (!paperId && scriptData.paperId) setPaperId(scriptData.paperId);
           if (!projectPaperId && scriptData.projectPaperId) setProjectPaperId(scriptData.projectPaperId);
-          if (!allocationId && scriptData.allocationId) setAllocationId(scriptData.allocationId);
+          const allocId = scriptData.allocationId || scriptData.AllocationId;
+          if (!allocationId && allocId) setAllocationId(allocId);
           if (!studentName && (scriptData.studentName || scriptData.rollNumber)) {
             setStudentName(scriptData.studentName || scriptData.rollNumber);
           }
@@ -706,8 +706,9 @@ const ExaminerMarking = () => {
       if (!currentAllocId && scriptId) {
         try {
           const allocRes = await apiCall(`/allocations/script/${scriptId}`);
-          if (allocRes?.allocationId) {
-            currentAllocId = allocRes.allocationId;
+          const fetchedAllocId = allocRes?.allocationId || allocRes?.AllocationId;
+          if (fetchedAllocId) {
+            currentAllocId = fetchedAllocId;
             setAllocationId(currentAllocId);
           }
         } catch (allocErr) {

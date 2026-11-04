@@ -65,7 +65,8 @@ namespace API.Controllers
                     {
                         pps.Id,
                         pps.ProjectPaperId,
-                        pps.SectionMasterId,
+                        
+                        pps.BatchId,
                         pps.Name,
                         pps.Description,
                         pps.TotalQuestions,
@@ -87,6 +88,7 @@ namespace API.Controllers
                         {
                             q.QuestionId,
                             q.QuestionNo,
+                            q.TypeId,
                             q.Marks,
                             q.Type,
                             q.IsOptional,
@@ -122,7 +124,8 @@ namespace API.Controllers
                 {
                     section.Id,
                     section.ProjectPaperId,
-                    section.SectionMasterId,
+                    
+                    section.BatchId,
                     section.Name,
                     section.Description,
                     section.TotalQuestions,
@@ -144,6 +147,7 @@ namespace API.Controllers
                     {
                         q.QuestionId,
                         q.QuestionNo,
+                        q.TypeId,
                         q.Marks,
                         q.Type,
                         q.IsOptional,
@@ -182,15 +186,44 @@ namespace API.Controllers
 
                 var projectPaper = await _context.ProjectPapers
                     .Include(pp => pp.Paper)
+                    .Include(pp => pp.Project)
                     .FirstOrDefaultAsync(pp => pp.Id == dto.ProjectPaperId);
 
                 if (projectPaper == null)
                     return BadRequest(new { success = false, message = "Project paper assignment not found" });
 
+                if (projectPaper.Project != null && !projectPaper.Project.IsActive)
+                    return BadRequest(new { success = false, message = "Cannot create sections for an inactive project." });
+
+                // Handle SectionMaster: if not exists, create it first
+                var masterName = dto.Name.Trim();
+                var master = await _context.SectionMasters.FirstOrDefaultAsync(sm => sm.Name == masterName);
+                if (master == null)
+                {
+                    int nextBatchId = dto.BatchId > 0 ? dto.BatchId : (await _context.SectionMasters.MaxAsync(sm => (int?)sm.BatchId) ?? 0) + 1;
+                    master = new SectionMaster
+                    {
+                        BatchId = nextBatchId,
+                        Name = masterName,
+                        Description = dto.Description ?? "",
+                        TotalQuestions = dto.TotalQuestions > 0 ? dto.TotalQuestions : (dto.Questions?.Count ?? (dto.EndQuestion >= dto.StartQuestion ? dto.EndQuestion - dto.StartQuestion + 1 : 1)),
+                        TotalMarks = Math.Round(dto.TotalMarks, 2, MidpointRounding.AwayFromZero),
+                        StartQuestion = dto.StartQuestion,
+                        EndQuestion = dto.EndQuestion,
+                        MaxQuestionsToAttempt = dto.MaxQuestionsToAttempt > 0 ? dto.MaxQuestionsToAttempt : dto.TotalQuestions,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _context.SectionMasters.Add(master);
+                    await _context.SaveChangesAsync();
+                }
+
+                int resolvedBatchId = dto.BatchId > 0 ? dto.BatchId : master.BatchId;
+                if (resolvedBatchId <= 0) resolvedBatchId = 1;
+
                 var section = new ProjectPaperSection
                 {
                     ProjectPaperId = dto.ProjectPaperId,
-                    SectionMasterId = dto.SectionMasterId,
+                    BatchId = resolvedBatchId,
                     Name = dto.Name.Trim(),
                     Description = dto.Description,
                     TotalQuestions = dto.TotalQuestions > 0 ? dto.TotalQuestions : (dto.Questions?.Count ?? (dto.EndQuestion - dto.StartQuestion + 1)),
@@ -248,11 +281,17 @@ namespace API.Controllers
             {
                 var section = await _context.ProjectPaperSections
                     .Include(pps => pps.Questions)
+                    .Include(pps => pps.ProjectPaper)
+                        .ThenInclude(pp => pp.Project)
                     .FirstOrDefaultAsync(pps => pps.Id == id);
 
                 if (section == null)
                     return NotFound(new { success = false, message = "Project paper section not found" });
 
+                if (section.ProjectPaper?.Project != null && !section.ProjectPaper.Project.IsActive)
+                    return BadRequest(new { success = false, message = "Cannot update sections for an inactive project." });
+
+                if (dto.BatchId > 0) section.BatchId = dto.BatchId;
                 section.Name = dto.Name.Trim();
                 section.Description = dto.Description;
                 section.TotalQuestions = dto.TotalQuestions;
@@ -337,10 +376,15 @@ namespace API.Controllers
             {
                 var section = await _context.ProjectPaperSections
                     .Include(pps => pps.Questions)
+                    .Include(pps => pps.ProjectPaper)
+                        .ThenInclude(pp => pp.Project)
                     .FirstOrDefaultAsync(pps => pps.Id == id);
 
                 if (section == null)
                     return NotFound(new { success = false, message = "Project paper section not found" });
+
+                if (section.ProjectPaper?.Project != null && !section.ProjectPaper.Project.IsActive)
+                    return BadRequest(new { success = false, message = "Cannot update sections for an inactive project." });
 
                 var ppId = section.ProjectPaperId;
                 _context.Questions.RemoveRange(section.Questions);
@@ -387,10 +431,14 @@ namespace API.Controllers
 
                 var projectPaper = await _context.ProjectPapers
                     .Include(pp => pp.Paper)
+                    .Include(pp => pp.Project)
                     .FirstOrDefaultAsync(pp => pp.Id == projectPaperId);
 
                 if (projectPaper == null)
                     return NotFound(new { success = false, message = "Project paper not found" });
+
+                if (projectPaper.Project != null && !projectPaper.Project.IsActive)
+                    return BadRequest(new { success = false, message = "Cannot import sections to an inactive project." });
 
                 var masterSections = await _context.Sections
                     .Include(s => s.Questions)
@@ -419,7 +467,8 @@ namespace API.Controllers
                     var newSection = new ProjectPaperSection
                     {
                         ProjectPaperId = request.ProjectPaperId,
-                        SectionMasterId = ms.SectionMasterId,
+                        
+                        BatchId = ms.BatchId,
                         Name = ms.Name,
                         Description = ms.Description,
                         TotalQuestions = ms.TotalQuestions,
@@ -441,6 +490,7 @@ namespace API.Controllers
                             ProjectPaperSectionId = newSection.Id,
                             QuestionNo = mq.QuestionNo,
                             Marks = mq.Marks,
+                            TypeId = mq.TypeId,
                             Type = mq.Type,
                             IsOptional = mq.IsOptional,
                             OptionalGroupCode = mq.OptionalGroupCode,
@@ -490,10 +540,14 @@ namespace API.Controllers
 
                 var projectPaper = await _context.ProjectPapers
                     .Include(pp => pp.Paper)
+                    .Include(pp => pp.Project)
                     .FirstOrDefaultAsync(pp => pp.Id == projectPaperId);
 
                 if (projectPaper == null)
                     return NotFound(new { success = false, message = "Project paper not found" });
+
+                if (projectPaper.Project != null && !projectPaper.Project.IsActive)
+                    return BadRequest(new { success = false, message = "Cannot import sections to an inactive project." });
 
                 var masters = await _context.SectionMasters
                     .Where(m => request.MasterSectionIds.Contains(m.Id))
@@ -525,7 +579,8 @@ namespace API.Controllers
                     var newSection = new ProjectPaperSection
                     {
                         ProjectPaperId = projectPaperId,
-                        SectionMasterId = master.Id,
+                        
+                        BatchId = master.BatchId,
                         Name = master.Name,
                         Description = master.Description,
                         StartQuestion = master.StartQuestion,

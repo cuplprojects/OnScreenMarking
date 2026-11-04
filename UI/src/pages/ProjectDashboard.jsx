@@ -109,6 +109,11 @@ export default function ProjectDashboard() {
   };
 
   const handleAutoAllocateProject = async () => {
+    if (!projectId) return;
+    if (project?.isActive === false) {
+      message.warning("This project is inactive. Script allocation is not permitted.");
+      return;
+    }
     setIsBulkAutoAllocating(true);
     try {
       const res = await apiCall(`/allocation/project/${projectId}/auto-allocate`, { method: 'POST' });
@@ -122,6 +127,10 @@ export default function ProjectDashboard() {
   };
 
   const handleBulkAssign = async () => {
+    if (project?.isActive === false) {
+      message.warning("This project is inactive. Examiner assignment is not permitted.");
+      return;
+    }
     if (selectedExaminerIds.length === 0) {
       alert("Please select at least one examiner.");
       return;
@@ -206,7 +215,8 @@ export default function ProjectDashboard() {
       setProject({
         projectId: projStats.projectId,
         projectName: projStats.projectName,
-        description: projStats.description
+        description: projStats.description,
+        isActive: projStats.isActive !== false
       });
 
       setStats({
@@ -272,14 +282,13 @@ export default function ProjectDashboard() {
           <ProjectConfigHeader 
             completePercentage={stats?.completePercentage || 0}
             initialProjectName={project?.projectName}
-            titleBadge={activeTab === 'allocations' ? 'Allocation' : null}
             title={
               activeTab === 'papers' ? "Papers & Sections Management" :
               activeTab === 'allocations' ? "Script Allocation" :
               activeTab === 'attendance' ? "Attendance & Logs" :
               "Project Stats Dashboard"
             }
-            subtitle={activeTab === 'allocations' ? 'Allocate answer scripts to examiners' : null}
+            subtitle={activeTab === 'allocations'}
             titleIcon={
               activeTab === 'papers' ? <FileText size={18} /> :
               (activeTab === 'allocations' || activeTab === 'attendance') ? <Zap size={18} /> :
@@ -298,6 +307,20 @@ export default function ProjectDashboard() {
           </div>
         ) : (
           <>
+            {project?.isActive === false && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl flex items-center justify-between shadow-sm mb-3">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="text-amber-500 shrink-0" size={18} />
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider">Project is Inactive (Read-Only)</p>
+                    <p className="text-xs text-amber-700">This project is inactive. No new papers, sections, scripts, or examiner allocations can be added or updated.</p>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 bg-amber-200 text-amber-800 rounded-full text-[10px] font-black uppercase tracking-wider">
+                  Inactive
+                </span>
+              </div>
+            )}
             {activeTab === 'project-dashboard' && (
               <>
                 {/* Stats Banner */}
@@ -321,8 +344,8 @@ export default function ProjectDashboard() {
           {(stats.papersCount === 0 || stats.unconfiguredPapersCount > 0) && (
             <Link 
               to={userType === 'admin' 
-                ? `/admin/papers?projectId=${encryptedProjectId}` 
-                : `/papers?projectId=${encryptedProjectId}`}
+                ? `/admin/project-dashboard?projectId=${encryptedProjectId}&tab=papers` 
+                : `/project-dashboard?projectId=${encryptedProjectId}&tab=papers`}
               onClick={(e) => e.stopPropagation()}
               className="w-full flex items-center justify-center gap-1.5 px-2 py-1 mt-1 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors"
             >
@@ -455,7 +478,7 @@ export default function ProjectDashboard() {
               </div>
 
               <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
-                {selectedPaperIds.length > 0 && (
+                {selectedPaperIds.length > 0 && project?.isActive !== false && (
                   <button 
                     onClick={() => setIsBulkAssignModalOpen(true)}
                     className="px-3 py-2 bg-teal-700 hover:bg-teal-800 text-white text-[10px] font-bold uppercase tracking-wider rounded-md shadow-sm transition-all whitespace-nowrap"
@@ -464,7 +487,7 @@ export default function ProjectDashboard() {
                   </button>
                 )}
                 
-                {stats.pendingScripts > 0 && (
+                {stats.pendingScripts > 0 && project?.isActive !== false && (
                   <button
                     onClick={handleAutoAllocateProject}
                     disabled={isBulkAutoAllocating}

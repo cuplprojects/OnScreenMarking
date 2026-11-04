@@ -100,9 +100,10 @@ export default function DepartmentManagement() {
       searchPlaceholder: 'Search departments…',
       actionLabel: 'Add Department',
       onAction: () => setShowForm(true),
+      count: totalCount,
     });
     return () => setConfigHeader(null);
-  }, [search, setSearch, setConfigHeader]);
+  }, [search, setSearch, setConfigHeader, totalCount]);
 
 
   const handleEdit = (department) => {

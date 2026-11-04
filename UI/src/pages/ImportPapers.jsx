@@ -6,7 +6,10 @@ import {
   FileText,
   Loader,
   ChevronDown,
-  CheckCircle2
+  CheckCircle2,
+  SlidersHorizontal,
+  Users,
+  Hash
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBreadcrumb } from '../context/BreadcrumbContext';
@@ -40,6 +43,13 @@ export default function ImportPapers() {
   const [loadingSourcePapers, setLoadingSourcePapers] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState(null);
+
+  // Import Configurations (Checkboxes)
+  const [importConfig, setImportConfig] = useState({
+    importCatchNo: true,
+    importSections: true,
+    importExaminers: true
+  });
 
   // Set breadcrumb
   useEffect(() => {
@@ -270,11 +280,15 @@ export default function ImportPapers() {
 
     setImporting(true);
     try {
-      await paperService.importPapers({
+      const res = await paperService.importPapers({
         sourcePaperIds: selectedPaperIds,
-        targetProjectId: selectedTargetProjectId
+        targetProjectId: selectedTargetProjectId,
+        sourceProjectId: selectedSourceProject !== 'master' ? selectedSourceProject : null,
+        importCatchNo: importConfig.importCatchNo,
+        importSections: importConfig.importSections,
+        importExaminers: importConfig.importExaminers
       });
-      message.success(`Successfully imported ${selectedPaperIds.length} paper(s) into project!`);
+      message.success(res?.message || `Successfully imported ${selectedPaperIds.length} paper(s) into project!`);
       setSelectedPaperIds([]);
       if (selectedSourceProject) {
         fetchPapersForProject(selectedSourceProject);
@@ -416,6 +430,68 @@ export default function ImportPapers() {
               </div>
             </div>
 
+            {/* Configurable Import Options Bar */}
+            {selectedSourceProject && (
+              <div className="px-5 py-3 bg-teal-50/50 border-b border-teal-100 flex flex-wrap items-center justify-between gap-3 animate-fade-in">
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="p-1 rounded-md bg-teal-100 text-teal-800">
+                    <SlidersHorizontal size={13} />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-teal-900">Import Configuration</span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+                  {/* Checkbox 1: Import with Catch No */}
+                  <label className="flex items-center gap-2 cursor-pointer select-none group">
+                    <input
+                      type="checkbox"
+                      checked={importConfig.importCatchNo}
+                      onChange={(e) => setImportConfig(prev => ({ ...prev, importCatchNo: e.target.checked }))}
+                      className="w-4 h-4 rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer"
+                    />
+                    <div className="leading-tight">
+                      <span className="text-xs font-extrabold text-gray-800 group-hover:text-teal-900 transition-colors">
+                        Import with Catch No
+                      </span>
+                      <p className="text-[9.5px] text-gray-400">Include source booklet catch number</p>
+                    </div>
+                  </label>
+
+                  {/* Checkbox 2: Import with Sections */}
+                  <label className="flex items-center gap-2 cursor-pointer select-none group">
+                    <input
+                      type="checkbox"
+                      checked={importConfig.importSections}
+                      onChange={(e) => setImportConfig(prev => ({ ...prev, importSections: e.target.checked }))}
+                      className="w-4 h-4 rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer"
+                    />
+                    <div className="leading-tight">
+                      <span className="text-xs font-extrabold text-gray-800 group-hover:text-teal-900 transition-colors">
+                        Import with Sections
+                      </span>
+                      <p className="text-[9.5px] text-gray-400">Copy configured sections & questions</p>
+                    </div>
+                  </label>
+
+                  {/* Checkbox 3: Import with Examiner */}
+                  <label className="flex items-center gap-2 cursor-pointer select-none group">
+                    <input
+                      type="checkbox"
+                      checked={importConfig.importExaminers}
+                      onChange={(e) => setImportConfig(prev => ({ ...prev, importExaminers: e.target.checked }))}
+                      className="w-4 h-4 rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer"
+                    />
+                    <div className="leading-tight">
+                      <span className="text-xs font-extrabold text-gray-800 group-hover:text-teal-900 transition-colors">
+                        Import with Examiner
+                      </span>
+                      <p className="text-[9.5px] text-gray-400">Replicate assigned examiners</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            )}
+
             {/* Papers Table */}
             {!selectedSourceProject ? (
               <div className="p-16 text-center">
@@ -450,13 +526,24 @@ export default function ImportPapers() {
                       <SortHeader label="Paper Code" field="paperCode" hasFilter={true} />
                       <SortHeader label="Subjects" field="subjectNames" hasFilter={true} />
                       <SortHeader label="Max Marks" field="maxMarks" />
-                      <th className="px-5 py-3.5 text-center border-b border-gray-100">Sections</th>
+                      {importConfig.importCatchNo && (
+                        <SortHeader label="Catch No" field="catchNo" hasFilter={true} isCenter={true} />
+                      )}
+                      {importConfig.importSections && (
+                        <th className="px-5 py-3.5 text-center border-b border-gray-100">Sections</th>
+                      )}
+                      {importConfig.importExaminers && (
+                        <th className="px-5 py-3.5 text-center border-b border-gray-100">Examiners</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs font-bold text-gray-700">
                     {papers.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-5 py-16 text-center">
+                        <td 
+                          colSpan={5 + (importConfig.importCatchNo ? 1 : 0) + (importConfig.importSections ? 1 : 0) + (importConfig.importExaminers ? 1 : 0)} 
+                          className="px-5 py-16 text-center"
+                        >
                           <FileText size={32} className="mx-auto text-gray-200 mb-2" />
                           <p className="text-xs font-bold uppercase tracking-wider text-gray-400">
                             {tableSearch || Object.keys(filters).some(k => filters[k]) ? 'No papers match your search/filter criteria' : 'No papers found in selected project'}
@@ -466,6 +553,9 @@ export default function ImportPapers() {
                     ) : (
                       papers.map(paper => {
                         const isSelected = selectedPaperIds.includes(paper.paperId);
+                        const secCount = paper.sectionsCount ?? paper.sections?.length ?? 0;
+                        const examCount = paper.examinersCount ?? (paper.examinerNames?.length || 0);
+
                         return (
                           <tr key={paper.paperId} className={`hover:bg-gray-50/50 transition-colors ${isSelected ? 'bg-teal-50/30' : ''}`}>
                             <td className="px-5 py-2.5 text-center">
@@ -492,9 +582,43 @@ export default function ImportPapers() {
                             <td className="px-5 py-2.5 text-center font-bold text-gray-700">
                               {paper.maxMarks}
                             </td>
-                            <td className="px-5 py-2.5 text-center font-bold text-gray-700">
-                              {paper.sections?.length || 0}
-                            </td>
+                            {importConfig.importCatchNo && (
+                              <td className="px-5 py-2.5 text-center">
+                                {paper.catchNo ? (
+                                  <span className="font-mono bg-blue-50 text-blue-700 border border-blue-200/60 font-extrabold px-2 py-0.5 rounded text-[11px]">
+                                    {paper.catchNo}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 font-medium text-xs">—</span>
+                                )}
+                              </td>
+                            )}
+                            {importConfig.importSections && (
+                              <td className="px-5 py-2.5 text-center">
+                                <span className={`inline-flex items-center gap-1 font-bold text-xs px-2 py-0.5 rounded border ${
+                                  secCount > 0 
+                                    ? 'bg-amber-50 text-amber-800 border-amber-200/60' 
+                                    : 'bg-gray-50 text-gray-400 border-gray-200'
+                                }`}>
+                                  {secCount} {secCount === 1 ? 'Sec' : 'Secs'}
+                                </span>
+                              </td>
+                            )}
+                            {importConfig.importExaminers && (
+                              <td className="px-5 py-2.5 text-center">
+                                {examCount > 0 ? (
+                                  <span 
+                                    title={paper.examinerNames?.join(', ') || `${examCount} Examiner(s)`} 
+                                    className="inline-flex items-center gap-1 font-bold text-xs bg-emerald-50 text-emerald-800 border border-emerald-200/60 px-2 py-0.5 rounded cursor-help"
+                                  >
+                                    <Users size={11} />
+                                    {examCount} {examCount === 1 ? 'Examiner' : 'Examiners'}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 font-medium text-xs">None</span>
+                                )}
+                              </td>
+                            )}
                           </tr>
                         );
                       })

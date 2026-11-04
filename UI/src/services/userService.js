@@ -58,6 +58,13 @@ const userService = {
     });
   },
 
+  updateProfile: async (profileData) => {
+    return apiCall('/users/profile', {
+      method: 'PUT',
+      body: JSON.stringify(profileData)
+    });
+  },
+
   deleteUser: async (userId) => {
     return apiCall(`/users/${userId}`, {
       method: 'DELETE'

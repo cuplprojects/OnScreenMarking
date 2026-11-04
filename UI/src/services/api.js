@@ -2,13 +2,24 @@
 const API_URL = import.meta.env.VITE_API_URL;
 import message from './messageService';
 
-const getToken = () => sessionStorage.getItem('token');
+let inMemorySessionId = null;
+
+export const setSessionId = (id) => {
+  inMemorySessionId = id;
+};
+
+export const clearSessionId = () => {
+  inMemorySessionId = null;
+};
 
 const handleResponse = async (response, options = {}) => {
   if (response.status === 401) {
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('user');
-    window.location.href = '/login';
+    inMemorySessionId = null;
+    if (!options.ignoreAuthRedirect && 
+        !window.location.pathname.includes('/login') && 
+        !window.location.pathname.includes('/accept-invitation')) {
+      window.location.href = '/login';
+    }
     throw new Error('Session expired');
   }
 
@@ -21,7 +32,6 @@ const handleResponse = async (response, options = {}) => {
       try {
         const text = await response.text();
         if (text) {
-          // If it's a short text message, use it
           errorMessage = text.length < 200 ? text : `HTTP error! status: ${response.status}`;
         }
       } catch (textErr) {}
@@ -43,10 +53,9 @@ const handleResponse = async (response, options = {}) => {
 };
 
 const apiCall = async (endpoint, options = {}) => {
-  const token = getToken();
   const headers = {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`,
+    ...(inMemorySessionId ? { 'X-Session-Id': inMemorySessionId, 'Authorization': `Bearer ${inMemorySessionId}` } : {}),
     ...options.headers,
   };
 
@@ -59,6 +68,7 @@ const apiCall = async (endpoint, options = {}) => {
     ...options,
     headers,
     body,
+    credentials: 'include', // Automatically attaches HttpOnly OSM_SESSION cookie
   });
 
   return handleResponse(response, options);

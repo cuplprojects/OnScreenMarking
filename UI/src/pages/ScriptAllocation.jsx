@@ -85,6 +85,16 @@ export default function ScriptAllocation({ isTab = false }) {
   const [examinerCounts, setExaminerCounts] = useState({});
   const [bulkLoading, setBulkLoading] = useState(false);
   const [autoProjectLoading, setAutoProjectLoading] = useState(false);
+  const [projectData, setProjectData] = useState(null);
+  const isProjectInactive = projectData ? !projectData.isActive : false;
+
+  useEffect(() => {
+    if (projectId) {
+      apiCall(`/project/${projectId}`)
+        .then(p => setProjectData(p))
+        .catch(e => console.error("Error fetching project in ScriptAllocation:", e));
+    }
+  }, [projectId]);
   // Per-paper data for multi-paper allocation (paperId -> { examiners, pendingCount })
   const [perPaperData, setPerPaperData] = useState({});
 
@@ -573,6 +583,10 @@ export default function ScriptAllocation({ isTab = false }) {
   // Perform Bulk Allocation
   // -------------------------------------------------------------
   const handleBulkAllocate = async () => {
+    if (isProjectInactive) {
+      message.warning("This project is inactive. Script allocation is not permitted.");
+      return;
+    }
     try {
       setBulkLoading(true);
 
@@ -626,6 +640,10 @@ export default function ScriptAllocation({ isTab = false }) {
   // -------------------------------------------------------------
   const handleAutoAllocateProject = async () => {
     if (!projectId) return;
+    if (isProjectInactive) {
+      message.warning("This project is inactive. Script allocation is not permitted.");
+      return;
+    }
 
     setAutoProjectLoading(true);
     try {
@@ -756,6 +774,20 @@ export default function ScriptAllocation({ isTab = false }) {
         </div>
       ) : (
         <>
+        {isProjectInactive && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl flex items-center justify-between shadow-sm mb-3 w-full">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="text-amber-500 shrink-0" size={18} />
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider">Project is Inactive (Read-Only)</p>
+                <p className="text-xs text-amber-700">This project is inactive. Script allocation cannot be performed.</p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 bg-amber-200 text-amber-800 rounded-full text-[10px] font-black uppercase tracking-wider">
+              Inactive
+            </span>
+          </div>
+        )}
         {/* Header content moved to ProjectConfigHeader */}
 
         {/* TAB 1: ALLOCATION WORKFLOW */}
@@ -820,7 +852,7 @@ export default function ScriptAllocation({ isTab = false }) {
                       </div>
 
                       {/* Action buttons */}
-                      {selectedPaperIds.length > 0 && (
+                      {selectedPaperIds.length > 0 && !isProjectInactive && (
                         <button
                           onClick={openMultiPaperPane}
                           className="flex items-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md font-bold text-[10px] uppercase tracking-wider transition-all shadow-sm hover:shadow shrink-0 cursor-pointer"
@@ -829,7 +861,7 @@ export default function ScriptAllocation({ isTab = false }) {
                           Allocate Selected ({selectedPaperIds.length})
                         </button>
                       )}
-                      {projectId && (
+                      {projectId && !isProjectInactive && (
                         <div
                           title={!papers.some(p => p.pendingScripts > 0) && papers.length > 0 ? "All scripts are already allocated" : ""}
                           className="inline-block"

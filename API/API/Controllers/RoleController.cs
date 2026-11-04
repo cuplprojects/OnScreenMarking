@@ -9,6 +9,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+using API.Services;
+
 namespace API.Controllers
 {
     [ApiController]
@@ -17,24 +19,31 @@ namespace API.Controllers
     public class RoleController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IPermissionService _permissionService;
 
-        public RoleController(ApplicationDbContext context)
+        public RoleController(ApplicationDbContext context, IPermissionService permissionService)
         {
             _context = context;
+            _permissionService = permissionService;
         }
 
         private async Task<bool> HasPermissionAsync(string permission)
         {
             var userType = User.FindFirst("userType")?.Value;
-            if (string.IsNullOrEmpty(userType)) return false;
+            return await _permissionService.HasPermissionAsync(userType, permission);
+        }
 
-            var role = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName.ToLower() == userType.ToLower());
-            if (role == null)
+        [HttpGet("my-permissions")]
+        public async Task<ActionResult> GetMyPermissions()
+        {
+            var userType = User.FindFirst("userType")?.Value;
+            if (string.IsNullOrEmpty(userType))
             {
-                return userType.Equals("admin", StringComparison.OrdinalIgnoreCase);
+                return Unauthorized(new { success = false, message = "Invalid token claims" });
             }
 
-            return role.PermissionsList.Contains(permission);
+            var permissions = await _permissionService.GetRolePermissionsAsync(userType);
+            return Ok(new { success = true, data = permissions });
         }
 
         [HttpGet]
@@ -194,6 +203,7 @@ namespace API.Controllers
 
                 _context.Roles.Add(role);
                 await _context.SaveChangesAsync();
+                await _permissionService.InvalidateRolePermissionsAsync(role.RoleName);
 
                 var roleDto = new RoleDto
                 {
@@ -255,6 +265,7 @@ namespace API.Controllers
 
                 _context.Entry(role).State = EntityState.Modified;
                 await _context.SaveChangesAsync();
+                await _permissionService.InvalidateRolePermissionsAsync(role.RoleName);
 
                 return Ok(new { success = true, message = "Role updated successfully" });
             }
@@ -280,8 +291,10 @@ namespace API.Controllers
                     return NotFound(new { success = false, message = "Role not found" });
                 }
 
+                var roleName = role.RoleName;
                 _context.Roles.Remove(role);
                 await _context.SaveChangesAsync();
+                await _permissionService.InvalidateRolePermissionsAsync(roleName);
 
                 return Ok(new { success = true, message = "Role deleted successfully" });
             }

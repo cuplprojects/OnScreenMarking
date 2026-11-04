@@ -189,6 +189,11 @@ namespace API.Controllers
                 if (project == null)
                     return NotFound(new { success = false, message = "Project not found" });
 
+                if (!project.IsActive && !projectDto.IsActive)
+                {
+                    return BadRequest(new { success = false, message = "This project is inactive and cannot be modified. Activate it first to make changes." });
+                }
+
                 project.ProjectName = projectDto.ProjectName;
                 project.IsActive = projectDto.IsActive;
 

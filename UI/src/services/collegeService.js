@@ -1,4 +1,4 @@
-﻿import apiCall from './api';
+import apiCall from './api';
 
 const collegeService = {
   getAllColleges: async () => {
@@ -30,9 +30,6 @@ const collegeService = {
   },
 
   getTemplateUrl: () => {
-    // API endpoint directly returns CSV file
-    const token = sessionStorage.getItem('token');
-    // Using a direct link or fetching as blob
     return `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/colleges/template`;
   },
 
@@ -40,12 +37,9 @@ const collegeService = {
     const formData = new FormData();
     formData.append('file', file);
 
-    const token = sessionStorage.getItem('token');
     const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/colleges/import`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      },
+      credentials: 'include',
       body: formData
     });
 

@@ -14,6 +14,14 @@ const sectionService = {
     });
   },
 
+  // Create section masters in batch
+  createSectionMastersBatch: async (data) => {
+    return apiCall('/section/Masters/Batch', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   // Update section master
   updateSectionMaster: async (id, data) => {
     return apiCall(`/section/Masters/${id}`, {

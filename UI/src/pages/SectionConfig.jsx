@@ -8,6 +8,7 @@ import {
   Layers,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Clock,
   Award,
   Hash,
@@ -74,6 +75,7 @@ export default function SectionConfig() {
 
   const [loading, setLoading] = useState(false);
 
+  const [questionTypesList, setQuestionTypesList] = useState([]);
   const [dbQuestionTypes, setDbQuestionTypes] = useState(['MCQ', 'SA', 'LA']);
   const [newTypeName, setNewTypeName] = useState('');
   const [showNewTypeInput, setShowNewTypeInput] = useState(false);
@@ -83,6 +85,7 @@ export default function SectionConfig() {
     try {
       const data = await questionTypeService.getAllQuestionTypes();
       if (data && data.length > 0) {
+        setQuestionTypesList(data);
         setDbQuestionTypes(data.map(d => d.questionTypeName));
       }
     } catch (err) {
@@ -204,6 +207,7 @@ export default function SectionConfig() {
     const marksPerQuestion = totalQuestions > 0 ? totalMarks / totalQuestions : 0;
 
     const generatedQuestions = [];
+    const defaultQt = questionTypesList.length > 0 ? questionTypesList[0] : null;
     for (let i = startQuestion; i <= endQuestion; i++) {
       const qNoStr = i.toString();
       const existingQ = questions.find(q => String(q.questionNo) === qNoStr);
@@ -211,7 +215,8 @@ export default function SectionConfig() {
         questionId: existingQ?.questionId || 0,
         questionNo: qNoStr,
         marks: existingQ?.marks !== undefined ? existingQ.marks : parseFloat(marksPerQuestion.toFixed(2)),
-        type: existingQ?.type || '',
+        typeId: existingQ?.typeId || defaultQt?.questionTypeId || null,
+        type: existingQ?.type || defaultQt?.questionTypeName || '',
         isOptional: existingQ?.isOptional !== undefined ? existingQ.isOptional : false,
         optionalGroupCode: existingQ?.optionalGroupCode || '',
       });
@@ -235,12 +240,14 @@ export default function SectionConfig() {
       nextNo = (sectionForm.startQuestion || 1).toString();
     }
 
+    const defaultQt = questionTypesList.length > 0 ? questionTypesList[0] : null;
     setQuestions(prev => [
       ...prev,
       {
         questionNo: nextNo,
         marks: prev.length > 0 ? prev[prev.length - 1].marks : 1,
-        type: prev.length > 0 ? prev[prev.length - 1].type : '',
+        typeId: prev.length > 0 ? prev[prev.length - 1].typeId : (defaultQt?.questionTypeId || null),
+        type: prev.length > 0 ? prev[prev.length - 1].type : (defaultQt?.questionTypeName || ''),
         isOptional: false,
         optionalGroupCode: '',
       }
@@ -316,24 +323,28 @@ export default function SectionConfig() {
       totalMarks: section.totalMarks,
       maxQuestionsToAttempt: section.maxQuestionsToAttempt,
     });
-    setQuestions((section.questions || []).map(q => ({
-      ...q,
-      questionId: q.questionId || q.id || 0,
-      questionNo: q.questionNo?.toString() || '',
-      marks: q.marks !== undefined ? q.marks : 0,
-      type: q.type || '',
-      isOptional: Boolean(q.isOptional),
-      optionalGroupCode: q.optionalGroupCode || ''
-    })));
+    setQuestions((section.questions || []).map(q => {
+      const matchedQt = questionTypesList.find(qt => qt.questionTypeId === q.typeId || qt.questionTypeName?.toLowerCase() === q.type?.toLowerCase());
+      return {
+        ...q,
+        questionId: q.questionId || q.id || 0,
+        questionNo: q.questionNo?.toString() || '',
+        marks: q.marks !== undefined ? q.marks : 0,
+        typeId: q.typeId || matchedQt?.questionTypeId || null,
+        type: q.type || matchedQt?.questionTypeName || '',
+        isOptional: Boolean(q.isOptional),
+        optionalGroupCode: q.optionalGroupCode || ''
+      };
+    }));
     setEditingSectionId(section.id);
     setShowSectionForm(true);
     setShowQuestionPreview(true);
   };
 
   const handleSaveSection = async () => {
-    if (questions.some(q => !q.type)) {
+    if (questions.some(q => !q.type && !q.typeId)) {
       message.warning('Please select a type for all questions', 8000);
-      const firstMissingIdx = questions.findIndex(q => !q.type);
+      const firstMissingIdx = questions.findIndex(q => !q.type && !q.typeId);
       if (firstMissingIdx !== -1) {
         const el = document.getElementById(`question-type-select-${firstMissingIdx}`);
         if (el) {
@@ -774,22 +785,33 @@ export default function SectionConfig() {
                       <p className="text-[10px] text-teal-700 font-semibold mb-1">Set question type for all questions:</p>
                       <select
                         value={
-                          questions.length > 0 && questions.every(q => q.type && q.type === questions[0].type)
-                            ? questions[0].type
+                          questions.length > 0 && questions.every(q => (q.typeId && q.typeId === questions[0].typeId) || (q.type && q.type === questions[0].type))
+                            ? (questions[0].typeId || questions[0].type)
                             : ""
                         }
                         onChange={(e) => {
-                          const selectedType = e.target.value;
-                          if (selectedType) {
-                            setQuestions(prev => prev.map(q => ({ ...q, type: selectedType })));
+                          const val = e.target.value;
+                          const matched = questionTypesList.find(qt => String(qt.questionTypeId) === String(val) || qt.questionTypeName === val);
+                          if (matched) {
+                            setQuestions(prev => prev.map(q => ({ ...q, typeId: matched.questionTypeId, type: matched.questionTypeName })));
+                          } else if (val) {
+                            setQuestions(prev => prev.map(q => ({ ...q, type: val })));
                           }
                         }}
                         className="w-full bg-white px-3 py-1.5 rounded-lg border border-teal-200 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-teal-500 outline-none shadow-xs"
                       >
                         <option value="">Choose Type...</option>
-                        {dbQuestionTypes.map(type => (
-                          <option key={type} value={type}>{type}</option>
-                        ))}
+                        {questionTypesList.length > 0 ? (
+                          questionTypesList.map(qt => (
+                            <option key={qt.questionTypeId} value={qt.questionTypeId}>
+                              {qt.questionTypeName}
+                            </option>
+                          ))
+                        ) : (
+                          dbQuestionTypes.map(type => (
+                            <option key={type} value={type}>{type}</option>
+                          ))
+                        )}
                       </select>
 
                       {showNewTypeInput ? (
@@ -907,16 +929,34 @@ export default function SectionConfig() {
                               </td>
                               <td className="px-4 py-2">
                                 <select
-                                  value={q.type}
-                                  onChange={(e) => handleQuestionChange(idx, 'type', e.target.value)}
+                                  id={`question-type-select-${idx}`}
+                                  value={q.typeId || q.type || ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    const matched = questionTypesList.find(qt => String(qt.questionTypeId) === String(val) || qt.questionTypeName === val);
+                                    if (matched) {
+                                      handleQuestionChange(idx, 'typeId', matched.questionTypeId);
+                                      handleQuestionChange(idx, 'type', matched.questionTypeName);
+                                    } else {
+                                      handleQuestionChange(idx, 'type', val);
+                                    }
+                                  }}
                                   className={`w-full bg-gray-50 px-2 py-1 rounded-md border text-xs font-semibold outline-none ${
-                                    !q.type ? 'border-red-200' : 'border-gray-200 focus:ring-1 focus:ring-teal-500'
+                                    !q.type && !q.typeId ? 'border-red-200' : 'border-gray-200 focus:ring-1 focus:ring-teal-500'
                                   }`}
                                 >
                                   <option value="">Choose Type</option>
-                                  {dbQuestionTypes.map(type => (
-                                    <option key={type} value={type}>{type}</option>
-                                  ))}
+                                  {questionTypesList.length > 0 ? (
+                                    questionTypesList.map(qt => (
+                                      <option key={qt.questionTypeId} value={qt.questionTypeId}>
+                                        {qt.questionTypeName}
+                                      </option>
+                                    ))
+                                  ) : (
+                                    dbQuestionTypes.map(type => (
+                                      <option key={type} value={type}>{type}</option>
+                                    ))
+                                  )}
                                 </select>
                               </td>
                               <td className="px-4 py-2 text-center">
@@ -1022,9 +1062,16 @@ export default function SectionConfig() {
                             {section.name.replace(/^Section\s+/i, '').substring(0, 2).toUpperCase()}
                           </div>
                           <div className="flex flex-col">
-                            <span className="font-bold text-gray-900 text-xs">
-                              {section.name.toLowerCase().startsWith('section') ? section.name : `Section ${section.name}`}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-gray-900 text-xs">
+                                {section.name.toLowerCase().startsWith('section') ? section.name : `Section ${section.name}`}
+                              </span>
+                              {section.batchId && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 bg-teal-50 text-teal-800 border border-teal-200/60 rounded">
+                                  Batch #{section.batchId}
+                                </span>
+                              )}
+                            </div>
                             <span className="text-[11px] text-gray-400 max-w-[240px] truncate" title={section.description}>
                               {section.description || 'No description'}
                             </span>
@@ -1207,7 +1254,14 @@ export default function SectionConfig() {
                           />
                           <div className="flex-1">
                             <div className="flex items-center justify-between">
-                              <span className="font-bold text-gray-900 text-xs">{master.name}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-gray-900 text-xs">{master.name}</span>
+                                {master.batchId && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 bg-teal-50 text-teal-800 border border-teal-200/60 rounded">
+                                    Batch #{master.batchId}
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-[9px] font-extrabold px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md">
                                 {master.totalMarks} Marks
                               </span>

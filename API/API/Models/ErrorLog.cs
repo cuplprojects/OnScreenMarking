@@ -8,14 +8,26 @@ namespace API.Models
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public int ErrorID { get; set; }
+        public int Id { get; set; }
 
-        public string Error { get; set; }
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 
-        public string Message { get; set; }
+        public string Method { get; set; } = string.Empty;
 
-        public string OccuranceSpace { get; set; }
+        public string Path { get; set; } = string.Empty;
 
-        public DateTime LoggedAt { get; set; } = TimeZoneInfo.ConvertTime(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("India Standard Time"));
+        public string QueryString { get; set; } = string.Empty;
+
+        public int StatusCode { get; set; }
+
+        public string Message { get; set; } = string.Empty;
+
+        public string StackTrace { get; set; } = string.Empty;
+
+        public string? InnerException { get; set; }
+
+        // Legacy column compatibility for MySQL tables
+        public string? Error { get; set; } = string.Empty;
+        public string? OccuranceSpace { get; set; } = string.Empty;
     }
 }

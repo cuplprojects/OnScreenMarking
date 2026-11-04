@@ -1,65 +1,50 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import apiCall from '../services/api';
+import apiCall, { setSessionId, clearSessionId } from '../services/api';
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    const savedUser = sessionStorage.getItem('user');
-    try {
-      return savedUser ? JSON.parse(savedUser) : null;
-    } catch (e) {
-      console.error('Failed to parse saved user:', e);
-      return null;
-    }
-  });
-
-  const [permissions, setPermissions] = useState(() => {
-    const savedPermissions = sessionStorage.getItem('permissions');
-    try {
-      return savedPermissions ? JSON.parse(savedPermissions) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-  
-  // Only show loading if we have a token but no user data yet
-  const [loading, setLoading] = useState(() => {
-    const token = sessionStorage.getItem('token');
-    const savedUser = sessionStorage.getItem('user');
-    return !!token && !savedUser;
-  });
-  
+  // Pure session-based authentication backed by Redis.
+  // Nothing is stored in browser sessionStorage or localStorage.
+  const [user, setUser] = useState(null);
+  const [permissions, setPermissions] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch user data from token on mount or refresh
+  // Validate session on app initialization
   useEffect(() => {
-    const token = sessionStorage.getItem('token');
-    if (token) {
-      fetchUserData();
-    } else {
-      setLoading(false);
-      sessionStorage.removeItem('user');
-      sessionStorage.removeItem('permissions');
-      setUser(null);
-      setPermissions([]);
-    }
+    cleanLegacyStorage();
+    fetchUserData();
   }, []);
 
+  const cleanLegacyStorage = () => {
+    try {
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('user');
+      sessionStorage.removeItem('permissions');
+      sessionStorage.removeItem('userType');
+      sessionStorage.removeItem('userName');
+      sessionStorage.removeItem('userId');
+      sessionStorage.removeItem('userEmail');
+      sessionStorage.removeItem('profileImage');
+      sessionStorage.removeItem('universityId');
+      sessionStorage.removeItem('subjectId1');
+    } catch (e) {}
+  };
+
   const fetchUserPermissions = async (userData) => {
+    if (userData?.permissions && Array.isArray(userData.permissions) && userData.permissions.length > 0) {
+      setPermissions(userData.permissions);
+      return userData.permissions;
+    }
+
     if (!userData || !userData.userType) return [];
     try {
-      const response = await apiCall('/role', { hideErrorToast: true });
+      const response = await apiCall('/role/my-permissions', { hideErrorToast: true, ignoreAuthRedirect: true });
       if (response && response.success && response.data) {
-        const matchingRole = response.data.find(
-          r => r.roleName.toLowerCase() === userData.userType.toLowerCase()
-        );
-        if (matchingRole) {
-          const perms = matchingRole.permissionsList || [];
-          setPermissions(perms);
-          sessionStorage.setItem('permissions', JSON.stringify(perms));
-          return perms;
-        }
+        const perms = Array.isArray(response.data) ? response.data : [];
+        setPermissions(perms);
+        return perms;
       }
     } catch (e) {
       console.error('Failed to fetch user permissions:', e);
@@ -69,25 +54,26 @@ export function AuthProvider({ children }) {
 
   const fetchUserData = async () => {
     try {
-      // If we don't have a user, we must show loading
-      if (!user) setLoading(true);
-      
-      const userData = await apiCall('/users/me');
-      setUser(userData);
-      sessionStorage.setItem('user', JSON.stringify(userData));
-      await fetchUserPermissions(userData);
-      setError(null);
-    } catch (err) {
-      console.error('Failed to fetch user data:', err);
-      
-      // Only logout if it's an authentication error (401/403)
-      // If it's a network error (failed to fetch), keep the cached user
-      if (err.message.includes('401') || err.message.includes('403') || err.message.includes('Unauthorized')) {
-        setError('Session expired. Please login again.');
-        logout();
+      setLoading(true);
+      // Validates HttpOnly cookie session directly against Redis on backend
+      const userData = await apiCall('/users/me', { ignoreAuthRedirect: true, hideErrorToast: true });
+      if (userData && userData.id) {
+        setUser(userData);
+        if (userData.permissions && Array.isArray(userData.permissions)) {
+          setPermissions(userData.permissions);
+        } else {
+          await fetchUserPermissions(userData);
+        }
+        setError(null);
       } else {
-        setError('Could not refresh user data. Working with cached data.');
+        setUser(null);
+        setPermissions([]);
       }
+    } catch (err) {
+      // 401 on initial load simply means unauthenticated (guest / logged out)
+      setUser(null);
+      setPermissions([]);
+      clearSessionId();
     } finally {
       setLoading(false);
     }
@@ -98,20 +84,24 @@ export function AuthProvider({ children }) {
       setLoading(true);
       setError(null);
       
-      // Use /Auth/login to match authService.js casing if needed, 
-      // but apiCall usually handles whatever the backend expects.
       const response = await apiCall('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password })
       });
 
-      // Store token and user data
-      sessionStorage.setItem('token', response.token);
-      sessionStorage.setItem('user', JSON.stringify(response.user));
+      // Session ID stored in memory & HttpOnly cookie set by server; zero storage in sessionStorage
+      if (response.token) {
+        setSessionId(response.token);
+      }
+      cleanLegacyStorage();
       
-      // Set user data
+      // Set user data and permissions in React state
       setUser(response.user);
-      await fetchUserPermissions(response.user);
+      if (response.user?.permissions && Array.isArray(response.user.permissions)) {
+        setPermissions(response.user.permissions);
+      } else {
+        await fetchUserPermissions(response.user);
+      }
       
       return response;
     } catch (err) {
@@ -122,18 +112,15 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const logout = () => {
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('user');
-    sessionStorage.removeItem('permissions');
-    // Clear other potential legacy items from authService.js
-    sessionStorage.removeItem('userType');
-    sessionStorage.removeItem('userName');
-    sessionStorage.removeItem('userId');
-    sessionStorage.removeItem('userEmail');
-    sessionStorage.removeItem('profileImage');
-    sessionStorage.removeItem('universityId');
-    sessionStorage.removeItem('subjectId1');
+  const logout = async () => {
+    try {
+      await apiCall('/auth/logout', { method: 'POST', hideErrorToast: true, ignoreAuthRedirect: true });
+    } catch (e) {
+      // Ignore network errors on logout
+    }
+
+    clearSessionId();
+    cleanLegacyStorage();
     
     setUser(null);
     setPermissions([]);
@@ -184,6 +171,7 @@ export function AuthProvider({ children }) {
     login,
     logout,
     refreshUser,
+    updateUser: (userData) => setUser(userData),
     isAuthenticated: !!user,
     userType: user?.userType,
     userId: user?.id,

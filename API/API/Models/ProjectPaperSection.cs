@@ -16,9 +16,7 @@ namespace API.Models
         [ForeignKey("ProjectPaperId")]
         public ProjectPaper ProjectPaper { get; set; }
 
-        public int? SectionMasterId { get; set; }
-        [ForeignKey("SectionMasterId")]
-        public SectionMaster? SectionMaster { get; set; }
+        public int BatchId { get; set; } = 1;
 
         [Required]
         [MaxLength(100)]
