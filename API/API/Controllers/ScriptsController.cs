@@ -971,7 +971,7 @@ namespace API.Controllers
                             totalScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (!projectId.HasValue || s.ProjectPaper.ProjectId == projectId.Value)),
                             allocatedScripts = _context.Allocations.Count(a => a.Script.ProjectPaper.PaperId == p.PaperId && a.AssignmentStatus && (!projectId.HasValue || a.Script.ProjectPaper.ProjectId == projectId.Value)),
                             pendingScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (!projectId.HasValue || s.ProjectPaper.ProjectId == projectId.Value) && !_context.Allocations.Any(a => a.ScriptId == s.Id && a.AssignmentStatus)),
-                            isSectionsConfigured = _context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && (!projectId.HasValue || pps.ProjectPaper.ProjectId == projectId.Value)) || _context.Sections.Any(sec => sec.PaperId == p.PaperId),
+                            isSectionsConfigured = p.ProjectPapers.Any(pp => (!projectId.HasValue || pp.ProjectId == projectId.Value) && (pp.IsSectionConfigured || (pp.BatchId.HasValue && pp.BatchId.Value > 0))),
                             expertsCount = _context.PaperExaminers.Count(pe => pe.ProjectPaper != null && pe.ProjectPaper.PaperId == p.PaperId && (!projectId.HasValue || pe.ProjectPaper.ProjectId == projectId.Value))
                         })
                         .ToListAsync<object>();

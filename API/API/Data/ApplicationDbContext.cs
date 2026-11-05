@@ -56,6 +56,7 @@ namespace API.Data
         public DbSet<ProjectPaperSection> ProjectPaperSections { get; set; }
         public DbSet<SubjectPaperRequest> SubjectPaperRequests { get; set; }
         public DbSet<AssignmentType> AssignmentTypes { get; set; }
+        public DbSet<QuestionMaster> QuestionMasters { get; set; }
 
         protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
         {
@@ -719,6 +720,13 @@ namespace API.Data
                 .WithMany(gp => gp.UploadQueues)
                 .HasForeignKey(uq => uq.PdfId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // QuestionMaster configuration
+            modelBuilder.Entity<QuestionMaster>()
+                .HasKey(qm => qm.Id);
+            modelBuilder.Entity<QuestionMaster>()
+                .HasIndex(qm => new { qm.BatchId, qm.Section, qm.Question })
+                .IsUnique();
         }
     }
 }

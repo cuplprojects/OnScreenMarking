@@ -417,9 +417,15 @@ export default function SectionConfig() {
 
     try {
       setLoading(true);
+      // Find existing batchId from previously configured sections for this paper
+      const existingBatchId = sections && sections.length > 0 ? (sections.find(s => s.batchId > 0)?.batchId || 0) : 0;
+
       if (isProjectMode) {
         const projectPaperSectionData = {
           ...sectionForm,
+          batchId: editingSectionId 
+            ? (sections.find(s => s.id === editingSectionId)?.batchId || existingBatchId || 0)
+            : (existingBatchId || 0),
           totalQuestions: questions.length,
           projectId: parseInt(projectId, 10),
           paperId: selectedPaper.paperId,
@@ -440,6 +446,9 @@ export default function SectionConfig() {
       } else {
         const sectionData = {
           ...sectionForm,
+          batchId: editingSectionId 
+            ? (sections.find(s => s.id === editingSectionId)?.batchId || existingBatchId || 0)
+            : (existingBatchId || 0),
           totalQuestions: questions.length,
           paperId: selectedPaper.paperId,
           questions: questions.map(q => ({
