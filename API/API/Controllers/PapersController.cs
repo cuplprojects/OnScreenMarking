@@ -140,16 +140,11 @@ namespace API.Controllers
                             break;
                         case "unconfigured":
                             query = query.Where(p => 
-                                !p.ProjectPapers.Any(pp => (projectId <= 0 || pp.ProjectId == projectId) && pp.IsSectionConfigured) &&
-                                !_context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || pps.ProjectPaper.ProjectId == projectId)) &&
-                                !_context.Sections.Any(s => s.PaperId == p.PaperId));
+                                !p.ProjectPapers.Any(pp => (projectId <= 0 || pp.ProjectId == projectId) && (pp.IsSectionConfigured || (pp.BatchId.HasValue && pp.BatchId.Value > 0))));
                             break;
                         case "sections_missing":
                             query = query.Where(p => 
-                                !p.ProjectPapers.Any(pp => (projectId <= 0 || pp.ProjectId == projectId) && pp.IsSectionConfigured) ||
-                                (!_context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || pps.ProjectPaper.ProjectId == projectId)) && 
-                                 !_context.Sections.Any(s => s.PaperId == p.PaperId))
-                            );
+                                !p.ProjectPapers.Any(pp => (projectId <= 0 || pp.ProjectId == projectId) && (pp.IsSectionConfigured || (pp.BatchId.HasValue && pp.BatchId.Value > 0))));
                             break;
                         case "pdf_missing":
                             query = query.Where(p => !p.ProjectPapers.Any(pp => pp.ProjectId == projectId && !string.IsNullOrEmpty(pp.QuestionPaperPdfUrl)));
@@ -228,13 +223,14 @@ namespace API.Controllers
 
                 var totalCount = await query.CountAsync();
 
-                var items = await query
+                var rawItems = await query
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize)
                     .Select(p => new
                     {
                         paperId = p.PaperId,
                         projectPaperId = p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.Id).FirstOrDefault(),
+                        batchId = p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.BatchId).FirstOrDefault(),
                         universityId = p.UniversityId,
                         paperCode = p.PaperCode,
                         paperName = p.PaperName,
@@ -254,21 +250,76 @@ namespace API.Controllers
                         completedScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || s.ProjectPaper.ProjectId == projectId) && s.Status == ScriptStatus.completed),
                         allocatedScripts = _context.Allocations.Count(a => a.Script.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || a.Script.ProjectPaper.ProjectId == projectId) && a.AssignmentStatus),
                         pendingScripts = _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || s.ProjectPaper.ProjectId == projectId) && !_context.Allocations.Any(a => a.ScriptId == s.Id && a.AssignmentStatus)),
-                        isSectionsConfigured = _context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId) || _context.Sections.Any(s => s.PaperId == p.PaperId),
-                        isSectionConfigured = p.ProjectPapers.Any(pp => (projectId <= 0 || pp.ProjectId == projectId) && pp.IsSectionConfigured) 
-                            || _context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || pps.ProjectPaper.ProjectId == projectId)) 
-                            || _context.Sections.Any(s => s.PaperId == p.PaperId),
+                        isSectionConfiguredFlag = p.ProjectPapers.Any(pp => (projectId <= 0 || pp.ProjectId == projectId) && pp.IsSectionConfigured),
                         isExaminerAssigned = p.ProjectPapers.Any(pp => (projectId <= 0 || pp.ProjectId == projectId) && pp.IsExaminerAssigned) 
                             || _context.PaperExaminers.Any(pe => pe.ProjectPaper != null && pe.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || pe.ProjectPaper.ProjectId == projectId) && pe.IsActive),
-                        sectionsCount = _context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId) 
-                            ? _context.ProjectPaperSections.Count(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId) 
-                            : _context.Sections.Count(s => s.PaperId == p.PaperId),
-                        configuredMarks = _context.ProjectPaperSections.Any(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId)
-                            ? (_context.ProjectPaperSections.Where(pps => pps.ProjectPaper.PaperId == p.PaperId && pps.ProjectPaper.ProjectId == projectId).Sum(pps => (int?)pps.TotalMarks) ?? 0)
-                            : (_context.Sections.Where(s => s.PaperId == p.PaperId).Sum(s => (int?)s.TotalMarks) ?? 0),
                         expertsCount = _context.PaperExaminers.Count(pe => pe.ProjectPaper != null && pe.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || pe.ProjectPaper.ProjectId == projectId))
                     })
                     .ToListAsync();
+
+                var batchIds = rawItems
+                    .Where(p => p.batchId.HasValue && p.batchId.Value > 0)
+                    .Select(p => p.batchId!.Value)
+                    .Distinct()
+                    .ToList();
+
+                var sectionMasters = batchIds.Any()
+                    ? await _context.SectionMasters
+                        .Where(sm => batchIds.Contains(sm.BatchId))
+                        .ToListAsync()
+                    : new List<SectionMaster>();
+
+                var questionMasters = batchIds.Any()
+                    ? await _context.QuestionMasters
+                        .Where(qm => batchIds.Contains(qm.BatchId))
+                        .ToListAsync()
+                    : new List<QuestionMaster>();
+
+                var items = rawItems.Select(p =>
+                {
+                    int bId = p.batchId ?? 0;
+                    var bSections = bId > 0 ? sectionMasters.Where(sm => sm.BatchId == bId).ToList() : new List<SectionMaster>();
+                    var bQuestions = bId > 0 ? questionMasters.Where(qm => qm.BatchId == bId).ToList() : new List<QuestionMaster>();
+
+                    int secCount = bSections.Count > 0 
+                        ? bSections.Count 
+                        : bQuestions.Select(q => q.Section).Where(s => !string.IsNullOrEmpty(s)).Distinct().Count();
+
+                    decimal confMarks = bSections.Sum(sm => sm.TotalMarks);
+                    bool isConfigured = p.isSectionConfiguredFlag || (bId > 0 && secCount > 0);
+
+                    return new
+                    {
+                        p.paperId,
+                        p.projectPaperId,
+                        p.batchId,
+                        p.universityId,
+                        p.paperCode,
+                        p.paperName,
+                        p.paperNumber,
+                        p.description,
+                        p.catchNo,
+                        p.questionPaperPdfUrl,
+                        p.projectId,
+                        p.maxMarks,
+                        p.totalQuestions,
+                        p.isActive,
+                        p.subjectName,
+                        p.subjectId,
+                        p.subjectNames,
+                        p.subjectIds,
+                        p.totalScripts,
+                        p.completedScripts,
+                        p.allocatedScripts,
+                        p.pendingScripts,
+                        isSectionsConfigured = isConfigured,
+                        isSectionConfigured = isConfigured,
+                        p.isExaminerAssigned,
+                        sectionsCount = secCount,
+                        configuredMarks = confMarks,
+                        p.expertsCount
+                    };
+                }).ToList();
 
                 var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
@@ -340,11 +391,6 @@ namespace API.Controllers
                     .Include(p => p.ProjectPapers)
                         .ThenInclude(pp => pp.PaperExaminers)
                             .ThenInclude(pe => pe.Examiner)
-                    .Include(p => p.ProjectPapers)
-                        .ThenInclude(pp => pp.ProjectPaperSections)
-                    .Include(p => p.Sections)
-                    .Include(p => p.PaperSectionMasters)
-                        
                     .AsQueryable();
 
                 if (subjectId.HasValue)
@@ -412,6 +458,21 @@ namespace API.Controllers
                     .Take(pageSize)
                     .ToListAsync();
 
+                var paperBatchIds = paginatedPapers
+                    .SelectMany(p => p.ProjectPapers)
+                    .Where(pp => pp.BatchId.HasValue && pp.BatchId.Value > 0)
+                    .Select(pp => pp.BatchId!.Value)
+                    .Distinct()
+                    .ToList();
+
+                var smList = paperBatchIds.Any()
+                    ? await _context.SectionMasters.Where(sm => paperBatchIds.Contains(sm.BatchId)).ToListAsync()
+                    : new List<SectionMaster>();
+
+                var qmList = paperBatchIds.Any()
+                    ? await _context.QuestionMasters.Where(qm => paperBatchIds.Contains(qm.BatchId)).ToListAsync()
+                    : new List<QuestionMaster>();
+
                 // Map to DTOs
                 var paperDtos = paginatedPapers.Select(p =>
                 {
@@ -419,15 +480,13 @@ namespace API.Controllers
                         ? p.ProjectPapers.FirstOrDefault(pp => pp.ProjectId == projectId.Value)
                         : p.ProjectPapers.FirstOrDefault();
 
-                    int secCount = relevantPp?.ProjectPaperSections?.Count ?? 0;
-                    if (secCount == 0)
-                    {
-                        secCount = p.Sections?.Count ?? 0;
-                    }
-                    if (secCount == 0)
-                    {
-                        secCount = p.PaperSectionMasters?.Count ?? 0;
-                    }
+                    int bId = relevantPp?.BatchId ?? 0;
+                    var bSections = bId > 0 ? smList.Where(sm => sm.BatchId == bId).ToList() : new List<SectionMaster>();
+                    var bQuestions = bId > 0 ? qmList.Where(qm => qm.BatchId == bId).ToList() : new List<QuestionMaster>();
+
+                    int secCount = bSections.Count > 0 
+                        ? bSections.Count 
+                        : bQuestions.Select(q => q.Section).Where(s => !string.IsNullOrEmpty(s)).Distinct().Count();
 
                     var activeExaminers = relevantPp?.PaperExaminers?
                         .Where(pe => pe.IsActive && pe.Examiner != null)
@@ -449,6 +508,7 @@ namespace API.Controllers
                         UniversityId = p.UniversityId,
                         ProjectId = projectId ?? p.ProjectPapers.Select(pp => (int?)pp.ProjectId).FirstOrDefault(),
                         ProjectPaperId = relevantPp?.Id,
+                        BatchId = relevantPp?.BatchId,
                         CatchNo = relevantPp?.CatchNo ?? "",
                         QuestionPaperPdfUrl = relevantPp?.QuestionPaperPdfUrl ?? "",
                         SubjectIds = p.SubjectPapers
@@ -457,12 +517,8 @@ namespace API.Controllers
                         SubjectNames = p.SubjectPapers
                             .Select(sp => sp.Subject.SubName)
                             .ToList(),
-                        MasterSectionIds = p.PaperSectionMasters != null
-                            ? p.PaperSectionMasters.Select(psm => psm.BatchId).Distinct().ToList()
-                            : new List<int>(),
-                        MasterSectionNames = p.Sections != null && p.Sections.Any()
-                            ? p.Sections.Select(s => s.Name).Distinct().ToList()
-                            : new List<string>(),
+                        MasterSectionIds = bSections.Select(sm => sm.Id).ToList(),
+                        MasterSectionNames = bSections.Select(sm => sm.Name).Distinct().ToList(),
                         SectionsCount = secCount,
                         ExaminersCount = examCount,
                         ExaminerNames = examNames
@@ -779,8 +835,6 @@ namespace API.Controllers
                     if (request.SourceProjectId.HasValue && request.SourceProjectId.Value > 0)
                     {
                         sourcePp = await _context.ProjectPapers
-                            .Include(pp => pp.ProjectPaperSections)
-                                .ThenInclude(pps => pps.Questions)
                             .Include(pp => pp.PaperExaminers)
                             .FirstOrDefaultAsync(pp => pp.PaperId == paperId && pp.ProjectId == request.SourceProjectId.Value);
                     }
@@ -788,8 +842,6 @@ namespace API.Controllers
                     if (sourcePp == null)
                     {
                         sourcePp = await _context.ProjectPapers
-                            .Include(pp => pp.ProjectPaperSections)
-                                .ThenInclude(pps => pps.Questions)
                             .Include(pp => pp.PaperExaminers)
                             .Where(pp => pp.PaperId == paperId)
                             .OrderByDescending(pp => pp.UpdatedAt)
@@ -797,7 +849,6 @@ namespace API.Controllers
                     }
 
                     var targetPp = await _context.ProjectPapers
-                        .Include(pp => pp.ProjectPaperSections)
                         .Include(pp => pp.PaperExaminers)
                         .FirstOrDefaultAsync(pp => pp.ProjectId == request.TargetProjectId && pp.PaperId == paperId);
 
@@ -833,134 +884,23 @@ namespace API.Controllers
                     // 1. Configurable Sections Import
                     if (request.ImportSections)
                     {
-                        bool hadSections = targetPp.ProjectPaperSections != null && targetPp.ProjectPaperSections.Any();
-
-                        // Clone ProjectPaperSections directly from source ProjectPaper if present
-                        if (!hadSections && sourcePp != null && sourcePp.ProjectPaperSections != null && sourcePp.ProjectPaperSections.Any())
+                        if (sourcePp != null && sourcePp.BatchId.HasValue && sourcePp.BatchId.Value > 0)
                         {
-                            foreach (var srcSec in sourcePp.ProjectPaperSections)
-                            {
-                                var newPps = new ProjectPaperSection
-                                {
-                                    ProjectPaperId = targetPp.Id,
-                                    
-                                    BatchId = srcSec.BatchId,
-                                    Name = srcSec.Name,
-                                    Description = srcSec.Description,
-                                    TotalQuestions = srcSec.TotalQuestions,
-                                    TotalMarks = srcSec.TotalMarks,
-                                    StartQuestion = srcSec.StartQuestion,
-                                    EndQuestion = srcSec.EndQuestion,
-                                    MaxQuestionsToAttempt = srcSec.MaxQuestionsToAttempt,
-                                    CreatedAt = DateTime.UtcNow,
-                                    UpdatedAt = DateTime.UtcNow
-                                };
-                                _context.ProjectPaperSections.Add(newPps);
-                                await _context.SaveChangesAsync();
-                                sectionsConfiguredCount++;
-
-                                if (srcSec.Questions != null && srcSec.Questions.Any())
-                                {
-                                    foreach (var q in srcSec.Questions)
-                                    {
-                                        _context.Questions.Add(new Question
-                                        {
-                                            ProjectPaperSectionId = newPps.Id,
-                                            QuestionNo = q.QuestionNo,
-                                            Marks = q.Marks,
-                                            Type = q.Type ?? "MCQ",
-                                            IsOptional = q.IsOptional,
-                                            OptionalGroupCode = q.OptionalGroupCode,
-                                            CreatedAt = DateTime.UtcNow
-                                        });
-                                    }
-                                }
-                            }
-                            await _context.SaveChangesAsync();
+                            targetPp.BatchId = sourcePp.BatchId;
                             targetPp.IsSectionConfigured = true;
+                            targetPp.UpdatedAt = DateTime.UtcNow;
+                            _context.ProjectPapers.Update(targetPp);
+                            await _context.SaveChangesAsync();
+                            sectionsConfiguredCount++;
                         }
-                        else if (!hadSections)
+                        else if (explicitMasterSections.Any())
                         {
-                            // Auto-import mapped or explicit master sections for this paper
-                            var existingSections = await _context.Sections.Where(s => s.PaperId == paperId).ToListAsync();
-                            var sectionsToCreate = new List<SectionMaster>();
-
-                            if (explicitMasterSections.Any())
-                            {
-                                sectionsToCreate.AddRange(explicitMasterSections);
-                            }
-                            else
-                            {
-                                var mappedBatches = await _context.PaperSectionMasters
-                                    .Where(psm => psm.PaperId == paperId)
-                                    .Select(psm => psm.BatchId)
-                                    .Distinct()
-                                    .ToListAsync();
-
-                                if (mappedBatches.Any())
-                                {
-                                    var mappedMasterSections = await _context.SectionMasters
-                                        .Where(sm => mappedBatches.Contains(sm.BatchId))
-                                        .ToListAsync();
-                                    sectionsToCreate.AddRange(mappedMasterSections);
-                                }
-                            }
-
-                            if (sectionsToCreate.Any())
-                            {
-                                int currentMaxQ = existingSections.Any() ? existingSections.Max(s => s.EndQuestion) : 0;
-
-                                foreach (var master in sectionsToCreate)
-                                {
-                                    if (existingSections.Any(s => s.Name.Equals(master.Name, StringComparison.OrdinalIgnoreCase))) continue;
-
-                                    int startQ = currentMaxQ > 0 ? currentMaxQ + 1 : (master.StartQuestion > 0 ? master.StartQuestion : 1);
-                                    int totalQ = master.TotalQuestions > 0 ? master.TotalQuestions : 10;
-                                    int endQ = startQ + totalQ - 1;
-                                    currentMaxQ = endQ;
-
-                                    var newSec = new Section
-                                    {
-                                        PaperId = paperId,
-                                        
-                                        BatchId = master.BatchId,
-                                        Name = master.Name,
-                                        Description = master.Description ?? "",
-                                        TotalQuestions = totalQ,
-                                        TotalMarks = Math.Round(master.TotalMarks > 0 ? master.TotalMarks : 100, 2, MidpointRounding.AwayFromZero),
-                                        StartQuestion = startQ,
-                                        EndQuestion = endQ,
-                                        MaxQuestionsToAttempt = master.MaxQuestionsToAttempt > 0 ? master.MaxQuestionsToAttempt : totalQ,
-                                        CreatedAt = DateTime.UtcNow
-                                    };
-                                    _context.Sections.Add(newSec);
-                                    await _context.SaveChangesAsync();
-                                    sectionsConfiguredCount++;
-
-                                    // Generate default Question items for this section
-                                    decimal marksPerQ = totalQ > 0 ? Math.Round((decimal)newSec.TotalMarks / totalQ, 2, MidpointRounding.AwayFromZero) : 1;
-                                    var questions = new List<Question>();
-                                    for (int qNo = startQ; qNo <= endQ; qNo++)
-                                    {
-                                        questions.Add(new Question
-                                        {
-                                            SectionId = newSec.Id,
-                                            QuestionNo = qNo.ToString(),
-                                            Marks = marksPerQ,
-                                            Type = "MCQ",
-                                            IsOptional = false,
-                                            CreatedAt = DateTime.UtcNow
-                                        });
-                                    }
-                                    _context.Questions.AddRange(questions);
-                                    await _context.SaveChangesAsync();
-                                }
-                                targetPp.IsSectionConfigured = true;
-                            }
-                            else if (existingSections.Any())
-                            {
-                                targetPp.IsSectionConfigured = true;
-                            }
+                            targetPp.BatchId = explicitMasterSections.First().BatchId;
+                            targetPp.IsSectionConfigured = true;
+                            targetPp.UpdatedAt = DateTime.UtcNow;
+                            _context.ProjectPapers.Update(targetPp);
+                            await _context.SaveChangesAsync();
+                            sectionsConfiguredCount++;
                         }
                     }
 
@@ -1051,8 +991,6 @@ namespace API.Controllers
                 var paper = await _context.Papers
                     .Include(p => p.SubjectPapers)
                     .Include(p => p.ProjectPapers)
-                    .Include(p => p.PaperSectionMasters)
-                        
                     .FirstOrDefaultAsync(p => p.PaperId == id);
                 if (paper == null)
                     return NotFound(new { success = false, message = "Paper not found" });
@@ -1067,22 +1005,11 @@ namespace API.Controllers
                 }
 
                 // Validate if TotalQuestions or MaxMarks conflicts with mapped master sections
-                if ((paper.PaperSectionMasters != null && paper.PaperSectionMasters.Any()) || (paperDto.MasterSectionIds != null && paperDto.MasterSectionIds.Any()))
+                if (paperDto.MasterSectionIds != null && paperDto.MasterSectionIds.Any())
                 {
-                    List<SectionMaster> mappedSections;
-                    if (paperDto.MasterSectionIds != null && paperDto.MasterSectionIds.Any())
-                    {
-                        mappedSections = await _context.SectionMasters
-                            .Where(sm => paperDto.MasterSectionIds.Contains(sm.Id))
-                            .ToListAsync();
-                    }
-                    else
-                    {
-                        var psmBatches = paper.PaperSectionMasters.Select(psm => psm.BatchId).Distinct().ToList();
-                        mappedSections = await _context.SectionMasters
-                            .Where(sm => psmBatches.Contains(sm.BatchId))
-                            .ToListAsync();
-                    }
+                    var mappedSections = await _context.SectionMasters
+                        .Where(sm => paperDto.MasterSectionIds.Contains(sm.Id))
+                        .ToListAsync();
 
                     if (mappedSections.Any())
                     {
@@ -1208,17 +1135,25 @@ namespace API.Controllers
         }
 
         [HttpGet("{id}/sections")]
-        public async Task<ActionResult<IEnumerable<Section>>> GetPaperSections(int id)
+        public async Task<ActionResult<IEnumerable<object>>> GetPaperSections(int id)
         {
             try
             {
-                var sections = await _context.Sections
-                    .Where(s => s.PaperId == id)
-                    .Include(s => s.Questions)
-                    .OrderBy(s => s.Id)
-                    .ToListAsync();
+                var batchId = await _context.ProjectPapers
+                    .Where(pp => pp.PaperId == id && pp.BatchId.HasValue && pp.BatchId.Value > 0)
+                    .Select(pp => pp.BatchId!.Value)
+                    .FirstOrDefaultAsync();
 
-                return Ok(sections);
+                if (batchId > 0)
+                {
+                    var masters = await _context.SectionMasters
+                        .Where(sm => sm.BatchId == batchId)
+                        .OrderBy(sm => sm.Id)
+                        .ToListAsync();
+                    return Ok(masters);
+                }
+
+                return Ok(new List<object>());
             }
             catch (Exception ex)
             {

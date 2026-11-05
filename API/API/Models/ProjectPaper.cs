@@ -17,6 +17,8 @@ namespace API.Models
         public int PaperId { get; set; }
         public Paper Paper { get; set; }
 
+        public int? BatchId { get; set; }
+
         public string? CatchNo { get; set; }
         public string? QuestionPaperPdfUrl { get; set; }
         

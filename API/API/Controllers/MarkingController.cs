@@ -664,14 +664,10 @@ namespace API.Controllers
             {
                 var marking = await _context.Markings
                     .Include(m => m.Script)
-                        .ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.ProjectPaperSections)
-                            .ThenInclude(pps => pps.Questions)
-                    .Include(m => m.Script)
                         .ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                     .Include(m => m.Examiner)
                     .Include(m => m.Allocation)
                     .Include(m => m.QuestionMarks)
-                        .ThenInclude(qm => qm.Question)
                     .FirstOrDefaultAsync(m => m.Id == markingId);
 
                 if (marking == null)
@@ -688,37 +684,46 @@ namespace API.Controllers
                     }
                 }
 
-                var sections = marking.Script.ProjectPaper.ProjectPaperSections
-                    .OrderBy(pps => pps.Id)
-                    .Select(pps => new
-                    {
-                        id = pps.Id,
-                        name = pps.Name,
-                        description = pps.Description,
-                        totalQuestions = pps.TotalQuestions,
-                        totalMarks = pps.TotalMarks,
-                        startQuestion = pps.StartQuestion,
-                        endQuestion = pps.EndQuestion,
-                        maxQuestionsToAttempt = pps.MaxQuestionsToAttempt,
-                        questions = pps.Questions.Select(q => new
+                int secBatchId = marking.Script?.ProjectPaper?.BatchId ?? 0;
+                var sectionMasters = secBatchId > 0
+                    ? await _context.SectionMasters.Where(sm => sm.BatchId == secBatchId).OrderBy(sm => sm.Id).ToListAsync()
+                    : new List<SectionMaster>();
+
+                var questionMasters = secBatchId > 0
+                    ? await _context.QuestionMasters.Where(qm => qm.BatchId == secBatchId).OrderBy(qm => qm.Id).ToListAsync()
+                    : new List<QuestionMaster>();
+
+                var sections = sectionMasters.Select(sm => new
+                {
+                    id = sm.Id,
+                    name = sm.Name,
+                    description = sm.Description,
+                    totalQuestions = sm.TotalQuestions,
+                    totalMarks = sm.TotalMarks,
+                    startQuestion = sm.StartQuestion,
+                    endQuestion = sm.EndQuestion,
+                    maxQuestionsToAttempt = sm.MaxQuestionsToAttempt,
+                    questions = questionMasters
+                        .Where(qm => qm.Section == sm.Name)
+                        .Select(q => new
                         {
-                            questionId = q.QuestionId,
-                            questionNo = q.QuestionNo,
-                            marks = q.Marks,
+                            questionId = q.Id,
+                            questionNo = q.Question,
+                            marks = (decimal?)null,
                             type = q.Type,
-                            isOptional = q.IsOptional,
-                            optionalGroupCode = q.OptionalGroupCode,
-                            sectionId = pps.Id, // pass projectPaperSectionId as sectionId for frontend compatibility
+                            isOptional = !string.IsNullOrEmpty(q.Group),
+                            optionalGroupCode = q.Group,
+                            sectionId = sm.Id,
                             marksAwarded = marking.QuestionMarks
-                                .FirstOrDefault(qm => qm.QuestionId == q.QuestionId)?.MarksAwarded ?? 0,
+                                .FirstOrDefault(qm => qm.QuestionId == q.Id)?.MarksAwarded ?? 0,
                             isSkipped = marking.QuestionMarks
-                                .FirstOrDefault(qm => qm.QuestionId == q.QuestionId)?.IsSkipped ?? false,
+                                .FirstOrDefault(qm => qm.QuestionId == q.Id)?.IsSkipped ?? false,
                             remarks = marking.QuestionMarks
-                                .FirstOrDefault(qm => qm.QuestionId == q.QuestionId)?.Remarks ?? "",
+                                .FirstOrDefault(qm => qm.QuestionId == q.Id)?.Remarks ?? "",
                             isAttempted = marking.QuestionMarks
-                                .FirstOrDefault(qm => qm.QuestionId == q.QuestionId)?.IsAttempted ?? false
+                                .FirstOrDefault(qm => qm.QuestionId == q.Id)?.IsAttempted ?? false
                         }).ToList()
-                    }).ToList();
+                }).ToList();
 
                 return Ok(new
                 {
@@ -787,94 +792,86 @@ namespace API.Controllers
                 }
 
                 var questionIds = questionMarks.Select(qm => qm.QuestionId).ToList();
-                var questions = await _context.Questions
-                    .Include(q => q.Section)
-                    .Include(q => q.ProjectPaperSection)
-                    .Where(q => questionIds.Contains(q.QuestionId))
+                var qMasters = await _context.QuestionMasters
+                    .Where(qm => questionIds.Contains(qm.Id))
                     .ToListAsync();
+
+                var batchId = qMasters.FirstOrDefault()?.BatchId ?? 0;
+                var sMasters = batchId > 0
+                    ? await _context.SectionMasters.Where(sm => sm.BatchId == batchId).ToListAsync()
+                    : new List<SectionMaster>();
 
                 // 1. Question-wise validation
                 foreach (var qm in questionMarks)
                 {
                     if (qm.IsSkipped) continue;
 
-                    var question = questions.FirstOrDefault(q => q.QuestionId == qm.QuestionId);
-                    if (question == null)
+                    var q = qMasters.FirstOrDefault(x => x.Id == qm.QuestionId);
+                    if (q == null)
                         return BadRequest(new { success = false, message = $"Question with ID {qm.QuestionId} not found" });
 
-                    if (qm.MarksAwarded < 0 || qm.MarksAwarded > question.Marks)
+                    if (qm.MarksAwarded < 0)
                     {
                         return BadRequest(new { 
                             success = false, 
-                            message = $"Marks awarded for Question {question.QuestionNo} ({qm.MarksAwarded}) must be between 0 and maximum allowed ({question.Marks})" 
+                            message = $"Marks awarded for Question {q.Question} ({qm.MarksAwarded}) cannot be negative" 
                         });
                     }
                 }
 
                 // 2. Section-wise validation
-                var marksBySection = new Dictionary<int, decimal>();
+                var marksBySection = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
                 foreach (var qm in questionMarks)
                 {
                     if (qm.IsSkipped) continue;
 
-                    var question = questions.FirstOrDefault(q => q.QuestionId == qm.QuestionId);
-                    if (question != null)
+                    var q = qMasters.FirstOrDefault(x => x.Id == qm.QuestionId);
+                    if (q != null && !string.IsNullOrEmpty(q.Section))
                     {
-                        var secId = question.SectionId ?? question.ProjectPaperSectionId ?? 0;
-                        if (!marksBySection.ContainsKey(secId))
-                        {
-                            marksBySection[secId] = 0;
-                        }
-                        marksBySection[secId] += qm.MarksAwarded;
+                        if (!marksBySection.ContainsKey(q.Section))
+                            marksBySection[q.Section] = 0;
+                        marksBySection[q.Section] += qm.MarksAwarded;
                     }
                 }
 
                 foreach (var entry in marksBySection)
                 {
-                    var firstQuestionInSection = questions.First(q => (q.SectionId ?? q.ProjectPaperSectionId ?? 0) == entry.Key);
-                    var section = firstQuestionInSection.Section;
-                    var projectPaperSection = firstQuestionInSection.ProjectPaperSection;
-                    var sectionName = section?.Name ?? projectPaperSection?.Name ?? "Section";
-                    var maxSectionMarks = section?.TotalMarks ?? projectPaperSection?.TotalMarks ?? 0;
-
-                    if (maxSectionMarks > 0 && entry.Value > maxSectionMarks)
+                    var sm = sMasters.FirstOrDefault(s => s.Name.Equals(entry.Key, StringComparison.OrdinalIgnoreCase));
+                    if (sm != null && sm.TotalMarks > 0 && entry.Value > sm.TotalMarks)
                     {
                         return BadRequest(new { 
                             success = false, 
-                            message = $"Total marks in Section '{sectionName}' ({entry.Value}) cannot exceed the maximum section marks ({maxSectionMarks})" 
+                            message = $"Total marks in Section '{sm.Name}' ({entry.Value}) cannot exceed the maximum section marks ({sm.TotalMarks})" 
                         });
                     }
                 }
 
                 // 3. Max attempted questions validation per section
-                var attemptedCountBySection = new Dictionary<int, int>();
+                var attemptedCountBySection = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                 foreach (var qm in questionMarks)
                 {
                     if (qm.IsSkipped) continue;
 
-                    var question = questions.FirstOrDefault(q => q.QuestionId == qm.QuestionId);
-                    if (question != null)
+                    var q = qMasters.FirstOrDefault(x => x.Id == qm.QuestionId);
+                    if (q != null && !string.IsNullOrEmpty(q.Section))
                     {
                         var isAttempted = qm.IsAttempted || qm.MarksAwarded > 0;
                         if (isAttempted)
                         {
-                            var secId = question.SectionId ?? question.ProjectPaperSectionId ?? 0;
-                            if (!attemptedCountBySection.ContainsKey(secId))
+                            if (!attemptedCountBySection.ContainsKey(q.Section))
                             {
-                                attemptedCountBySection[secId] = 0;
+                                attemptedCountBySection[q.Section] = 0;
                             }
-                            attemptedCountBySection[secId]++;
+                            attemptedCountBySection[q.Section]++;
                         }
                     }
                 }
 
                 foreach (var entry in attemptedCountBySection)
                 {
-                    var firstQuestionInSection = questions.First(q => (q.SectionId ?? q.ProjectPaperSectionId ?? 0) == entry.Key);
-                    var section = firstQuestionInSection.Section;
-                    var projectPaperSection = firstQuestionInSection.ProjectPaperSection;
-                    var sectionName = section?.Name ?? projectPaperSection?.Name ?? "Section";
-                    var maxAttempts = section?.MaxQuestionsToAttempt ?? projectPaperSection?.MaxQuestionsToAttempt ?? 0;
+                    var sm = sMasters.FirstOrDefault(s => s.Name.Equals(entry.Key, StringComparison.OrdinalIgnoreCase));
+                    var sectionName = sm?.Name ?? entry.Key;
+                    var maxAttempts = sm?.MaxQuestionsToAttempt ?? 0;
 
                     if (maxAttempts > 0 && entry.Value > maxAttempts)
                     {
@@ -894,20 +891,19 @@ namespace API.Controllers
                     var isAttempted = qm.IsAttempted || qm.MarksAwarded > 0;
                     if (!isAttempted) continue;
 
-                    var question = questions.FirstOrDefault(q => q.QuestionId == qm.QuestionId);
-                    if (question != null && !string.IsNullOrWhiteSpace(question.OptionalGroupCode))
+                    var q = qMasters.FirstOrDefault(x => x.Id == qm.QuestionId);
+                    if (q != null && !string.IsNullOrWhiteSpace(q.Group))
                     {
-                        var secId = question.SectionId ?? question.ProjectPaperSectionId ?? 0;
-                        var groupCode = question.OptionalGroupCode.Trim().ToUpper();
-                        var groupKey = $"{secId}_{groupCode}";
+                        var groupCode = q.Group.Trim().ToUpper();
+                        var groupKey = $"{q.Section}_{groupCode}";
                         if (groupsAttempted.TryGetValue(groupKey, out var existingQNo))
                         {
                             return BadRequest(new { 
                                 success = false, 
-                                message = $"Question {question.QuestionNo} and Question {existingQNo} both belong to Optional Group '{groupCode}'. Only one question from this group can be awarded marks." 
+                                message = $"Question {q.Question} and Question {existingQNo} both belong to Optional Group '{groupCode}'. Only one question from this group can be awarded marks." 
                             });
                         }
-                        groupsAttempted[groupKey] = question.QuestionNo;
+                        groupsAttempted[groupKey] = q.Question;
                     }
                 }
 
@@ -918,8 +914,8 @@ namespace API.Controllers
                 decimal totalMarks = 0;
                 foreach (var qm in questionMarks)
                 {
-                    var question = questions.FirstOrDefault(q => q.QuestionId == qm.QuestionId);
-                    if (question == null)
+                    var q = qMasters.FirstOrDefault(x => x.Id == qm.QuestionId);
+                    if (q == null)
                         continue;
 
                     var questionMark = new QuestionMark

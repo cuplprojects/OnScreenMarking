@@ -368,15 +368,56 @@ namespace API.Controllers
                     sectionDto.TotalQuestions = calculatedTotalQuestions;
                 }
 
-                // Handle SectionMaster
+                // 1. Resolve BatchId for this paper:
+                int finalBatchId = sectionDto.BatchId > 0 ? sectionDto.BatchId : 0;
+
+                if (finalBatchId <= 0)
+                {
+                    // Check if paper already has existing sections
+                    finalBatchId = await _context.Sections
+                        .Where(s => s.PaperId == sectionDto.PaperId && s.BatchId > 0)
+                        .OrderBy(s => s.Id)
+                        .Select(s => s.BatchId)
+                        .FirstOrDefaultAsync();
+                }
+
+                if (finalBatchId <= 0)
+                {
+                    // Check ProjectPapers for the same paper
+                    finalBatchId = await _context.ProjectPapers
+                        .Where(pp => pp.PaperId == sectionDto.PaperId && pp.BatchId.HasValue && pp.BatchId.Value > 0)
+                        .Select(pp => pp.BatchId!.Value)
+                        .FirstOrDefaultAsync();
+                }
+
+                if (finalBatchId <= 0)
+                {
+                    var maxSm = await _context.SectionMasters.MaxAsync(sm => (int?)sm.BatchId) ?? 0;
+                    var maxQm = await _context.QuestionMasters.MaxAsync(qm => (int?)qm.BatchId) ?? 0;
+                    finalBatchId = Math.Max(maxSm, maxQm) + 1;
+                }
+
+                if (finalBatchId <= 0) finalBatchId = 1;
+
+                // Link ProjectPapers if any
+                var linkedPps = await _context.ProjectPapers.Where(pp => pp.PaperId == sectionDto.PaperId).ToListAsync();
+                foreach (var pp in linkedPps)
+                {
+                    pp.BatchId = finalBatchId;
+                    pp.IsSectionConfigured = true;
+                    pp.UpdatedAt = DateTime.UtcNow;
+                }
+                await _context.SaveChangesAsync();
+
+                // 2. Handle SectionMaster for this batch and section name
                 var masterName = sectionDto.Name.Trim();
-                var master = await _context.SectionMasters.FirstOrDefaultAsync(sm => sm.Name == masterName);
+                var master = await _context.SectionMasters
+                    .FirstOrDefaultAsync(sm => sm.BatchId == finalBatchId && sm.Name.ToLower() == masterName.ToLower());
                 if (master == null)
                 {
-                    int nextBatchId = sectionDto.BatchId > 0 ? sectionDto.BatchId : (await _context.SectionMasters.MaxAsync(sm => (int?)sm.BatchId) ?? 0) + 1;
                     master = new SectionMaster
                     {
-                        BatchId = nextBatchId,
+                        BatchId = finalBatchId,
                         Name = masterName,
                         Description = sectionDto.Description,
                         TotalQuestions = sectionDto.TotalQuestions,
@@ -387,11 +428,18 @@ namespace API.Controllers
                         CreatedAt = DateTime.UtcNow
                     };
                     _context.SectionMasters.Add(master);
-                    await _context.SaveChangesAsync();
                 }
-
-                int finalBatchId = sectionDto.BatchId > 0 ? sectionDto.BatchId : master.BatchId;
-                if (finalBatchId <= 0) finalBatchId = 1;
+                else
+                {
+                    master.Description = sectionDto.Description;
+                    master.TotalQuestions = sectionDto.TotalQuestions;
+                    master.TotalMarks = Math.Round(sectionDto.TotalMarks, 2, MidpointRounding.AwayFromZero);
+                    master.StartQuestion = sectionDto.StartQuestion;
+                    master.EndQuestion = sectionDto.EndQuestion;
+                    master.MaxQuestionsToAttempt = sectionDto.MaxQuestionsToAttempt;
+                    _context.SectionMasters.Update(master);
+                }
+                await _context.SaveChangesAsync();
 
                 var section = new Section
                 {
@@ -456,8 +504,28 @@ namespace API.Controllers
                     }
                 }
 
-                _context.Questions.AddRange(questions);
+                // -- Sync to QuestionMasters ----------------------------------
+                // Remove any existing QuestionMaster rows for this batch+section
+                // then re-insert so the master stays in sync.
+                var existingQMs = await _context.QuestionMasters
+                    .Where(qm => qm.BatchId == finalBatchId && qm.Section == section.Name)
+                    .ToListAsync();
+                if (existingQMs.Any())
+                    _context.QuestionMasters.RemoveRange(existingQMs);
+
+                var questionMasters = questions.Select(q => new QuestionMaster
+                {
+                    BatchId   = finalBatchId,
+                    Section   = section.Name,
+                    Question  = q.QuestionNo,
+                    Type      = !string.IsNullOrWhiteSpace(q.Type) ? q.Type.Trim() : "MCQ",
+                    Group     = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                    Status    = true,
+                    CreatedAt = DateTime.UtcNow
+                }).ToList();
+                _context.QuestionMasters.AddRange(questionMasters);
                 await _context.SaveChangesAsync();
+                // -------------------------------------------------------------
 
                 return CreatedAtAction(nameof(GetSection), new { id = section.Id }, section);
             }
@@ -477,31 +545,9 @@ namespace API.Controllers
                 if (section == null)
                     return NotFound(new { success = false, message = "Section not found" });
 
-                // Handle SectionMaster updates
-                var masterName = sectionDto.Name.Trim();
-                var master = await _context.SectionMasters.FirstOrDefaultAsync(sm => sm.Name == masterName);
-                if (master == null)
-                {
-                    int nextBatchId = sectionDto.BatchId > 0 ? sectionDto.BatchId : (await _context.SectionMasters.MaxAsync(sm => (int?)sm.BatchId) ?? 0) + 1;
-                    master = new SectionMaster
-                    {
-                        BatchId = nextBatchId,
-                        Name = masterName,
-                        Description = sectionDto.Description,
-                        TotalQuestions = sectionDto.TotalQuestions,
-                        TotalMarks = Math.Round(sectionDto.TotalMarks, 2, MidpointRounding.AwayFromZero),
-                        StartQuestion = sectionDto.StartQuestion,
-                        EndQuestion = sectionDto.EndQuestion,
-                        MaxQuestionsToAttempt = sectionDto.MaxQuestionsToAttempt,
-                        CreatedAt = DateTime.UtcNow
-                    };
-                    _context.SectionMasters.Add(master);
-                    await _context.SaveChangesAsync();
-                }
-
-                section.BatchId = sectionDto.BatchId > 0 ? sectionDto.BatchId : master.BatchId;
+                if (sectionDto.BatchId > 0) section.BatchId = sectionDto.BatchId;
                 if (section.BatchId <= 0) section.BatchId = 1;
-                section.Name = sectionDto.Name;
+                section.Name = sectionDto.Name.Trim();
                 section.Description = sectionDto.Description;
                 section.TotalQuestions = sectionDto.TotalQuestions;
                 section.TotalMarks = Math.Round(sectionDto.TotalMarks, 2, MidpointRounding.AwayFromZero);
@@ -512,46 +558,61 @@ namespace API.Controllers
                 _context.Sections.Update(section);
                 await _context.SaveChangesAsync();
 
-                // Save or update individual questions
+                // Handle SectionMaster updates
+                var masterName = section.Name.Trim();
+                var master = await _context.SectionMasters
+                    .FirstOrDefaultAsync(sm => sm.BatchId == section.BatchId && sm.Name.ToLower() == masterName.ToLower());
+                if (master != null)
+                {
+                    master.Description = section.Description ?? "";
+                    master.TotalQuestions = section.TotalQuestions;
+                    master.TotalMarks = section.TotalMarks;
+                    master.StartQuestion = section.StartQuestion;
+                    master.EndQuestion = section.EndQuestion;
+                    master.MaxQuestionsToAttempt = section.MaxQuestionsToAttempt;
+                    _context.SectionMasters.Update(master);
+                }
+                else
+                {
+                    master = new SectionMaster
+                    {
+                        BatchId = section.BatchId,
+                        Name = masterName,
+                        Description = section.Description ?? "",
+                        TotalQuestions = section.TotalQuestions,
+                        TotalMarks = section.TotalMarks,
+                        StartQuestion = section.StartQuestion,
+                        EndQuestion = section.EndQuestion,
+                        MaxQuestionsToAttempt = section.MaxQuestionsToAttempt,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _context.SectionMasters.Add(master);
+                }
+                await _context.SaveChangesAsync();
+
+                // Sync to QuestionMaster directly
+                var existingQMs = await _context.QuestionMasters
+                    .Where(qm => qm.BatchId == section.BatchId && qm.Section == section.Name)
+                    .ToListAsync();
+                if (existingQMs.Any())
+                {
+                    _context.QuestionMasters.RemoveRange(existingQMs);
+                }
+
                 if (sectionDto.Questions != null && sectionDto.Questions.Count > 0)
                 {
-                    var existingQuestions = await _context.Questions.Where(q => q.SectionId == id).ToListAsync();
-                    
-                    foreach (var questionDto in sectionDto.Questions)
+                    var qmList = sectionDto.Questions.Select(q => new QuestionMaster
                     {
-                        var existingQuestion = existingQuestions.FirstOrDefault(q => q.QuestionNo == questionDto.QuestionNo);
-                        if (existingQuestion != null)
-                        {
-                            existingQuestion.Marks = Math.Round(questionDto.Marks, 2, MidpointRounding.AwayFromZero);
-                            existingQuestion.Type = questionDto.Type;
-                            existingQuestion.IsOptional = questionDto.IsOptional;
-                            existingQuestion.OptionalGroupCode = questionDto.OptionalGroupCode;
-                            _context.Questions.Update(existingQuestion);
-                        }
-                        else
-                        {
-                            var newQuestion = new Question
-                            {
-                                SectionId = id,
-                                QuestionNo = questionDto.QuestionNo,
-                                Marks = Math.Round(questionDto.Marks, 2, MidpointRounding.AwayFromZero),
-                                Type = questionDto.Type,
-                                IsOptional = questionDto.IsOptional,
-                                OptionalGroupCode = questionDto.OptionalGroupCode,
-                                CreatedAt = DateTime.UtcNow
-                            };
-                            _context.Questions.Add(newQuestion);
-                        }
-                    }
-                    
-                    // Remove any questions that are no longer in the range
-                    var questionNosToKeep = sectionDto.Questions.Select(q => q.QuestionNo).ToList();
-                    var questionsToRemove = existingQuestions.Where(q => !questionNosToKeep.Contains(q.QuestionNo)).ToList();
-                    if (questionsToRemove.Count > 0)
-                    {
-                        _context.Questions.RemoveRange(questionsToRemove);
-                    }
-                    
+                        BatchId = section.BatchId,
+                        Section = section.Name,
+                        Question = q.QuestionNo,
+                        Type = !string.IsNullOrWhiteSpace(q.Type) ? q.Type.Trim() : "MCQ",
+                        Group = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                        Status = true,
+                        CreatedAt = DateTime.UtcNow
+                    }).ToList();
+
+                    _context.QuestionMasters.AddRange(qmList);
                     await _context.SaveChangesAsync();
                 }
 
@@ -573,7 +634,20 @@ namespace API.Controllers
                 if (section == null)
                     return NotFound(new { success = false, message = "Section not found" });
 
+                var secBatchId = section.BatchId;
+                var secName = section.Name;
+
                 _context.Sections.Remove(section);
+
+                // Clean up QuestionMaster rows for this section
+                var qmsToRemove = await _context.QuestionMasters
+                    .Where(qm => qm.BatchId == secBatchId && qm.Section == secName)
+                    .ToListAsync();
+                if (qmsToRemove.Any())
+                {
+                    _context.QuestionMasters.RemoveRange(qmsToRemove);
+                }
+
                 await _context.SaveChangesAsync();
 
                 return Ok(new { success = true, message = "Section deleted successfully" });
@@ -686,7 +760,17 @@ namespace API.Controllers
                         }
                     }
 
-                    _context.Questions.AddRange(questions);
+                    var qmBulk = questions.Select(q => new QuestionMaster
+                    {
+                        BatchId = section.BatchId,
+                        Section = section.Name,
+                        Question = q.QuestionNo,
+                        Type = !string.IsNullOrWhiteSpace(q.Type) ? q.Type.Trim() : "MCQ",
+                        Group = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                        Status = true,
+                        CreatedAt = DateTime.UtcNow
+                    }).ToList();
+                    _context.QuestionMasters.AddRange(qmBulk);
                     await _context.SaveChangesAsync();
                 }
 
@@ -784,7 +868,17 @@ namespace API.Controllers
                             CreatedAt = DateTime.UtcNow
                         }).ToList();
 
-                        _context.Questions.AddRange(newQuestions);
+                        var qmImport = newQuestions.Select(q => new QuestionMaster
+                        {
+                            BatchId = newSection.BatchId,
+                            Section = newSection.Name,
+                            Question = q.QuestionNo,
+                            Type = !string.IsNullOrWhiteSpace(q.Type) ? q.Type.Trim() : "MCQ",
+                            Group = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                            Status = true,
+                            CreatedAt = DateTime.UtcNow
+                        }).ToList();
+                        _context.QuestionMasters.AddRange(qmImport);
                         await _context.SaveChangesAsync();
                     }
                     
@@ -800,13 +894,26 @@ namespace API.Controllers
         }
 
         [HttpGet("{id}/questions")]
-        public async Task<ActionResult<IEnumerable<Question>>> GetSectionQuestions(int id)
+        public async Task<ActionResult<IEnumerable<object>>> GetSectionQuestions(int id)
         {
             try
             {
-                var questions = await _context.Questions
-                    .Where(q => q.SectionId == id)
-                    .OrderBy(q => q.QuestionNo)
+                var section = await _context.Sections.FindAsync(id);
+                if (section == null)
+                    return Ok(new List<object>());
+
+                var questions = await _context.QuestionMasters
+                    .Where(qm => qm.BatchId == section.BatchId && qm.Section == section.Name)
+                    .OrderBy(qm => qm.Id)
+                    .Select(qm => new
+                    {
+                        questionId = qm.Id,
+                        questionNo = qm.Question,
+                        marks = (decimal?)null,
+                        type = qm.Type,
+                        isOptional = !string.IsNullOrEmpty(qm.Group),
+                        optionalGroupCode = qm.Group
+                    })
                     .ToListAsync();
 
                 return Ok(questions);
@@ -823,16 +930,14 @@ namespace API.Controllers
         {
             try
             {
-                var question = await _context.Questions.FindAsync(questionId);
-                if (question == null)
+                var qm = await _context.QuestionMasters.FindAsync(questionId);
+                if (qm == null)
                     return NotFound(new { success = false, message = "Question not found" });
 
-                question.Marks = Math.Round(questionDto.Marks, 2, MidpointRounding.AwayFromZero);
-                question.Type = questionDto.Type;
-                question.IsOptional = questionDto.IsOptional;
-                question.OptionalGroupCode = questionDto.OptionalGroupCode;
+                if (!string.IsNullOrWhiteSpace(questionDto.Type)) qm.Type = questionDto.Type.Trim();
+                qm.Group = !string.IsNullOrWhiteSpace(questionDto.OptionalGroupCode) ? questionDto.OptionalGroupCode.Trim() : null;
 
-                _context.Questions.Update(question);
+                _context.QuestionMasters.Update(qm);
                 await _context.SaveChangesAsync();
 
                 return Ok(new { success = true, message = "Question updated successfully" });
@@ -941,7 +1046,17 @@ namespace API.Controllers
                             });
                         }
 
-                        _context.Questions.AddRange(questions);
+                        var qmImportMs = questions.Select(q => new QuestionMaster
+                        {
+                            BatchId = newSection.BatchId,
+                            Section = newSection.Name,
+                            Question = q.QuestionNo,
+                            Type = !string.IsNullOrWhiteSpace(q.Type) ? q.Type.Trim() : "MCQ",
+                            Group = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                            Status = true,
+                            CreatedAt = DateTime.UtcNow
+                        }).ToList();
+                        _context.QuestionMasters.AddRange(qmImportMs);
                         await _context.SaveChangesAsync();
                         importedCount++;
                     }
@@ -961,11 +1076,20 @@ namespace API.Controllers
         {
             try
             {
-                var batchIds = await _context.PaperSectionMasters
-                    .Where(psm => psm.PaperId == paperId)
-                    .Select(psm => psm.BatchId)
+                var batchIds = await _context.ProjectPapers
+                    .Where(pp => pp.PaperId == paperId && pp.BatchId.HasValue && pp.BatchId.Value > 0)
+                    .Select(pp => pp.BatchId!.Value)
                     .Distinct()
                     .ToListAsync();
+
+                if (!batchIds.Any())
+                {
+                    batchIds = await _context.Sections
+                        .Where(sec => sec.PaperId == paperId && sec.BatchId > 0)
+                        .Select(sec => sec.BatchId)
+                        .Distinct()
+                        .ToListAsync();
+                }
 
                 var mappings = await _context.SectionMasters
                     .Where(sm => batchIds.Contains(sm.BatchId))
@@ -1022,165 +1146,27 @@ namespace API.Controllers
                     }
                 }
 
-                // 1. Update PaperSectionMaster mappings
-                var existingPsm = await _context.PaperSectionMasters.Where(psm => psm.PaperId == request.PaperId).ToListAsync();
-                _context.PaperSectionMasters.RemoveRange(existingPsm);
-
-                var targetBatchIds = masterSections.Select(sm => sm.BatchId).Distinct().ToList();
-                if (request.BatchIds != null && request.BatchIds.Any())
-                {
-                    targetBatchIds.AddRange(request.BatchIds.Where(b => b > 0));
-                    targetBatchIds = targetBatchIds.Distinct().ToList();
-                }
-
-                foreach (var bId in targetBatchIds)
-                {
-                    _context.PaperSectionMasters.Add(new PaperSectionMaster
-                    {
-                        PaperId = request.PaperId,
-                        BatchId = bId,
-                        CreatedAt = DateTime.UtcNow
-                    });
-                }
-
-                // 2. Synchronize Sections and Questions for the Paper (Sections table)
-                var existingSections = await _context.Sections
-                    .Include(s => s.Questions)
-                    .Where(s => s.PaperId == request.PaperId)
-                    .ToListAsync();
-
-                foreach (var s in existingSections)
-                {
-                    _context.Questions.RemoveRange(s.Questions);
-                }
-                _context.Sections.RemoveRange(existingSections);
-                await _context.SaveChangesAsync();
-
-                if (masterSections.Any())
-                {
-                    int currentMaxQ = 0;
-                    var otherSections = await _context.Sections.Where(s => s.PaperId == request.PaperId).ToListAsync();
-                    if (otherSections.Any())
-                    {
-                        currentMaxQ = otherSections.Max(s => s.EndQuestion);
-                    }
-
-                    foreach (var master in masterSections)
-                    {
-                        int totalQ = master.TotalQuestions > 0 ? master.TotalQuestions : (master.EndQuestion >= master.StartQuestion ? master.EndQuestion - master.StartQuestion + 1 : 1);
-                        int startQ = master.StartQuestion > 0 ? master.StartQuestion : (currentMaxQ > 0 ? currentMaxQ + 1 : 1);
-                        int endQ = master.EndQuestion >= startQ ? master.EndQuestion : startQ + totalQ - 1;
-                        currentMaxQ = endQ;
-
-                        var newSection = new Section
-                        {
-                            PaperId = request.PaperId,
-                            BatchId = master.BatchId > 0 ? master.BatchId : 1,
-                            Name = master.Name,
-                            Description = master.Description ?? "",
-                            TotalQuestions = totalQ,
-                            TotalMarks = Math.Round(master.TotalMarks, 2, MidpointRounding.AwayFromZero),
-                            StartQuestion = startQ,
-                            EndQuestion = endQ,
-                            MaxQuestionsToAttempt = master.MaxQuestionsToAttempt > 0 ? master.MaxQuestionsToAttempt : totalQ,
-                            CreatedAt = DateTime.UtcNow
-                        };
-                        _context.Sections.Add(newSection);
-                        await _context.SaveChangesAsync();
-
-                        decimal marksPerQ = totalQ > 0 ? Math.Round(master.TotalMarks / totalQ, 2) : 1;
-                        var questions = new List<Question>();
-                        for (int qNo = startQ; qNo <= endQ; qNo++)
-                        {
-                            var (defTypeId, defTypeName) = await ResolveQuestionTypeAsync(null, "MCQ");
-                            questions.Add(new Question
-                            {
-                                SectionId = newSection.Id,
-                                QuestionNo = qNo.ToString(),
-                                Marks = marksPerQ,
-                                TypeId = defTypeId,
-                                Type = defTypeName,
-                                IsOptional = false,
-                                CreatedAt = DateTime.UtcNow
-                            });
-                        }
-                        _context.Questions.AddRange(questions);
-                        await _context.SaveChangesAsync();
-                    }
-                }
-
-                // 3. Synchronize ProjectPaperSections and Questions for any ProjectPapers linked to this Paper
+                int targetBatchId = masterSections.FirstOrDefault()?.BatchId ?? (request.BatchIds?.FirstOrDefault() ?? 0);
                 var projectPapers = await _context.ProjectPapers
                     .Where(pp => pp.PaperId == request.PaperId)
                     .ToListAsync();
 
                 foreach (var pp in projectPapers)
                 {
-                    var existingPps = await _context.ProjectPaperSections
-                        .Include(pps => pps.Questions)
-                        .Where(pps => pps.ProjectPaperId == pp.Id)
-                        .ToListAsync();
-
-                    foreach (var pps in existingPps)
+                    if (targetBatchId > 0)
                     {
-                        _context.Questions.RemoveRange(pps.Questions);
-                    }
-                    _context.ProjectPaperSections.RemoveRange(existingPps);
-                    await _context.SaveChangesAsync();
-
-                    if (masterSections.Any())
-                    {
-                        foreach (var master in masterSections)
-                        {
-                            int totalQ = master.TotalQuestions > 0 ? master.TotalQuestions : (master.EndQuestion >= master.StartQuestion ? master.EndQuestion - master.StartQuestion + 1 : 1);
-                            int startQ = master.StartQuestion > 0 ? master.StartQuestion : 1;
-                            int endQ = master.EndQuestion >= startQ ? master.EndQuestion : startQ + totalQ - 1;
-
-                            var newPps = new ProjectPaperSection
-                            {
-                                ProjectPaperId = pp.Id,
-                                BatchId = master.BatchId > 0 ? master.BatchId : 1,
-                                Name = master.Name,
-                                Description = master.Description ?? "",
-                                StartQuestion = startQ,
-                                EndQuestion = endQ,
-                                TotalQuestions = totalQ,
-                                TotalMarks = Math.Round(master.TotalMarks, 2, MidpointRounding.AwayFromZero),
-                                MaxQuestionsToAttempt = master.MaxQuestionsToAttempt > 0 ? master.MaxQuestionsToAttempt : totalQ,
-                                CreatedAt = DateTime.UtcNow,
-                                UpdatedAt = DateTime.UtcNow
-                            };
-                            _context.ProjectPaperSections.Add(newPps);
-                            await _context.SaveChangesAsync();
-
-                            decimal marksPerQ = totalQ > 0 ? Math.Round(master.TotalMarks / totalQ, 2) : 1;
-                            var ppsQuestions = new List<Question>();
-                            for (int i = startQ; i <= endQ; i++)
-                            {
-                                ppsQuestions.Add(new Question
-                                {
-                                    ProjectPaperSectionId = newPps.Id,
-                                    QuestionNo = i.ToString(),
-                                    Marks = marksPerQ,
-                                    Type = "MCQ",
-                                    IsOptional = false,
-                                    CreatedAt = DateTime.UtcNow
-                                });
-                            }
-                            _context.Questions.AddRange(ppsQuestions);
-                            await _context.SaveChangesAsync();
-                        }
+                        pp.BatchId = targetBatchId;
                         pp.IsSectionConfigured = true;
                     }
                     else
                     {
+                        pp.BatchId = null;
                         pp.IsSectionConfigured = false;
                     }
                     pp.UpdatedAt = DateTime.UtcNow;
                 }
-
                 await _context.SaveChangesAsync();
-                return Ok(new { success = true, message = "Paper master section mapping and questions updated successfully" });
+                return Ok(new { success = true, message = "Paper master section mapping updated successfully" });
             }
             catch (Exception ex)
             {
