@@ -130,6 +130,8 @@ const ExaminerMarking = () => {
   const [paperId, setPaperId] = useState(rawPaperId ? decryptId(rawPaperId) : null);
   const rawProjectPaperId = location.state?.projectPaperId || queryParams.get('projectPaperId');
   const [projectPaperId, setProjectPaperId] = useState(rawProjectPaperId ? decryptId(rawProjectPaperId) : null);
+  const rawBatchId = location.state?.batchId || queryParams.get('batchId');
+  const [batchId, setBatchId] = useState(rawBatchId ? decryptId(rawBatchId) : null);
   const rawAllocationId = location.state?.allocationId || queryParams.get('allocationId');
   const [allocationId, setAllocationId] = useState(rawAllocationId ? decryptId(rawAllocationId) : null);
   const examinerId = location.state?.examinerId || queryParams.get('examinerId') || user?.id;
@@ -609,7 +611,7 @@ const ExaminerMarking = () => {
       return;
     }
 
-    if (paperId && allocationId) {
+    if (paperId && allocationId && batchId) {
       return;
     }
 
@@ -620,6 +622,10 @@ const ExaminerMarking = () => {
         if (scriptData) {
           if (!paperId && scriptData.paperId) setPaperId(scriptData.paperId);
           if (!projectPaperId && scriptData.projectPaperId) setProjectPaperId(scriptData.projectPaperId);
+          if (scriptData.batchId) setBatchId(scriptData.batchId);
+          if (scriptData.maxMarks) {
+            setPaperInfo(prev => ({ ...(prev || {}), maxMarks: scriptData.maxMarks }));
+          }
           const allocId = scriptData.allocationId || scriptData.AllocationId;
           if (!allocationId && allocId) setAllocationId(allocId);
           if (!studentName && (scriptData.studentName || scriptData.rollNumber)) {
@@ -670,9 +676,10 @@ const ExaminerMarking = () => {
           // Convert array format to object format for state
           marksToLoad = { ...defaultMarks };
           savedMarks.forEach(sm => {
-            if (marksToLoad[sm.questionId]) {
-              marksToLoad[sm.questionId] = {
-                ...marksToLoad[sm.questionId],
+            const targetKey = Object.keys(marksToLoad).find(k => String(k) === String(sm.questionId));
+            if (targetKey) {
+              marksToLoad[targetKey] = {
+                ...marksToLoad[targetKey],
                 marksAwarded: sm.marksAwarded,
                 isSkipped: sm.isSkipped,
                 remarks: sm.remarks || "",
@@ -688,8 +695,9 @@ const ExaminerMarking = () => {
         // Ensure default structure is maintained in case draft is partial
         const updated = { ...defaultMarks };
         Object.keys(marksToLoad).forEach(qId => {
-          if (updated[qId]) {
-             updated[qId] = { ...updated[qId], ...marksToLoad[qId] };
+          const matchKey = Object.keys(updated).find(k => String(k) === String(qId)) || qId;
+          if (updated[matchKey]) {
+             updated[matchKey] = { ...updated[matchKey], ...marksToLoad[qId] };
           }
         });
         setQuestionMarks(updated);
@@ -798,31 +806,46 @@ const ExaminerMarking = () => {
         }
       }
 
-      // Fetch ProjectPaperSections using projectPaperId (from query/state or script)
+      // Fetch ProjectPaperSections using batchId, projectPaperId, or scriptId
       let data = null;
       let effectiveProjectPaperId = projectPaperId;
+      let effectiveBatchId = batchId;
 
-      if (!effectiveProjectPaperId && scriptId) {
+      if ((!effectiveProjectPaperId || !effectiveBatchId) && scriptId) {
         try {
           const scriptData = await apiCall(`/scripts/${scriptId}`);
-          effectiveProjectPaperId = scriptData?.projectPaperId;
+          if (!effectiveProjectPaperId && scriptData?.projectPaperId) {
+            effectiveProjectPaperId = scriptData.projectPaperId;
+            setProjectPaperId(effectiveProjectPaperId);
+          }
+          if (!effectiveBatchId && scriptData?.batchId) {
+            effectiveBatchId = scriptData.batchId;
+            setBatchId(effectiveBatchId);
+          }
+          if (scriptData?.maxMarks) {
+            setPaperInfo(prev => ({ ...(prev || {}), maxMarks: scriptData.maxMarks }));
+          }
         } catch (scriptErr) {
-          console.warn("Failed to fetch script to get projectPaperId:", scriptErr);
+          console.warn("Failed to fetch script to get projectPaperId/batchId:", scriptErr);
         }
       }
 
-      if (effectiveProjectPaperId) {
+      if (effectiveBatchId || effectiveProjectPaperId || scriptId) {
         try {
-          data = await sectionService.getProjectPaperSections({ projectPaperId: effectiveProjectPaperId });
+          data = await sectionService.getProjectPaperSections({
+            projectPaperId: effectiveProjectPaperId,
+            batchId: effectiveBatchId,
+            scriptId: scriptId
+          });
         } catch (secErr) {
-          console.warn("Failed to fetch sections by projectPaperId:", secErr);
+          console.warn("Failed to fetch sections by batchId/projectPaperId:", secErr);
         }
       }
 
       // Fallback: filter by paperId if we still have no data
       if (!data || data.length === 0) {
         try {
-          data = await sectionService.getProjectPaperSections({ paperId });
+          data = await sectionService.getProjectPaperSections({ paperId, batchId: effectiveBatchId, scriptId });
         } catch (fallbackErr) {
           console.warn("Fallback section fetch also failed:", fallbackErr);
         }
@@ -840,10 +863,13 @@ const ExaminerMarking = () => {
 
         setSections(normalizedData);
 
-        // Extract paper info from ProjectPaper if available
+        // Extract paper info and max marks
+        const resolvedMaxMarks = data[0]?.totalPaperMarks || data[0]?.projectPaper?.maxMarks;
         if (data[0]?.projectPaper) {
           const pp = data[0].projectPaper;
-          setPaperInfo(prev => ({ ...(prev || {}), ...pp }));
+          setPaperInfo(prev => ({ ...(prev || {}), ...pp, maxMarks: resolvedMaxMarks || prev?.maxMarks }));
+        } else if (resolvedMaxMarks) {
+          setPaperInfo(prev => ({ ...(prev || {}), maxMarks: resolvedMaxMarks }));
         }
 
         const expanded = {};

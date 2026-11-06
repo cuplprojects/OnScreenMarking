@@ -16,6 +16,7 @@ namespace API.Models
         public ProjectPaper ProjectPaper { get; set; }
         public int? ProjectId { get; set; }
         public Project? Project { get; set; }
+        public int? BatchId { get; set; }
         public string CleanPdfUrl { get; set; }
         public ScriptStatus Status { get; set; } = ScriptStatus.pending;
         public bool? IsReEvaluationRequested { get; set; }

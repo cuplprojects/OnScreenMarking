@@ -29,10 +29,19 @@ namespace API.Models
         public string Question { get; set; } = string.Empty;
 
         /// <summary>
-        /// Type of the question (e.g. "MCQ", "Short Answer", "Descriptive")
+        /// Question-wise marks allocated for this question
         /// </summary>
-        [MaxLength(100)]
-        public string? Type { get; set; }
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal Marks { get; set; } = 0;
+
+        /// <summary>
+        /// Foreign key to QuestionType in questiontypes table
+        /// </summary>
+        [Required]
+        public int QuestionTypeId { get; set; }
+
+        [ForeignKey(nameof(QuestionTypeId))]
+        public QuestionType QuestionType { get; set; } = null!;
 
         /// <summary>
         /// Group the question belongs to (only populated if question is grouped, e.g. optional group code)
@@ -48,5 +57,3 @@ namespace API.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }
-
-

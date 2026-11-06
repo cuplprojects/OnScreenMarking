@@ -27,11 +27,6 @@ namespace API.Models
         public string Message { get; set; } = string.Empty;
 
         public string IpAddress { get; set; } = string.Empty;
-
-        // Legacy column compatibility for MySQL tables
-        public string? Event { get; set; } = string.Empty;
-        public string? Category { get; set; } = string.Empty;
-        public string? OldValue { get; set; } = string.Empty;
-        public string? NewValue { get; set; } = string.Empty;
+        
     }
 }

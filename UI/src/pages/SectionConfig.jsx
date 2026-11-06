@@ -432,7 +432,9 @@ export default function SectionConfig() {
           questions: questions.map(q => ({
             ...q,
             questionId: q.questionId || 0,
-            marks: parseFloat(q.marks)
+            questionTypeId: q.typeId || q.questionTypeId || null,
+            typeId: q.typeId || q.questionTypeId || null,
+            marks: parseFloat(q.marks) || 0
           }))
         };
 
@@ -454,7 +456,9 @@ export default function SectionConfig() {
           questions: questions.map(q => ({
             ...q,
             questionId: q.questionId || 0,
-            marks: parseFloat(q.marks)
+            questionTypeId: q.typeId || q.questionTypeId || null,
+            typeId: q.typeId || q.questionTypeId || null,
+            marks: parseFloat(q.marks) || 0
           }))
         };
 

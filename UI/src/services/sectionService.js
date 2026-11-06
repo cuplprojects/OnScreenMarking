@@ -122,11 +122,13 @@ const sectionService = {
   },
 
   // Project Paper Sections
-  getProjectPaperSections: async ({ projectPaperId = null, projectId = null, paperId = null } = {}) => {
+  getProjectPaperSections: async ({ projectPaperId = null, projectId = null, paperId = null, batchId = null, scriptId = null } = {}) => {
     const params = new URLSearchParams();
     if (projectPaperId) params.append('projectPaperId', projectPaperId);
     if (projectId) params.append('projectId', projectId);
     if (paperId) params.append('paperId', paperId);
+    if (batchId) params.append('batchId', batchId);
+    if (scriptId) params.append('scriptId', scriptId);
     const qs = params.toString() ? `?${params.toString()}` : '';
     return apiCall(`/projectpapersection${qs}`);
   },

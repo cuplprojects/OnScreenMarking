@@ -14,7 +14,7 @@ namespace API.Controllers
     {
         private readonly ApplicationDbContext _context;
 
-        private async Task<(int? typeId, string typeName)> ResolveQuestionTypeAsync(int? dtoTypeId, string? dtoTypeName)
+        private async Task<(int typeId, string typeName)> ResolveQuestionTypeAsync(int? dtoTypeId, string? dtoTypeName)
         {
             if (dtoTypeId.HasValue && dtoTypeId.Value > 0)
             {
@@ -33,7 +33,6 @@ namespace API.Controllers
                 {
                     return (qt.QuestionTypeId, qt.QuestionTypeName);
                 }
-                return (null, trimmed);
             }
 
             var defQt = await _context.QuestionTypes.FirstOrDefaultAsync(t => t.QuestionTypeName == "MCQ") 
@@ -43,7 +42,11 @@ namespace API.Controllers
                 return (defQt.QuestionTypeId, defQt.QuestionTypeName);
             }
 
-            return (null, "MCQ");
+            // Create default MCQ if table is empty
+            var defaultQt = new QuestionType { QuestionTypeName = "MCQ" };
+            _context.QuestionTypes.Add(defaultQt);
+            await _context.SaveChangesAsync();
+            return (defaultQt.QuestionTypeId, defaultQt.QuestionTypeName);
         }
 
         public SectionController(ApplicationDbContext context)
@@ -153,6 +156,27 @@ namespace API.Controllers
                 };
 
                 _context.SectionMasters.Add(master);
+
+                // Auto-generate QuestionMasters for this section
+                decimal marksPerQ = totalQ > 0 ? Math.Round((decimal)master.TotalMarks / totalQ, 2) : 0;
+                var (defTypeId, defTypeName) = await ResolveQuestionTypeAsync(null, "MCQ");
+                var initialQMs = new List<QuestionMaster>();
+                for (int i = master.StartQuestion; i <= master.EndQuestion; i++)
+                {
+                    initialQMs.Add(new QuestionMaster
+                    {
+                        BatchId        = assignedBatchId,
+                        Section        = master.Name,
+                        Question       = i.ToString(),
+                        Marks          = marksPerQ,
+                        QuestionTypeId = defTypeId,
+                        Group          = null,
+                        Status         = true,
+                        CreatedAt      = DateTime.UtcNow
+                    });
+                }
+                _context.QuestionMasters.AddRange(initialQMs);
+
                 await _context.SaveChangesAsync();
 
                 return CreatedAtAction(nameof(GetSectionMaster), new { id = master.Id }, master);
@@ -217,6 +241,30 @@ namespace API.Controllers
                 }
 
                 _context.SectionMasters.AddRange(newMasters);
+
+                // Auto-generate QuestionMasters for all sections in this batch
+                var (batchDefTypeId, batchDefTypeName) = await ResolveQuestionTypeAsync(null, "MCQ");
+                var batchQMs = new List<QuestionMaster>();
+                foreach (var nm in newMasters)
+                {
+                    decimal qMarks = nm.TotalQuestions > 0 ? Math.Round((decimal)nm.TotalMarks / nm.TotalQuestions, 2) : 0;
+                    for (int i = nm.StartQuestion; i <= nm.EndQuestion; i++)
+                    {
+                        batchQMs.Add(new QuestionMaster
+                        {
+                            BatchId        = assignedBatchId,
+                            Section        = nm.Name,
+                            Question       = i.ToString(),
+                            Marks          = qMarks,
+                            QuestionTypeId = batchDefTypeId,
+                            Group          = null,
+                            Status         = true,
+                            CreatedAt      = DateTime.UtcNow
+                        });
+                    }
+                }
+                _context.QuestionMasters.AddRange(batchQMs);
+
                 await _context.SaveChangesAsync();
 
                 return Ok(new { 
@@ -513,15 +561,17 @@ namespace API.Controllers
                 if (existingQMs.Any())
                     _context.QuestionMasters.RemoveRange(existingQMs);
 
+                var (syncDefTypeId, _) = await ResolveQuestionTypeAsync(null, "MCQ");
                 var questionMasters = questions.Select(q => new QuestionMaster
                 {
-                    BatchId   = finalBatchId,
-                    Section   = section.Name,
-                    Question  = q.QuestionNo,
-                    Type      = !string.IsNullOrWhiteSpace(q.Type) ? q.Type.Trim() : "MCQ",
-                    Group     = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
-                    Status    = true,
-                    CreatedAt = DateTime.UtcNow
+                    BatchId        = finalBatchId,
+                    Section        = section.Name,
+                    Question       = q.QuestionNo,
+                    Marks          = q.Marks,
+                    QuestionTypeId = q.TypeId ?? syncDefTypeId,
+                    Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                    Status         = true,
+                    CreatedAt      = DateTime.UtcNow
                 }).ToList();
                 _context.QuestionMasters.AddRange(questionMasters);
                 await _context.SaveChangesAsync();
@@ -601,16 +651,22 @@ namespace API.Controllers
 
                 if (sectionDto.Questions != null && sectionDto.Questions.Count > 0)
                 {
-                    var qmList = sectionDto.Questions.Select(q => new QuestionMaster
+                    var qmList = new List<QuestionMaster>();
+                    foreach (var q in sectionDto.Questions)
                     {
-                        BatchId = section.BatchId,
-                        Section = section.Name,
-                        Question = q.QuestionNo,
-                        Type = !string.IsNullOrWhiteSpace(q.Type) ? q.Type.Trim() : "MCQ",
-                        Group = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
-                        Status = true,
-                        CreatedAt = DateTime.UtcNow
-                    }).ToList();
+                        var (resolvedQTypeId, resolvedQTypeName) = await ResolveQuestionTypeAsync(q.TypeId ?? q.QuestionTypeId, q.Type);
+                        qmList.Add(new QuestionMaster
+                        {
+                            BatchId        = section.BatchId,
+                            Section        = section.Name,
+                            Question       = q.QuestionNo,
+                            Marks          = Math.Round(q.Marks, 2, MidpointRounding.AwayFromZero),
+                            QuestionTypeId = resolvedQTypeId,
+                            Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                            Status         = true,
+                            CreatedAt      = DateTime.UtcNow
+                        });
+                    }
 
                     _context.QuestionMasters.AddRange(qmList);
                     await _context.SaveChangesAsync();
@@ -760,15 +816,17 @@ namespace API.Controllers
                         }
                     }
 
+                    var (bulkDefTypeId, _) = await ResolveQuestionTypeAsync(null, "MCQ");
                     var qmBulk = questions.Select(q => new QuestionMaster
                     {
-                        BatchId = section.BatchId,
-                        Section = section.Name,
-                        Question = q.QuestionNo,
-                        Type = !string.IsNullOrWhiteSpace(q.Type) ? q.Type.Trim() : "MCQ",
-                        Group = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
-                        Status = true,
-                        CreatedAt = DateTime.UtcNow
+                        BatchId        = section.BatchId,
+                        Section        = section.Name,
+                        Question       = q.QuestionNo,
+                        Marks          = q.Marks,
+                        QuestionTypeId = q.TypeId ?? bulkDefTypeId,
+                        Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                        Status         = true,
+                        CreatedAt      = DateTime.UtcNow
                     }).ToList();
                     _context.QuestionMasters.AddRange(qmBulk);
                     await _context.SaveChangesAsync();
@@ -868,15 +926,17 @@ namespace API.Controllers
                             CreatedAt = DateTime.UtcNow
                         }).ToList();
 
+                        var (importDefTypeId, _) = await ResolveQuestionTypeAsync(null, "MCQ");
                         var qmImport = newQuestions.Select(q => new QuestionMaster
                         {
-                            BatchId = newSection.BatchId,
-                            Section = newSection.Name,
-                            Question = q.QuestionNo,
-                            Type = !string.IsNullOrWhiteSpace(q.Type) ? q.Type.Trim() : "MCQ",
-                            Group = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
-                            Status = true,
-                            CreatedAt = DateTime.UtcNow
+                            BatchId        = newSection.BatchId,
+                            Section        = newSection.Name,
+                            Question       = q.QuestionNo,
+                            Marks          = q.Marks,
+                            QuestionTypeId = q.TypeId ?? importDefTypeId,
+                            Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                            Status         = true,
+                            CreatedAt      = DateTime.UtcNow
                         }).ToList();
                         _context.QuestionMasters.AddRange(qmImport);
                         await _context.SaveChangesAsync();
@@ -903,15 +963,18 @@ namespace API.Controllers
                     return Ok(new List<object>());
 
                 var questions = await _context.QuestionMasters
+                    .Include(qm => qm.QuestionType)
                     .Where(qm => qm.BatchId == section.BatchId && qm.Section == section.Name)
                     .OrderBy(qm => qm.Id)
                     .Select(qm => new
                     {
-                        questionId = qm.Id,
-                        questionNo = qm.Question,
-                        marks = (decimal?)null,
-                        type = qm.Type,
-                        isOptional = !string.IsNullOrEmpty(qm.Group),
+                        questionId        = qm.Id,
+                        questionNo        = qm.Question,
+                        marks             = qm.Marks,
+                        typeId            = qm.QuestionTypeId,
+                        questionTypeId    = qm.QuestionTypeId,
+                        type              = qm.QuestionType != null ? qm.QuestionType.QuestionTypeName : "MCQ",
+                        isOptional        = !string.IsNullOrEmpty(qm.Group),
                         optionalGroupCode = qm.Group
                     })
                     .ToListAsync();
@@ -934,7 +997,9 @@ namespace API.Controllers
                 if (qm == null)
                     return NotFound(new { success = false, message = "Question not found" });
 
-                if (!string.IsNullOrWhiteSpace(questionDto.Type)) qm.Type = questionDto.Type.Trim();
+                qm.Marks = Math.Round(questionDto.Marks, 2, MidpointRounding.AwayFromZero);
+                var (resolvedTypeId, resolvedTypeName) = await ResolveQuestionTypeAsync(questionDto.TypeId ?? questionDto.QuestionTypeId, questionDto.Type);
+                qm.QuestionTypeId = resolvedTypeId;
                 qm.Group = !string.IsNullOrWhiteSpace(questionDto.OptionalGroupCode) ? questionDto.OptionalGroupCode.Trim() : null;
 
                 _context.QuestionMasters.Update(qm);
@@ -1046,15 +1111,17 @@ namespace API.Controllers
                             });
                         }
 
+                        var (importMsDefTypeId, _) = await ResolveQuestionTypeAsync(null, "MCQ");
                         var qmImportMs = questions.Select(q => new QuestionMaster
                         {
-                            BatchId = newSection.BatchId,
-                            Section = newSection.Name,
-                            Question = q.QuestionNo,
-                            Type = !string.IsNullOrWhiteSpace(q.Type) ? q.Type.Trim() : "MCQ",
-                            Group = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
-                            Status = true,
-                            CreatedAt = DateTime.UtcNow
+                            BatchId        = newSection.BatchId,
+                            Section        = newSection.Name,
+                            Question       = q.QuestionNo,
+                            Marks          = q.Marks,
+                            QuestionTypeId = q.TypeId ?? importMsDefTypeId,
+                            Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                            Status         = true,
+                            CreatedAt      = DateTime.UtcNow
                         }).ToList();
                         _context.QuestionMasters.AddRange(qmImportMs);
                         await _context.SaveChangesAsync();

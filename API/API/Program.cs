@@ -76,12 +76,16 @@ builder.Services.AddScoped<IPermissionService, PermissionService>();
 builder.Services.AddScoped<IDailyAllocationService, DailyAllocationService>();
 builder.Services.AddHostedService<DailyAllocationBackgroundService>();
 
+// Add Payload & Response Encryption Service
+builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
+
 // Add CORS with credentials support for session cookies
 builder.Services.AddCors(options => {
     options.AddDefaultPolicy(policy => {
         policy.SetIsOriginAllowed(origin => true)
               .AllowAnyMethod()
               .AllowAnyHeader()
+              .WithExposedHeaders("X-Encrypted", "Content-Disposition")
               .AllowCredentials();
     });
 });
@@ -97,7 +101,7 @@ builder.Services.AddAuthentication(options => {
 
 var app = builder.Build();
 
-// Ensure BatchId column exists in SectionMasters, Sections, ProjectPaperSections
+// Ensure BatchId column exists in SectionMasters, Sections, ProjectPaperSections, Scripts
 using (var migrationScope = app.Services.CreateScope())
 {
     try
@@ -177,6 +181,99 @@ using (var migrationScope = app.Services.CreateScope())
         }
         catch { }
 
+        // Ensure QuestionMasters Marks and QuestionTypeId exist
+        try
+        {
+            dbContext.Database.ExecuteSqlRaw("ALTER TABLE `QuestionMasters` ADD COLUMN `Marks` DECIMAL(10,2) NOT NULL DEFAULT 0.00;");
+        }
+        catch { /* Column already exists */ }
+
+        try
+        {
+            dbContext.Database.ExecuteSqlRaw("ALTER TABLE `QuestionMasters` ADD COLUMN `QuestionTypeId` INT NULL;");
+        }
+        catch { /* Column already exists */ }
+
+        try
+        {
+            dbContext.Database.ExecuteSqlRaw(@"
+                UPDATE `QuestionMasters` qm
+                INNER JOIN `questiontypes` qt ON LOWER(TRIM(qm.`Type`)) = LOWER(TRIM(qt.`Questiontype`))
+                SET qm.`QuestionTypeId` = qt.`QuestiontypeId`
+                WHERE qm.`QuestionTypeId` IS NULL;
+            ");
+        }
+        catch { }
+
+        try
+        {
+            dbContext.Database.ExecuteSqlRaw(@"
+                UPDATE `QuestionMasters`
+                SET `QuestionTypeId` = (SELECT `QuestiontypeId` FROM `questiontypes` ORDER BY `QuestiontypeId` ASC LIMIT 1)
+                WHERE `QuestionTypeId` IS NULL OR `QuestionTypeId` = 0;
+            ");
+        }
+        catch { }
+
+        try
+        {
+            dbContext.Database.ExecuteSqlRaw(@"
+                UPDATE `QuestionMasters` qm
+                INNER JOIN `SectionMasters` sm ON qm.`BatchId` = sm.`BatchId` AND LOWER(TRIM(qm.`Section`)) = LOWER(TRIM(sm.`Name`))
+                SET qm.`Marks` = ROUND(sm.`TotalMarks` / GREATEST(sm.`TotalQuestions`, 1), 2)
+                WHERE qm.`Marks` = 0 AND sm.`TotalQuestions` > 0;
+            ");
+        }
+        catch { }
+
+        try
+        {
+            dbContext.Database.ExecuteSqlRaw("ALTER TABLE `QuestionMasters` DROP FOREIGN KEY `FK_QuestionMasters_QuestionTypes_QuestionTypeId`;");
+        }
+        catch { }
+
+        try
+        {
+            dbContext.Database.ExecuteSqlRaw("ALTER TABLE `QuestionMasters` MODIFY COLUMN `QuestionTypeId` INT NOT NULL;");
+        }
+        catch { }
+
+        try
+        {
+            dbContext.Database.ExecuteSqlRaw(@"
+                ALTER TABLE `QuestionMasters`
+                ADD CONSTRAINT `FK_QuestionMasters_QuestionTypes_QuestionTypeId`
+                FOREIGN KEY (`QuestionTypeId`) REFERENCES `questiontypes` (`QuestiontypeId`)
+                ON DELETE RESTRICT;
+            ");
+        }
+        catch { }
+
+        // Remove Type column from QuestionMasters
+        try
+        {
+            dbContext.Database.ExecuteSqlRaw("ALTER TABLE `QuestionMasters` DROP COLUMN `Type`;");
+        }
+        catch { /* Column already removed or doesn't exist */ }
+
+        // Ensure Scripts table has BatchId column and backfill from ProjectPapers
+        try
+        {
+            dbContext.Database.ExecuteSqlRaw("ALTER TABLE `Scripts` ADD COLUMN `BatchId` INT NULL;");
+        }
+        catch { /* Column already exists */ }
+
+        try
+        {
+            dbContext.Database.ExecuteSqlRaw(@"
+                UPDATE `Scripts` s
+                INNER JOIN `ProjectPapers` pp ON s.`ProjectPaperId` = pp.`Id`
+                SET s.`BatchId` = pp.`BatchId`
+                WHERE (s.`BatchId` IS NULL OR s.`BatchId` = 0) AND pp.`BatchId` IS NOT NULL AND pp.`BatchId` > 0;
+            ");
+        }
+        catch { }
+
         // Seed Coordinator Full Academic Workflow
         try
         {
@@ -228,6 +325,7 @@ app.UseStaticFiles();
 // OSM static files are now served dynamically via FilesController.cs
 
 app.UseCors();
+app.UseEncryptionMiddleware();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseLoggingMiddleware();

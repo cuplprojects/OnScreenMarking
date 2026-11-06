@@ -26,8 +26,5 @@ namespace API.Models
 
         public string? InnerException { get; set; }
 
-        // Legacy column compatibility for MySQL tables
-        public string? Error { get; set; } = string.Empty;
-        public string? OccuranceSpace { get; set; } = string.Empty;
     }
 }

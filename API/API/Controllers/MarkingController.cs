@@ -434,17 +434,23 @@ namespace API.Controllers
 
                 if (marking != null && marking.QuestionMarks.Any())
                 {
+                    var qIds = marking.QuestionMarks.Select(qm => qm.QuestionId).Distinct().ToList();
+                    var qMasters = await _context.QuestionMasters
+                        .Where(qm => qIds.Contains(qm.Id))
+                        .ToDictionaryAsync(qm => qm.Id, qm => new { qm.Marks, qm.Question });
+
                     var dbDraft = new Dictionary<string, object>();
                     foreach (var qm in marking.QuestionMarks)
                     {
+                        qMasters.TryGetValue(qm.QuestionId, out var qmInfo);
                         dbDraft[qm.QuestionId.ToString()] = new
                         {
                             marksAwarded = qm.MarksAwarded,
                             isSkipped = qm.IsSkipped,
                             remarks = qm.Remarks ?? "",
                             isAttempted = qm.IsAttempted,
-                            maxMarks = qm.Question?.Marks ?? 0,
-                            questionNo = qm.Question?.QuestionNo ?? ""
+                            maxMarks = qmInfo != null ? qmInfo.Marks : (qm.Question?.Marks ?? 0),
+                            questionNo = qmInfo != null ? qmInfo.Question : (qm.Question?.QuestionNo ?? "")
                         };
                     }
                     return Ok(new { success = true, draftData = dbDraft });
@@ -684,14 +690,68 @@ namespace API.Controllers
                     }
                 }
 
-                int secBatchId = marking.Script?.ProjectPaper?.BatchId ?? 0;
+                int secBatchId = marking.Script?.BatchId ?? marking.Script?.ProjectPaper?.BatchId ?? 0;
+                if (secBatchId <= 0 && marking.Script?.ProjectPaper?.PaperId != null)
+                {
+                    secBatchId = await _context.ProjectPapers
+                        .Where(pp => pp.PaperId == marking.Script.ProjectPaper.PaperId && pp.BatchId != null && pp.BatchId > 0)
+                        .Select(pp => pp.BatchId!.Value)
+                        .FirstOrDefaultAsync();
+                }
+
                 var sectionMasters = secBatchId > 0
                     ? await _context.SectionMasters.Where(sm => sm.BatchId == secBatchId).OrderBy(sm => sm.Id).ToListAsync()
                     : new List<SectionMaster>();
 
                 var questionMasters = secBatchId > 0
-                    ? await _context.QuestionMasters.Where(qm => qm.BatchId == secBatchId).OrderBy(qm => qm.Id).ToListAsync()
+                    ? await _context.QuestionMasters
+                        .Include(qm => qm.QuestionType)
+                        .Where(qm => qm.BatchId == secBatchId)
+                        .OrderBy(qm => qm.Id)
+                        .ToListAsync()
                     : new List<QuestionMaster>();
+
+                // Fallback: If sectionMasters is empty but questionMasters exist, synthesize sections dynamically
+                if (sectionMasters.Count == 0 && questionMasters.Count > 0)
+                {
+                    var groupedBySection = questionMasters
+                        .GroupBy(qm => string.IsNullOrWhiteSpace(qm.Section) ? "Section A" : qm.Section)
+                        .ToList();
+
+                    int syntheticId = 1;
+                    foreach (var group in groupedBySection)
+                    {
+                        var groupList = group.ToList();
+                        var firstQ = groupList.First().Question;
+                        var lastQ = groupList.Last().Question;
+                        var sumMarks = groupList.Sum(q => q.Marks);
+                        int startQ = int.TryParse(firstQ, out int sq) ? sq : 1;
+                        int endQ = int.TryParse(lastQ, out int eq) ? eq : (startQ + groupList.Count - 1);
+
+                        sectionMasters.Add(new SectionMaster
+                        {
+                            Id = syntheticId++,
+                            BatchId = secBatchId,
+                            Name = group.Key,
+                            Description = group.Key,
+                            TotalQuestions = groupList.Count,
+                            TotalMarks = sumMarks,
+                            StartQuestion = startQ,
+                            EndQuestion = endQ,
+                            MaxQuestionsToAttempt = groupList.Count
+                        });
+                    }
+                }
+
+                decimal paperMaxMarks = marking.Script?.ProjectPaper?.Paper?.MaxMarks ?? 0;
+                if (paperMaxMarks <= 0 && questionMasters.Any(q => q.Marks > 0))
+                {
+                    paperMaxMarks = questionMasters.Sum(q => q.Marks);
+                }
+                if (paperMaxMarks <= 0)
+                {
+                    paperMaxMarks = 100;
+                }
 
                 var sections = sectionMasters.Select(sm => new
                 {
@@ -709,8 +769,10 @@ namespace API.Controllers
                         {
                             questionId = q.Id,
                             questionNo = q.Question,
-                            marks = (decimal?)null,
-                            type = q.Type,
+                            marks = q.Marks > 0 ? q.Marks : (decimal?)null,
+                            type = q.QuestionType != null ? q.QuestionType.QuestionTypeName : "MCQ",
+                            typeId = q.QuestionTypeId,
+                            questionTypeId = q.QuestionTypeId,
                             isOptional = !string.IsNullOrEmpty(q.Group),
                             optionalGroupCode = q.Group,
                             sectionId = sm.Id,
@@ -748,6 +810,8 @@ namespace API.Controllers
                         projectPaperId = marking.Script.ProjectPaperId,
                         cleanPdfUrl = marking.Script.CleanPdfUrl,
                         status = marking.Script.Status,
+                        batchId = secBatchId > 0 ? secBatchId : (marking.Script.BatchId ?? marking.Script.ProjectPaper?.BatchId),
+                        maxMarks = paperMaxMarks
                     },
                     sections = sections
                 });
@@ -815,6 +879,14 @@ namespace API.Controllers
                         return BadRequest(new { 
                             success = false, 
                             message = $"Marks awarded for Question {q.Question} ({qm.MarksAwarded}) cannot be negative" 
+                        });
+                    }
+
+                    if (q.Marks > 0 && qm.MarksAwarded > q.Marks)
+                    {
+                        return BadRequest(new { 
+                            success = false, 
+                            message = $"Marks awarded for Question {q.Question} ({qm.MarksAwarded}) cannot exceed maximum question marks ({q.Marks})" 
                         });
                     }
                 }
@@ -972,19 +1044,25 @@ namespace API.Controllers
                     }
                 }
 
-                var questionMarks = await _context.QuestionMarks
+                var rawList = await _context.QuestionMarks
                     .Where(qm => qm.MarkingId == markingId)
                     .Include(qm => qm.Question)
-                    .Select(qm => new QuestionMarkDto
-                    {
-                        QuestionId = qm.QuestionId,
-                        QuestionNo = qm.Question.QuestionNo,
-                        MarksAwarded = Math.Round(qm.MarksAwarded, 2, MidpointRounding.AwayFromZero),
-                        IsSkipped = qm.IsSkipped,
-                        Remarks = qm.Remarks,
-                        IsAttempted = qm.IsAttempted
-                    })
                     .ToListAsync();
+
+                var qIds = rawList.Select(x => x.QuestionId).Distinct().ToList();
+                var qMasters = await _context.QuestionMasters
+                    .Where(qm => qIds.Contains(qm.Id))
+                    .ToDictionaryAsync(qm => qm.Id, qm => qm.Question);
+
+                var questionMarks = rawList.Select(qm => new QuestionMarkDto
+                {
+                    QuestionId = qm.QuestionId,
+                    QuestionNo = qMasters.TryGetValue(qm.QuestionId, out var qmNo) ? qmNo : (qm.Question?.QuestionNo ?? ""),
+                    MarksAwarded = Math.Round(qm.MarksAwarded, 2, MidpointRounding.AwayFromZero),
+                    IsSkipped = qm.IsSkipped,
+                    Remarks = qm.Remarks,
+                    IsAttempted = qm.IsAttempted
+                }).ToList();
 
                 return Ok(questionMarks);
             }

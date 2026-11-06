@@ -40,8 +40,6 @@ namespace API.Services
                     UserId = userId,
                     Message = message ?? string.Empty,
                     IpAddress = ipAddress ?? string.Empty,
-                    Event = message ?? method ?? string.Empty,
-                    Category = method ?? string.Empty
                 };
 
                 _context.EventLogs.Add(eventLog);
@@ -66,9 +64,7 @@ namespace API.Services
                     StatusCode = statusCode,
                     Message = message ?? string.Empty,
                     StackTrace = stackTrace ?? string.Empty,
-                    InnerException = innerException,
-                    Error = message ?? string.Empty,
-                    OccuranceSpace = path ?? string.Empty
+                    InnerException = innerException
                 };
 
                 _context.ErrorLogs.Add(errorLog);

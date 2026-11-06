@@ -474,7 +474,6 @@ export default function ProjectDashboard() {
                     </span>
                   )}
                 </h3>
-                <p className="text-[10px] text-gray-500">Section configurations, paper code, max marks, and map progress</p>
               </div>
 
               <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5">

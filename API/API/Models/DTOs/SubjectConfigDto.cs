@@ -64,6 +64,7 @@ namespace API.Models.DTOs
         public string QuestionNo { get; set; }
         public decimal Marks { get; set; }
         public int? TypeId { get; set; }
+        public int? QuestionTypeId { get; set; }
         public string Type { get; set; } = "MCQ";
         public bool IsOptional { get; set; }
         public string? OptionalGroupCode { get; set; }
