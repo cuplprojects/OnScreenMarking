@@ -620,7 +620,7 @@ export default function ProjectDashboard() {
                             <td className="px-3 py-2.5 text-gray-600 font-medium">
                               <span className="line-clamp-1">{paper.subjectName}</span>
                             </td>
-                            <td className="px-2 py-2.5 text-center text-gray-600 font-mono text-[11px]">{paper.catchNo || 'N/A'}</td>
+                            <td className="px-2 py-2.5 text-center text-gray-600 font-mono text-[11px]">{paper.catchNo}</td>
                             <td className="px-2 py-2.5 text-center text-gray-900">{paper.totalScripts}</td>
                             <td className="px-2 py-2.5 text-center text-amber-600">{paper.pendingScripts}</td>
                             <td className="px-2 py-2.5 text-center text-teal-700">{paper.allocatedScripts}</td>

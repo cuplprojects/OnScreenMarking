@@ -350,7 +350,7 @@ export default function SubjectManagement() {
                             ? 'bg-teal-100/70 border-teal-200 text-teal-800' 
                             : 'bg-gray-100 border-gray-200 text-gray-700'
                         }`}>
-                          {subject.subCode || 'N/A'}
+                          {subject.subCode}
                         </span>
                       </td>
                       <td className="py-2.5 max-w-xs md:px-6 px-4">

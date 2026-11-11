@@ -1,5 +1,6 @@
 // Centralized API configuration
 const API_URL = import.meta.env.VITE_API_URL;
+const ENABLE_ENCRYPTION = import.meta.env.VITE_ENABLE_ENCRYPTION;
 import message from './messageService';
 import { encryptPayload, decryptResponseData } from '../utils/payloadEncryption';
 
@@ -28,7 +29,7 @@ const handleResponse = async (response, options = {}) => {
     let errorMessage = `HTTP error! status: ${response.status}`;
     try {
       let errorObj = await response.json();
-      if (response.headers.get('X-Encrypted') === 'true' || errorObj?.encryptedData) {
+      if (ENABLE_ENCRYPTION && (response.headers.get('X-Encrypted') === 'true' || errorObj?.encryptedData)) {
         errorObj = await decryptResponseData(errorObj);
       }
       errorMessage = errorObj?.message || errorMessage;
@@ -51,7 +52,7 @@ const handleResponse = async (response, options = {}) => {
   }
 
   let data = await response.json();
-  if (response.headers.get('X-Encrypted') === 'true' || data?.encryptedData) {
+  if (ENABLE_ENCRYPTION && (response.headers.get('X-Encrypted') === 'true' || data?.encryptedData)) {
     data = await decryptResponseData(data);
   }
   
@@ -73,18 +74,11 @@ const apiCall = async (endpoint, options = {}) => {
   let body = options.body;
   const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
 
-  if (body !== undefined && body !== null && !isFormData && !options.skipEncryption) {
-    try {
-      const encrypted = await encryptPayload(body);
-      body = JSON.stringify(encrypted);
-      headers['X-Encrypted'] = 'true';
-      headers['Content-Type'] = 'application/json';
-    } catch (encErr) {
-      console.warn('Payload encryption failed, falling back to plaintext:', encErr);
-      if (typeof body === 'object') {
-        body = JSON.stringify(body);
-      }
-    }
+  if (ENABLE_ENCRYPTION && body !== undefined && body !== null && !isFormData && !options.skipEncryption) {
+    const encrypted = await encryptPayload(body);
+    body = JSON.stringify(encrypted);
+    headers['X-Encrypted'] = 'true';
+    headers['Content-Type'] = 'application/json';
   } else if (body && typeof body === 'object' && !isFormData) {
     body = JSON.stringify(body);
   } else if (isFormData) {

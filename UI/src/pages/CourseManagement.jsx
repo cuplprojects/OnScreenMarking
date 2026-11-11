@@ -288,7 +288,7 @@ export default function CourseManagement() {
                       </td>
                       <td className="py-2.5 md:px-6 px-4">
                         <span className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-md font-bold text-[10px] uppercase tracking-wide">
-                          {course.department?.name || 'Unassigned'}
+                          {course.department.name}
                         </span>
                       </td>
                       <td className="py-2.5 md:px-6 px-4">
@@ -299,7 +299,7 @@ export default function CourseManagement() {
                               ? 'bg-amber-50 text-amber-600 border border-amber-100'
                               : 'bg-teal-50 text-teal-700 border border-teal-100'
                         }`}>
-                          {course.type || 'UG'}
+                          {course.type}
                         </span>
                       </td>
                       <td className="py-2.5 max-w-xs md:px-6 px-4">

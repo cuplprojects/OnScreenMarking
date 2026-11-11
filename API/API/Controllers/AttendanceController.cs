@@ -52,8 +52,8 @@ namespace API.Controllers
                 {
                     AttendanceId = a.AttendanceId,
                     ExaminerId = a.ExaminerId,
-                    ExaminerName = a.Examiner?.Name ?? "Unknown",
-                    ExaminerEmail = a.Examiner?.Email ?? "Unknown",
+                    ExaminerName = a.Examiner.Name,
+                    ExaminerEmail = a.Examiner.Email,
                     Date = a.Date,
                     Status = a.Status,
                     Remarks = a.Remarks,

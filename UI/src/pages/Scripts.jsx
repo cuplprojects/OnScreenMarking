@@ -200,10 +200,10 @@ const Scripts = () => {
                 {scripts.map((script) => (
                   <tr key={script.id} className="hover:bg-gray-50/50 transition-colors group">
                     <td className="px-5 py-3 font-bold text-xs text-gray-900">
-                      {script.generatedBarcode || `SCR-${script.id}`}
+                      {script.generatedBarcode}
                     </td>
                     <td className="px-5 py-3 text-xs text-gray-600 font-medium">
-                      {script.subjectName || 'General Subject'}
+                      {script.subjectName}
                     </td>
                     <td className="px-5 py-3 text-xs text-gray-800 font-semibold">
                       {script.paperName}

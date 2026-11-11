@@ -695,7 +695,7 @@ export default function Attendance({ isTab = false }) {
                         }) : '-'}
                       </td>
                       <td className="py-2.5 font-medium text-gray-800 md:px-6 px-4">
-                        {log?.examinerName || 'Unknown'}
+                        {log?.examinerName}
                       </td>
                       <td className="py-2.5 text-gray-600 md:px-6 px-4">
                         {log?.examinerEmail || '-'}
@@ -708,7 +708,7 @@ export default function Attendance({ isTab = false }) {
                             ? 'bg-red-100 text-red-700 border border-red-200'
                             : 'bg-amber-100 text-amber-700 border border-amber-200'
                         }`}>
-                          {log?.status || 'Unknown'}
+                          {log?.status}
                         </span>
                       </td>
                       <td className="py-2.5 text-gray-500 max-w-xs truncate md:px-6 px-4">

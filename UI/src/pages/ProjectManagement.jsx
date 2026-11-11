@@ -255,7 +255,7 @@ export default function ProjectManagement() {
                     </td>
                     <td className="py-2.5 md:px-6 px-4">
                       <span className="px-2.5 py-1 bg-gray-100 border border-gray-200 text-gray-700 rounded-md font-bold text-[10px] tracking-wide">
-                        {project.session?.sessionName || 'N/A'}
+                        {project.session.sessionName}
                       </span>
                     </td>
                     <td className="py-2.5 text-center md:px-6 px-4">

@@ -49,13 +49,13 @@ namespace API.Controllers
                     {
                         ScriptId = s.Id,
                         RollNumber = s.RollNumber,
-                        PaperName = s.ProjectPaper?.Paper?.PaperName ?? "N/A",
-                        PaperCode = s.ProjectPaper?.Paper?.PaperCode ?? "N/A",
-                        SubjectName = subjectPaper?.Subject?.SubName ?? "N/A",
-                        TotalMarks = s.TotalMarks ?? 0,
-                        Percentage = s.Percentage ?? 0,
+                        PaperName = s.ProjectPaper.Paper.PaperName,
+                        PaperCode = s.ProjectPaper.Paper.PaperCode,
+                        SubjectName = subjectPaper.Subject.SubName,
+                        TotalMarks = s.TotalMarks,
+                        Percentage = s.Percentage,
                         IsReEvaluationRequested = s.IsReEvaluationRequested ?? false,
-                        EvaluatedPdfUrl = submittedMarking?.EvaluatedPdfUrl ?? "",
+                        EvaluatedPdfUrl = submittedMarking.EvaluatedPdfUrl,
                         SubmittedAt = s.SubmittedAt
                     };
                 }).ToList();

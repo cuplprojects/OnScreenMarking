@@ -395,7 +395,7 @@ export default function SubjectPaperRequests() {
                         </div>
                         <div>
                           <div className="font-extrabold text-gray-900 leading-tight">
-                            {r.examinerName || 'Unknown Examiner'}
+                            {r.examinerName}
                           </div>
                           <div className="text-[11px] text-gray-400 flex items-center gap-1.5 mt-0.5">
                             <span>{r.examinerEmail}</span>
@@ -414,11 +414,11 @@ export default function SubjectPaperRequests() {
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-1.5">
                           <span className="font-mono font-bold bg-teal-50 text-teal-800 px-2 py-0.5 rounded text-[11px] border border-teal-100">
-                            {r.paperCode || `Paper #${r.paperId}`}
+                            {r.paperCode}
                           </span>
                         </div>
                         <div className="font-medium text-gray-700 text-xs line-clamp-1">
-                          {r.paperName || 'Untitled Paper'}
+                          {r.paperName}
                         </div>
                         {r.universityName && (
                           <div className="text-[10px] text-gray-400 flex items-center gap-1">
@@ -584,7 +584,7 @@ export default function SubjectPaperRequests() {
                 <div className="flex items-center justify-between">
                   <span className="text-gray-500 font-medium">Examiner:</span>
                   <span className="font-extrabold text-gray-900">
-                    {allocateModalRequest.examinerName || 'Examiner'}
+                    {allocateModalRequest.examinerName}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">

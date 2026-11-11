@@ -400,9 +400,9 @@ namespace API.Controllers
                 {
                     Email = invitation.Email,
                     UniversityId = invitation.UniversityId,
-                    UniversityName = invitation.University?.UniversityName ?? "Unknown University",
+                    UniversityName = invitation.University.UniversityName,
                     DepartmentId = invitation.DepartmentId,
-                    DepartmentName = invitation.Department?.Name ?? "General",
+                    DepartmentName = invitation.Department.Name,
                     UserType = invitation.UserType
                 });
             }
