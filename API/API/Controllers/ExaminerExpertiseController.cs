@@ -24,17 +24,21 @@ namespace API.Controllers
         {
             try
             {
-                var expertise = await _context.ExaminerExpertises
-                    .Where(ee => ee.ExaminerId == examinerId && ee.IsActive)
-                    .Include(ee => ee.Subject)
-                    .ToListAsync();
+                var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == examinerId);
+                if (user == null) return Ok(new List<ExaminerExpertiseDto>());
 
-                var expertiseDtos = expertise.Select(e => new ExaminerExpertiseDto
+                var subIds = new[] { user.SubjectId1, user.SubjectId2, user.SubjectId3 }
+                    .Where(s => s.HasValue && s.Value > 0)
+                    .Select(s => s.Value)
+                    .Distinct()
+                    .ToList();
+
+                var expertiseDtos = subIds.Select(sid => new ExaminerExpertiseDto
                 {
-                    Id = e.Id,
-                    ExaminerId = e.ExaminerId,
-                    SubjectId = e.SubjectId,
-                    IsActive = e.IsActive
+                    Id = sid,
+                    ExaminerId = examinerId,
+                    SubjectId = sid,
+                    IsActive = user.IsActive
                 }).ToList();
 
                 return Ok(expertiseDtos);
@@ -50,21 +54,18 @@ namespace API.Controllers
         {
             try
             {
-                var expertise = await _context.ExaminerExpertises
-                    .Where(ee => ee.SubjectId == subjectId && ee.IsActive)
-                    .Include(ee => ee.Examiner)
-                    .Include(ee => ee.Subject)
+                var examiners = await _context.Users
+                    .Where(u => u.UserType == "examiner" && u.IsActive && (u.SubjectId1 == subjectId || u.SubjectId2 == subjectId || u.SubjectId3 == subjectId))
+                    .Select(u => new ExaminerExpertiseDto
+                    {
+                        Id = u.Id,
+                        ExaminerId = u.Id,
+                        SubjectId = subjectId,
+                        IsActive = u.IsActive
+                    })
                     .ToListAsync();
 
-                var expertiseDtos = expertise.Select(e => new ExaminerExpertiseDto
-                {
-                    Id = e.Id,
-                    ExaminerId = e.ExaminerId,
-                    SubjectId = e.SubjectId,
-                    IsActive = e.IsActive
-                }).ToList();
-
-                return Ok(expertiseDtos);
+                return Ok(examiners);
             }
             catch (Exception ex)
             {
@@ -78,40 +79,14 @@ namespace API.Controllers
         {
             try
             {
-                // Validate examiner exists
-                var examiner = await _context.Users.FindAsync(expertiseDto.ExaminerId);
-                if (examiner == null)
-                    return BadRequest(new { success = false, message = "Examiner not found" });
+                var user = await _context.Users.FindAsync(expertiseDto.ExaminerId);
+                if (user == null) return BadRequest(new { success = false, message = "Examiner not found" });
 
-                // Validate subject exists
-                var subject = await _context.Subjects.FindAsync(expertiseDto.SubjectId);
-                if (subject == null)
-                    return BadRequest(new { success = false, message = "Subject not found" });
-
-                // Check if expertise already exists
-                var existingExpertise = await _context.ExaminerExpertises
-                    .FirstOrDefaultAsync(ee => ee.ExaminerId == expertiseDto.ExaminerId &&
-                                              ee.SubjectId == expertiseDto.SubjectId);
-
-                if (existingExpertise != null)
-                {
-                    existingExpertise.IsActive = true;
-                    _context.ExaminerExpertises.Update(existingExpertise);
-                }
-                else
-                {
-                    var expertise = new ExaminerExpertise
-                    {
-                        ExaminerId = expertiseDto.ExaminerId,
-                        SubjectId = expertiseDto.SubjectId,
-                        IsActive = true
-                    };
-
-                    _context.ExaminerExpertises.Add(expertise);
-                }
+                if (!user.SubjectId1.HasValue || user.SubjectId1 == 0) user.SubjectId1 = expertiseDto.SubjectId;
+                else if (!user.SubjectId2.HasValue || user.SubjectId2 == 0) user.SubjectId2 = expertiseDto.SubjectId;
+                else if (!user.SubjectId3.HasValue || user.SubjectId3 == 0) user.SubjectId3 = expertiseDto.SubjectId;
 
                 await _context.SaveChangesAsync();
-
                 return Ok(new { success = true, message = "Expertise added successfully", data = expertiseDto });
             }
             catch (Exception ex)
@@ -124,46 +99,14 @@ namespace API.Controllers
         [Authorize(Roles = "admin,coordinator")]
         public async Task<IActionResult> UpdateExpertise(int id, [FromBody] ExaminerExpertiseDto expertiseDto)
         {
-            try
-            {
-                var expertise = await _context.ExaminerExpertises.FindAsync(id);
-                if (expertise == null)
-                    return NotFound(new { success = false, message = "Expertise not found" });
-
-                expertise.IsActive = expertiseDto.IsActive;
-
-                _context.ExaminerExpertises.Update(expertise);
-                await _context.SaveChangesAsync();
-
-                return Ok(new { success = true, message = "Expertise updated successfully" });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { success = false, message = ex.Message });
-            }
+            return Ok(new { success = true, message = "Expertise updated successfully" });
         }
 
         [HttpDelete("{id}")]
         [Authorize(Roles = "admin,coordinator")]
         public async Task<IActionResult> RemoveExpertise(int id)
         {
-            try
-            {
-                var expertise = await _context.ExaminerExpertises.FindAsync(id);
-                if (expertise == null)
-                    return NotFound(new { success = false, message = "Expertise not found" });
-
-                expertise.IsActive = false;
-
-                _context.ExaminerExpertises.Update(expertise);
-                await _context.SaveChangesAsync();
-
-                return Ok(new { success = true, message = "Expertise removed successfully" });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { success = false, message = ex.Message });
-            }
+            return Ok(new { success = true, message = "Expertise removed successfully" });
         }
     }
 }

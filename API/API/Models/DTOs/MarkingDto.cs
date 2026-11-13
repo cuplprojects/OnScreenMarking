@@ -36,11 +36,23 @@ namespace API.Models.DTOs
 
     public class QuestionMarkDto
     {
-        public int QuestionId { get; set; }
-        public string QuestionNo { get; set; }
+        public int? QuestionMasterId { get; set; }
+        private int _questionId;
+        public int QuestionId
+        {
+            get => QuestionMasterId.HasValue && QuestionMasterId.Value > 0 ? QuestionMasterId.Value : _questionId;
+            set
+            {
+                _questionId = value;
+                if (!QuestionMasterId.HasValue || QuestionMasterId.Value == 0)
+                    QuestionMasterId = value;
+            }
+        }
+        public int? ScriptId { get; set; }
+        public string QuestionNo { get; set; } = string.Empty;
         public decimal MarksAwarded { get; set; }
         public bool IsSkipped { get; set; }
-        public string Remarks { get; set; }
+        public string Remarks { get; set; } = string.Empty;
         public bool IsAttempted { get; set; }
     }
 

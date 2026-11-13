@@ -317,8 +317,24 @@ namespace API.Controllers
                         .ThenInclude(sp => sp.Paper)
                     .Include(s => s.CourseSubjects)
                         .ThenInclude(cs => cs.Course)
-                    .Include(s => s.ExaminerExpertises)
                     .FirstOrDefaultAsync(s => s.SubjectId == id);
+
+                if (subject != null)
+                {
+                    // Load examiners mapped via Users.SubjectId1
+                    var examinerUsers = await _context.Users
+                        .Where(u => u.UserType == "examiner" && (u.SubjectId1 == id || u.SubjectId2 == id || u.SubjectId3 == id))
+                        .ToListAsync();
+
+                    subject.ExaminerExpertises = examinerUsers.Select(u => new ExaminerExpertise
+                    {
+                        Id = u.Id,
+                        ExaminerId = u.Id,
+                        SubjectId = id,
+                        IsActive = u.IsActive,
+                        Examiner = u
+                    }).ToList();
+                }
 
                 if (subject == null)
                 {
@@ -528,13 +544,28 @@ namespace API.Controllers
         }
 
         [HttpGet("{id}/examiners")]
-        public async Task<ActionResult<IEnumerable<ExaminerExpertise>>> GetSubjectExaminers(int id)
+        public async Task<ActionResult<IEnumerable<object>>> GetSubjectExaminers(int id)
         {
             try
             {
-                var examiners = await _context.ExaminerExpertises
-                    .Where(ee => ee.SubjectId == id && ee.IsActive)
-                    .Include(ee => ee.Examiner)
+                var examiners = await _context.Users
+                    .Where(u => u.UserType == "examiner" && u.IsActive && (u.SubjectId1 == id || u.SubjectId2 == id || u.SubjectId3 == id))
+                    .Select(u => new
+                    {
+                        id = u.Id,
+                        examinerId = u.Id,
+                        subjectId = id,
+                        isActive = u.IsActive,
+                        examiner = new
+                        {
+                            id = u.Id,
+                            name = u.Name,
+                            email = u.Email,
+                            phone = u.Phone,
+                            userType = u.UserType,
+                            isActive = u.IsActive
+                        }
+                    })
                     .ToListAsync();
 
                 return Ok(examiners);

@@ -4660,41 +4660,106 @@ export default function PapersManagement({ isTab = false }) {
                               </div>
                             </div>
 
-                            {/* Preview Section Config Inside This Batch */}
+                            {/* Preview Section & Questions Config Inside This Batch */}
                             {isPreviewOpen && (
-                              <div className="border-t border-teal-100 p-3.5 bg-teal-50/40 rounded-b-xl space-y-2 animate-in fade-in duration-150">
+                              <div className="border-t border-teal-100 p-3.5 bg-teal-50/40 rounded-b-xl space-y-3 animate-in fade-in duration-150">
                                 <div className="text-[10px] font-extrabold uppercase tracking-wider text-teal-900 flex items-center justify-between">
-                                  <span>Section Config Preview for Batch #{bId}:</span>
-                                  <span className="text-teal-700 normal-case">{bSections.length} Sections Configured</span>
+                                  <span>Section & Questions Preview for Batch #{bId}:</span>
+                                  <span className="text-teal-700 normal-case">{bSections.length} Sections • {bTotalQ} Questions</span>
                                 </div>
-                                <div className="grid grid-cols-1 gap-2">
-                                  {bSections.map(sec => (
-                                    <div
-                                      key={sec.id}
-                                      className="p-2.5 bg-white rounded-lg border border-teal-100 flex items-center justify-between text-xs shadow-2xs"
-                                    >
-                                      <div>
-                                        <span className="font-extrabold text-gray-900">{sec.name}</span>
-                                        <span className="text-[11px] text-gray-500 ml-2 font-medium">
-                                          Q{sec.startQuestion} - Q{sec.endQuestion}
-                                        </span>
-                                        {sec.description && (
-                                          <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{sec.description}</p>
-                                        )}
+                                <div className="grid grid-cols-1 gap-2.5">
+                                  {bSections.map(sec => {
+                                    const questionsList = (sec.questions && sec.questions.length > 0)
+                                      ? sec.questions
+                                      : Array.from({ length: sec.totalQuestions || (sec.endQuestion - sec.startQuestion + 1) || 1 }, (_, i) => {
+                                          const qNum = (sec.startQuestion || 1) + i;
+                                          return {
+                                            questionNo: String(qNum),
+                                            type: 'MCQ',
+                                            marks: ((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1),
+                                            isOptional: false,
+                                            optionalGroupCode: null
+                                          };
+                                        });
+
+                                    return (
+                                      <div
+                                        key={sec.id}
+                                        className="p-3 bg-white rounded-xl border border-teal-100 space-y-2.5 shadow-2xs"
+                                      >
+                                        <div className="flex items-center justify-between text-xs flex-wrap gap-2">
+                                          <div>
+                                            <span className="font-extrabold text-gray-900">{sec.name}</span>
+                                            <span className="text-[11px] text-gray-500 ml-2 font-medium">
+                                              Q{sec.startQuestion} - Q{sec.endQuestion}
+                                            </span>
+                                            {sec.description && (
+                                              <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{sec.description}</p>
+                                            )}
+                                          </div>
+                                          <div className="flex items-center gap-1.5 shrink-0">
+                                            <span className="px-2 py-0.5 bg-gray-100 rounded text-gray-700 text-[10px] font-bold">
+                                              {sec.totalQuestions} Questions
+                                            </span>
+                                            <span className="px-2 py-0.5 bg-teal-50 text-teal-800 border border-teal-200/60 rounded text-[10px] font-extrabold">
+                                              {sec.totalMarks} Marks
+                                            </span>
+                                            <span className="text-gray-500 text-[10px] font-semibold">
+                                              Attempt {sec.maxQuestionsToAttempt || sec.totalQuestions}
+                                            </span>
+                                          </div>
+                                        </div>
+
+                                        {/* Questions Details Table */}
+                                        <div className="pt-2 border-t border-gray-100">
+                                          <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1.5 flex items-center justify-between">
+                                            <span>Questions Details ({questionsList.length}):</span>
+                                            <span className="text-teal-700 font-extrabold lowercase">
+                                              ~{((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1)} marks each
+                                            </span>
+                                          </div>
+                                          <div className="overflow-x-auto rounded-lg border border-gray-100 max-h-48 overflow-y-auto custom-scrollbar">
+                                            <table className="w-full text-left border-collapse text-[11px]">
+                                              <thead>
+                                                <tr className="bg-gray-50 text-[10px] font-bold uppercase tracking-wider text-gray-500 border-b border-gray-100 sticky top-0 z-10">
+                                                  <th className="py-1.5 px-2.5">Q#</th>
+                                                  <th className="py-1.5 px-2.5">Type</th>
+                                                  <th className="py-1.5 px-2.5">Marks</th>
+                                                  <th className="py-1.5 px-2.5">Choice / Group</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody className="divide-y divide-gray-100 bg-white">
+                                                {questionsList.map((q, qIdx) => (
+                                                  <tr key={q.id || q.questionId || qIdx} className="hover:bg-teal-50/20">
+                                                    <td className="py-1 px-2.5 font-bold text-gray-900">
+                                                      {q.questionNo ? (String(q.questionNo).startsWith('Q') ? q.questionNo : `Q${q.questionNo}`) : `Q${(sec.startQuestion || 1) + qIdx}`}
+                                                    </td>
+                                                    <td className="py-1 px-2.5">
+                                                      <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-[10px] font-semibold">
+                                                        {q.type || 'MCQ'}
+                                                      </span>
+                                                    </td>
+                                                    <td className="py-1 px-2.5 font-extrabold text-teal-800">
+                                                      {q.marks !== undefined && q.marks !== null ? q.marks : ((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1)}
+                                                    </td>
+                                                    <td className="py-1 px-2.5">
+                                                      {q.isOptional || q.optionalGroupCode ? (
+                                                        <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
+                                                          {q.optionalGroupCode ? `Group: ${q.optionalGroupCode}` : 'Optional'}
+                                                        </span>
+                                                      ) : (
+                                                        <span className="text-gray-400 text-[10px]">Compulsory</span>
+                                                      )}
+                                                    </td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        </div>
                                       </div>
-                                      <div className="flex items-center gap-2 shrink-0">
-                                        <span className="px-2 py-0.5 bg-gray-100 rounded text-gray-700 text-[10px] font-bold">
-                                          {sec.totalQuestions} Questions
-                                        </span>
-                                        <span className="px-2 py-0.5 bg-teal-50 text-teal-800 border border-teal-200/60 rounded text-[10px] font-extrabold">
-                                          {sec.totalMarks} Marks
-                                        </span>
-                                        <span className="text-gray-500 text-[10px] font-semibold">
-                                          Attempt {sec.maxQuestionsToAttempt || sec.totalQuestions}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
                               </div>
                             )}

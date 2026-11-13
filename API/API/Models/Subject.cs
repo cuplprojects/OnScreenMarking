@@ -22,6 +22,7 @@ namespace API.Models
         public ICollection<SubjectPaper> SubjectPapers { get; set; }
             = new List<SubjectPaper>();
         // Navigation properties
+        [NotMapped]
         public ICollection<ExaminerExpertise> ExaminerExpertises { get; set; } = new List<ExaminerExpertise>();
         public ICollection<CourseSubject> CourseSubjects { get; set; } = new List<CourseSubject>();
     }

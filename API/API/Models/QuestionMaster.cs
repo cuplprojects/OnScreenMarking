@@ -29,7 +29,13 @@ namespace API.Models
         public string Question { get; set; } = string.Empty;
 
         /// <summary>
-        /// Question-wise marks allocated for this question
+        /// Reference to QuestionType in questiontypes table (computed in code from Type / questiontypes, not in DB)
+        /// </summary>
+        [NotMapped]
+        public int? QuestionTypeId { get; set; }
+
+        /// <summary>
+        /// Type of the question (e.g. "MCQ", "Short Answer", "Descriptive")
         /// </summary>
         [Column(TypeName = "decimal(10,2)")]
         public decimal Marks { get; set; } = 0;

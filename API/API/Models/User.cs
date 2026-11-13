@@ -39,6 +39,7 @@ namespace API.Models
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         
         // Navigation properties
+        [NotMapped]
         public ICollection<ExaminerExpertise> Expertise { get; set; } = new List<ExaminerExpertise>();
         public ICollection<Allocation> Allocations { get; set; } = new List<Allocation>();
         public ICollection<Marking> Markings { get; set; } = new List<Marking>();

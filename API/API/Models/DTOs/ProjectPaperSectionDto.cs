@@ -38,6 +38,10 @@ namespace API.Models.DTOs
 
     public class UpdateProjectPaperSectionDto
     {
+        public int? ProjectPaperId { get; set; }
+        public int? ProjectId { get; set; }
+        public int? PaperId { get; set; }
+        public bool ForkNewBatch { get; set; } = false;
         public int BatchId { get; set; } = 0;
         public string Name { get; set; }
         public string? Description { get; set; }

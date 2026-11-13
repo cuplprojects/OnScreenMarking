@@ -333,7 +333,12 @@ namespace API.Controllers
                         {
                             foreach (var item in request.DraftData.EnumerateArray())
                             {
-                                int qId = item.TryGetProperty("questionId", out var qp) && qp.ValueKind == JsonValueKind.Number ? qp.GetInt32() : 0;
+                                int qId = 0;
+                                if (item.TryGetProperty("questionMasterId", out var qmp) && qmp.ValueKind == JsonValueKind.Number)
+                                    qId = qmp.GetInt32();
+                                else if (item.TryGetProperty("questionId", out var qp) && qp.ValueKind == JsonValueKind.Number)
+                                    qId = qp.GetInt32();
+
                                 if (qId > 0)
                                 {
                                     decimal marksAwarded = item.TryGetProperty("marksAwarded", out var mp) && mp.ValueKind == JsonValueKind.Number ? Math.Round(mp.GetDecimal(), 2, MidpointRounding.AwayFromZero) : 0;
@@ -348,13 +353,17 @@ namespace API.Controllers
 
                         if (parsedQuestionMarks.Any())
                         {
-                            var existingMap = marking.QuestionMarks.ToDictionary(qm => qm.QuestionId);
+                            var existingMap = marking.QuestionMarks
+                                .GroupBy(qm => qm.QuestionMasterId)
+                                .ToDictionary(g => g.Key, g => g.First());
                             decimal totalMarks = 0;
 
                             foreach (var qm in parsedQuestionMarks)
                             {
                                 if (existingMap.TryGetValue(qm.QuestionId, out var existingQm))
                                 {
+                                    existingQm.ScriptId = scriptId;
+                                    existingQm.QuestionMasterId = qm.QuestionId;
                                     existingQm.MarksAwarded = Math.Round(qm.MarksAwarded, 2, MidpointRounding.AwayFromZero);
                                     existingQm.IsSkipped = qm.IsSkipped;
                                     existingQm.Remarks = qm.Remarks ?? "";
@@ -366,7 +375,8 @@ namespace API.Controllers
                                     var newQm = new QuestionMark
                                     {
                                         MarkingId = marking.Id,
-                                        QuestionId = qm.QuestionId,
+                                        ScriptId = scriptId,
+                                        QuestionMasterId = qm.QuestionId,
                                         MarksAwarded = Math.Round(qm.MarksAwarded, 2, MidpointRounding.AwayFromZero),
                                         IsSkipped = qm.IsSkipped,
                                         Remarks = qm.Remarks ?? "",
@@ -429,6 +439,7 @@ namespace API.Controllers
                 // 2. Fallback to Database QuestionMarks if cache is empty or unavailable
                 var marking = await _context.Markings
                     .Include(m => m.QuestionMarks)
+                        .ThenInclude(qm => qm.QuestionMaster)
                     .FirstOrDefaultAsync(m => m.ScriptId == scriptId && m.ExaminerId == examinerId);
 
                 if (marking != null && marking.QuestionMarks.Any())
@@ -441,15 +452,18 @@ namespace API.Controllers
                     var dbDraft = new Dictionary<string, object>();
                     foreach (var qm in marking.QuestionMarks)
                     {
-                        qMasters.TryGetValue(qm.QuestionId, out var qmInfo);
-                        dbDraft[qm.QuestionId.ToString()] = new
+                        var targetQId = qm.QuestionMasterId;
+                        dbDraft[targetQId.ToString()] = new
                         {
+                            questionMasterId = targetQId,
+                            questionId = targetQId,
+                            scriptId = qm.ScriptId ?? marking.ScriptId,
                             marksAwarded = qm.MarksAwarded,
                             isSkipped = qm.IsSkipped,
                             remarks = qm.Remarks ?? "",
                             isAttempted = qm.IsAttempted,
-                            maxMarks = qmInfo?.Marks ?? 0,
-                            questionNo = qmInfo?.Question ?? ""
+                            maxMarks = 0,
+                            questionNo = qm.QuestionMaster?.Question ?? ""
                         };
                     }
                     return Ok(new { success = true, draftData = dbDraft });
@@ -764,25 +778,23 @@ namespace API.Controllers
                     maxQuestionsToAttempt = sm.MaxQuestionsToAttempt,
                     questions = questionMasters
                         .Where(qm => qm.Section == sm.Name)
-                        .Select(q => new
-                        {
-                            questionId = q.Id,
-                            questionNo = q.Question,
-                            marks = q.Marks > 0 ? q.Marks : (decimal?)null,
-                            type = q.QuestionType != null ? q.QuestionType.QuestionTypeName : "MCQ",
-                            typeId = q.QuestionTypeId,
-                            questionTypeId = q.QuestionTypeId,
-                            isOptional = !string.IsNullOrEmpty(q.Group),
-                            optionalGroupCode = q.Group,
-                            sectionId = sm.Id,
-                            marksAwarded = marking.QuestionMarks
-                                .FirstOrDefault(qm => qm.QuestionId == q.Id)?.MarksAwarded ?? 0,
-                            isSkipped = marking.QuestionMarks
-                                .FirstOrDefault(qm => qm.QuestionId == q.Id)?.IsSkipped ?? false,
-                            remarks = marking.QuestionMarks
-                                .FirstOrDefault(qm => qm.QuestionId == q.Id)?.Remarks ?? "",
-                            isAttempted = marking.QuestionMarks
-                                .FirstOrDefault(qm => qm.QuestionId == q.Id)?.IsAttempted ?? false
+                        .Select(q => {
+                            qMarksDict.TryGetValue(q.Id, out var awarded);
+                            return new
+                            {
+                                questionMasterId = q.Id,
+                                questionId = q.Id,
+                                questionNo = q.Question,
+                                marks = (decimal?)null,
+                                type = q.Type,
+                                isOptional = !string.IsNullOrEmpty(q.Group),
+                                optionalGroupCode = q.Group,
+                                sectionId = sm.Id,
+                                marksAwarded = awarded?.MarksAwarded ?? 0,
+                                isSkipped = awarded?.IsSkipped ?? false,
+                                remarks = awarded?.Remarks ?? "",
+                                isAttempted = awarded?.IsAttempted ?? false
+                            };
                         }).ToList()
                 }).ToList();
 
@@ -854,7 +866,7 @@ namespace API.Controllers
                     marking.UpdatedAt = DateTime.UtcNow;
                 }
 
-                var questionIds = questionMarks.Select(qm => qm.QuestionId).ToList();
+                var questionIds = questionMarks.Select(qm => qm.QuestionMasterId.HasValue && qm.QuestionMasterId.Value > 0 ? qm.QuestionMasterId.Value : qm.QuestionId).Distinct().ToList();
                 var qMasters = await _context.QuestionMasters
                     .Where(qm => questionIds.Contains(qm.Id))
                     .ToListAsync();
@@ -869,9 +881,10 @@ namespace API.Controllers
                 {
                     if (qm.IsSkipped) continue;
 
-                    var q = qMasters.FirstOrDefault(x => x.Id == qm.QuestionId);
+                    var targetQId = qm.QuestionMasterId.HasValue && qm.QuestionMasterId.Value > 0 ? qm.QuestionMasterId.Value : qm.QuestionId;
+                    var q = qMasters.FirstOrDefault(x => x.Id == targetQId);
                     if (q == null)
-                        return BadRequest(new { success = false, message = $"Question with ID {qm.QuestionId} not found" });
+                        return BadRequest(new { success = false, message = $"Question with ID {targetQId} not found" });
 
                     if (qm.MarksAwarded < 0)
                     {
@@ -896,7 +909,8 @@ namespace API.Controllers
                 {
                     if (qm.IsSkipped) continue;
 
-                    var q = qMasters.FirstOrDefault(x => x.Id == qm.QuestionId);
+                    var targetQId = qm.QuestionMasterId.HasValue && qm.QuestionMasterId.Value > 0 ? qm.QuestionMasterId.Value : qm.QuestionId;
+                    var q = qMasters.FirstOrDefault(x => x.Id == targetQId);
                     if (q != null && !string.IsNullOrEmpty(q.Section))
                     {
                         if (!marksBySection.ContainsKey(q.Section))
@@ -923,7 +937,8 @@ namespace API.Controllers
                 {
                     if (qm.IsSkipped) continue;
 
-                    var q = qMasters.FirstOrDefault(x => x.Id == qm.QuestionId);
+                    var targetQId = qm.QuestionMasterId.HasValue && qm.QuestionMasterId.Value > 0 ? qm.QuestionMasterId.Value : qm.QuestionId;
+                    var q = qMasters.FirstOrDefault(x => x.Id == targetQId);
                     if (q != null && !string.IsNullOrEmpty(q.Section))
                     {
                         var isAttempted = qm.IsAttempted || qm.MarksAwarded > 0;
@@ -962,7 +977,8 @@ namespace API.Controllers
                     var isAttempted = qm.IsAttempted || qm.MarksAwarded > 0;
                     if (!isAttempted) continue;
 
-                    var q = qMasters.FirstOrDefault(x => x.Id == qm.QuestionId);
+                    var targetQId = qm.QuestionMasterId.HasValue && qm.QuestionMasterId.Value > 0 ? qm.QuestionMasterId.Value : qm.QuestionId;
+                    var q = qMasters.FirstOrDefault(x => x.Id == targetQId);
                     if (q != null && !string.IsNullOrWhiteSpace(q.Group))
                     {
                         var groupCode = q.Group.Trim().ToUpper();
@@ -979,20 +995,25 @@ namespace API.Controllers
                 }
 
                 // Remove existing question marks
-                _context.QuestionMarks.RemoveRange(marking.QuestionMarks);
+                var existingMarks = await _context.QuestionMarks
+                    .Where(qm => qm.MarkingId == markingId || (marking.ScriptId > 0 && qm.ScriptId == marking.ScriptId))
+                    .ToListAsync();
+                _context.QuestionMarks.RemoveRange(existingMarks);
 
                 // Add new question marks
                 decimal totalMarks = 0;
                 foreach (var qm in questionMarks)
                 {
-                    var q = qMasters.FirstOrDefault(x => x.Id == qm.QuestionId);
+                    var targetQId = qm.QuestionMasterId.HasValue && qm.QuestionMasterId.Value > 0 ? qm.QuestionMasterId.Value : qm.QuestionId;
+                    var q = qMasters.FirstOrDefault(x => x.Id == targetQId);
                     if (q == null)
                         continue;
 
                     var questionMark = new QuestionMark
                     {
                         MarkingId = markingId,
-                        QuestionId = qm.QuestionId,
+                        ScriptId = marking.ScriptId,
+                        QuestionMasterId = targetQId,
                         MarksAwarded = Math.Round(qm.MarksAwarded, 2, MidpointRounding.AwayFromZero),
                         IsSkipped = qm.IsSkipped,
                         Remarks = qm.Remarks ?? "",
@@ -1043,8 +1064,20 @@ namespace API.Controllers
                     }
                 }
 
-                var rawList = await _context.QuestionMarks
-                    .Where(qm => qm.MarkingId == markingId)
+                var questionMarks = await _context.QuestionMarks
+                    .Where(qm => qm.MarkingId == markingId || (marking.ScriptId > 0 && qm.ScriptId == marking.ScriptId))
+                    .Include(qm => qm.QuestionMaster)
+                    .Select(qm => new QuestionMarkDto
+                    {
+                        QuestionMasterId = qm.QuestionMasterId,
+                        QuestionId = qm.QuestionMasterId,
+                        ScriptId = qm.ScriptId ?? marking.ScriptId,
+                        QuestionNo = qm.QuestionMaster != null ? qm.QuestionMaster.Question : "",
+                        MarksAwarded = Math.Round(qm.MarksAwarded, 2, MidpointRounding.AwayFromZero),
+                        IsSkipped = qm.IsSkipped,
+                        Remarks = qm.Remarks ?? "",
+                        IsAttempted = qm.IsAttempted
+                    })
                     .ToListAsync();
 
                 var qIds = rawList.Select(x => x.QuestionId).Distinct().ToList();

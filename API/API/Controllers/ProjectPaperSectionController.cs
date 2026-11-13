@@ -200,7 +200,8 @@ namespace API.Controllers
         }
 
         // POST: api/projectpapersection
-        // Creates/updates a section in SectionMasters and saves questions to QuestionMasters.
+        // Creates a section in SectionMasters and saves questions to QuestionMasters.
+        // If paper already has a shared/master batch, it forks to a new batch.
         // Links the paper to the batch via ProjectPapers.BatchId.
         [HttpPost]
         [Authorize(Roles = "admin,coordinator")]
@@ -234,22 +235,77 @@ namespace API.Controllers
                 if (projectPaper.Project != null && !projectPaper.Project.IsActive)
                     return BadRequest(new { success = false, message = "Cannot create sections for an inactive project." });
 
-                // ── Resolve BatchId ──────────────────────────────────────────────────
-                // Priority: DTO → ProjectPapers.BatchId → generate new
-                int resolvedBatchId = dto.BatchId > 0 ? dto.BatchId : 0;
+                // ── Resolve BatchId and Fork if Master/Shared ──────────────────────────
+                int resolvedBatchId = 0;
+                int currentBatchId = projectPaper.BatchId.HasValue && projectPaper.BatchId.Value > 0 ? projectPaper.BatchId.Value : 0;
 
-                if (resolvedBatchId <= 0 && projectPaper.BatchId.HasValue && projectPaper.BatchId.Value > 0)
-                    resolvedBatchId = projectPaper.BatchId.Value;
+                bool isMasterOrShared = currentBatchId > 0 && (
+                    currentBatchId <= 5 || 
+                    await _context.ProjectPapers.CountAsync(pp => pp.BatchId == currentBatchId) > 1
+                );
 
-                if (resolvedBatchId <= 0)
+                if (isMasterOrShared)
                 {
-                    // Generate a new batch id (max across SectionMasters + QuestionMasters)
+                    // Fork into a new batch so master template remains untouched
                     var maxSm = await _context.SectionMasters.MaxAsync(sm => (int?)sm.BatchId) ?? 0;
                     var maxQm = await _context.QuestionMasters.MaxAsync(qm => (int?)qm.BatchId) ?? 0;
                     resolvedBatchId = Math.Max(maxSm, maxQm) + 1;
-                }
+                    if (resolvedBatchId <= 0) resolvedBatchId = 1;
 
-                if (resolvedBatchId <= 0) resolvedBatchId = 1;
+                    // Duplicate existing sections & questions from currentBatchId to resolvedBatchId
+                    var existingSections = await _context.SectionMasters
+                        .Where(sm => sm.BatchId == currentBatchId)
+                        .ToListAsync();
+
+                    foreach (var es in existingSections)
+                    {
+                        var clonedSm = new SectionMaster
+                        {
+                            BatchId               = resolvedBatchId,
+                            Name                  = es.Name,
+                            Description           = es.Description,
+                            TotalQuestions        = es.TotalQuestions,
+                            TotalMarks            = es.TotalMarks,
+                            StartQuestion         = es.StartQuestion,
+                            EndQuestion           = es.EndQuestion,
+                            MaxQuestionsToAttempt = es.MaxQuestionsToAttempt,
+                            CreatedAt             = DateTime.UtcNow
+                        };
+                        _context.SectionMasters.Add(clonedSm);
+
+                        var esQuestions = await _context.QuestionMasters
+                            .Where(qm => qm.BatchId == currentBatchId && qm.Section == es.Name)
+                            .ToListAsync();
+
+                        foreach (var eqm in esQuestions)
+                        {
+                            _context.QuestionMasters.Add(new QuestionMaster
+                            {
+                                BatchId        = resolvedBatchId,
+                                Section        = es.Name,
+                                Question       = eqm.Question,
+                                QuestionTypeId = eqm.QuestionTypeId,
+                                Type           = eqm.Type,
+                                Group          = eqm.Group,
+                                Status         = eqm.Status,
+                                CreatedAt      = DateTime.UtcNow
+                            });
+                        }
+                    }
+                }
+                else if (currentBatchId > 0)
+                {
+                    // Reuse paper's existing dedicated custom batch
+                    resolvedBatchId = currentBatchId;
+                }
+                else
+                {
+                    // Generate new batch id
+                    var maxSm = await _context.SectionMasters.MaxAsync(sm => (int?)sm.BatchId) ?? 0;
+                    var maxQm = await _context.QuestionMasters.MaxAsync(qm => (int?)qm.BatchId) ?? 0;
+                    resolvedBatchId = Math.Max(maxSm, maxQm) + 1;
+                    if (resolvedBatchId <= 0) resolvedBatchId = 1;
+                }
 
                 // ── SectionMaster: create or update ──────────────────────────────────
                 var masterName = dto.Name.Trim();
@@ -303,30 +359,52 @@ namespace API.Controllers
                 if (existingQMs.Any())
                     _context.QuestionMasters.RemoveRange(existingQMs);
 
-                List<QuestionMaster> qmList = new List<QuestionMaster>();
+                var allQTypes = await _context.QuestionTypes.ToListAsync();
+                var defType = allQTypes.FirstOrDefault(t => t.QuestionTypeName == "MCQ") ?? allQTypes.FirstOrDefault();
+
+                List<QuestionMaster> qmList;
                 if (dto.Questions != null && dto.Questions.Count > 0)
                 {
-                    foreach (var q in dto.Questions)
+                    qmList = dto.Questions.Select(q =>
                     {
-                        var (resolvedTypeId, resolvedTypeName) = await ResolveQuestionTypeAsync(q.TypeId ?? q.QuestionTypeId, q.Type);
-                        qmList.Add(new QuestionMaster
+                        int? qTypeId = q.QuestionTypeId ?? q.TypeId;
+                        string qTypeName = !string.IsNullOrWhiteSpace(q.Type) ? q.Type.Trim() : "";
+
+                        if (qTypeId.HasValue && qTypeId.Value > 0)
+                        {
+                            var matched = allQTypes.FirstOrDefault(t => t.QuestionTypeId == qTypeId.Value);
+                            if (matched != null && string.IsNullOrEmpty(qTypeName))
+                                qTypeName = matched.QuestionTypeName;
+                        }
+                        else if (!string.IsNullOrEmpty(qTypeName))
+                        {
+                            var matched = allQTypes.FirstOrDefault(t => t.QuestionTypeName.ToLower() == qTypeName.ToLower());
+                            if (matched != null)
+                                qTypeId = matched.QuestionTypeId;
+                        }
+
+                        if (!qTypeId.HasValue && defType != null)
+                        {
+                            qTypeId = defType.QuestionTypeId;
+                            if (string.IsNullOrEmpty(qTypeName)) qTypeName = defType.QuestionTypeName;
+                        }
+
+                        return new QuestionMaster
                         {
                             BatchId        = resolvedBatchId,
                             Section        = masterName,
                             Question       = q.QuestionNo,
-                            Marks          = Math.Round(q.Marks, 2, MidpointRounding.AwayFromZero),
-                            QuestionTypeId = resolvedTypeId,
+                            QuestionTypeId = qTypeId,
+                            Type           = !string.IsNullOrWhiteSpace(qTypeName) ? qTypeName : "MCQ",
                             Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
                             Status         = true,
                             CreatedAt      = DateTime.UtcNow
-                        });
-                    }
+                        };
+                    }).ToList();
                 }
                 else
                 {
-                    // Auto-generate questions from start→end range
-                    decimal defaultMarksPerQ = totalQ > 0 ? Math.Round((decimal)dto.TotalMarks / totalQ, 2) : 0;
-                    var (defTypeId, defTypeName) = await ResolveQuestionTypeAsync(null, "MCQ");
+                    qmList = new List<QuestionMaster>();
                     for (int i = dto.StartQuestion; i <= dto.EndQuestion; i++)
                     {
                         qmList.Add(new QuestionMaster
@@ -334,6 +412,8 @@ namespace API.Controllers
                             BatchId        = resolvedBatchId,
                             Section        = masterName,
                             Question       = i.ToString(),
+                            QuestionTypeId = defType?.QuestionTypeId,
+                            Type           = defType?.QuestionTypeName ?? "MCQ",
                             Marks          = defaultMarksPerQ,
                             QuestionTypeId = defTypeId,
                             Group          = null,
@@ -365,6 +445,8 @@ namespace API.Controllers
 
         // PUT: api/projectpapersection/5
         // id = SectionMaster.Id
+        // If the edited section belongs to an imported master template or shared batch,
+        // a NEW batch is created with all sections & questions, preserving the master template!
         [HttpPut("{id}")]
         [Authorize(Roles = "admin,coordinator")]
         public async Task<IActionResult> UpdateProjectPaperSection(int id, [FromBody] UpdateProjectPaperSectionDto dto)
@@ -378,26 +460,19 @@ namespace API.Controllers
                 var oldName    = master.Name;
                 var oldBatchId = master.BatchId;
 
-                if (dto.BatchId > 0) master.BatchId = dto.BatchId;
-                master.Name                  = dto.Name.Trim();
-                master.Description           = dto.Description ?? "";
-                master.TotalQuestions        = dto.TotalQuestions;
-                master.TotalMarks            = Math.Round(dto.TotalMarks, 2, MidpointRounding.AwayFromZero);
-                master.StartQuestion         = dto.StartQuestion;
-                master.EndQuestion           = dto.EndQuestion;
-                master.MaxQuestionsToAttempt = dto.MaxQuestionsToAttempt > 0 ? dto.MaxQuestionsToAttempt : dto.TotalQuestions;
-                _context.SectionMasters.Update(master);
-                await _context.SaveChangesAsync();
-
-                // ── QuestionMasters: replace rows for this batch+section ──────────────
-                var existingQMs = await _context.QuestionMasters
-                    .Where(qm => qm.BatchId == master.BatchId && qm.Section == oldName)
-                    .ToListAsync();
-                if (existingQMs.Any())
-                    _context.QuestionMasters.RemoveRange(existingQMs);
-
-                if (dto.Questions != null && dto.Questions.Count > 0)
+                // Resolve the ProjectPaper
+                ProjectPaper? projectPaper = null;
+                if (dto.ProjectPaperId.HasValue && dto.ProjectPaperId.Value > 0)
                 {
+                    projectPaper = await _context.ProjectPapers.FirstOrDefaultAsync(pp => pp.Id == dto.ProjectPaperId.Value);
+                }
+                else if (dto.ProjectId.HasValue && dto.PaperId.HasValue)
+                {
+                    projectPaper = await _context.ProjectPapers.FirstOrDefaultAsync(pp => pp.ProjectId == dto.ProjectId.Value && pp.PaperId == dto.PaperId.Value);
+                }
+                else
+                {
+                    projectPaper = await _context.ProjectPapers.FirstOrDefaultAsync(pp => pp.BatchId == oldBatchId);
                     var qmList = new List<QuestionMaster>();
                     foreach (var q in dto.Questions)
                     {
@@ -417,9 +492,248 @@ namespace API.Controllers
                     _context.QuestionMasters.AddRange(qmList);
                 }
 
-                await _context.SaveChangesAsync();
+                bool isMasterOrShared = oldBatchId <= 5 || 
+                    await _context.ProjectPapers.CountAsync(pp => pp.BatchId == oldBatchId) > 1 ||
+                    dto.ForkNewBatch;
 
-                return Ok(new { success = true, message = "Section updated successfully" });
+                if (isMasterOrShared)
+                {
+                    // ── FORK: Coordinator imported section from master and is editing it ──
+                    // Create a NEW batch so the master template remains pristine!
+                    var maxSm = await _context.SectionMasters.MaxAsync(sm => (int?)sm.BatchId) ?? 0;
+                    var maxQm = await _context.QuestionMasters.MaxAsync(qm => (int?)qm.BatchId) ?? 0;
+                    int newBatchId = Math.Max(maxSm, maxQm) + 1;
+                    if (newBatchId <= 0) newBatchId = 1;
+
+                    // 1. Copy other sections in oldBatchId to newBatchId
+                    var otherMasters = await _context.SectionMasters
+                        .Where(sm => sm.BatchId == oldBatchId && sm.Id != id)
+                        .ToListAsync();
+
+                    foreach (var om in otherMasters)
+                    {
+                        var clonedSm = new SectionMaster
+                        {
+                            BatchId               = newBatchId,
+                            Name                  = om.Name,
+                            Description           = om.Description,
+                            TotalQuestions        = om.TotalQuestions,
+                            TotalMarks            = om.TotalMarks,
+                            StartQuestion         = om.StartQuestion,
+                            EndQuestion           = om.EndQuestion,
+                            MaxQuestionsToAttempt = om.MaxQuestionsToAttempt,
+                            CreatedAt             = DateTime.UtcNow
+                        };
+                        _context.SectionMasters.Add(clonedSm);
+
+                        var omQuestions = await _context.QuestionMasters
+                            .Where(qm => qm.BatchId == oldBatchId && qm.Section == om.Name)
+                            .ToListAsync();
+
+                        foreach (var qm in omQuestions)
+                        {
+                            _context.QuestionMasters.Add(new QuestionMaster
+                            {
+                                BatchId        = newBatchId,
+                                Section        = om.Name,
+                                Question       = qm.Question,
+                                QuestionTypeId = qm.QuestionTypeId,
+                                Type           = qm.Type,
+                                Group          = qm.Group,
+                                Status         = qm.Status,
+                                CreatedAt      = DateTime.UtcNow
+                            });
+                        }
+                    }
+
+                    // 2. Add the EDITED section under newBatchId
+                    int totalQ = dto.TotalQuestions > 0 ? dto.TotalQuestions : (dto.Questions?.Count ?? (dto.EndQuestion >= dto.StartQuestion ? dto.EndQuestion - dto.StartQuestion + 1 : 1));
+                    var newMaster = new SectionMaster
+                    {
+                        BatchId               = newBatchId,
+                        Name                  = dto.Name.Trim(),
+                        Description           = dto.Description ?? "",
+                        TotalQuestions        = totalQ,
+                        TotalMarks            = Math.Round(dto.TotalMarks, 2, MidpointRounding.AwayFromZero),
+                        StartQuestion         = dto.StartQuestion,
+                        EndQuestion           = dto.EndQuestion,
+                        MaxQuestionsToAttempt = dto.MaxQuestionsToAttempt > 0 ? dto.MaxQuestionsToAttempt : totalQ,
+                        CreatedAt             = DateTime.UtcNow
+                    };
+                    _context.SectionMasters.Add(newMaster);
+
+                    var allQTypesUpdate = await _context.QuestionTypes.ToListAsync();
+                    var defTypeUpdate = allQTypesUpdate.FirstOrDefault(t => t.QuestionTypeName == "MCQ") ?? allQTypesUpdate.FirstOrDefault();
+
+                    // 3. Add questions for the edited section under newBatchId
+                    if (dto.Questions != null && dto.Questions.Count > 0)
+                    {
+                        var qmList = dto.Questions.Select(q =>
+                        {
+                            int? qTypeId = q.QuestionTypeId ?? q.TypeId;
+                            string qTypeName = !string.IsNullOrWhiteSpace(q.Type) ? q.Type.Trim() : "";
+
+                            if (qTypeId.HasValue && qTypeId.Value > 0)
+                            {
+                                var matched = allQTypesUpdate.FirstOrDefault(t => t.QuestionTypeId == qTypeId.Value);
+                                if (matched != null && string.IsNullOrEmpty(qTypeName))
+                                    qTypeName = matched.QuestionTypeName;
+                            }
+                            else if (!string.IsNullOrEmpty(qTypeName))
+                            {
+                                var matched = allQTypesUpdate.FirstOrDefault(t => t.QuestionTypeName.ToLower() == qTypeName.ToLower());
+                                if (matched != null)
+                                    qTypeId = matched.QuestionTypeId;
+                            }
+
+                            if (!qTypeId.HasValue && defTypeUpdate != null)
+                            {
+                                qTypeId = defTypeUpdate.QuestionTypeId;
+                                if (string.IsNullOrEmpty(qTypeName)) qTypeName = defTypeUpdate.QuestionTypeName;
+                            }
+
+                            return new QuestionMaster
+                            {
+                                BatchId        = newBatchId,
+                                Section        = newMaster.Name,
+                                Question       = q.QuestionNo,
+                                QuestionTypeId = qTypeId,
+                                Type           = !string.IsNullOrWhiteSpace(qTypeName) ? qTypeName : "MCQ",
+                                Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                                Status         = true,
+                                CreatedAt      = DateTime.UtcNow
+                            };
+                        }).ToList();
+                        _context.QuestionMasters.AddRange(qmList);
+                    }
+                    else
+                    {
+                        for (int i = dto.StartQuestion; i <= dto.EndQuestion; i++)
+                        {
+                            _context.QuestionMasters.Add(new QuestionMaster
+                            {
+                                BatchId        = newBatchId,
+                                Section        = newMaster.Name,
+                                Question       = i.ToString(),
+                                QuestionTypeId = defTypeUpdate?.QuestionTypeId,
+                                Type           = defTypeUpdate?.QuestionTypeName ?? "MCQ",
+                                Group          = null,
+                                Status         = true,
+                                CreatedAt      = DateTime.UtcNow
+                            });
+                        }
+                    }
+
+                    // 4. Update ProjectPaper's BatchId reference to the newly created batch!
+                    if (projectPaper != null)
+                    {
+                        projectPaper.BatchId             = newBatchId;
+                        projectPaper.IsSectionConfigured = true;
+                        projectPaper.UpdatedAt           = DateTime.UtcNow;
+                        _context.ProjectPapers.Update(projectPaper);
+                    }
+
+                    await _context.SaveChangesAsync();
+
+                    return Ok(new 
+                    { 
+                        success   = true, 
+                        message   = "Section edited and successfully branched to a new batch",
+                        batchId   = newBatchId,
+                        sectionId = newMaster.Id 
+                    });
+                }
+                else
+                {
+                    // Update in place for dedicated batch
+                    master.Name                  = dto.Name.Trim();
+                    master.Description           = dto.Description ?? "";
+                    master.TotalQuestions        = dto.TotalQuestions;
+                    master.TotalMarks            = Math.Round(dto.TotalMarks, 2, MidpointRounding.AwayFromZero);
+                    master.StartQuestion         = dto.StartQuestion;
+                    master.EndQuestion           = dto.EndQuestion;
+                    master.MaxQuestionsToAttempt = dto.MaxQuestionsToAttempt > 0 ? dto.MaxQuestionsToAttempt : dto.TotalQuestions;
+                    _context.SectionMasters.Update(master);
+
+                    var existingQMs = await _context.QuestionMasters
+                        .Where(qm => qm.BatchId == master.BatchId && qm.Section == oldName)
+                        .ToListAsync();
+                    if (existingQMs.Any())
+                        _context.QuestionMasters.RemoveRange(existingQMs);
+
+                    var allQTypesDirect = await _context.QuestionTypes.ToListAsync();
+                    var defTypeDirect = allQTypesDirect.FirstOrDefault(t => t.QuestionTypeName == "MCQ") ?? allQTypesDirect.FirstOrDefault();
+
+                    if (dto.Questions != null && dto.Questions.Count > 0)
+                    {
+                        var qmList = dto.Questions.Select(q =>
+                        {
+                            int? qTypeId = q.QuestionTypeId ?? q.TypeId;
+                            string qTypeName = !string.IsNullOrWhiteSpace(q.Type) ? q.Type.Trim() : "";
+
+                            if (qTypeId.HasValue && qTypeId.Value > 0)
+                            {
+                                var matched = allQTypesDirect.FirstOrDefault(t => t.QuestionTypeId == qTypeId.Value);
+                                if (matched != null && string.IsNullOrEmpty(qTypeName))
+                                    qTypeName = matched.QuestionTypeName;
+                            }
+                            else if (!string.IsNullOrEmpty(qTypeName))
+                            {
+                                var matched = allQTypesDirect.FirstOrDefault(t => t.QuestionTypeName.ToLower() == qTypeName.ToLower());
+                                if (matched != null)
+                                    qTypeId = matched.QuestionTypeId;
+                            }
+
+                            if (!qTypeId.HasValue && defTypeDirect != null)
+                            {
+                                qTypeId = defTypeDirect.QuestionTypeId;
+                                if (string.IsNullOrEmpty(qTypeName)) qTypeName = defTypeDirect.QuestionTypeName;
+                            }
+
+                            return new QuestionMaster
+                            {
+                                BatchId        = master.BatchId,
+                                Section        = master.Name,
+                                Question       = q.QuestionNo,
+                                QuestionTypeId = qTypeId,
+                                Type           = !string.IsNullOrWhiteSpace(qTypeName) ? qTypeName : "MCQ",
+                                Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                                Status         = true,
+                                CreatedAt      = DateTime.UtcNow
+                            };
+                        }).ToList();
+                        _context.QuestionMasters.AddRange(qmList);
+                    }
+                    else
+                    {
+                        for (int i = dto.StartQuestion; i <= dto.EndQuestion; i++)
+                        {
+                            _context.QuestionMasters.Add(new QuestionMaster
+                            {
+                                BatchId        = master.BatchId,
+                                Section        = master.Name,
+                                Question       = i.ToString(),
+                                QuestionTypeId = defTypeDirect?.QuestionTypeId,
+                                Type           = defTypeDirect?.QuestionTypeName ?? "MCQ",
+                                Group          = null,
+                                Status         = true,
+                                CreatedAt      = DateTime.UtcNow
+                            });
+                        }
+                    }
+
+                    if (projectPaper != null && projectPaper.BatchId != master.BatchId)
+                    {
+                        projectPaper.BatchId             = master.BatchId;
+                        projectPaper.IsSectionConfigured = true;
+                        projectPaper.UpdatedAt           = DateTime.UtcNow;
+                        _context.ProjectPapers.Update(projectPaper);
+                    }
+
+                    await _context.SaveChangesAsync();
+
+                    return Ok(new { success = true, message = "Section updated successfully", batchId = master.BatchId, sectionId = master.Id });
+                }
             }
             catch (Exception ex)
             {
@@ -431,7 +745,11 @@ namespace API.Controllers
         // id = SectionMaster.Id
         [HttpDelete("{id}")]
         [Authorize(Roles = "admin,coordinator")]
-        public async Task<IActionResult> DeleteProjectPaperSection(int id)
+        public async Task<IActionResult> DeleteProjectPaperSection(
+            int id, 
+            [FromQuery] int? projectPaperId = null, 
+            [FromQuery] int? projectId = null, 
+            [FromQuery] int? paperId = null)
         {
             try
             {
@@ -442,7 +760,77 @@ namespace API.Controllers
                 var secBatchId = master.BatchId;
                 var secName    = master.Name;
 
-                // Remove QuestionMasters for this section
+                // Resolve project paper
+                ProjectPaper? projectPaper = null;
+                if (projectPaperId.HasValue && projectPaperId.Value > 0)
+                    projectPaper = await _context.ProjectPapers.FindAsync(projectPaperId.Value);
+                else if (projectId.HasValue && paperId.HasValue)
+                    projectPaper = await _context.ProjectPapers.FirstOrDefaultAsync(pp => pp.ProjectId == projectId.Value && pp.PaperId == paperId.Value);
+                else
+                    projectPaper = await _context.ProjectPapers.FirstOrDefaultAsync(pp => pp.BatchId == secBatchId);
+
+                bool isMasterOrShared = secBatchId <= 5 || await _context.ProjectPapers.CountAsync(pp => pp.BatchId == secBatchId) > 1;
+
+                if (isMasterOrShared && projectPaper != null)
+                {
+                    // Fork remaining sections into new batch so template is not deleted
+                    var remaining = await _context.SectionMasters
+                        .Where(sm => sm.BatchId == secBatchId && sm.Id != id)
+                        .ToListAsync();
+
+                    if (remaining.Any())
+                    {
+                        var maxSm = await _context.SectionMasters.MaxAsync(sm => (int?)sm.BatchId) ?? 0;
+                        var maxQm = await _context.QuestionMasters.MaxAsync(qm => (int?)qm.BatchId) ?? 0;
+                        int newBatchId = Math.Max(maxSm, maxQm) + 1;
+                        if (newBatchId <= 0) newBatchId = 1;
+
+                        foreach (var rem in remaining)
+                        {
+                            _context.SectionMasters.Add(new SectionMaster
+                            {
+                                BatchId               = newBatchId,
+                                Name                  = rem.Name,
+                                Description           = rem.Description,
+                                TotalQuestions        = rem.TotalQuestions,
+                                TotalMarks            = rem.TotalMarks,
+                                StartQuestion         = rem.StartQuestion,
+                                EndQuestion           = rem.EndQuestion,
+                                MaxQuestionsToAttempt = rem.MaxQuestionsToAttempt,
+                                CreatedAt             = DateTime.UtcNow
+                            });
+
+                            var remQuestions = await _context.QuestionMasters
+                                .Where(qm => qm.BatchId == secBatchId && qm.Section == rem.Name)
+                                .ToListAsync();
+
+                            foreach (var qm in remQuestions)
+                            {
+                                _context.QuestionMasters.Add(new QuestionMaster
+                                {
+                                    BatchId   = newBatchId,
+                                    Section   = rem.Name,
+                                    Question  = qm.Question,
+                                    Type      = qm.Type,
+                                    Group     = qm.Group,
+                                    Status    = qm.Status,
+                                    CreatedAt = DateTime.UtcNow
+                                });
+                            }
+                        }
+                        projectPaper.BatchId = newBatchId;
+                    }
+                    else
+                    {
+                        projectPaper.BatchId             = null;
+                        projectPaper.IsSectionConfigured = false;
+                    }
+                    projectPaper.UpdatedAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+                    return Ok(new { success = true, message = "Section removed from paper" });
+                }
+
+                // If not master/shared, delete directly
                 var qmsToRemove = await _context.QuestionMasters
                     .Where(qm => qm.BatchId == secBatchId && qm.Section == secName)
                     .ToListAsync();
@@ -533,7 +921,7 @@ namespace API.Controllers
                 int? targetUniId = projectPaper.Paper?.UniversityId;
                 _dailyAllocationService.TriggerAutoAllocationBackground(targetUniId);
 
-                return Ok(new { success = true, message = $"Successfully linked {masters.Count} master section(s) to project paper" });
+                return Ok(new { success = true, batchId = batchId, message = $"Successfully linked {masters.Count} master section(s) to project paper" });
             }
             catch (Exception ex)
             {
@@ -688,113 +1076,71 @@ namespace API.Controllers
                 .OrderBy(qm => qm.Id)
                 .ToListAsync();
 
-            decimal paperMaxMarks = projectPaper?.Paper?.MaxMarks ?? 0;
-            if (paperMaxMarks <= 0)
+            var allQTypesResponse = await _context.QuestionTypes.ToListAsync();
+            var defQtResponse = allQTypesResponse.FirstOrDefault(t => t.QuestionTypeName == "MCQ") ?? allQTypesResponse.FirstOrDefault();
+
+            return sectionMasters.Select(sm =>
             {
-                paperMaxMarks = allQuestions.Sum(q => q.Marks);
-                if (paperMaxMarks <= 0 && sectionMasters.Any())
+                decimal qMarks = sm.TotalQuestions > 0
+                    ? Math.Round(sm.TotalMarks / sm.TotalQuestions, 2, MidpointRounding.AwayFromZero)
+                    : 0m;
+
+                return (object)new
                 {
-                    paperMaxMarks = sectionMasters.Sum(sm => sm.TotalMarks);
-                }
-            }
-
-            if (!sectionMasters.Any() && allQuestions.Any())
-            {
-                var sectionNames = allQuestions
-                    .Select(q => string.IsNullOrWhiteSpace(q.Section) ? "Section A" : q.Section.Trim())
-                    .Distinct()
-                    .ToList();
-
-                int virtualId = 1;
-                return sectionNames.Select(secName =>
-                {
-                    var secQuestions = allQuestions
-                        .Where(q => (string.IsNullOrWhiteSpace(q.Section) ? "Section A" : q.Section.Trim()) == secName)
-                        .ToList();
-                    decimal secMarks = secQuestions.Sum(q => q.Marks);
-                    int startQ = 1;
-                    int endQ = secQuestions.Count;
-                    if (int.TryParse(secQuestions.FirstOrDefault()?.Question, out int sq)) startQ = sq;
-                    if (int.TryParse(secQuestions.LastOrDefault()?.Question, out int eq)) endQ = eq;
-
-                    return (object)new
+                    id                    = sm.Id,
+                    projectPaperId        = projectPaper.Id,
+                    batchId               = sm.BatchId,
+                    name                  = sm.Name,
+                    description           = sm.Description,
+                    totalQuestions        = sm.TotalQuestions,
+                    totalMarks            = sm.TotalMarks,
+                    startQuestion         = sm.StartQuestion,
+                    endQuestion           = sm.EndQuestion,
+                    maxQuestionsToAttempt = sm.MaxQuestionsToAttempt,
+                    createdAt             = sm.CreatedAt,
+                    updatedAt             = sm.CreatedAt,
+                    projectPaper = new
                     {
-                        id = virtualId++,
-                        projectPaperId = projectPaper?.Id ?? 0,
-                        batchId = batchId,
-                        name = secName,
-                        description = secName,
-                        totalQuestions = secQuestions.Count,
-                        totalMarks = secMarks,
-                        startQuestion = startQ,
-                        endQuestion = endQ,
-                        maxQuestionsToAttempt = secQuestions.Count,
-                        createdAt = DateTime.UtcNow,
-                        updatedAt = DateTime.UtcNow,
-                        projectPaper = new
-                        {
-                            id = projectPaper?.Id ?? 0,
-                            projectId = projectPaper?.ProjectId ?? 0,
-                            paperId = projectPaper?.PaperId ?? 0,
-                            batchId = batchId,
-                            paperName = projectPaper?.Paper?.PaperName,
-                            paperCode = projectPaper?.Paper?.PaperCode,
-                            maxMarks = paperMaxMarks
-                        },
-                        totalPaperMarks = paperMaxMarks,
-                        questions = secQuestions.Select(qm => new
-                        {
-                            questionId = qm.Id,
-                            questionNo = qm.Question,
-                            marks = qm.Marks,
-                            typeId = qm.QuestionTypeId,
-                            questionTypeId = qm.QuestionTypeId,
-                            type = qm.QuestionType != null ? qm.QuestionType.QuestionTypeName : "MCQ",
-                            isOptional = !string.IsNullOrEmpty(qm.Group),
-                            optionalGroupCode = qm.Group
+                        id        = projectPaper.Id,
+                        projectId = projectPaper.ProjectId,
+                        paperId   = projectPaper.PaperId,
+                        paperName = projectPaper.Paper?.PaperName,
+                        paperCode = projectPaper.Paper?.PaperCode
+                    },
+                    questions = allQuestions
+                        .Where(qm => qm.Section == sm.Name)
+                        .Select(qm => {
+                            int? typeId = qm.QuestionTypeId;
+                            string typeName = qm.Type;
+                            if (!typeId.HasValue && !string.IsNullOrEmpty(typeName))
+                            {
+                                var matched = allQTypesResponse.FirstOrDefault(t => t.QuestionTypeName.ToLower() == typeName.ToLower());
+                                if (matched != null) typeId = matched.QuestionTypeId;
+                            }
+                            if (string.IsNullOrEmpty(typeName) && typeId.HasValue)
+                            {
+                                var matched = allQTypesResponse.FirstOrDefault(t => t.QuestionTypeId == typeId.Value);
+                                if (matched != null) typeName = matched.QuestionTypeName;
+                            }
+                            if (!typeId.HasValue && defQtResponse != null)
+                            {
+                                typeId = defQtResponse.QuestionTypeId;
+                                if (string.IsNullOrEmpty(typeName)) typeName = defQtResponse.QuestionTypeName;
+                            }
+
+                            return new
+                            {
+                                questionId        = qm.Id,
+                                questionNo        = qm.Question,
+                                typeId            = typeId,
+                                questionTypeId    = typeId,
+                                type              = !string.IsNullOrWhiteSpace(typeName) ? typeName : "MCQ",
+                                isOptional        = !string.IsNullOrEmpty(qm.Group),
+                                optionalGroupCode = qm.Group,
+                                marks             = qMarks
+                            };
                         }).ToList()
-                    };
-                }).ToList();
-            }
-
-            return sectionMasters.Select(sm => (object)new
-            {
-                id                    = sm.Id,
-                projectPaperId        = projectPaper?.Id ?? 0,
-                batchId               = sm.BatchId,
-                name                  = sm.Name,
-                description           = sm.Description,
-                totalQuestions        = sm.TotalQuestions,
-                totalMarks            = sm.TotalMarks,
-                startQuestion         = sm.StartQuestion,
-                endQuestion           = sm.EndQuestion,
-                maxQuestionsToAttempt = sm.MaxQuestionsToAttempt,
-                createdAt             = sm.CreatedAt,
-                updatedAt             = sm.CreatedAt,
-                projectPaper = new
-                {
-                    id        = projectPaper?.Id ?? 0,
-                    projectId = projectPaper?.ProjectId ?? 0,
-                    paperId   = projectPaper?.PaperId ?? 0,
-                    batchId   = batchId,
-                    paperName = projectPaper?.Paper?.PaperName,
-                    paperCode = projectPaper?.Paper?.PaperCode,
-                    maxMarks  = paperMaxMarks
-                },
-                totalPaperMarks = paperMaxMarks,
-                questions = allQuestions
-                    .Where(qm => (string.IsNullOrWhiteSpace(qm.Section) ? "Section A" : qm.Section.Trim()) == sm.Name.Trim())
-                    .Select(qm => new
-                    {
-                        questionId        = qm.Id,
-                        questionNo        = qm.Question,
-                        marks             = qm.Marks,
-                        typeId            = qm.QuestionTypeId,
-                        questionTypeId    = qm.QuestionTypeId,
-                        type              = qm.QuestionType != null ? qm.QuestionType.QuestionTypeName : "MCQ",
-                        isOptional        = !string.IsNullOrEmpty(qm.Group),
-                        optionalGroupCode = qm.Group
-                    }).ToList()
+                };
             }).ToList();
         }
     }

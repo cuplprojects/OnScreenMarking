@@ -425,23 +425,32 @@ namespace API.Controllers
                     .OrderBy(s => s.Id)
                     .ToListAsync();
 
-                // Get examiners with expertise in ANY of the subjects associated with this paper
-                var examiners = await _context.ExaminerExpertises
-                    .Where(ee => subjectIds.Contains(ee.SubjectId) && ee.IsActive)
-                    .Include(ee => ee.Examiner)
-                    .Include(ee => ee.Subject)
-                    .GroupBy(ee => ee.ExaminerId)
-                    .Select(g => new
-                    {
-                        UserId = g.First().Examiner.Id,
-                        FirstName = g.First().Examiner.Name,
-                        Email = g.First().Examiner.Email,
-                        Expertise = g.Select(ee => ee.Subject.SubName).Distinct().ToList(),
-                        AllocatedCount = _context.Allocations
-                            .Where(a => a.ExaminerId == g.Key && a.AssignmentStatus)
-                            .Count()
-                    })
+                // Get examiners with SubjectId1 (or SubjectId2/3) matching ANY of the subjects associated with this paper
+                var matchingExaminers = await _context.Users
+                    .Where(u => u.UserType == "examiner" && u.IsActive &&
+                               ((u.SubjectId1.HasValue && subjectIds.Contains(u.SubjectId1.Value)) ||
+                                (u.SubjectId2.HasValue && subjectIds.Contains(u.SubjectId2.Value)) ||
+                                (u.SubjectId3.HasValue && subjectIds.Contains(u.SubjectId3.Value))))
                     .ToListAsync();
+
+                var subjectNameMap = await _context.Subjects
+                    .Where(s => subjectIds.Contains(s.SubjectId))
+                    .ToDictionaryAsync(s => s.SubjectId, s => s.SubName);
+
+                var examiners = matchingExaminers.Select(u => new
+                {
+                    UserId = u.Id,
+                    FirstName = u.Name,
+                    Email = u.Email,
+                    Expertise = new[] { u.SubjectId1, u.SubjectId2, u.SubjectId3 }
+                        .Where(sid => sid.HasValue && subjectNameMap.ContainsKey(sid.Value))
+                        .Select(sid => subjectNameMap[sid.Value])
+                        .Distinct()
+                        .ToList(),
+                    AllocatedCount = _context.Allocations
+                        .Where(a => a.ExaminerId == u.Id && a.AssignmentStatus)
+                        .Count()
+                }).ToList();
 
                 var scriptDtos = scripts.Select(s => new
                 {
