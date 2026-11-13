@@ -20,18 +20,25 @@ namespace API.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Question>>> GetQuestions([FromQuery] int? sectionId = null)
+        public async Task<ActionResult<IEnumerable<QuestionMaster>>> GetQuestions([FromQuery] int? sectionId = null, [FromQuery] int? batchId = null)
         {
             try
             {
-                var query = _context.Questions.AsQueryable();
+                var query = _context.QuestionMasters.AsQueryable();
 
                 if (sectionId.HasValue)
-                    query = query.Where(q => q.SectionId == sectionId.Value);
+                {
+                    // Look up section name from SectionMasters
+                    var section = await _context.SectionMasters.FindAsync(sectionId.Value);
+                    if (section != null)
+                        query = query.Where(q => q.BatchId == section.BatchId && q.Section == section.Name);
+                }
+
+                if (batchId.HasValue)
+                    query = query.Where(q => q.BatchId == batchId.Value);
 
                 var questions = await query
-                    .Include(q => q.Section)
-                    .OrderBy(q => q.QuestionNo)
+                    .OrderBy(q => q.Id)
                     .ToListAsync();
 
                 return Ok(questions);
@@ -43,14 +50,12 @@ namespace API.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Question>> GetQuestion(int id)
+        public async Task<ActionResult<QuestionMaster>> GetQuestion(int id)
         {
             try
             {
-                var question = await _context.Questions
-                    .Include(q => q.Section)
-                    
-                    .FirstOrDefaultAsync(q => q.QuestionId == id);
+                var question = await _context.QuestionMasters
+                    .FirstOrDefaultAsync(q => q.Id == id);
 
                 if (question == null)
                     return NotFound(new { success = false, message = "Question not found" });
@@ -65,36 +70,42 @@ namespace API.Controllers
 
         [HttpPost]
         [Authorize(Roles = "admin,coordinator")]
-        public async Task<ActionResult<Question>> CreateQuestion([FromBody] QuestionDto questionDto)
+        public async Task<ActionResult<QuestionMaster>> CreateQuestion([FromBody] QuestionDto questionDto)
         {
             try
             {
-                if (questionDto.SectionId <= 0)
-                    return BadRequest(new { success = false, message = "Section ID is required" });
-
                 if (questionDto.Marks <= 0)
                     return BadRequest(new { success = false, message = "Marks must be greater than 0" });
 
-                // Verify section exists
-                var section = await _context.Sections.FindAsync(questionDto.SectionId);
-                if (section == null)
-                    return BadRequest(new { success = false, message = "Section not found" });
-
-                var question = new Question
+                // Resolve BatchId and Section name from SectionMasters
+                int batchId = 0;
+                string? sectionName = null;
+                if (questionDto.SectionId.HasValue && questionDto.SectionId.Value > 0)
                 {
-                    SectionId = questionDto.SectionId,
-                    QuestionNo = questionDto.QuestionNo,
-                    Marks = questionDto.Marks,
-                    Type = questionDto.Type,
-                    IsOptional = questionDto.IsOptional,
-                    OptionalGroupCode = questionDto.OptionalGroupCode,
+                    var sm = await _context.SectionMasters.FindAsync(questionDto.SectionId.Value);
+                    if (sm != null)
+                    {
+                        batchId     = sm.BatchId;
+                        sectionName = sm.Name;
+                    }
+                }
+
+                var question = new QuestionMaster
+                {
+                    BatchId   = batchId,
+                    Section   = sectionName,
+                    Question  = questionDto.QuestionNo,
+                    Type      = questionDto.Type,
+                    Marks     = questionDto.Marks,
+                    Group     = questionDto.OptionalGroupCode,
+                    Status    = true,
                     CreatedAt = DateTime.UtcNow
                 };
 
-                _context.Questions.Add(question);
+                _context.QuestionMasters.Add(question);
                 await _context.SaveChangesAsync();
 
-                return CreatedAtAction(nameof(GetQuestion), new { id = question.QuestionId }, question);
+                return CreatedAtAction(nameof(GetQuestion), new { id = question.Id }, question);
             }
             catch (Exception ex)
             {
@@ -108,17 +119,16 @@ namespace API.Controllers
         {
             try
             {
-                var question = await _context.Questions.FindAsync(id);
+                var question = await _context.QuestionMasters.FindAsync(id);
                 if (question == null)
                     return NotFound(new { success = false, message = "Question not found" });
 
-                question.QuestionNo = questionDto.QuestionNo;
-                question.Marks = questionDto.Marks;
-                question.Type = questionDto.Type;
-                question.IsOptional = questionDto.IsOptional;
-                question.OptionalGroupCode = questionDto.OptionalGroupCode;
+                question.Question = questionDto.QuestionNo;
+                question.Marks    = questionDto.Marks;
+                question.Type     = questionDto.Type;
+                question.Group    = questionDto.OptionalGroupCode;
 
-                _context.Questions.Update(question);
+                _context.QuestionMasters.Update(question);
                 await _context.SaveChangesAsync();
 
                 return Ok(new { success = true, message = "Question updated successfully" });
@@ -135,11 +145,11 @@ namespace API.Controllers
         {
             try
             {
-                var question = await _context.Questions.FindAsync(id);
+                var question = await _context.QuestionMasters.FindAsync(id);
                 if (question == null)
                     return NotFound(new { success = false, message = "Question not found" });
 
-                _context.Questions.Remove(question);
+                _context.QuestionMasters.Remove(question);
                 await _context.SaveChangesAsync();
 
                 return Ok(new { success = true, message = "Question deleted successfully" });

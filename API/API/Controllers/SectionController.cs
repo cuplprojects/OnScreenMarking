@@ -1068,7 +1068,6 @@ namespace API.Controllers
                     return Ok(new List<object>());
 
                 var questions = await _context.QuestionMasters
-                    .Include(qm => qm.QuestionType)
                     .Where(qm => qm.BatchId == section.BatchId && qm.Section == section.Name)
                     .OrderBy(qm => qm.Id)
                     .Select(qm => new
@@ -1076,9 +1075,9 @@ namespace API.Controllers
                         questionId        = qm.Id,
                         questionNo        = qm.Question,
                         marks             = qm.Marks,
-                        typeId            = qm.QuestionTypeId,
-                        questionTypeId    = qm.QuestionTypeId,
-                        type              = qm.QuestionType != null ? qm.QuestionType.QuestionTypeName : "MCQ",
+                        typeId            = (int?)null,
+                        questionTypeId    = (int?)null,
+                        type              = qm.Type != null ? qm.Type : "MCQ",
                         isOptional        = !string.IsNullOrEmpty(qm.Group),
                         optionalGroupCode = qm.Group
                     })

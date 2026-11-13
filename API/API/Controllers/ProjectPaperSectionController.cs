@@ -162,7 +162,6 @@ namespace API.Controllers
                     return NotFound(new { success = false, message = "Section not found" });
 
                 var questions = await _context.QuestionMasters
-                    .Include(qm => qm.QuestionType)
                     .Where(qm => qm.BatchId == master.BatchId && qm.Section == master.Name)
                     .OrderBy(qm => qm.Id)
                     .Select(qm => new
@@ -170,9 +169,9 @@ namespace API.Controllers
                         questionId        = qm.Id,
                         questionNo        = qm.Question,
                         marks             = qm.Marks,
-                        typeId            = qm.QuestionTypeId,
-                        questionTypeId    = qm.QuestionTypeId,
-                        type              = qm.QuestionType != null ? qm.QuestionType.QuestionTypeName : "MCQ",
+                        typeId            = (int?)null,
+                        questionTypeId    = (int?)null,
+                        type              = qm.Type != null ? qm.Type : "MCQ",
                         isOptional        = !string.IsNullOrEmpty(qm.Group),
                         optionalGroupCode = qm.Group
                     })
@@ -405,6 +404,10 @@ namespace API.Controllers
                 else
                 {
                     qmList = new List<QuestionMaster>();
+                    decimal defaultMarksPerQ = dto.TotalQuestions > 0 && dto.TotalMarks > 0
+                        ? Math.Round(dto.TotalMarks / dto.TotalQuestions, 2, MidpointRounding.AwayFromZero)
+                        : 0m;
+                    int? defTypeId = defType?.QuestionTypeId;
                     for (int i = dto.StartQuestion; i <= dto.EndQuestion; i++)
                     {
                         qmList.Add(new QuestionMaster
@@ -412,10 +415,9 @@ namespace API.Controllers
                             BatchId        = resolvedBatchId,
                             Section        = masterName,
                             Question       = i.ToString(),
-                            QuestionTypeId = defType?.QuestionTypeId,
+                            QuestionTypeId = defTypeId,
                             Type           = defType?.QuestionTypeName ?? "MCQ",
                             Marks          = defaultMarksPerQ,
-                            QuestionTypeId = defTypeId,
                             Group          = null,
                             Status         = true,
                             CreatedAt      = DateTime.UtcNow
@@ -1071,7 +1073,6 @@ namespace API.Controllers
                 .ToListAsync();
 
             var allQuestions = await _context.QuestionMasters
-                .Include(qm => qm.QuestionType)
                 .Where(qm => qm.BatchId == batchId)
                 .OrderBy(qm => qm.Id)
                 .ToListAsync();

@@ -29,25 +29,22 @@ namespace API.Models
         public string Question { get; set; } = string.Empty;
 
         /// <summary>
-        /// Reference to QuestionType in questiontypes table (computed in code from Type / questiontypes, not in DB)
+        /// Reference to QuestionType in questiontypes table (computed in code — not stored in DB)
         /// </summary>
         [NotMapped]
         public int? QuestionTypeId { get; set; }
 
         /// <summary>
-        /// Type of the question (e.g. "MCQ", "Short Answer", "Descriptive")
+        /// Type of the question as a string (e.g. "MCQ", "Short Answer", "Descriptive") — stored in DB
+        /// </summary>
+        [MaxLength(100)]
+        public string? Type { get; set; }
+
+        /// <summary>
+        /// Maximum marks for this question
         /// </summary>
         [Column(TypeName = "decimal(10,2)")]
         public decimal Marks { get; set; } = 0;
-
-        /// <summary>
-        /// Foreign key to QuestionType in questiontypes table
-        /// </summary>
-        [Required]
-        public int QuestionTypeId { get; set; }
-
-        [ForeignKey(nameof(QuestionTypeId))]
-        public QuestionType QuestionType { get; set; } = null!;
 
         /// <summary>
         /// Group the question belongs to (only populated if question is grouped, e.g. optional group code)

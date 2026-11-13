@@ -725,15 +725,7 @@ namespace API.Data
             modelBuilder.Entity<QuestionMaster>()
                 .Property(qm => qm.Marks)
                 .HasPrecision(10, 2);
-            modelBuilder.Entity<QuestionMaster>()
-                .Property(qm => qm.QuestionTypeId)
-                .IsRequired();
-            modelBuilder.Entity<QuestionMaster>()
-                .HasOne(qm => qm.QuestionType)
-                .WithMany()
-                .HasForeignKey(qm => qm.QuestionTypeId)
-                .IsRequired()
-                .OnDelete(DeleteBehavior.Restrict);
+            // QuestionTypeId is [NotMapped] — resolved in code, not stored in DB
             modelBuilder.Entity<QuestionMaster>()
                 .HasIndex(qm => new { qm.BatchId, qm.Section, qm.Question })
                 .IsUnique();
