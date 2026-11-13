@@ -1,22 +1,32 @@
 // Centralized API configuration
 const API_URL = import.meta.env.VITE_API_URL;
-const ENABLE_ENCRYPTION = import.meta.env.VITE_ENABLE_ENCRYPTION;
+const ENABLE_ENCRYPTION = import.meta.env.VITE_ENABLE_ENCRYPTION === 'true';
 import message from './messageService';
 import { encryptPayload, decryptResponseData } from '../utils/payloadEncryption';
 
-let inMemorySessionId = null;
+let inMemorySessionId = typeof sessionStorage !== 'undefined' ? (sessionStorage.getItem('token') || null) : null;
 
 export const setSessionId = (id) => {
   inMemorySessionId = id;
+  try {
+    if (id) {
+      sessionStorage.setItem('token', id);
+    } else {
+      sessionStorage.removeItem('token');
+    }
+  } catch (e) {}
 };
 
 export const clearSessionId = () => {
   inMemorySessionId = null;
+  try {
+    sessionStorage.removeItem('token');
+  } catch (e) {}
 };
 
 const handleResponse = async (response, options = {}) => {
   if (response.status === 401) {
-    inMemorySessionId = null;
+    clearSessionId();
     if (!options.ignoreAuthRedirect && 
         !window.location.pathname.includes('/login') && 
         !window.location.pathname.includes('/accept-invitation')) {
@@ -65,9 +75,10 @@ const handleResponse = async (response, options = {}) => {
 };
 
 const apiCall = async (endpoint, options = {}) => {
+  const currentToken = inMemorySessionId || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('token') : null);
   const headers = {
     'Content-Type': 'application/json',
-    ...(inMemorySessionId ? { 'X-Session-Id': inMemorySessionId, 'Authorization': `Bearer ${inMemorySessionId}` } : {}),
+    ...(currentToken ? { 'X-Session-Id': currentToken, 'Authorization': `Bearer ${currentToken}` } : {}),
     ...options.headers,
   };
 

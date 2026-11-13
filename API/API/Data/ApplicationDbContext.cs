@@ -21,7 +21,7 @@ namespace API.Data
         public DbSet<ProjectPaper> ProjectPapers { get; set; }
         public DbSet<Section> Sections { get; set; }
         public DbSet<SectionMaster> SectionMasters { get; set; }
-        public DbSet<Question> Questions { get; set; }
+       // public DbSet<Question> Questions { get; set; }
         public DbSet<QuestionMark> QuestionMarks { get; set; }
         public DbSet<ExaminerExpertise> ExaminerExpertises { get; set; }
         public DbSet<Script> Scripts { get; set; }
@@ -53,7 +53,7 @@ namespace API.Data
         public DbSet<GeneratedPdf> GeneratedPdfs { get; set; }
         public DbSet<UploadQueue> UploadQueues { get; set; }
         public DbSet<PaperSectionMaster> PaperSectionMasters { get; set; }
-        public DbSet<ProjectPaperSection> ProjectPaperSections { get; set; }
+       // public DbSet<ProjectPaperSection> ProjectPaperSections { get; set; }
         public DbSet<SubjectPaperRequest> SubjectPaperRequests { get; set; }
         public DbSet<AssignmentType> AssignmentTypes { get; set; }
         public DbSet<QuestionMaster> QuestionMasters { get; set; }

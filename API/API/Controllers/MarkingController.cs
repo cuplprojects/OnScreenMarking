@@ -429,7 +429,6 @@ namespace API.Controllers
                 // 2. Fallback to Database QuestionMarks if cache is empty or unavailable
                 var marking = await _context.Markings
                     .Include(m => m.QuestionMarks)
-                        .ThenInclude(qm => qm.Question)
                     .FirstOrDefaultAsync(m => m.ScriptId == scriptId && m.ExaminerId == examinerId);
 
                 if (marking != null && marking.QuestionMarks.Any())
@@ -449,8 +448,8 @@ namespace API.Controllers
                             isSkipped = qm.IsSkipped,
                             remarks = qm.Remarks ?? "",
                             isAttempted = qm.IsAttempted,
-                            maxMarks = qmInfo != null ? qmInfo.Marks : (qm.Question?.Marks ?? 0),
-                            questionNo = qmInfo != null ? qmInfo.Question : (qm.Question?.QuestionNo ?? "")
+                            maxMarks = qmInfo?.Marks ?? 0,
+                            questionNo = qmInfo?.Question ?? ""
                         };
                     }
                     return Ok(new { success = true, draftData = dbDraft });
@@ -1046,7 +1045,6 @@ namespace API.Controllers
 
                 var rawList = await _context.QuestionMarks
                     .Where(qm => qm.MarkingId == markingId)
-                    .Include(qm => qm.Question)
                     .ToListAsync();
 
                 var qIds = rawList.Select(x => x.QuestionId).Distinct().ToList();
@@ -1057,7 +1055,7 @@ namespace API.Controllers
                 var questionMarks = rawList.Select(qm => new QuestionMarkDto
                 {
                     QuestionId = qm.QuestionId,
-                    QuestionNo = qMasters.TryGetValue(qm.QuestionId, out var qmNo) ? qmNo : (qm.Question?.QuestionNo ?? ""),
+                    QuestionNo = qMasters.TryGetValue(qm.QuestionId, out var qmNo) ? qmNo : "",
                     MarksAwarded = Math.Round(qm.MarksAwarded, 2, MidpointRounding.AwayFromZero),
                     IsSkipped = qm.IsSkipped,
                     Remarks = qm.Remarks,
