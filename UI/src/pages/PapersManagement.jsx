@@ -822,12 +822,13 @@ export default function PapersManagement({ isTab = false }) {
         allExaminers = await apiCall(`/users/examiners${projUniversityId ? `?universityId=${projUniversityId}` : ''}`);
       }
 
-      // Filter: get only those examiners with university id whose subject1 is same as paper's subject
+      // Filter: get only those examiners with university id whose subject (subjectId1, subjectId2, or subjectId3) matches paper's subject
       const filteredExaminers = allExaminers.filter(ex => {
         const matchesUni = !projUniversityId || ex.universityId === parseInt(projUniversityId);
+        const exSubjectIds = [ex.subjectId1, ex.subjectId2, ex.subjectId3].filter(Boolean);
         const matchesSub = subIds.length > 0 
-          ? subIds.includes(ex.subjectId1)
-          : (paper.subjectId ? ex.subjectId1 === parseInt(paper.subjectId) : true);
+          ? exSubjectIds.some(sid => subIds.includes(sid))
+          : (paper.subjectId ? exSubjectIds.includes(parseInt(paper.subjectId)) : true);
         return matchesUni && matchesSub;
       });
 
@@ -3132,8 +3133,9 @@ export default function PapersManagement({ isTab = false }) {
                             if (activeUniversityId && ex.universityId !== parseInt(activeUniversityId)) {
                               return false;
                             }
-                            // Check subject match
-                            return row.paper.subjectId && ex.subjectId1 === row.paper.subjectId;
+                            // Check subject match (primary, secondary, or tertiary)
+                            const exSubjectIds = [ex.subjectId1, ex.subjectId2, ex.subjectId3].filter(Boolean);
+                            return row.paper.subjectId && exSubjectIds.includes(row.paper.subjectId);
                           });
                         } else {
                           // For not found or other cases, filter all examiners by subject and university
@@ -3142,8 +3144,9 @@ export default function PapersManagement({ isTab = false }) {
                             if (activeUniversityId && ex.universityId !== parseInt(activeUniversityId)) {
                               return false;
                             }
-                            // Check subject match
-                            return row.paper.subjectId && ex.subjectId1 === row.paper.subjectId;
+                            // Check subject match (primary, secondary, or tertiary)
+                            const exSubjectIds = [ex.subjectId1, ex.subjectId2, ex.subjectId3].filter(Boolean);
+                            return row.paper.subjectId && exSubjectIds.includes(row.paper.subjectId);
                           });
                         }
                         
@@ -3549,8 +3552,9 @@ export default function PapersManagement({ isTab = false }) {
                                 return false;
                               }
                               
-                              // Then filter by paper's subject
-                              const matchesSubject = paper.subjectId && ex.subjectId1 === paper.subjectId;
+                              // Then filter by paper's subject (primary, secondary, or tertiary)
+                              const exSubjectIds = [ex.subjectId1, ex.subjectId2, ex.subjectId3].filter(Boolean);
+                              const matchesSubject = paper.subjectId && exSubjectIds.includes(paper.subjectId);
                               
                               if (!matchesSubject) return false;
                               

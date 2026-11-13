@@ -515,8 +515,8 @@ namespace API.Controllers
 
                 if (subjectId.HasValue)
                 {
-                    // Filter examiners whose SubjectId1 is the same as paper's subject
-                    query = query.Where(u => u.SubjectId1 == subjectId.Value);
+                    // Filter examiners matching primary, secondary, or tertiary subject
+                    query = query.Where(u => u.SubjectId1 == subjectId.Value || u.SubjectId2 == subjectId.Value || u.SubjectId3 == subjectId.Value);
                 }
 
                 var examiners = await query
@@ -989,6 +989,19 @@ namespace API.Controllers
                     .Where(a => examinerIds.Contains(a.ExaminerId) && a.AssignmentStatus)
                     .ToListAsync();
 
+                // Resolve subject names for examiners using SubjectId1, SubjectId2, SubjectId3
+                var allSubjectIds = examinersList
+                    .SelectMany(u => new[] { u.SubjectId1, u.SubjectId2, u.SubjectId3 })
+                    .Where(s => s.HasValue && s.Value > 0)
+                    .Select(s => s.Value)
+                    .Distinct()
+                    .ToList();
+
+                var subjectsMap = await _context.Subjects
+                    .AsNoTracking()
+                    .Where(s => allSubjectIds.Contains(s.SubjectId))
+                    .ToDictionaryAsync(s => s.SubjectId, s => s.SubName);
+
                 var processedExaminers = new List<ProjectExaminerDto>();
 
                 foreach (var ex in examinersList)
@@ -1004,9 +1017,13 @@ namespace API.Controllers
                     // Only include active/available examiners (either allocated to this project, or generally have allocations)
                     if (projAllocationsCount > 0 || totalAllocatedCount >= 0)
                     {
-                        var subjects = ex.Expertise != null 
-                            ? string.Join(", ", ex.Expertise.Where(ee => ee.Subject != null).Select(ee => ee.Subject.SubName))
-                            : "";
+                        var exSubNames = new[] { ex.SubjectId1, ex.SubjectId2, ex.SubjectId3 }
+                            .Where(s => s.HasValue && s.Value > 0 && subjectsMap.ContainsKey(s.Value))
+                            .Select(s => subjectsMap[s.Value])
+                            .Distinct()
+                            .ToList();
+
+                        var subjects = string.Join(", ", exSubNames);
 
                         processedExaminers.Add(new ProjectExaminerDto
                         {

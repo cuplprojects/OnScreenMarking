@@ -765,10 +765,7 @@ namespace API.Controllers
                     paperMaxMarks = 100;
                 }
 
-                // Build a lookup of awarded marks per QuestionMasterId for this marking
-                var qMarksDict = marking.QuestionMarks
-                    .GroupBy(qm => qm.QuestionMasterId)
-                    .ToDictionary(g => g.Key, g => g.First());
+                var qMarksDict = marking.QuestionMarks.ToDictionary(qm => qm.QuestionMasterId);
 
                 var sections = sectionMasters.Select(sm => new
                 {
@@ -846,7 +843,6 @@ namespace API.Controllers
             try
             {
                 var marking = await _context.Markings
-                    .Include(m => m.QuestionMarks)
                     .Include(m => m.Script)
                         .ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                     .FirstOrDefaultAsync(m => m.Id == markingId);

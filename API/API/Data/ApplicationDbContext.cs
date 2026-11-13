@@ -21,7 +21,7 @@ namespace API.Data
         public DbSet<ProjectPaper> ProjectPapers { get; set; }
         public DbSet<Section> Sections { get; set; }
         public DbSet<SectionMaster> SectionMasters { get; set; }
-       // public DbSet<Question> Questions { get; set; }
+        public DbSet<Question> Questions { get; set; }
         public DbSet<QuestionMark> QuestionMarks { get; set; }
         public DbSet<ExaminerExpertise> ExaminerExpertises { get; set; }
         public DbSet<Script> Scripts { get; set; }
@@ -464,6 +464,9 @@ namespace API.Data
             // QuestionMark configuration
             modelBuilder.Entity<QuestionMark>()
                 .HasKey(qm => qm.Id);
+            modelBuilder.Entity<QuestionMark>()
+                .Property(qm => qm.QuestionMasterId)
+                .HasColumnName("QuestionMasterId");
             modelBuilder.Entity<QuestionMark>()
                 .HasOne(qm => qm.QuestionMaster)
                 .WithMany()

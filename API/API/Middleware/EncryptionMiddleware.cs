@@ -181,10 +181,19 @@ namespace API.Middleware
                 "/swagger",
                 "/health",
                 "/api/health",
-                "/.well-known"
+                "/.well-known",
+                "/files",
+                "/api/files"
             };
 
-            return skipPaths.Any(skipPath => pathValue.StartsWith(skipPath));
+            if (skipPaths.Any(skipPath => pathValue.StartsWith(skipPath)))
+                return true;
+
+            // Skip PDF streaming endpoints and binary file downloads
+            if (pathValue.EndsWith("/pdf") || pathValue.EndsWith(".pdf") || pathValue.Contains("/pdf/"))
+                return true;
+
+            return false;
         }
 
         private bool ShouldEncryptResponse(HttpContext context, string responseText)

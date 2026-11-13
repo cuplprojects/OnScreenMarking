@@ -163,10 +163,10 @@ export default function SectionConfig() {
       setLoading(true);
       if (isProjectMode) {
         const data = await sectionService.getProjectPaperSections({ projectId, paperId: urlPaperId });
-        setSections(data || []);
+        setSections(Array.isArray(data) ? data : (data?.sections || []));
       } else {
         const data = await sectionService.getAllSections(urlPaperId);
-        setSections(data || []);
+        setSections(Array.isArray(data) ? data : (data?.sections || []));
       }
     } catch (err) {
       message.error('Failed to fetch sections');

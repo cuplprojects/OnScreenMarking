@@ -29,10 +29,16 @@ namespace API.Models
         public string Question { get; set; } = string.Empty;
 
         /// <summary>
-        /// Foreign key to QuestionType in questiontypes table — stored in DB
+        /// Type of the question (e.g. "MCQ", "Short Answer", "Descriptive")
+        /// </summary>
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal Marks { get; set; } = 0;
+
+        /// <summary>
+        /// Foreign key to QuestionType in questiontypes table
         /// </summary>
         [Required]
-        public int QuestionTypeId { get; set; }
+        public int QuestionTypeId { get; set; } = 1;
 
         [ForeignKey(nameof(QuestionTypeId))]
         public QuestionType? QuestionType { get; set; }
