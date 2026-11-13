@@ -87,8 +87,6 @@ namespace API.Models
         [ForeignKey("QuestionMasterId")]
         public QuestionMaster? QuestionMaster { get; set; }
 
-
-
         [Column(TypeName = "decimal(10,2)")]
         public decimal MarksAwarded { get; set; }
         public bool IsSkipped { get; set; }

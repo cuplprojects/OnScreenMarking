@@ -140,9 +140,6 @@ const Login = () => {
               Register Here
             </span>
           </p>
-          <p className="text-xs text-gray-500">
-            Demo Credentials: examiner@uv.gov.in / password
-          </p>
         </div>
       </div>
     </div>

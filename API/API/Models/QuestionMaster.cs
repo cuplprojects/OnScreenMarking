@@ -29,12 +29,6 @@ namespace API.Models
         public string Question { get; set; } = string.Empty;
 
         /// <summary>
-        /// Reference to QuestionType in questiontypes table (computed in code from Type / questiontypes, not in DB)
-        /// </summary>
-        [NotMapped]
-        public int? QuestionTypeId { get; set; }
-
-        /// <summary>
         /// Type of the question (e.g. "MCQ", "Short Answer", "Descriptive")
         /// </summary>
         [Column(TypeName = "decimal(10,2)")]
@@ -44,10 +38,17 @@ namespace API.Models
         /// Foreign key to QuestionType in questiontypes table
         /// </summary>
         [Required]
-        public int QuestionTypeId { get; set; }
+        public int QuestionTypeId { get; set; } = 1;
 
         [ForeignKey(nameof(QuestionTypeId))]
-        public QuestionType QuestionType { get; set; } = null!;
+        public QuestionType? QuestionType { get; set; }
+
+        [NotMapped]
+        public string? Type
+        {
+            get => QuestionType?.QuestionTypeName;
+            set { }
+        }
 
         /// <summary>
         /// Group the question belongs to (only populated if question is grouped, e.g. optional group code)

@@ -128,7 +128,12 @@ namespace API.Controllers
                         var ppSections = await BuildSectionsResponse(pp, pp.BatchId);
                         allResults.AddRange(ppSections);
                     }
-                    return Ok(allResults);
+                    return Ok(new
+                    {
+                        projectPaper = (object?)null,
+                        totalPaperMarks = 0m,
+                        sections = allResults
+                    });
                 }
 
                 if (resolvedBatchId.HasValue && resolvedBatchId.Value > 0 && projectPaper == null)
@@ -139,10 +144,31 @@ namespace API.Controllers
                 }
 
                 if (projectPaper == null && (!resolvedBatchId.HasValue || resolvedBatchId.Value <= 0))
-                    return Ok(new List<object>());
+                {
+                    return Ok(new
+                    {
+                        projectPaper = (object?)null,
+                        totalPaperMarks = 0m,
+                        sections = new List<object>()
+                    });
+                }
 
                 var sections = await BuildSectionsResponse(projectPaper, resolvedBatchId);
-                return Ok(sections);
+                return Ok(new
+                {
+                    projectPaper = projectPaper != null ? new
+                    {
+                        id = projectPaper.Id,
+                        projectId = projectPaper.ProjectId,
+                        paperId = projectPaper.PaperId,
+                        batchId = resolvedBatchId ?? projectPaper.BatchId,
+                        paperName = projectPaper.Paper?.PaperName,
+                        paperCode = projectPaper.Paper?.PaperCode,
+                        maxMarks = projectPaper.Paper?.MaxMarks ?? 100.00m
+                    } : null,
+                    totalPaperMarks = projectPaper?.Paper?.MaxMarks ?? 100.00m,
+                    sections = sections
+                });
             }
             catch (Exception ex)
             {
@@ -394,7 +420,7 @@ namespace API.Controllers
                             BatchId        = resolvedBatchId,
                             Section        = masterName,
                             Question       = q.QuestionNo,
-                            QuestionTypeId = qTypeId,
+                            QuestionTypeId = qTypeId ?? 1,
                             Type           = !string.IsNullOrWhiteSpace(qTypeName) ? qTypeName : "MCQ",
                             Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
                             Status         = true,
@@ -412,10 +438,8 @@ namespace API.Controllers
                             BatchId        = resolvedBatchId,
                             Section        = masterName,
                             Question       = i.ToString(),
-                            QuestionTypeId = defType?.QuestionTypeId,
+                            QuestionTypeId = defType?.QuestionTypeId ?? 1,
                             Type           = defType?.QuestionTypeName ?? "MCQ",
-                            Marks          = defaultMarksPerQ,
-                            QuestionTypeId = defTypeId,
                             Group          = null,
                             Status         = true,
                             CreatedAt      = DateTime.UtcNow
@@ -597,7 +621,7 @@ namespace API.Controllers
                                 BatchId        = newBatchId,
                                 Section        = newMaster.Name,
                                 Question       = q.QuestionNo,
-                                QuestionTypeId = qTypeId,
+                                QuestionTypeId = qTypeId ?? 1,
                                 Type           = !string.IsNullOrWhiteSpace(qTypeName) ? qTypeName : "MCQ",
                                 Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
                                 Status         = true,
@@ -615,7 +639,7 @@ namespace API.Controllers
                                 BatchId        = newBatchId,
                                 Section        = newMaster.Name,
                                 Question       = i.ToString(),
-                                QuestionTypeId = defTypeUpdate?.QuestionTypeId,
+                                QuestionTypeId = defTypeUpdate?.QuestionTypeId ?? 1,
                                 Type           = defTypeUpdate?.QuestionTypeName ?? "MCQ",
                                 Group          = null,
                                 Status         = true,
@@ -695,7 +719,7 @@ namespace API.Controllers
                                 BatchId        = master.BatchId,
                                 Section        = master.Name,
                                 Question       = q.QuestionNo,
-                                QuestionTypeId = qTypeId,
+                                QuestionTypeId = qTypeId ?? 1,
                                 Type           = !string.IsNullOrWhiteSpace(qTypeName) ? qTypeName : "MCQ",
                                 Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
                                 Status         = true,
@@ -713,7 +737,7 @@ namespace API.Controllers
                                 BatchId        = master.BatchId,
                                 Section        = master.Name,
                                 Question       = i.ToString(),
-                                QuestionTypeId = defTypeDirect?.QuestionTypeId,
+                                QuestionTypeId = defTypeDirect?.QuestionTypeId ?? 1,
                                 Type           = defTypeDirect?.QuestionTypeName ?? "MCQ",
                                 Group          = null,
                                 Status         = true,
@@ -808,13 +832,15 @@ namespace API.Controllers
                             {
                                 _context.QuestionMasters.Add(new QuestionMaster
                                 {
-                                    BatchId   = newBatchId,
-                                    Section   = rem.Name,
-                                    Question  = qm.Question,
-                                    Type      = qm.Type,
-                                    Group     = qm.Group,
-                                    Status    = qm.Status,
-                                    CreatedAt = DateTime.UtcNow
+                                    BatchId        = newBatchId,
+                                    Section        = rem.Name,
+                                    Question       = qm.Question,
+                                    QuestionTypeId = qm.QuestionTypeId,
+                                    Marks          = qm.Marks,
+                                    Type           = qm.Type,
+                                    Group          = qm.Group,
+                                    Status         = qm.Status,
+                                    CreatedAt      = DateTime.UtcNow
                                 });
                             }
                         }
@@ -1088,7 +1114,7 @@ namespace API.Controllers
                 return (object)new
                 {
                     id                    = sm.Id,
-                    projectPaperId        = projectPaper.Id,
+                    projectPaperId        = projectPaper?.Id ?? 0,
                     batchId               = sm.BatchId,
                     name                  = sm.Name,
                     description           = sm.Description,
@@ -1099,14 +1125,6 @@ namespace API.Controllers
                     maxQuestionsToAttempt = sm.MaxQuestionsToAttempt,
                     createdAt             = sm.CreatedAt,
                     updatedAt             = sm.CreatedAt,
-                    projectPaper = new
-                    {
-                        id        = projectPaper.Id,
-                        projectId = projectPaper.ProjectId,
-                        paperId   = projectPaper.PaperId,
-                        paperName = projectPaper.Paper?.PaperName,
-                        paperCode = projectPaper.Paper?.PaperCode
-                    },
                     questions = allQuestions
                         .Where(qm => qm.Section == sm.Name)
                         .Select(qm => {

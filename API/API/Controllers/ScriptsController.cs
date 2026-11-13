@@ -193,8 +193,8 @@ namespace API.Controllers
                     return NotFound(new { success = false, message = $"PDF file not found on disk at: {fullPath} (Stored as: {script.CleanPdfUrl})" });
                 }
 
-                var fileBytes = await System.IO.File.ReadAllBytesAsync(fullPath);
-                return File(fileBytes, "application/pdf", System.IO.Path.GetFileName(fullPath));
+                // Use PhysicalFile with enableRangeProcessing: true for direct kernel streaming and HTTP Range support
+                return PhysicalFile(fullPath, "application/pdf", enableRangeProcessing: true);
             }
             catch (Exception ex)
             {
@@ -661,22 +661,21 @@ namespace API.Controllers
             [FromQuery] string? sortField = null,
             [FromQuery] string? sortOrder = null,
             [FromQuery] string? statusFilter = null,
-            [FromQuery] int? subjectFilter = null)
+            [FromQuery] int? subjectFilter = null,
+            [FromQuery] bool summaryOnly = false)
         {
             try
             {
                 var allocations = await _context.Allocations
+                    .AsNoTracking()
                     .Where(a => a.ExaminerId == examinerId)
                     .ToListAsync();
 
                 var scriptIds = allocations.Select(a => a.ScriptId).ToList();
 
                 var query = _context.Scripts
-                    .Where(s => scriptIds.Contains(s.Id))
-                    .Include(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
-                        .ThenInclude(p => p.SubjectPapers)
-                            .ThenInclude(sp => sp.Subject)
-                    .AsQueryable();
+                    .AsNoTracking()
+                    .Where(s => scriptIds.Contains(s.Id));
 
                 if (!string.IsNullOrEmpty(statusFilter) && statusFilter != "all" && Enum.TryParse<ScriptStatus>(statusFilter.Replace("-", "_"), true, out var parsedFilter))
                 {
@@ -699,38 +698,74 @@ namespace API.Controllers
 
                 var totalCount = await query.CountAsync();
 
+                // Lightweight dashboard summary mode: return only the fields used on Examiner Dashboard
+                if (summaryOnly || pageSize >= 500)
+                {
+                    var summaryQuery = query.Select(s => new
+                    {
+                        id = s.Id,
+                        status = s.Status,
+                        totalMarks = s.TotalMarks,
+                        paperId = s.ProjectPaper != null ? (int?)s.ProjectPaper.PaperId : null,
+                        paperName = s.ProjectPaper != null && s.ProjectPaper.Paper != null ? s.ProjectPaper.Paper.PaperName : null,
+                        paperCode = s.ProjectPaper != null && s.ProjectPaper.Paper != null ? s.ProjectPaper.Paper.PaperCode : null,
+                        subjectId = s.ProjectPaper != null && s.ProjectPaper.Paper != null 
+                            ? s.ProjectPaper.Paper.SubjectPapers.Select(sp => (int?)sp.SubjectId).FirstOrDefault() 
+                            : null
+                    });
+
+                    var summaryItems = pageSize > 0 && pageSize < 500
+                        ? await summaryQuery.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync()
+                        : await summaryQuery.Take(pageSize > 0 ? pageSize : 1000).ToListAsync();
+
+                    return Ok(new
+                    {
+                        items = summaryItems,
+                        totalCount = totalCount,
+                        page = page,
+                        pageSize = pageSize,
+                        totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 1
+                    });
+                }
+
+                // Full DTO query with entity relations for detailed paginated list (e.g. Scripts table)
+                IQueryable<Script> detailedQuery = query
+                    .Include(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
+                        .ThenInclude(p => p.SubjectPapers)
+                            .ThenInclude(sp => sp.Subject);
+
                 // Sorting
                 if (!string.IsNullOrEmpty(sortField))
                 {
                     bool isDesc = sortOrder?.ToLower() == "desc";
                     
                     if (sortField.Equals("rollNumber", StringComparison.OrdinalIgnoreCase))
-                        query = isDesc ? query.OrderByDescending(s => s.RollNumber) : query.OrderBy(s => s.RollNumber);
+                        detailedQuery = isDesc ? detailedQuery.OrderByDescending(s => s.RollNumber) : detailedQuery.OrderBy(s => s.RollNumber);
                     else if (sortField.Equals("status", StringComparison.OrdinalIgnoreCase))
-                        query = isDesc ? query.OrderByDescending(s => s.Status) : query.OrderBy(s => s.Status);
+                        detailedQuery = isDesc ? detailedQuery.OrderByDescending(s => s.Status) : detailedQuery.OrderBy(s => s.Status);
                     else if (sortField.Equals("submittedAt", StringComparison.OrdinalIgnoreCase))
-                        query = isDesc ? query.OrderByDescending(s => s.SubmittedAt ?? s.CreatedAt) : query.OrderBy(s => s.SubmittedAt ?? s.CreatedAt);
+                        detailedQuery = isDesc ? detailedQuery.OrderByDescending(s => s.SubmittedAt ?? s.CreatedAt) : detailedQuery.OrderBy(s => s.SubmittedAt ?? s.CreatedAt);
                     else if (sortField.Equals("totalMarks", StringComparison.OrdinalIgnoreCase))
-                        query = isDesc ? query.OrderByDescending(s => s.TotalMarks) : query.OrderBy(s => s.TotalMarks);
+                        detailedQuery = isDesc ? detailedQuery.OrderByDescending(s => s.TotalMarks) : detailedQuery.OrderBy(s => s.TotalMarks);
                     else
-                        query = query.OrderByDescending(s => s.CreatedAt);
+                        detailedQuery = detailedQuery.OrderByDescending(s => s.CreatedAt);
                 }
                 else
                 {
-                    query = query.OrderByDescending(s => s.CreatedAt);
+                    detailedQuery = detailedQuery.OrderByDescending(s => s.CreatedAt);
                 }
 
                 List<Script> scripts;
                 if (pageSize > 0)
                 {
-                    scripts = await query
+                    scripts = await detailedQuery
                         .Skip((page - 1) * pageSize)
                         .Take(pageSize)
                         .ToListAsync();
                 }
                 else
                 {
-                    scripts = await query.ToListAsync();
+                    scripts = await detailedQuery.ToListAsync();
                 }
 
                 var scriptDtos = scripts.Select(s => {

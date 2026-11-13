@@ -132,7 +132,7 @@ namespace API.Controllers
                                 BatchId = m.BatchId,
                                 Section = m.Name,
                                 Question = qNo.ToString(),
-                                QuestionTypeId = defQt?.QuestionTypeId,
+                                QuestionTypeId = defQt?.QuestionTypeId ?? 1,
                                 Type = defQt?.QuestionTypeName ?? "MCQ",
                                 Group = null,
                                 Status = true,

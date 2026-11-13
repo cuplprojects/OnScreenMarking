@@ -217,7 +217,7 @@ const MarkingHeader = ({
     </div>
 
     <div className="flex items-center gap-3">
-      {timePerCopyMinutes > 0 && !isMarkingSubmitted && (
+      {/* {timePerCopyMinutes > 0 && !isMarkingSubmitted && (
         <div
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all shadow-sm ${
             remainingSeconds > 0
@@ -240,7 +240,7 @@ const MarkingHeader = ({
             </p>
           </div>
         </div>
-      )}
+      )} */}
 
       <div className="bg-teal-50 py-1.5 rounded-lg border border-teal-200 flex flex-col items-center md:px-4 px-3">
         <p className="text-[10px] uppercase font-bold text-teal-700">Total Score</p>
@@ -1523,7 +1523,8 @@ const ExaminerMarking = () => {
       }
 
       // Fallback: filter by paperId if we still have no data
-      if (!data || data.length === 0) {
+      const getSectionsList = (res) => Array.isArray(res) ? res : (res?.sections || []);
+      if (!data || getSectionsList(data).length === 0) {
         try {
           data = await sectionService.getProjectPaperSections({ paperId, batchId: effectiveBatchId, scriptId });
         } catch (fallbackErr) {
@@ -1531,9 +1532,13 @@ const ExaminerMarking = () => {
         }
       }
 
-      // Normalize data shape: ensure each question has a sectionId equal to its parent section id
-      if (data && data.length > 0) {
-        const normalizedData = data.map(section => ({
+      // Normalize data shape: handle both envelope { projectPaper, sections } and array
+      const rawSections = getSectionsList(data);
+      const paperInfoObj = data?.projectPaper || rawSections[0]?.projectPaper;
+      const resolvedMaxMarks = data?.totalPaperMarks || paperInfoObj?.maxMarks || rawSections[0]?.totalPaperMarks;
+
+      if (rawSections && rawSections.length > 0) {
+        const normalizedData = rawSections.map(section => ({
           ...section,
           questions: (section.questions || []).map(q => ({
             ...q,
@@ -1544,10 +1549,8 @@ const ExaminerMarking = () => {
         setSections(normalizedData);
 
         // Extract paper info and max marks
-        const resolvedMaxMarks = data[0]?.totalPaperMarks || data[0]?.projectPaper?.maxMarks;
-        if (data[0]?.projectPaper) {
-          const pp = data[0].projectPaper;
-          setPaperInfo(prev => ({ ...(prev || {}), ...pp, maxMarks: resolvedMaxMarks || prev?.maxMarks }));
+        if (paperInfoObj) {
+          setPaperInfo(prev => ({ ...(prev || {}), ...paperInfoObj, maxMarks: resolvedMaxMarks || prev?.maxMarks }));
         } else if (resolvedMaxMarks) {
           setPaperInfo(prev => ({ ...(prev || {}), maxMarks: resolvedMaxMarks }));
         }

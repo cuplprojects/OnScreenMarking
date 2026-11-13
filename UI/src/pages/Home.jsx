@@ -158,8 +158,8 @@ const Home = () => {
       } catch(e) { console.error("Failed to load papers:", e); }
       
       try {
-        // Fetch all scripts for stats
-        const allScriptsResponse = await apiCall(`/scripts/examiner/${user.id}?pageSize=1000`);
+        // Fetch all scripts for stats (lightweight summary: only fields used on Examiner Dashboard)
+        const allScriptsResponse = await apiCall(`/scripts/examiner/${user.id}?pageSize=1000&summaryOnly=true`);
         const allScripts = allScriptsResponse.items || (Array.isArray(allScriptsResponse) ? allScriptsResponse : []);
 
         const total = allScripts.length;

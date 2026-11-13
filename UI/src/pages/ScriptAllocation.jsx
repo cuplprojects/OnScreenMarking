@@ -343,15 +343,19 @@ export default function ScriptAllocation({ isTab = false }) {
     setLoading(true);
     try {
       // Check ProjectPaperSections first, falling back to master sections
-      let sectionsData = null;
+      const unwrapSections = (res) => Array.isArray(res) ? res : (res?.sections || []);
+      let rawSections = null;
       if (paper.projectPaperId) {
-        sectionsData = await sectionService.getProjectPaperSections({ projectPaperId: paper.projectPaperId });
+        rawSections = await sectionService.getProjectPaperSections({ projectPaperId: paper.projectPaperId });
+      }
+      let sectionsData = unwrapSections(rawSections);
+      if (!sectionsData || sectionsData.length === 0) {
+        rawSections = await sectionService.getProjectPaperSections({ projectId, paperId: paper.paperId });
+        sectionsData = unwrapSections(rawSections);
       }
       if (!sectionsData || sectionsData.length === 0) {
-        sectionsData = await sectionService.getProjectPaperSections({ projectId, paperId: paper.paperId });
-      }
-      if (!sectionsData || sectionsData.length === 0) {
-        sectionsData = await sectionService.getAllSections(paper.paperId);
+        rawSections = await sectionService.getAllSections(paper.paperId);
+        sectionsData = unwrapSections(rawSections);
       }
 
       if (!sectionsData || sectionsData.length === 0) {

@@ -319,23 +319,6 @@ namespace API.Controllers
                         .ThenInclude(cs => cs.Course)
                     .FirstOrDefaultAsync(s => s.SubjectId == id);
 
-                if (subject != null)
-                {
-                    // Load examiners mapped via Users.SubjectId1
-                    var examinerUsers = await _context.Users
-                        .Where(u => u.UserType == "examiner" && (u.SubjectId1 == id || u.SubjectId2 == id || u.SubjectId3 == id))
-                        .ToListAsync();
-
-                    subject.ExaminerExpertises = examinerUsers.Select(u => new ExaminerExpertise
-                    {
-                        Id = u.Id,
-                        ExaminerId = u.Id,
-                        SubjectId = id,
-                        IsActive = u.IsActive,
-                        Examiner = u
-                    }).ToList();
-                }
-
                 if (subject == null)
                 {
                     return NotFound(new
@@ -344,6 +327,32 @@ namespace API.Controllers
                         message = "Subject not found"
                     });
                 }
+
+                // Load examiners mapped via Users.SubjectId1, SubjectId2, SubjectId3
+                var examinerUsers = await _context.Users
+                    .AsNoTracking()
+                    .Where(u => u.UserType == "examiner" && (u.SubjectId1 == id || u.SubjectId2 == id || u.SubjectId3 == id))
+                    .ToListAsync();
+
+                subject.ExaminerExpertises = examinerUsers.Select(u => new ExaminerExpertise
+                {
+                    Id = u.Id,
+                    ExaminerId = u.Id,
+                    SubjectId = id,
+                    IsActive = u.IsActive,
+                    Examiner = new User
+                    {
+                        Id = u.Id,
+                        Name = u.Name,
+                        Email = u.Email,
+                        Phone = u.Phone,
+                        UserType = u.UserType,
+                        IsActive = u.IsActive,
+                        SubjectId1 = u.SubjectId1,
+                        SubjectId2 = u.SubjectId2,
+                        SubjectId3 = u.SubjectId3
+                    }
+                }).ToList();
 
                 return Ok(subject);
             }
@@ -549,12 +558,16 @@ namespace API.Controllers
             try
             {
                 var examiners = await _context.Users
+                    .AsNoTracking()
                     .Where(u => u.UserType == "examiner" && u.IsActive && (u.SubjectId1 == id || u.SubjectId2 == id || u.SubjectId3 == id))
                     .Select(u => new
                     {
                         id = u.Id,
                         examinerId = u.Id,
                         subjectId = id,
+                        isPrimary = u.SubjectId1 == id,
+                        isSecondary = u.SubjectId2 == id,
+                        isTertiary = u.SubjectId3 == id,
                         isActive = u.IsActive,
                         examiner = new
                         {
@@ -563,7 +576,10 @@ namespace API.Controllers
                             email = u.Email,
                             phone = u.Phone,
                             userType = u.UserType,
-                            isActive = u.IsActive
+                            isActive = u.IsActive,
+                            subjectId1 = u.SubjectId1,
+                            subjectId2 = u.SubjectId2,
+                            subjectId3 = u.SubjectId3
                         }
                     })
                     .ToListAsync();

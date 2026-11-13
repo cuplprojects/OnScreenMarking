@@ -444,7 +444,7 @@ namespace API.Controllers
 
                 if (marking != null && marking.QuestionMarks.Any())
                 {
-                    var qIds = marking.QuestionMarks.Select(qm => qm.QuestionId).Distinct().ToList();
+                    var qIds = marking.QuestionMarks.Select(qm => qm.QuestionMasterId).Distinct().ToList();
                     var qMasters = await _context.QuestionMasters
                         .Where(qm => qIds.Contains(qm.Id))
                         .ToDictionaryAsync(qm => qm.Id, qm => new { qm.Marks, qm.Question });
@@ -766,6 +766,8 @@ namespace API.Controllers
                     paperMaxMarks = 100;
                 }
 
+                var qMarksDict = marking.QuestionMarks.ToDictionary(qm => qm.QuestionMasterId);
+
                 var sections = sectionMasters.Select(sm => new
                 {
                     id = sm.Id,
@@ -840,7 +842,6 @@ namespace API.Controllers
             try
             {
                 var marking = await _context.Markings
-                    .Include(m => m.QuestionMarks)
                     .Include(m => m.Script)
                         .ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                     .FirstOrDefaultAsync(m => m.Id == markingId);
@@ -1079,21 +1080,6 @@ namespace API.Controllers
                         IsAttempted = qm.IsAttempted
                     })
                     .ToListAsync();
-
-                var qIds = rawList.Select(x => x.QuestionId).Distinct().ToList();
-                var qMasters = await _context.QuestionMasters
-                    .Where(qm => qIds.Contains(qm.Id))
-                    .ToDictionaryAsync(qm => qm.Id, qm => qm.Question);
-
-                var questionMarks = rawList.Select(qm => new QuestionMarkDto
-                {
-                    QuestionId = qm.QuestionId,
-                    QuestionNo = qMasters.TryGetValue(qm.QuestionId, out var qmNo) ? qmNo : "",
-                    MarksAwarded = Math.Round(qm.MarksAwarded, 2, MidpointRounding.AwayFromZero),
-                    IsSkipped = qm.IsSkipped,
-                    Remarks = qm.Remarks,
-                    IsAttempted = qm.IsAttempted
-                }).ToList();
 
                 return Ok(questionMarks);
             }
