@@ -76,12 +76,16 @@ builder.Services.AddScoped<IPermissionService, PermissionService>();
 builder.Services.AddScoped<IDailyAllocationService, DailyAllocationService>();
 builder.Services.AddHostedService<DailyAllocationBackgroundService>();
 
+// Add Payload & Response Encryption Service
+builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
+
 // Add CORS with credentials support for session cookies
 builder.Services.AddCors(options => {
     options.AddDefaultPolicy(policy => {
         policy.SetIsOriginAllowed(origin => true)
               .AllowAnyMethod()
               .AllowAnyHeader()
+              .WithExposedHeaders("X-Encrypted", "Content-Disposition")
               .AllowCredentials();
     });
 });
@@ -97,103 +101,6 @@ builder.Services.AddAuthentication(options => {
 
 var app = builder.Build();
 
-// Ensure BatchId column exists in SectionMasters, Sections, ProjectPaperSections
-using (var migrationScope = app.Services.CreateScope())
-{
-    try
-    {
-        var dbContext = migrationScope.ServiceProvider.GetRequiredService<API.Data.ApplicationDbContext>();
-        var tables = new[] { "SectionMasters", "Sections", "ProjectPaperSections", "PaperSectionMasters" };
-        foreach (var tbl in tables)
-        {
-            try
-            {
-                dbContext.Database.ExecuteSqlRaw($"ALTER TABLE `{tbl}` ADD COLUMN `BatchId` INT NOT NULL DEFAULT 1;");
-            }
-            catch
-            {
-                try
-                {
-                    dbContext.Database.ExecuteSqlRaw($"UPDATE `{tbl}` SET `BatchId` = 1 WHERE `BatchId` IS NULL OR `BatchId` = 0;");
-                    dbContext.Database.ExecuteSqlRaw($"ALTER TABLE `{tbl}` MODIFY COLUMN `BatchId` INT NOT NULL DEFAULT 1;");
-                }
-                catch { /* Column already updated */ }
-            }
-        }
-
-        // Ensure SectionMasterId is nullable in existing tables so EF inserts do not fail
-        foreach (var tbl in new[] { "Sections", "ProjectPaperSections", "PaperSectionMasters" })
-        {
-            try
-            {
-                dbContext.Database.ExecuteSqlRaw($"ALTER TABLE `{tbl}` MODIFY COLUMN `SectionMasterId` INT NULL DEFAULT NULL;");
-            }
-            catch { /* Ignore if column does not exist or already nullable */ }
-        }
-
-        // Ensure SectionMasters unique index is on (BatchId, Name) rather than Name alone
-        try
-        {
-            dbContext.Database.ExecuteSqlRaw("ALTER TABLE `SectionMasters` DROP INDEX `IX_SectionMasters_Name`;");
-        }
-        catch { /* Index already dropped or not present */ }
-        try
-        {
-            dbContext.Database.ExecuteSqlRaw("ALTER TABLE `SectionMasters` ADD UNIQUE INDEX `IX_SectionMasters_BatchId_Name` (`BatchId`, `Name`);");
-        }
-        catch { /* Index already exists */ }
-
-        // Ensure Questions TypeId column and seed QuestionTypes
-        try
-        {
-            dbContext.Database.ExecuteSqlRaw("ALTER TABLE `Questions` ADD COLUMN `TypeId` INT NULL;");
-        }
-        catch { /* Column already exists */ }
-
-        try
-        {
-            if (!dbContext.QuestionTypes.Any())
-            {
-                dbContext.QuestionTypes.AddRange(new[]
-                {
-                    new API.Models.QuestionType { QuestionTypeName = "MCQ" },
-                    new API.Models.QuestionType { QuestionTypeName = "SA" },
-                    new API.Models.QuestionType { QuestionTypeName = "LA" },
-                    new API.Models.QuestionType { QuestionTypeName = "Descriptive" }
-                });
-                dbContext.SaveChanges();
-            }
-        }
-        catch { }
-
-        try
-        {
-            dbContext.Database.ExecuteSqlRaw(@"
-                UPDATE `Questions` q
-                INNER JOIN `questiontypes` qt ON LOWER(TRIM(q.`Type`)) = LOWER(TRIM(qt.`Questiontype`))
-                SET q.`TypeId` = qt.`QuestiontypeId`
-                WHERE q.`TypeId` IS NULL;
-            ");
-        }
-        catch { }
-
-        // Seed Coordinator Full Academic Workflow
-        try
-        {
-            var seedController = new API.Controllers.SeedController(dbContext);
-            seedController.SeedCoordinatorFullWorkflow().GetAwaiter().GetResult();
-            Console.WriteLine("[Startup Seed] Coordinator academic workflow successfully populated.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Startup Seed Warning] {ex.Message}");
-        }
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"[Startup Migration Warning] {ex.Message}");
-    }
-}
 
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
@@ -228,6 +135,7 @@ app.UseStaticFiles();
 // OSM static files are now served dynamically via FilesController.cs
 
 app.UseCors();
+app.UseEncryptionMiddleware();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseLoggingMiddleware();

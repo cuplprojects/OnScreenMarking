@@ -69,6 +69,8 @@ namespace API.Controllers
                         PaperId = s.ProjectPaper.PaperId,
                         ProjectPaperId = s.ProjectPaperId,
                         ProjectId = s.ProjectId ?? s.ProjectPaper?.ProjectId,
+                        BatchId = s.BatchId ?? s.ProjectPaper?.BatchId,
+                        MaxMarks = s.ProjectPaper?.Paper?.MaxMarks ?? 100,
                         CleanPdfUrl = s.CleanPdfUrl,
                         Status = s.Status,
                         IsReEvaluationRequested = s.IsReEvaluationRequested,
@@ -113,6 +115,27 @@ namespace API.Controllers
 
                 var alloc = await _context.Allocations.FirstOrDefaultAsync(a => a.ScriptId == id && a.AssignmentStatus);
                 var subjectPaper = script.ProjectPaper?.Paper?.SubjectPapers?.FirstOrDefault();
+
+                int? scriptBatchId = script.BatchId ?? script.ProjectPaper?.BatchId;
+                if (!scriptBatchId.HasValue || scriptBatchId.Value <= 0)
+                {
+                    if (script.ProjectPaper != null)
+                    {
+                        scriptBatchId = await _context.ProjectPapers
+                            .Where(pp => pp.PaperId == script.ProjectPaper.PaperId && pp.BatchId != null && pp.BatchId > 0)
+                            .Select(pp => pp.BatchId)
+                            .FirstOrDefaultAsync();
+                    }
+                }
+
+                decimal maxMarks = script.ProjectPaper?.Paper?.MaxMarks ?? 0;
+                if (maxMarks <= 0 && scriptBatchId.HasValue && scriptBatchId.Value > 0)
+                {
+                    maxMarks = await _context.QuestionMasters
+                        .Where(qm => qm.BatchId == scriptBatchId.Value)
+                        .SumAsync(qm => qm.Marks);
+                }
+
                 var scriptDto = new ScriptDto
                 {
                     Id = script.Id,
@@ -121,6 +144,8 @@ namespace API.Controllers
                     PaperId = script.ProjectPaper.PaperId,
                     ProjectPaperId = script.ProjectPaperId,
                     ProjectId = script.ProjectId ?? script.ProjectPaper?.ProjectId,
+                    BatchId = scriptBatchId,
+                    MaxMarks = maxMarks > 0 ? maxMarks : 100,
                     CleanPdfUrl = script.CleanPdfUrl,
                     Status = script.Status,
                     IsReEvaluationRequested = script.IsReEvaluationRequested,
@@ -280,6 +305,7 @@ namespace API.Controllers
                 {
                     ProjectPaperId = projectPaper.Id,
                     ProjectId = projectPaper.ProjectId,
+                    BatchId = projectPaper.BatchId,
                     InBuiltBarcode = scriptDto.InBuiltBarCode,
                     GeneratedBarcode = barcode,
                     CleanPdfUrl = scriptDto.CleanPdfUrl ?? "",
@@ -357,6 +383,7 @@ namespace API.Controllers
                     {
                         ProjectPaperId = pp.Id,
                         ProjectId = pp.ProjectId,
+                        BatchId = pp.BatchId,
                         InBuiltBarcode = dto.InBuiltBarCode,
                         GeneratedBarcode = barcode,
                         CleanPdfUrl = dto.CleanPdfUrl ?? "",
@@ -508,6 +535,7 @@ namespace API.Controllers
                     {
                         ProjectPaperId = pp.Id,
                         ProjectId = pp.ProjectId,
+                        BatchId = pp.BatchId,
                         InBuiltBarcode = barcode,
                         GeneratedBarcode = barcode,
                         CleanPdfUrl = fileUrl,
@@ -716,6 +744,8 @@ namespace API.Controllers
                         PaperId = s.ProjectPaper.PaperId,
                         ProjectPaperId = s.ProjectPaperId,
                         ProjectId = s.ProjectId ?? s.ProjectPaper?.ProjectId,
+                        BatchId = s.BatchId ?? s.ProjectPaper?.BatchId,
+                        MaxMarks = s.ProjectPaper?.Paper?.MaxMarks ?? 100,
                         CleanPdfUrl = s.CleanPdfUrl,
                         Status = s.Status,
                         IsReEvaluationRequested = s.IsReEvaluationRequested,

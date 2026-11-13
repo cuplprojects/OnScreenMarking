@@ -70,6 +70,10 @@ namespace API.Middleware
             if (context.Request.Method == "GET" || context.Request.ContentLength == 0)
                 return;
 
+            if (context.Request.ContentType != null &&
+                context.Request.ContentType.StartsWith("multipart/form-data", StringComparison.OrdinalIgnoreCase))
+                return;
+
             // Check if request has encryption header
             var isEncrypted = context.Request.Headers.ContainsKey("X-Encrypted") &&
                              context.Request.Headers["X-Encrypted"] == "true";
@@ -92,7 +96,7 @@ namespace API.Middleware
 
                 // Parse the encrypted payload using camelCase naming
                 var encryptedPayload = JsonSerializer.Deserialize<EncryptedPayload>(body, _jsonOptions);
-                if (encryptedPayload?.EncryptedData == null)
+                if (string.IsNullOrWhiteSpace(encryptedPayload?.EncryptedData))
                 {
                     _logger.LogWarning("Invalid encrypted payload format");
                     return;
@@ -136,26 +140,21 @@ namespace API.Middleware
                 {
                     _logger.LogInformation("🔒 Encrypting response");
 
-                    // Parse and encrypt the response maintaining camelCase
-                    var responseData = JsonSerializer.Deserialize<object>(responseText, _jsonOptions);
-                    if (responseData != null)
+                    var encryptedData = encryptionService.EncryptString(responseText);
+                    if (!string.IsNullOrEmpty(encryptedData))
                     {
-                        var encryptedData = encryptionService.EncryptData(responseData);
+                        var encryptedResponse = new EncryptedPayload { EncryptedData = encryptedData };
+                        var encryptedJson = JsonSerializer.Serialize(encryptedResponse, _jsonOptions);
+                        var encryptedBytes = Encoding.UTF8.GetBytes(encryptedJson);
 
-                        if (!string.IsNullOrEmpty(encryptedData))
-                        {
-                            var encryptedResponse = new EncryptedPayload { EncryptedData = encryptedData };
-                            var encryptedJson = JsonSerializer.Serialize(encryptedResponse, _jsonOptions);
-                            var encryptedBytes = Encoding.UTF8.GetBytes(encryptedJson);
+                        // Set encryption header
+                        context.Response.Headers["X-Encrypted"] = "true";
+                        context.Response.ContentType = "application/json; charset=utf-8";
+                        context.Response.ContentLength = encryptedBytes.Length;
 
-                            // Set encryption header
-                            context.Response.Headers["X-Encrypted"] = "true";
-                            context.Response.ContentLength = encryptedBytes.Length;
-
-                            await originalResponseBody.WriteAsync(encryptedBytes);
-                            _logger.LogInformation("✅ Response encrypted successfully");
-                            return;
-                        }
+                        await originalResponseBody.WriteAsync(encryptedBytes);
+                        _logger.LogInformation("✅ Response encrypted successfully");
+                        return;
                     }
                 }
 

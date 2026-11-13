@@ -28,31 +28,91 @@ namespace API.Controllers
             _dailyAllocationService = dailyAllocationService;
         }
 
-        // GET: api/projectpapersection?projectPaperId=5 OR ?projectId=1&paperId=2
-        // Sections are read from SectionMasters (by BatchId from ProjectPapers)
+        private async Task<(int typeId, string typeName)> ResolveQuestionTypeAsync(int? dtoTypeId, string? dtoTypeName)
+        {
+            if (dtoTypeId.HasValue && dtoTypeId.Value > 0)
+            {
+                var qt = await _context.QuestionTypes.FindAsync(dtoTypeId.Value);
+                if (qt != null)
+                {
+                    return (qt.QuestionTypeId, qt.QuestionTypeName);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(dtoTypeName))
+            {
+                var trimmed = dtoTypeName.Trim();
+                var qt = await _context.QuestionTypes.FirstOrDefaultAsync(t => t.QuestionTypeName.ToLower() == trimmed.ToLower());
+                if (qt != null)
+                {
+                    return (qt.QuestionTypeId, qt.QuestionTypeName);
+                }
+            }
+
+            // Fallback to first available
+            var firstQt = await _context.QuestionTypes.FirstOrDefaultAsync();
+            if (firstQt != null)
+            {
+                return (firstQt.QuestionTypeId, firstQt.QuestionTypeName);
+            }
+
+            // Create default MCQ if table is empty
+            var defaultQt = new QuestionType { QuestionTypeName = "MCQ" };
+            _context.QuestionTypes.Add(defaultQt);
+            await _context.SaveChangesAsync();
+            return (defaultQt.QuestionTypeId, defaultQt.QuestionTypeName);
+        }
+
+        // GET: api/projectpapersection?projectPaperId=5 OR ?batchId=1 OR ?scriptId=10
+        // Sections are read from SectionMasters (by BatchId)
         // Questions are read from QuestionMasters (by BatchId + Section name)
         [HttpGet]
         public async Task<ActionResult<IEnumerable<object>>> GetProjectPaperSections(
             [FromQuery] int? projectPaperId = null,
             [FromQuery] int? projectId = null,
-            [FromQuery] int? paperId = null)
+            [FromQuery] int? paperId = null,
+            [FromQuery] int? batchId = null,
+            [FromQuery] int? scriptId = null)
         {
             try
             {
-                // Resolve the ProjectPaper record
                 ProjectPaper? projectPaper = null;
+                int? resolvedBatchId = batchId;
+
+                if (scriptId.HasValue && scriptId.Value > 0)
+                {
+                    var script = await _context.Scripts
+                        .Include(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
+                        .FirstOrDefaultAsync(s => s.Id == scriptId.Value);
+
+                    if (script != null)
+                    {
+                        projectPaper = script.ProjectPaper;
+                        resolvedBatchId = script.BatchId ?? script.ProjectPaper?.BatchId;
+                    }
+                }
 
                 if (projectPaperId.HasValue && projectPaperId.Value > 0)
                 {
                     projectPaper = await _context.ProjectPapers
                         .Include(pp => pp.Paper)
                         .FirstOrDefaultAsync(pp => pp.Id == projectPaperId.Value);
+
+                    if (projectPaper != null && (!resolvedBatchId.HasValue || resolvedBatchId.Value <= 0))
+                    {
+                        resolvedBatchId = projectPaper.BatchId;
+                    }
                 }
                 else if (projectId.HasValue && paperId.HasValue)
                 {
                     projectPaper = await _context.ProjectPapers
                         .Include(pp => pp.Paper)
                         .FirstOrDefaultAsync(pp => pp.ProjectId == projectId.Value && pp.PaperId == paperId.Value);
+
+                    if (projectPaper != null && (!resolvedBatchId.HasValue || resolvedBatchId.Value <= 0))
+                    {
+                        resolvedBatchId = projectPaper.BatchId;
+                    }
                 }
                 else if (projectId.HasValue)
                 {
@@ -65,16 +125,23 @@ namespace API.Controllers
                     var allResults = new List<object>();
                     foreach (var pp in projectPapers)
                     {
-                        var ppSections = await BuildSectionsResponse(pp);
+                        var ppSections = await BuildSectionsResponse(pp, pp.BatchId);
                         allResults.AddRange(ppSections);
                     }
                     return Ok(allResults);
                 }
 
-                if (projectPaper == null)
+                if (resolvedBatchId.HasValue && resolvedBatchId.Value > 0 && projectPaper == null)
+                {
+                    projectPaper = await _context.ProjectPapers
+                        .Include(pp => pp.Paper)
+                        .FirstOrDefaultAsync(pp => pp.BatchId == resolvedBatchId.Value);
+                }
+
+                if (projectPaper == null && (!resolvedBatchId.HasValue || resolvedBatchId.Value <= 0))
                     return Ok(new List<object>());
 
-                var sections = await BuildSectionsResponse(projectPaper);
+                var sections = await BuildSectionsResponse(projectPaper, resolvedBatchId);
                 return Ok(sections);
             }
             catch (Exception ex)
@@ -95,17 +162,18 @@ namespace API.Controllers
                     return NotFound(new { success = false, message = "Section not found" });
 
                 var questions = await _context.QuestionMasters
+                    .Include(qm => qm.QuestionType)
                     .Where(qm => qm.BatchId == master.BatchId && qm.Section == master.Name)
                     .OrderBy(qm => qm.Id)
                     .Select(qm => new
                     {
-                        questionId = qm.Id,
-                        questionNo = qm.Question,
-                        marks     = (decimal?)null,
-                        typeId    = qm.QuestionTypeId,
-                        questionTypeId = qm.QuestionTypeId,
-                        type      = qm.Type,
-                        isOptional = !string.IsNullOrEmpty(qm.Group),
+                        questionId        = qm.Id,
+                        questionNo        = qm.Question,
+                        marks             = qm.Marks,
+                        typeId            = qm.QuestionTypeId,
+                        questionTypeId    = qm.QuestionTypeId,
+                        type              = qm.QuestionType != null ? qm.QuestionType.QuestionTypeName : "MCQ",
+                        isOptional        = !string.IsNullOrEmpty(qm.Group),
                         optionalGroupCode = qm.Group
                     })
                     .ToListAsync();
@@ -346,6 +414,8 @@ namespace API.Controllers
                             Question       = i.ToString(),
                             QuestionTypeId = defType?.QuestionTypeId,
                             Type           = defType?.QuestionTypeName ?? "MCQ",
+                            Marks          = defaultMarksPerQ,
+                            QuestionTypeId = defTypeId,
                             Group          = null,
                             Status         = true,
                             CreatedAt      = DateTime.UtcNow
@@ -403,6 +473,23 @@ namespace API.Controllers
                 else
                 {
                     projectPaper = await _context.ProjectPapers.FirstOrDefaultAsync(pp => pp.BatchId == oldBatchId);
+                    var qmList = new List<QuestionMaster>();
+                    foreach (var q in dto.Questions)
+                    {
+                        var (resolvedTypeId, resolvedTypeName) = await ResolveQuestionTypeAsync(q.TypeId ?? q.QuestionTypeId, q.Type);
+                        qmList.Add(new QuestionMaster
+                        {
+                            BatchId        = master.BatchId,
+                            Section        = master.Name,
+                            Question       = q.QuestionNo,
+                            Marks          = Math.Round(q.Marks, 2, MidpointRounding.AwayFromZero),
+                            QuestionTypeId = resolvedTypeId,
+                            Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                            Status         = true,
+                            CreatedAt      = DateTime.UtcNow
+                        });
+                    }
+                    _context.QuestionMasters.AddRange(qmList);
                 }
 
                 bool isMasterOrShared = oldBatchId <= 5 || 
@@ -926,17 +1013,20 @@ namespace API.Controllers
                     if (existingQMs.Any())
                         _context.QuestionMasters.RemoveRange(existingQMs);
 
+                    decimal defaultMarksPerQ = ms.TotalQuestions > 0 ? Math.Round((decimal)ms.TotalMarks / ms.TotalQuestions, 2) : 0;
+                    var (defTypeId, defTypeName) = await ResolveQuestionTypeAsync(null, "MCQ");
                     for (int i = ms.StartQuestion; i <= ms.EndQuestion; i++)
                     {
                         _context.QuestionMasters.Add(new QuestionMaster
                         {
-                            BatchId   = resolvedBatchId,
-                            Section   = ms.Name,
-                            Question  = i.ToString(),
-                            Type      = "MCQ",
-                            Group     = null,
-                            Status    = true,
-                            CreatedAt = DateTime.UtcNow
+                            BatchId        = resolvedBatchId,
+                            Section        = ms.Name,
+                            Question       = i.ToString(),
+                            Marks          = defaultMarksPerQ,
+                            QuestionTypeId = defTypeId,
+                            Group          = null,
+                            Status         = true,
+                            CreatedAt      = DateTime.UtcNow
                         });
                     }
                 }
@@ -961,12 +1051,19 @@ namespace API.Controllers
         }
 
         // ── Helper: build section response from SectionMasters + QuestionMasters ──────
-        private async Task<List<object>> BuildSectionsResponse(ProjectPaper projectPaper)
+        private async Task<List<object>> BuildSectionsResponse(ProjectPaper? projectPaper, int? explicitBatchId = null)
         {
-            if (!projectPaper.BatchId.HasValue || projectPaper.BatchId.Value <= 0)
-                return new List<object>();
+            int batchId = explicitBatchId ?? projectPaper?.BatchId ?? 0;
+            if (batchId <= 0 && projectPaper != null)
+            {
+                batchId = await _context.ProjectPapers
+                    .Where(pp => pp.PaperId == projectPaper.PaperId && pp.BatchId != null && pp.BatchId > 0)
+                    .Select(pp => pp.BatchId!.Value)
+                    .FirstOrDefaultAsync();
+            }
 
-            int batchId = projectPaper.BatchId.Value;
+            if (batchId <= 0)
+                return new List<object>();
 
             var sectionMasters = await _context.SectionMasters
                 .Where(sm => sm.BatchId == batchId)
@@ -974,6 +1071,7 @@ namespace API.Controllers
                 .ToListAsync();
 
             var allQuestions = await _context.QuestionMasters
+                .Include(qm => qm.QuestionType)
                 .Where(qm => qm.BatchId == batchId)
                 .OrderBy(qm => qm.Id)
                 .ToListAsync();

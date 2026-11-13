@@ -1147,7 +1147,7 @@ export default function ScriptAllocation({ isTab = false }) {
                                       {(examiner.examiner?.name || 'E').charAt(0)}
                                     </div>
                                     <div>
-                                      <p className="text-xs font-bold text-gray-900">{examiner.examiner?.name || 'Examiner'}</p>
+                                      <p className="text-xs font-bold text-gray-900">{examiner.examiner.name}</p>
                                       {examiner.examiner?.email && (
                                         <p className="text-[11px] text-gray-400 font-medium">{examiner.examiner.email}</p>
                                       )}

@@ -242,7 +242,7 @@ namespace API.Controllers
                         maxMarks = p.MaxMarks,
                         totalQuestions = p.TotalQuestions,
                         isActive = p.IsActive,
-                        subjectName = p.SubjectPapers.Select(sp => sp.Subject.SubName).FirstOrDefault() ?? "N/A",
+                        subjectName = p.SubjectPapers.Select(sp => sp.Subject.SubName).FirstOrDefault(),
                         subjectId = p.SubjectPapers.Select(sp => sp.SubjectId).FirstOrDefault(),
                         subjectNames = p.SubjectPapers.Select(sp => sp.Subject.SubName).ToList(),
                         subjectIds = p.SubjectPapers.Select(sp => sp.SubjectId).ToList(),

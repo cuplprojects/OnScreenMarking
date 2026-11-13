@@ -17,10 +17,6 @@ import {
 import message from '../services/messageService';
 
 export default function SessionProjectManagement() {
-  const [searchParams] = useSearchParams();
-  const { userType } = useAuth();
-
-  // Define fetch function for useTable hook
   const fetchFn = useCallback((params) => {
     return sessionService.getAllSessions(params);
   }, []);
