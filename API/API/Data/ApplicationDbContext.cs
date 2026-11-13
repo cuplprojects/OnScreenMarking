@@ -255,11 +255,7 @@ namespace API.Data
                 .WithMany(s => s.SubjectPapers)
                 .HasForeignKey(sp => sp.SubjectId)
                 .OnDelete(DeleteBehavior.Cascade);
-            modelBuilder.Entity<Subject>()
-                .HasMany(s => s.ExaminerExpertises)
-                .WithOne(ee => ee.Subject)
-                .HasForeignKey(ee => ee.SubjectId)
-                .OnDelete(DeleteBehavior.Cascade);
+
 
             // Paper configuration
             modelBuilder.Entity<Paper>()
@@ -351,18 +347,9 @@ namespace API.Data
                 .HasForeignKey(q => q.ProjectPaperSectionId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Cascade);
-            modelBuilder.Entity<Question>()
-                .HasMany(q => q.QuestionMarks)
-                .WithOne(qm => qm.Question)
-                .HasForeignKey(qm => qm.QuestionId)
-                .OnDelete(DeleteBehavior.Cascade);
 
-            // ExaminerExpertise configuration
-            modelBuilder.Entity<ExaminerExpertise>()
-                .HasKey(ee => ee.Id);
-            modelBuilder.Entity<ExaminerExpertise>()
-                .HasIndex(ee => new { ee.ExaminerId, ee.SubjectId })
-                .IsUnique();
+            // ExaminerExpertise table removed from DB — mapped via Users.SubjectId1
+            modelBuilder.Ignore<ExaminerExpertise>();
 
             // Script configuration
             modelBuilder.Entity<Script>()
@@ -505,6 +492,17 @@ namespace API.Data
             // QuestionMark configuration
             modelBuilder.Entity<QuestionMark>()
                 .HasKey(qm => qm.Id);
+            modelBuilder.Entity<QuestionMark>()
+                .HasOne(qm => qm.QuestionMaster)
+                .WithMany()
+                .HasForeignKey(qm => qm.QuestionMasterId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<QuestionMark>()
+                .HasOne(qm => qm.Script)
+                .WithMany()
+                .HasForeignKey(qm => qm.ScriptId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // Invitation configuration
             modelBuilder.Entity<Invitation>()

@@ -670,9 +670,10 @@ const ExaminerMarking = () => {
           // Convert array format to object format for state
           marksToLoad = { ...defaultMarks };
           savedMarks.forEach(sm => {
-            if (marksToLoad[sm.questionId]) {
-              marksToLoad[sm.questionId] = {
-                ...marksToLoad[sm.questionId],
+            const qKey = sm.questionMasterId || sm.questionId;
+            if (marksToLoad[qKey]) {
+              marksToLoad[qKey] = {
+                ...marksToLoad[qKey],
                 marksAwarded: sm.marksAwarded,
                 isSkipped: sm.isSkipped,
                 remarks: sm.remarks || "",
@@ -1286,7 +1287,9 @@ const ExaminerMarking = () => {
       const isSkipped = mark.isSkipped || (!isAttempted && limitReached);
 
       return {
+        questionMasterId: questionId,
         questionId: questionId,
+        scriptId: scriptId ? parseInt(scriptId) : null,
         questionNo: mark.questionNo,
         marksAwarded: mark.marksAwarded || 0,
         isSkipped: isSkipped,

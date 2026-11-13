@@ -1,12 +1,11 @@
 import apiCall from './api';
 
-const sectionService = {
+export const sectionService = {
   // Get all section masters
   getSectionMasters: async () => {
     return apiCall('/section/Masters');
   },
 
-  // Create section master
   createSectionMaster: async (data) => {
     return apiCall('/section/Masters', {
       method: 'POST',
@@ -22,7 +21,6 @@ const sectionService = {
     });
   },
 
-  // Update section master
   updateSectionMaster: async (id, data) => {
     return apiCall(`/section/Masters/${id}`, {
       method: 'PUT',
@@ -30,77 +28,82 @@ const sectionService = {
     });
   },
 
-  // Delete section master
   deleteSectionMaster: async (id) => {
     return apiCall(`/section/Masters/${id}`, {
       method: 'DELETE',
     });
   },
 
-  // Get all sections
-  getAllSections: async (paperId = null) => {
-    const query = paperId ? `?paperId=${paperId}` : '';
-    return apiCall(`/section${query}`);
+  getAllSections: async (paperId) => {
+    return apiCall(`/section/paper/${paperId}`);
   },
 
-  // Get section by ID
-  getSectionById: async (sectionId) => {
-    return apiCall(`/section/${sectionId}`);
+  getSectionById: async (id) => {
+    return apiCall(`/section/${id}`);
   },
 
-  // Get questions for a section
-  getSectionQuestions: async (sectionId) => {
-    return apiCall(`/section/${sectionId}/questions`);
-  },
-
-  // Create section
-  createSection: async (sectionData) => {
+  createSection: async (data) => {
     return apiCall('/section', {
       method: 'POST',
-      body: JSON.stringify(sectionData),
+      body: JSON.stringify(data),
     });
   },
 
-  // Update section
-  updateSection: async (sectionId, sectionData) => {
-    return apiCall(`/section/${sectionId}`, {
+  updateSection: async (id, data) => {
+    return apiCall(`/section/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(sectionData),
+      body: JSON.stringify(data),
     });
   },
 
-  // Delete section
-  deleteSection: async (sectionId) => {
-    return apiCall(`/section/${sectionId}`, {
+  deleteSection: async (id) => {
+    return apiCall(`/section/${id}`, {
       method: 'DELETE',
     });
   },
 
-  // Update question
-  updateQuestion: async (questionId, questionData) => {
-    return apiCall(`/section/question/${questionId}`, {
-      method: 'PUT',
-      body: JSON.stringify(questionData),
-    });
+  // Questions APIs
+  getSectionQuestions: async (sectionId) => {
+    return apiCall(`/section/${sectionId}/questions`);
   },
 
-  // Bulk create sections for multiple papers
-  bulkCreateSections: async (bulkData) => {
-    return apiCall('/section/bulk-create', {
+  createQuestion: async (sectionId, data) => {
+    return apiCall(`/section/${sectionId}/questions`, {
       method: 'POST',
-      body: JSON.stringify(bulkData),
+      body: JSON.stringify(data),
     });
   },
 
-  // Import sections from one paper to multiple target papers
-  importSections: async (importData) => {
+  updateQuestion: async (questionId, data) => {
+    return apiCall(`/section/questions/${questionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteQuestion: async (questionId) => {
+    return apiCall(`/section/questions/${questionId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Bulk operations
+  createSectionsBulk: async (paperId, sections) => {
+    return apiCall(`/section/paper/${paperId}/bulk`, {
+      method: 'POST',
+      body: JSON.stringify(sections),
+    });
+  },
+
+  // Import sections
+  importSections: async (data) => {
     return apiCall('/section/import', {
       method: 'POST',
-      body: JSON.stringify(importData),
+      body: JSON.stringify(data),
     });
   },
 
-  // Import master sections to one or multiple papers
+  // Import master sections
   importMasterSections: async (data) => {
     return apiCall('/section/import-masters', {
       method: 'POST',
@@ -108,12 +111,12 @@ const sectionService = {
     });
   },
 
-  // Get mapped master sections for a paper
+  // Get paper master sections
   getPaperMasterSections: async (paperId) => {
     return apiCall(`/section/paper-masters/${paperId}`);
   },
 
-  // Save master section mappings for a paper
+  // Save paper master sections
   savePaperMasterSections: async (paperId, masterSectionIds) => {
     return apiCall('/section/paper-masters', {
       method: 'POST',
@@ -149,8 +152,13 @@ const sectionService = {
     });
   },
 
-  deleteProjectPaperSection: async (id) => {
-    return apiCall(`/projectpapersection/${id}`, {
+  deleteProjectPaperSection: async (id, { projectPaperId = null, projectId = null, paperId = null } = {}) => {
+    const params = new URLSearchParams();
+    if (projectPaperId) params.append('projectPaperId', projectPaperId);
+    if (projectId) params.append('projectId', projectId);
+    if (paperId) params.append('paperId', paperId);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return apiCall(`/projectpapersection/${id}${qs}`, {
       method: 'DELETE',
     });
   },

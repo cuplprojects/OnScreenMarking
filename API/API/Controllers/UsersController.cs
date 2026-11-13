@@ -60,16 +60,11 @@ namespace API.Controllers
 
         private async Task<List<int>> GetUserSubjectIdsAsync(int userId, int? s1, int? s2, int? s3)
         {
-            var subjectIds = await _context.ExaminerExpertises
-                .Where(ee => ee.ExaminerId == userId && ee.IsActive)
-                .Select(ee => ee.SubjectId)
-                .ToListAsync();
-
+            var subjectIds = new List<int>();
             if (s1.HasValue && s1.Value > 0 && !subjectIds.Contains(s1.Value)) subjectIds.Add(s1.Value);
             if (s2.HasValue && s2.Value > 0 && !subjectIds.Contains(s2.Value)) subjectIds.Add(s2.Value);
             if (s3.HasValue && s3.Value > 0 && !subjectIds.Contains(s3.Value)) subjectIds.Add(s3.Value);
-
-            return subjectIds;
+            return await Task.FromResult(subjectIds);
         }
 
         [HttpGet("me")]
@@ -806,36 +801,7 @@ namespace API.Controllers
                     user.SubjectId2 = request.SubjectIds.Count > 1 ? request.SubjectIds[1] : null;
                     user.SubjectId3 = request.SubjectIds.Count > 2 ? request.SubjectIds[2] : null;
 
-                    var existingExpertise = await _context.ExaminerExpertises
-                        .Where(ee => ee.ExaminerId == user.Id)
-                        .ToListAsync();
-
-                    foreach (var subId in request.SubjectIds)
-                    {
-                        var existing = existingExpertise.FirstOrDefault(ee => ee.SubjectId == subId);
-                        if (existing != null)
-                        {
-                            existing.IsActive = true;
-                        }
-                        else
-                        {
-                            _context.ExaminerExpertises.Add(new ExaminerExpertise
-                            {
-                                ExaminerId = user.Id,
-                                SubjectId = subId,
-                                IsActive = true,
-                                CreatedAt = DateTime.UtcNow
-                            });
-                        }
-                    }
-
-                    foreach (var existing in existingExpertise)
-                    {
-                        if (!request.SubjectIds.Contains(existing.SubjectId))
-                        {
-                            existing.IsActive = false;
-                        }
-                    }
+// ExaminerExpertises table removed; synced via SubjectId1/2/3 above
                 }
 
                 user.UpdatedAt = DateTime.UtcNow;
@@ -937,36 +903,7 @@ namespace API.Controllers
                     user.SubjectId2 = request.SubjectIds.Count > 1 ? request.SubjectIds[1] : null;
                     user.SubjectId3 = request.SubjectIds.Count > 2 ? request.SubjectIds[2] : null;
 
-                    var existingExpertise = await _context.ExaminerExpertises
-                        .Where(ee => ee.ExaminerId == user.Id)
-                        .ToListAsync();
-
-                    foreach (var subId in request.SubjectIds)
-                    {
-                        var existing = existingExpertise.FirstOrDefault(ee => ee.SubjectId == subId);
-                        if (existing != null)
-                        {
-                            existing.IsActive = true;
-                        }
-                        else
-                        {
-                            _context.ExaminerExpertises.Add(new ExaminerExpertise
-                            {
-                                ExaminerId = user.Id,
-                                SubjectId = subId,
-                                IsActive = true,
-                                CreatedAt = DateTime.UtcNow
-                            });
-                        }
-                    }
-
-                    foreach (var existing in existingExpertise)
-                    {
-                        if (!request.SubjectIds.Contains(existing.SubjectId))
-                        {
-                            existing.IsActive = false;
-                        }
-                    }
+// ExaminerExpertises table removed; synced via SubjectId1/2/3 above
                 }
                 if (request.EmpId.HasValue) user.EmpId = request.EmpId.Value > 0 ? request.EmpId.Value : null;
                 if (request.CollegeId.HasValue) user.CollegeId = request.CollegeId.Value > 0 ? request.CollegeId.Value : null;

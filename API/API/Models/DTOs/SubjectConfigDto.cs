@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using API.Models;
 
 namespace API.Models.DTOs
@@ -64,6 +66,7 @@ namespace API.Models.DTOs
         public string QuestionNo { get; set; }
         public decimal Marks { get; set; }
         public int? TypeId { get; set; }
+        public int? QuestionTypeId { get => TypeId; set => TypeId = value; }
         public string Type { get; set; } = "MCQ";
         public bool IsOptional { get; set; }
         public string? OptionalGroupCode { get; set; }

@@ -29,6 +29,12 @@ namespace API.Models
         public string Question { get; set; } = string.Empty;
 
         /// <summary>
+        /// Reference to QuestionType in questiontypes table (computed in code from Type / questiontypes, not in DB)
+        /// </summary>
+        [NotMapped]
+        public int? QuestionTypeId { get; set; }
+
+        /// <summary>
         /// Type of the question (e.g. "MCQ", "Short Answer", "Descriptive")
         /// </summary>
         [MaxLength(100)]
@@ -48,5 +54,3 @@ namespace API.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }
-
-

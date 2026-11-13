@@ -49,7 +49,7 @@ namespace API.Controllers
             {
                 var question = await _context.Questions
                     .Include(q => q.Section)
-                    .Include(q => q.QuestionMarks)
+                    
                     .FirstOrDefaultAsync(q => q.QuestionId == id);
 
                 if (question == null)
@@ -156,7 +156,7 @@ namespace API.Controllers
             try
             {
                 var marks = await _context.QuestionMarks
-                    .Where(qm => qm.QuestionId == id)
+                    .Where(qm => qm.QuestionMasterId == id)
                     .Include(qm => qm.Marking)
                     .ToListAsync();
 
