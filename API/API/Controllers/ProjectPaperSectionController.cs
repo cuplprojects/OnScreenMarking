@@ -476,23 +476,6 @@ namespace API.Controllers
                 else
                 {
                     projectPaper = await _context.ProjectPapers.FirstOrDefaultAsync(pp => pp.BatchId == oldBatchId);
-                    var qmList = new List<QuestionMaster>();
-                    foreach (var q in dto.Questions)
-                    {
-                        var (resolvedTypeId, resolvedTypeName) = await ResolveQuestionTypeAsync(q.TypeId ?? q.QuestionTypeId, q.Type);
-                        qmList.Add(new QuestionMaster
-                        {
-                            BatchId        = master.BatchId,
-                            Section        = master.Name,
-                            Question       = q.QuestionNo,
-                            Marks          = Math.Round(q.Marks, 2, MidpointRounding.AwayFromZero),
-                            QuestionTypeId = resolvedTypeId,
-                            Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
-                            Status         = true,
-                            CreatedAt      = DateTime.UtcNow
-                        });
-                    }
-                    _context.QuestionMasters.AddRange(qmList);
                 }
 
                 bool isMasterOrShared = oldBatchId <= 5 || 

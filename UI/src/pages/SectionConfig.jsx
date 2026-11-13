@@ -424,8 +424,12 @@ export default function SectionConfig() {
         .reduce((sum, s) => sum + s.totalMarks, 0);
         
       if (currentOtherSectionMarks + expectedTotalMarks > selectedPaper.maxMarks) {
-        message.error(`Cannot save section! The total allocated marks (${currentOtherSectionMarks + expectedTotalMarks}) would exceed the paper's maximum marks (${selectedPaper.maxMarks}).`);
-        return;
+        if (!editingSectionId) {
+          message.error(`Cannot add section! The total allocated marks (${currentOtherSectionMarks + expectedTotalMarks}) would exceed the paper's maximum marks (${selectedPaper.maxMarks}).`);
+          return;
+        } else {
+          message.warning(`Notice: The total allocated marks (${currentOtherSectionMarks + expectedTotalMarks}) exceeds the paper's maximum marks (${selectedPaper.maxMarks}). Please make sure to adjust other sections.`);
+        }
       }
       
       const maxEndQuestion = Math.max(
@@ -434,8 +438,12 @@ export default function SectionConfig() {
       );
       
       if (selectedPaper.totalQuestions > 0 && maxEndQuestion > selectedPaper.totalQuestions) {
-        message.error(`Cannot save section! The end question (Q${sectionForm.endQuestion}) exceeds the paper's total questions (${selectedPaper.totalQuestions}).`);
-        return;
+        if (!editingSectionId) {
+          message.error(`Cannot save section! The end question (Q${sectionForm.endQuestion}) exceeds the paper's total questions (${selectedPaper.totalQuestions}).`);
+          return;
+        } else {
+          message.warning(`Notice: The end question (Q${sectionForm.endQuestion}) exceeds the paper's total questions (${selectedPaper.totalQuestions}).`);
+        }
       }
     }
 
