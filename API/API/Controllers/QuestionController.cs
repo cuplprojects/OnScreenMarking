@@ -90,16 +90,23 @@ namespace API.Controllers
                     }
                 }
 
+                int qTypeId = questionDto.QuestionTypeId ?? questionDto.TypeId ?? 0;
+                if (qTypeId <= 0)
+                {
+                    var defQt = await _context.QuestionTypes.FirstOrDefaultAsync();
+                    if (defQt != null) qTypeId = defQt.QuestionTypeId;
+                }
+
                 var question = new QuestionMaster
                 {
-                    BatchId   = batchId,
-                    Section   = sectionName,
-                    Question  = questionDto.QuestionNo,
-                    Type      = questionDto.Type,
-                    Marks     = questionDto.Marks,
-                    Group     = questionDto.OptionalGroupCode,
-                    Status    = true,
-                    CreatedAt = DateTime.UtcNow
+                    BatchId        = batchId,
+                    Section        = sectionName,
+                    Question       = questionDto.QuestionNo,
+                    QuestionTypeId = qTypeId,
+                    Marks          = questionDto.Marks,
+                    Group          = questionDto.OptionalGroupCode,
+                    Status         = true,
+                    CreatedAt      = DateTime.UtcNow
                 };
 
                 _context.QuestionMasters.Add(question);
@@ -125,7 +132,10 @@ namespace API.Controllers
 
                 question.Question = questionDto.QuestionNo;
                 question.Marks    = questionDto.Marks;
-                question.Type     = questionDto.Type;
+                if ((questionDto.QuestionTypeId ?? questionDto.TypeId).HasValue)
+                {
+                    question.QuestionTypeId = (questionDto.QuestionTypeId ?? questionDto.TypeId)!.Value;
+                }
                 question.Group    = questionDto.OptionalGroupCode;
 
                 _context.QuestionMasters.Update(question);

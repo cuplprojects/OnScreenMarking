@@ -169,8 +169,8 @@ namespace API.Controllers
                         questionId        = qm.Id,
                         questionNo        = qm.Question,
                         marks             = qm.Marks,
-                        typeId            = (int?)null,
-                        questionTypeId    = (int?)null,
+                        typeId            = qm.QuestionTypeId,
+                        questionTypeId    = qm.QuestionTypeId,
                         type              = qm.Type != null ? qm.Type : "MCQ",
                         isOptional        = !string.IsNullOrEmpty(qm.Group),
                         optionalGroupCode = qm.Group
@@ -393,8 +393,9 @@ namespace API.Controllers
                             BatchId        = resolvedBatchId,
                             Section        = masterName,
                             Question       = q.QuestionNo,
-                            QuestionTypeId = qTypeId,
+                            QuestionTypeId = qTypeId ?? defType?.QuestionTypeId ?? 1,
                             Type           = !string.IsNullOrWhiteSpace(qTypeName) ? qTypeName : "MCQ",
+                            Marks          = q.Marks,
                             Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
                             Status         = true,
                             CreatedAt      = DateTime.UtcNow
@@ -407,7 +408,7 @@ namespace API.Controllers
                     decimal defaultMarksPerQ = dto.TotalQuestions > 0 && dto.TotalMarks > 0
                         ? Math.Round(dto.TotalMarks / dto.TotalQuestions, 2, MidpointRounding.AwayFromZero)
                         : 0m;
-                    int? defTypeId = defType?.QuestionTypeId;
+                    int defTypeIdVal = defType?.QuestionTypeId ?? 1;
                     for (int i = dto.StartQuestion; i <= dto.EndQuestion; i++)
                     {
                         qmList.Add(new QuestionMaster
@@ -415,7 +416,7 @@ namespace API.Controllers
                             BatchId        = resolvedBatchId,
                             Section        = masterName,
                             Question       = i.ToString(),
-                            QuestionTypeId = defTypeId,
+                            QuestionTypeId = defTypeIdVal,
                             Type           = defType?.QuestionTypeName ?? "MCQ",
                             Marks          = defaultMarksPerQ,
                             Group          = null,
@@ -599,8 +600,9 @@ namespace API.Controllers
                                 BatchId        = newBatchId,
                                 Section        = newMaster.Name,
                                 Question       = q.QuestionNo,
-                                QuestionTypeId = qTypeId,
+                                QuestionTypeId = qTypeId ?? defTypeUpdate?.QuestionTypeId ?? 1,
                                 Type           = !string.IsNullOrWhiteSpace(qTypeName) ? qTypeName : "MCQ",
+                                Marks          = q.Marks,
                                 Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
                                 Status         = true,
                                 CreatedAt      = DateTime.UtcNow
@@ -617,7 +619,7 @@ namespace API.Controllers
                                 BatchId        = newBatchId,
                                 Section        = newMaster.Name,
                                 Question       = i.ToString(),
-                                QuestionTypeId = defTypeUpdate?.QuestionTypeId,
+                                QuestionTypeId = defTypeUpdate?.QuestionTypeId ?? 1,
                                 Type           = defTypeUpdate?.QuestionTypeName ?? "MCQ",
                                 Group          = null,
                                 Status         = true,
@@ -697,8 +699,9 @@ namespace API.Controllers
                                 BatchId        = master.BatchId,
                                 Section        = master.Name,
                                 Question       = q.QuestionNo,
-                                QuestionTypeId = qTypeId,
+                                QuestionTypeId = qTypeId ?? defTypeDirect?.QuestionTypeId ?? 1,
                                 Type           = !string.IsNullOrWhiteSpace(qTypeName) ? qTypeName : "MCQ",
+                                Marks          = q.Marks,
                                 Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
                                 Status         = true,
                                 CreatedAt      = DateTime.UtcNow
@@ -715,7 +718,7 @@ namespace API.Controllers
                                 BatchId        = master.BatchId,
                                 Section        = master.Name,
                                 Question       = i.ToString(),
-                                QuestionTypeId = defTypeDirect?.QuestionTypeId,
+                                QuestionTypeId = defTypeDirect?.QuestionTypeId ?? 1,
                                 Type           = defTypeDirect?.QuestionTypeName ?? "MCQ",
                                 Group          = null,
                                 Status         = true,

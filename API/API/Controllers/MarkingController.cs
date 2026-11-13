@@ -790,6 +790,8 @@ namespace API.Controllers
                                 questionId = q.Id,
                                 questionNo = q.Question,
                                 marks = (decimal?)null,
+                                typeId = q.QuestionTypeId,
+                                questionTypeId = q.QuestionTypeId,
                                 type = q.Type,
                                 isOptional = !string.IsNullOrEmpty(q.Group),
                                 optionalGroupCode = q.Group,

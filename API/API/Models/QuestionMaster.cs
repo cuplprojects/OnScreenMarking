@@ -29,16 +29,24 @@ namespace API.Models
         public string Question { get; set; } = string.Empty;
 
         /// <summary>
-        /// Reference to QuestionType in questiontypes table (computed in code — not stored in DB)
+        /// Foreign key to QuestionType in questiontypes table — stored in DB
+        /// </summary>
+        [Required]
+        public int QuestionTypeId { get; set; }
+
+        [ForeignKey(nameof(QuestionTypeId))]
+        public QuestionType? QuestionType { get; set; }
+
+        private string? _type;
+        /// <summary>
+        /// Helper property for question type name (not in DB — resolved from QuestionType navigation)
         /// </summary>
         [NotMapped]
-        public int? QuestionTypeId { get; set; }
-
-        /// <summary>
-        /// Type of the question as a string (e.g. "MCQ", "Short Answer", "Descriptive") — stored in DB
-        /// </summary>
-        [MaxLength(100)]
-        public string? Type { get; set; }
+        public string? Type
+        {
+            get => QuestionType?.QuestionTypeName ?? _type;
+            set => _type = value;
+        }
 
         /// <summary>
         /// Maximum marks for this question
