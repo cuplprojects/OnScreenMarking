@@ -198,8 +198,8 @@ namespace API.Controllers
                         typeId            = qm.QuestionTypeId,
                         questionTypeId    = qm.QuestionTypeId,
                         type              = qm.Type != null ? qm.Type : "MCQ",
-                        isOptional        = !string.IsNullOrEmpty(qm.Group),
-                        optionalGroupCode = qm.Group
+                        isOptional        = !string.IsNullOrEmpty(qm.Group) || (master.MaxQuestionsToAttempt > 0 && master.MaxQuestionsToAttempt < master.TotalQuestions),
+                        optionalGroupCode = !string.IsNullOrEmpty(qm.Group) ? qm.Group : (master.MaxQuestionsToAttempt > 0 && master.MaxQuestionsToAttempt < master.TotalQuestions ? $"{master.Name}-Optional" : null)
                     })
                     .ToListAsync();
 
@@ -376,6 +376,24 @@ namespace API.Controllers
                 projectPaper.UpdatedAt           = DateTime.UtcNow;
                 _context.ProjectPapers.Update(projectPaper);
                 await _context.SaveChangesAsync();
+
+                // ── Update existing Scripts with BatchId ─────────────────────────────
+                // When sections are configured, all existing scripts for this project paper should get the BatchId
+                var existingScripts = await _context.Scripts
+                    .Where(s => s.ProjectPaperId == projectPaper.Id && s.BatchId == null)
+                    .ToListAsync();
+                
+                foreach (var script in existingScripts)
+                {
+                    script.BatchId = resolvedBatchId;
+                    script.UpdatedAt = DateTime.UtcNow;
+                    _context.Scripts.Update(script);
+                }
+                
+                if (existingScripts.Any())
+                {
+                    await _context.SaveChangesAsync();
+                }
 
                 // ── QuestionMasters: replace all rows for this batch+section ─────────
                 var existingQMs = await _context.QuestionMasters
@@ -745,6 +763,27 @@ namespace API.Controllers
                     }
 
                     await _context.SaveChangesAsync();
+
+                    // ── Update existing Scripts with BatchId ─────────────────────────────
+                    // When sections are updated, all existing scripts for this project paper should get the BatchId
+                    if (projectPaper != null)
+                    {
+                        var existingScripts = await _context.Scripts
+                            .Where(s => s.ProjectPaperId == projectPaper.Id && s.BatchId == null)
+                            .ToListAsync();
+                        
+                        foreach (var script in existingScripts)
+                        {
+                            script.BatchId = master.BatchId;
+                            script.UpdatedAt = DateTime.UtcNow;
+                            _context.Scripts.Update(script);
+                        }
+                        
+                        if (existingScripts.Any())
+                        {
+                            await _context.SaveChangesAsync();
+                        }
+                    }
 
                     return Ok(new { success = true, message = "Section updated successfully", batchId = master.BatchId, sectionId = master.Id });
                 }
@@ -1144,7 +1183,7 @@ namespace API.Controllers
                                 type              = !string.IsNullOrWhiteSpace(typeName) ? typeName : "MCQ",
                                 isOptional        = !string.IsNullOrEmpty(qm.Group),
                                 optionalGroupCode = qm.Group,
-                                marks             = qMarks
+                                marks             = qm.Marks
                             };
                         }).ToList()
                 };

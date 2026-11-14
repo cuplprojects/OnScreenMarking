@@ -29,12 +29,6 @@ namespace API.Models
         public string Question { get; set; } = string.Empty;
 
         /// <summary>
-        /// Type of the question (e.g. "MCQ", "Short Answer", "Descriptive")
-        /// </summary>
-        [Column(TypeName = "decimal(10,2)")]
-        public decimal Marks { get; set; } = 0;
-
-        /// <summary>
         /// Foreign key to QuestionType in questiontypes table
         /// </summary>
         [Required]

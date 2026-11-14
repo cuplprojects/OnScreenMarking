@@ -149,6 +149,7 @@ namespace API.Controllers
                         {
                             ProjectPaperId = targetProjectPaper.Id,
                             ProjectId = targetProjectPaper.ProjectId,
+                            BatchId = targetProjectPaper.BatchId,
                             InBuiltBarcode = barcode,
                             GeneratedBarcode = barcode,
                             CleanPdfUrl = fileUrl,

@@ -489,14 +489,22 @@ export default function SectionConfig() {
       const existingBatchId = sections && sections.length > 0 ? (sections.find(s => s.batchId > 0)?.batchId || 0) : 0;
 
       if (isProjectMode) {
+        // Ensure we have a valid ProjectPaperId
+        const resolvedProjectPaperId = sections[0]?.projectPaperId || null;
+        
         const projectPaperSectionData = {
-          ...sectionForm,
-          projectPaperId: sections[0]?.projectPaperId || null,
+          projectPaperId: resolvedProjectPaperId || 0,
           projectId: parseInt(projectId, 10),
           paperId: selectedPaper.paperId,
           batchId: editingSectionId 
             ? (sections.find(s => s.id === editingSectionId)?.batchId || existingBatchId || 0)
             : (existingBatchId || 0),
+          name: sectionForm.name,
+          description: sectionForm.description || '',
+          startQuestion: parseInt(sectionForm.startQuestion, 10) || 1,
+          endQuestion: parseInt(sectionForm.endQuestion, 10) || 1,
+          totalMarks: parseFloat(sectionForm.totalMarks) || 0,
+          maxQuestionsToAttempt: parseInt(sectionForm.maxQuestionsToAttempt, 10) || 1,
           totalQuestions: questions.length,
           questions: questions.map(q => {
             const matchedQt = questionTypesList.find(qt => 
@@ -507,12 +515,14 @@ export default function SectionConfig() {
             const resolvedTypeId = matchedQt?.questionTypeId || q.questionTypeId || q.typeId || null;
             const resolvedTypeName = matchedQt?.questionTypeName || q.type || '';
             return {
-              ...q,
               questionId: q.questionId || 0,
+              questionNo: q.questionNo || '',
               typeId: resolvedTypeId,
               questionTypeId: resolvedTypeId,
               type: resolvedTypeName,
-              marks: parseFloat(q.marks)
+              marks: parseFloat(q.marks),
+              isOptional: q.isOptional || false,
+              optionalGroupCode: q.optionalGroupCode || null
             };
           })
         };
@@ -534,12 +544,17 @@ export default function SectionConfig() {
         }
       } else {
         const sectionData = {
-          ...sectionForm,
           batchId: editingSectionId 
             ? (sections.find(s => s.id === editingSectionId)?.batchId || existingBatchId || 0)
             : (existingBatchId || 0),
-          totalQuestions: questions.length,
           paperId: selectedPaper.paperId,
+          name: sectionForm.name,
+          description: sectionForm.description || '',
+          startQuestion: parseInt(sectionForm.startQuestion, 10) || 1,
+          endQuestion: parseInt(sectionForm.endQuestion, 10) || 1,
+          totalMarks: parseFloat(sectionForm.totalMarks) || 0,
+          maxQuestionsToAttempt: parseInt(sectionForm.maxQuestionsToAttempt, 10) || 1,
+          totalQuestions: questions.length,
           questions: questions.map(q => {
             const matchedQt = questionTypesList.find(qt => 
               (q.questionTypeId && qt.questionTypeId === q.questionTypeId) ||
@@ -549,12 +564,14 @@ export default function SectionConfig() {
             const resolvedTypeId = matchedQt?.questionTypeId || q.questionTypeId || q.typeId || null;
             const resolvedTypeName = matchedQt?.questionTypeName || q.type || '';
             return {
-              ...q,
               questionId: q.questionId || 0,
+              questionNo: q.questionNo || '',
               typeId: resolvedTypeId,
               questionTypeId: resolvedTypeId,
               type: resolvedTypeName,
-              marks: parseFloat(q.marks)
+              marks: parseFloat(q.marks),
+              isOptional: q.isOptional || false,
+              optionalGroupCode: q.optionalGroupCode || null
             };
           })
         };

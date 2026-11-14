@@ -1046,11 +1046,18 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
   };
 
   const getMarkOptions = () => {
+    // Find the current question to get its maximum marks
+    const currentQuestion = sections.flatMap(s => s.questions || [])
+      .find(q => q.questionNo === currentQuestionId || q.questionId === currentQuestionId);
+    
+    const max = currentQuestion?.marks || maxMarks || 10;
     const options = [0];
-    const max = maxMarks || 10;
+    
+    // Generate marks with 0.5 increment up to the question's maximum marks
     for (let i = 0.5; i <= max; i += 0.5) {
-      options.push(i);
+      options.push(parseFloat(i.toFixed(1))); // Fix floating point precision
     }
+    
     return options;
   };
 
@@ -1601,17 +1608,26 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
                         setMarkInput('');
                         return;
                       }
-                      // Parse and validate against maxMarks
+                      // Parse and validate against question marks
                       const numValue = parseFloat(value);
                       if (!isNaN(numValue)) {
-                        // Cap at maxMarks
-                        const cappedValue = Math.min(numValue, maxMarks);
+                        // Find question marks from sections
+                        const currentQuestion = sections.flatMap(s => s.questions || [])
+                          .find(q => q.questionNo === (pendingAnno?.questionId || currentQuestionId) || q.questionId === (pendingAnno?.questionId || currentQuestionId));
+                        const maxQuestionMarks = currentQuestion?.marks || maxMarks || 10;
+                        
+                        // Cap at question's max marks
+                        const cappedValue = Math.min(numValue, maxQuestionMarks);
                         setMarkInput(cappedValue.toString());
                       }
                     }}
                     placeholder="Custom"
                     min="0"
-                    max={maxMarks}
+                    max={(() => {
+                      const currentQuestion = sections.flatMap(s => s.questions || [])
+                        .find(q => q.questionNo === (pendingAnno?.questionId || currentQuestionId) || q.questionId === (pendingAnno?.questionId || currentQuestionId));
+                      return currentQuestion?.marks || maxMarks || 10;
+                    })()}
                     step="0.5"
                     className="w-20 min-w-0 flex-1 text-sm p-2 border border-gray-300 rounded-lg outline-none focus:border-teal-500"
                     autoFocus

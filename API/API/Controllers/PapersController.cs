@@ -257,36 +257,10 @@ namespace API.Controllers
                     })
                     .ToListAsync();
 
-                var batchIds = rawItems
-                    .Where(p => p.batchId.HasValue && p.batchId.Value > 0)
-                    .Select(p => p.batchId!.Value)
-                    .Distinct()
-                    .ToList();
-
-                var sectionMasters = batchIds.Any()
-                    ? await _context.SectionMasters
-                        .Where(sm => batchIds.Contains(sm.BatchId))
-                        .ToListAsync()
-                    : new List<SectionMaster>();
-
-                var questionMasters = batchIds.Any()
-                    ? await _context.QuestionMasters
-                        .Where(qm => batchIds.Contains(qm.BatchId))
-                        .ToListAsync()
-                    : new List<QuestionMaster>();
-
                 var items = rawItems.Select(p =>
                 {
-                    int bId = p.batchId ?? 0;
-                    var bSections = bId > 0 ? sectionMasters.Where(sm => sm.BatchId == bId).ToList() : new List<SectionMaster>();
-                    var bQuestions = bId > 0 ? questionMasters.Where(qm => qm.BatchId == bId).ToList() : new List<QuestionMaster>();
-
-                    int secCount = bSections.Count > 0 
-                        ? bSections.Count 
-                        : bQuestions.Select(q => q.Section).Where(s => !string.IsNullOrEmpty(s)).Distinct().Count();
-
-                    decimal confMarks = bSections.Sum(sm => sm.TotalMarks);
-                    bool isConfigured = p.isSectionConfiguredFlag || (bId > 0 && secCount > 0);
+                    // Simplified: Only use IsSectionConfigured flag from ProjectPapers table
+                    bool isConfigured = p.isSectionConfiguredFlag;
 
                     return new
                     {
@@ -315,8 +289,8 @@ namespace API.Controllers
                         isSectionsConfigured = isConfigured,
                         isSectionConfigured = isConfigured,
                         p.isExaminerAssigned,
-                        sectionsCount = secCount,
-                        configuredMarks = confMarks,
+                        sectionsCount = 0, // No longer calculating section count
+                        configuredMarks = 0m, // No longer calculating marks
                         p.expertsCount
                     };
                 }).ToList();

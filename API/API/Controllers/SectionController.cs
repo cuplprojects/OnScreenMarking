@@ -177,6 +177,19 @@ namespace API.Controllers
                                 if (string.IsNullOrEmpty(typeName)) typeName = defQt.QuestionTypeName;
                             }
 
+                            // Use individual question marks from QuestionMasters table, fallback to average
+                            decimal questionMarks = q.Marks > 0 ? q.Marks : qMarks;
+
+                            // If maxQuestionsToAttempt < totalQuestions, mark all questions as optional
+                            bool isOptional = !string.IsNullOrEmpty(q.Group) || (m.MaxQuestionsToAttempt > 0 && m.MaxQuestionsToAttempt < m.TotalQuestions);
+                            string groupCode = q.Group;
+                            
+                            // If section has attempt limit, create a group for all questions in this section
+                            if (m.MaxQuestionsToAttempt > 0 && m.MaxQuestionsToAttempt < m.TotalQuestions && string.IsNullOrEmpty(groupCode))
+                            {
+                                groupCode = $"{m.Name}-Optional";
+                            }
+
                             return new
                             {
                                 id = q.Id,
@@ -185,9 +198,9 @@ namespace API.Controllers
                                 typeId = typeId,
                                 questionTypeId = typeId,
                                 type = !string.IsNullOrWhiteSpace(typeName) ? typeName : "MCQ",
-                                isOptional = !string.IsNullOrEmpty(q.Group),
-                                optionalGroupCode = q.Group,
-                                marks = qMarks
+                                isOptional = isOptional,
+                                optionalGroupCode = groupCode,
+                                marks = questionMarks
                             };
                         }).ToList();
 
