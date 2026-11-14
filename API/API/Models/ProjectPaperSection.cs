@@ -40,6 +40,8 @@ namespace API.Models
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation properties
+        // Questions collection removed — superseded by QuestionMasters (via BatchId + Section name)
+        [NotMapped]
         public ICollection<Question> Questions { get; set; } = new List<Question>();
     }
 }

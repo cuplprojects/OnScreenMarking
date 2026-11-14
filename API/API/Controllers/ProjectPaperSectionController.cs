@@ -188,7 +188,6 @@ namespace API.Controllers
                     return NotFound(new { success = false, message = "Section not found" });
 
                 var questions = await _context.QuestionMasters
-                    .Include(qm => qm.QuestionType)
                     .Where(qm => qm.BatchId == master.BatchId && qm.Section == master.Name)
                     .OrderBy(qm => qm.Id)
                     .Select(qm => new
@@ -198,9 +197,9 @@ namespace API.Controllers
                         marks             = qm.Marks,
                         typeId            = qm.QuestionTypeId,
                         questionTypeId    = qm.QuestionTypeId,
-                        type              = qm.QuestionType != null ? qm.QuestionType.QuestionTypeName : "MCQ",
-                        isOptional        = !string.IsNullOrEmpty(qm.Group),
-                        optionalGroupCode = qm.Group
+                        type              = qm.Type != null ? qm.Type : "MCQ",
+                        isOptional        = !string.IsNullOrEmpty(qm.Group) || (master.MaxQuestionsToAttempt > 0 && master.MaxQuestionsToAttempt < master.TotalQuestions),
+                        optionalGroupCode = !string.IsNullOrEmpty(qm.Group) ? qm.Group : (master.MaxQuestionsToAttempt > 0 && master.MaxQuestionsToAttempt < master.TotalQuestions ? $"{master.Name}-Optional" : null)
                     })
                     .ToListAsync();
 
@@ -378,6 +377,24 @@ namespace API.Controllers
                 _context.ProjectPapers.Update(projectPaper);
                 await _context.SaveChangesAsync();
 
+                // ── Update existing Scripts with BatchId ─────────────────────────────
+                // When sections are configured, all existing scripts for this project paper should get the BatchId
+                var existingScripts = await _context.Scripts
+                    .Where(s => s.ProjectPaperId == projectPaper.Id && s.BatchId == null)
+                    .ToListAsync();
+                
+                foreach (var script in existingScripts)
+                {
+                    script.BatchId = resolvedBatchId;
+                    script.UpdatedAt = DateTime.UtcNow;
+                    _context.Scripts.Update(script);
+                }
+                
+                if (existingScripts.Any())
+                {
+                    await _context.SaveChangesAsync();
+                }
+
                 // ── QuestionMasters: replace all rows for this batch+section ─────────
                 var existingQMs = await _context.QuestionMasters
                     .Where(qm => qm.BatchId == resolvedBatchId && qm.Section == masterName)
@@ -420,8 +437,9 @@ namespace API.Controllers
                             BatchId        = resolvedBatchId,
                             Section        = masterName,
                             Question       = q.QuestionNo,
-                            QuestionTypeId = qTypeId ?? 1,
+                            QuestionTypeId = qTypeId ?? defType?.QuestionTypeId ?? 1,
                             Type           = !string.IsNullOrWhiteSpace(qTypeName) ? qTypeName : "MCQ",
+                            Marks          = q.Marks,
                             Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
                             Status         = true,
                             CreatedAt      = DateTime.UtcNow
@@ -431,6 +449,10 @@ namespace API.Controllers
                 else
                 {
                     qmList = new List<QuestionMaster>();
+                    decimal defaultMarksPerQ = dto.TotalQuestions > 0 && dto.TotalMarks > 0
+                        ? Math.Round(dto.TotalMarks / dto.TotalQuestions, 2, MidpointRounding.AwayFromZero)
+                        : 0m;
+                    int defTypeIdVal = defType?.QuestionTypeId ?? 1;
                     for (int i = dto.StartQuestion; i <= dto.EndQuestion; i++)
                     {
                         qmList.Add(new QuestionMaster
@@ -438,8 +460,9 @@ namespace API.Controllers
                             BatchId        = resolvedBatchId,
                             Section        = masterName,
                             Question       = i.ToString(),
-                            QuestionTypeId = defType?.QuestionTypeId ?? 1,
+                            QuestionTypeId = defTypeIdVal,
                             Type           = defType?.QuestionTypeName ?? "MCQ",
+                            Marks          = defaultMarksPerQ,
                             Group          = null,
                             Status         = true,
                             CreatedAt      = DateTime.UtcNow
@@ -497,23 +520,6 @@ namespace API.Controllers
                 else
                 {
                     projectPaper = await _context.ProjectPapers.FirstOrDefaultAsync(pp => pp.BatchId == oldBatchId);
-                    var qmList = new List<QuestionMaster>();
-                    foreach (var q in dto.Questions)
-                    {
-                        var (resolvedTypeId, resolvedTypeName) = await ResolveQuestionTypeAsync(q.TypeId ?? q.QuestionTypeId, q.Type);
-                        qmList.Add(new QuestionMaster
-                        {
-                            BatchId        = master.BatchId,
-                            Section        = master.Name,
-                            Question       = q.QuestionNo,
-                            Marks          = Math.Round(q.Marks, 2, MidpointRounding.AwayFromZero),
-                            QuestionTypeId = resolvedTypeId,
-                            Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
-                            Status         = true,
-                            CreatedAt      = DateTime.UtcNow
-                        });
-                    }
-                    _context.QuestionMasters.AddRange(qmList);
                 }
 
                 bool isMasterOrShared = oldBatchId <= 5 || 
@@ -621,8 +627,9 @@ namespace API.Controllers
                                 BatchId        = newBatchId,
                                 Section        = newMaster.Name,
                                 Question       = q.QuestionNo,
-                                QuestionTypeId = qTypeId ?? 1,
+                                QuestionTypeId = qTypeId ?? defTypeUpdate?.QuestionTypeId ?? 1,
                                 Type           = !string.IsNullOrWhiteSpace(qTypeName) ? qTypeName : "MCQ",
+                                Marks          = q.Marks,
                                 Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
                                 Status         = true,
                                 CreatedAt      = DateTime.UtcNow
@@ -719,8 +726,9 @@ namespace API.Controllers
                                 BatchId        = master.BatchId,
                                 Section        = master.Name,
                                 Question       = q.QuestionNo,
-                                QuestionTypeId = qTypeId ?? 1,
+                                QuestionTypeId = qTypeId ?? defTypeDirect?.QuestionTypeId ?? 1,
                                 Type           = !string.IsNullOrWhiteSpace(qTypeName) ? qTypeName : "MCQ",
+                                Marks          = q.Marks,
                                 Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
                                 Status         = true,
                                 CreatedAt      = DateTime.UtcNow
@@ -755,6 +763,27 @@ namespace API.Controllers
                     }
 
                     await _context.SaveChangesAsync();
+
+                    // ── Update existing Scripts with BatchId ─────────────────────────────
+                    // When sections are updated, all existing scripts for this project paper should get the BatchId
+                    if (projectPaper != null)
+                    {
+                        var existingScripts = await _context.Scripts
+                            .Where(s => s.ProjectPaperId == projectPaper.Id && s.BatchId == null)
+                            .ToListAsync();
+                        
+                        foreach (var script in existingScripts)
+                        {
+                            script.BatchId = master.BatchId;
+                            script.UpdatedAt = DateTime.UtcNow;
+                            _context.Scripts.Update(script);
+                        }
+                        
+                        if (existingScripts.Any())
+                        {
+                            await _context.SaveChangesAsync();
+                        }
+                    }
 
                     return Ok(new { success = true, message = "Section updated successfully", batchId = master.BatchId, sectionId = master.Id });
                 }
@@ -1097,7 +1126,6 @@ namespace API.Controllers
                 .ToListAsync();
 
             var allQuestions = await _context.QuestionMasters
-                .Include(qm => qm.QuestionType)
                 .Where(qm => qm.BatchId == batchId)
                 .OrderBy(qm => qm.Id)
                 .ToListAsync();
@@ -1155,7 +1183,7 @@ namespace API.Controllers
                                 type              = !string.IsNullOrWhiteSpace(typeName) ? typeName : "MCQ",
                                 isOptional        = !string.IsNullOrEmpty(qm.Group),
                                 optionalGroupCode = qm.Group,
-                                marks             = qMarks
+                                marks             = qm.Marks
                             };
                         }).ToList()
                 };

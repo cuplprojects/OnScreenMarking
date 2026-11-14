@@ -297,6 +297,7 @@ export default function PapersManagement({ isTab = false }) {
   const [importSectionMode, setImportSectionMode] = useState('master'); // 'master' | 'paper'
   const [selectedMasterSectionIds, setSelectedMasterSectionIds] = useState([]);
   const [overwriteExistingSections, setOverwriteExistingSections] = useState(true);
+  const [previewAllocateBatchId, setPreviewAllocateBatchId] = useState(null);
 
   // Table Level Question Paper Upload State
   const [uploadingPaperId, setUploadingPaperId] = useState(null);
@@ -2412,28 +2413,19 @@ export default function PapersManagement({ isTab = false }) {
                             const missingReasons = [];
                             const statusDetails = [];
 
-                            const hasSections = !!paper.isSectionsConfigured && (paper.sectionsCount || 0) > 0;
-                            const marksMatch = hasSections && (paper.maxMarks > 0 ? paper.configuredMarks === paper.maxMarks : true);
+                            const hasSections = !!paper.isSectionsConfigured;
+                            const marksMatch = true; // Always true, no longer checking marks
                             const hasEvaluators = (paper.expertsCount || 0) > 0;
                             const hasQp = !!paper.questionPaperPdfUrl;
 
                             if (!hasSections) {
                               missingReasons.push("No sections configured for this paper");
-                              statusDetails.push({ label: "Sections", ok: false, text: "0 sections created" });
-                            } else if (!marksMatch) {
-                              const diff = (paper.maxMarks || 0) - (paper.configuredMarks || 0);
-                              const diffText = diff > 0 ? `${diff} marks pending` : `${Math.abs(diff)} marks exceeded`;
-                              missingReasons.push(`Section marks (${paper.configuredMarks || 0}) don't equal Max Marks (${paper.maxMarks || 0}) - ${diffText}`);
-                              statusDetails.push({ 
-                                label: "Section Marks", 
-                                ok: false, 
-                                text: `${paper.sectionsCount} section(s), ${paper.configuredMarks || 0}/${paper.maxMarks} marks (${diffText})` 
-                              });
+                              statusDetails.push({ label: "Sections", ok: false, text: "Sections not configured" });
                             } else {
                               statusDetails.push({ 
-                                label: "Sections & Marks", 
+                                label: "Sections", 
                                 ok: true, 
-                                text: `${paper.sectionsCount} section(s), ${paper.configuredMarks}/${paper.maxMarks} marks matched` 
+                                text: "Sections configured" 
                               });
                             }
 
@@ -2458,10 +2450,10 @@ export default function PapersManagement({ isTab = false }) {
                             return (
                               <div className="flex items-center justify-center gap-2 text-[11px] font-medium text-gray-600" title={tooltipTitle}>
                                 <span 
-                                  className={`inline-flex items-center gap-1 ${hasSections && marksMatch ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`} 
-                                  title={hasSections && marksMatch ? `Sections & Marks: ${paper.sectionsCount || 0} sections, ${paper.configuredMarks}/${paper.maxMarks} marks` : (!hasSections ? 'Sections: 0 created' : `Marks mismatch: ${paper.configuredMarks}/${paper.maxMarks}`)}
+                                  className={`inline-flex items-center gap-1 ${hasSections ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`} 
+                                  title={hasSections ? 'Sections: Configured' : 'Sections: Not configured'}
                                 >
-                                  {hasSections && marksMatch ? <CheckCircle2 size={12} className="text-emerald-600 shrink-0" /> : <X size={12} className="text-rose-500 shrink-0" />}
+                                  {hasSections ? <CheckCircle2 size={12} className="text-emerald-600 shrink-0" /> : <X size={12} className="text-rose-500 shrink-0" />}
                                   Sections
                                 </span>
                                 <span className="text-gray-300">•</span>
@@ -3887,7 +3879,10 @@ export default function PapersManagement({ isTab = false }) {
                   <h3 className="text-lg font-black text-gray-900">Import Sections</h3>
                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Applying to {selectedPaperIds.length} selected paper(s)</p>
                 </div>
-                <button onClick={() => setShowImportSectionsModal(false)} className="p-1.5 hover:bg-gray-200 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
+                <button onClick={() => {
+                  setShowImportSectionsModal(false);
+                  setPreviewAllocateBatchId(null);
+                }} className="p-1.5 hover:bg-gray-200 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
                   <X size={18} />
                 </button>
               </div>
@@ -3925,55 +3920,189 @@ export default function PapersManagement({ isTab = false }) {
                       Select predefined master section structures to automatically generate and assign sections to the chosen papers.
                     </p>
 
-                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {/* Group sections by BatchId */}
+                    <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                       {sectionMasters.length === 0 ? (
                         <p className="text-xs text-gray-400 text-center py-4">No master sections available.</p>
                       ) : (
-                        sectionMasters.map(master => {
-                          const isChecked = selectedMasterSectionIds.includes(master.id);
-                          return (
-                            <label
-                              key={master.id}
-                              className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
-                                isChecked ? 'bg-teal-50/60 border-teal-300' : 'bg-white border-gray-200 hover:bg-gray-50'
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedMasterSectionIds(prev => [...prev, master.id]);
-                                  } else {
-                                    setSelectedMasterSectionIds(prev => prev.filter(id => id !== master.id));
-                                  }
-                                }}
-                                className="mt-1 rounded border-gray-300 text-teal-700 focus:ring-teal-500"
-                              />
-                              <div className="flex-1">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-gray-900 text-sm">{master.name}</span>
-                                    {master.batchId && (
-                                      <span className="text-[9px] font-bold px-1.5 py-0.5 bg-teal-50 text-teal-800 border border-teal-200/60 rounded">
-                                        Batch #{master.batchId}
+                        (() => {
+                          // Group masters by batchId
+                          const batchGroups = {};
+                          sectionMasters.forEach(master => {
+                            const bId = master.batchId || 'unbatched';
+                            if (!batchGroups[bId]) {
+                              batchGroups[bId] = [];
+                            }
+                            batchGroups[bId].push(master);
+                          });
+
+                          return Object.entries(batchGroups).map(([bId, bSections]) => {
+                            const bTotalQ = bSections.reduce((sum, s) => sum + (parseInt(s.totalQuestions, 10) || 0), 0);
+                            const bTotalM = bSections.reduce((sum, s) => sum + (parseFloat(s.totalMarks) || 0), 0);
+                            const isBatchApplied = bSections.length > 0 && bSections.every(s => selectedMasterSectionIds.includes(s.id));
+                            const isPreviewOpen = previewAllocateBatchId === bId;
+
+                            return (
+                              <div
+                                key={bId}
+                                className="rounded-xl border bg-white border-gray-200 hover:border-teal-200 transition-all"
+                              >
+                                {/* Batch Summary Row */}
+                                <div className="p-3.5 flex items-center justify-between gap-3 flex-wrap">
+                                  <div className="flex items-center gap-3 flex-1">
+                                    <span className="font-extrabold text-xs px-2.5 py-1 rounded-lg bg-teal-700 text-white shadow-2xs">
+                                      Batch #{bId}
+                                    </span>
+                                    <div className="flex-1">
+                                      <span className="font-bold text-xs text-gray-900 block">
+                                        {bSections.map(s => s.name).join(", ")}
                                       </span>
-                                    )}
+                                      <span className="text-[11px] text-gray-500 font-medium flex items-center gap-1.5 mt-0.5">
+                                        <span>{bSections.length} Sections</span>
+                                        <span>&bull;</span>
+                                        <span>{bTotalQ} Questions</span>
+                                        <span>&bull;</span>
+                                        <span>{bTotalM} Marks</span>
+                                      </span>
+                                    </div>
                                   </div>
-                                  <span className="text-[10px] font-extrabold px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md">
-                                    {master.totalMarks} Marks
-                                  </span>
+
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewAllocateBatchId(prev => prev === bId ? null : bId)}
+                                      className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-teal-800 bg-teal-100/70 hover:bg-teal-100 transition-colors flex items-center gap-1 cursor-pointer"
+                                      title="Preview section & questions configuration inside this batch"
+                                    >
+                                      <Eye size={12} />
+                                      {isPreviewOpen ? "Hide" : "Preview"}
+                                    </button>
+
+                                    <label className="flex items-center cursor-pointer rounded-lg hover:bg-gray-50 p-1">
+                                      <input
+                                        type="checkbox"
+                                        checked={isBatchApplied}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setSelectedMasterSectionIds(prev => [
+                                              ...prev,
+                                              ...bSections.filter(s => !prev.includes(s.id)).map(s => s.id)
+                                            ]);
+                                          } else {
+                                            setSelectedMasterSectionIds(prev => 
+                                              prev.filter(id => !bSections.map(s => s.id).includes(id))
+                                            );
+                                          }
+                                        }}
+                                        className="rounded border-gray-300 text-teal-700 focus:ring-teal-500"
+                                      />
+                                    </label>
+                                  </div>
                                 </div>
-                                <div className="text-[11px] text-gray-500 mt-0.5">
-                                  Q{master.startQuestion} - Q{master.endQuestion} ({master.totalQuestions || (master.endQuestion - master.startQuestion + 1)} Questions) &bull; Attempt {master.maxQuestionsToAttempt}
-                                </div>
-                                {master.description && (
-                                  <p className="text-[10px] text-gray-400 mt-1">{master.description}</p>
+
+                                {/* Preview Section & Questions Config Inside This Batch */}
+                                {isPreviewOpen && (
+                                  <div className="border-t border-teal-100 p-3.5 bg-teal-50/40 rounded-b-xl space-y-3 animate-in fade-in duration-150">
+                                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-teal-900">
+                                      Section & Questions Configuration for Batch #{bId}:
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-2.5">
+                                      {bSections.map(sec => {
+                                        const questionsList = (sec.questions && sec.questions.length > 0)
+                                          ? sec.questions
+                                          : Array.from({ length: sec.totalQuestions || (sec.endQuestion - sec.startQuestion + 1) || 1 }, (_, i) => {
+                                              const qNum = (sec.startQuestion || 1) + i;
+                                              return {
+                                                questionNo: String(qNum),
+                                                type: sec.type || 'MCQ',
+                                                marks: ((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1),
+                                                isOptional: false,
+                                                optionalGroupCode: null
+                                              };
+                                            });
+
+                                        return (
+                                          <div
+                                            key={sec.id}
+                                            className="p-3 bg-white rounded-xl border border-teal-100 space-y-2.5 shadow-2xs"
+                                          >
+                                            <div className="flex items-center justify-between text-xs flex-wrap gap-2">
+                                              <div>
+                                                <span className="font-extrabold text-gray-900">{sec.name}</span>
+                                                <span className="text-[11px] text-gray-500 ml-2 font-medium">
+                                                  Q{sec.startQuestion} - Q{sec.endQuestion}
+                                                </span>
+                                                {sec.description && (
+                                                  <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{sec.description}</p>
+                                                )}
+                                              </div>
+                                              <div className="flex items-center gap-1.5 shrink-0">
+                                                <span className="px-2 py-0.5 bg-gray-100 rounded text-gray-700 text-[10px] font-bold">
+                                                  {sec.totalQuestions} Questions
+                                                </span>
+                                                <span className="px-2 py-0.5 bg-teal-50 text-teal-800 border border-teal-200/60 rounded text-[10px] font-extrabold">
+                                                  {sec.totalMarks} Marks
+                                                </span>
+                                              </div>
+                                            </div>
+
+                                            {/* Questions Details Table */}
+                                            <div className="pt-2 border-t border-gray-100">
+                                              <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1.5 flex items-center justify-between">
+                                                <span>Questions ({questionsList.length}):</span>
+                                                <span className="text-teal-700 font-extrabold lowercase">
+                                                  ~{((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1)} marks each
+                                                </span>
+                                              </div>
+                                              <div className="overflow-x-auto rounded-lg border border-gray-100 max-h-40 overflow-y-auto custom-scrollbar">
+                                                <table className="w-full text-left border-collapse text-[10px]">
+                                                  <thead>
+                                                    <tr className="bg-gray-50 text-[9px] font-bold uppercase tracking-wider text-gray-500 border-b border-gray-100 sticky top-0 z-10">
+                                                      <th className="py-1.5 px-2">Q#</th>
+                                                      <th className="py-1.5 px-2">Type</th>
+                                                      <th className="py-1.5 px-2">Marks</th>
+                                                      <th className="py-1.5 px-2">Group</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody className="divide-y divide-gray-100 bg-white">
+                                                    {questionsList.map((q, qIdx) => (
+                                                      <tr key={q.id || q.questionId || qIdx} className="hover:bg-teal-50/20">
+                                                        <td className="py-1 px-2 font-bold text-gray-900">
+                                                          {q.questionNo ? (String(q.questionNo).startsWith('Q') ? q.questionNo : `Q${q.questionNo}`) : `Q${(sec.startQuestion || 1) + qIdx}`}
+                                                        </td>
+                                                        <td className="py-1 px-2">
+                                                          <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-[9px] font-semibold">
+                                                            {q.type || 'MCQ'}
+                                                          </span>
+                                                        </td>
+                                                        <td className="py-1 px-2 font-extrabold text-teal-800">
+                                                          {q.marks !== undefined && q.marks !== null ? q.marks : ((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1)}
+                                                        </td>
+                                                        <td className="py-1 px-2">
+                                                          {q.isOptional || q.optionalGroupCode ? (
+                                                            <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[9px] font-bold">
+                                                              {q.optionalGroupCode ? `Group: ${q.optionalGroupCode}` : 'Optional'}
+                                                            </span>
+                                                          ) : (
+                                                            <span className="text-gray-400 text-[9px]">Compulsory</span>
+                                                          )}
+                                                        </td>
+                                                      </tr>
+                                                    ))}
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
                                 )}
                               </div>
-                            </label>
-                          );
-                        })
+                            );
+                          });
+                        })()
                       )}
                     </div>
 
@@ -4030,7 +4159,10 @@ export default function PapersManagement({ isTab = false }) {
                 )}
                 
                 <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
-                  <button type="button" onClick={() => setShowImportSectionsModal(false)} className="px-5 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors">Cancel</button>
+                  <button type="button" onClick={() => {
+                    setShowImportSectionsModal(false);
+                    setPreviewAllocateBatchId(null);
+                  }} className="px-5 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors">Cancel</button>
                   <button type="submit" disabled={importingSections} className="px-5 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-xl shadow-md transition-colors disabled:opacity-50 flex items-center gap-2">
                     {importingSections ? 'Importing...' : 'Confirm Import'}
                   </button>

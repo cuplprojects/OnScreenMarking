@@ -718,7 +718,6 @@ namespace API.Controllers
 
                 var questionMasters = secBatchId > 0
                     ? await _context.QuestionMasters
-                        .Include(qm => qm.QuestionType)
                         .Where(qm => qm.BatchId == secBatchId)
                         .OrderBy(qm => qm.Id)
                         .ToListAsync()
@@ -788,6 +787,8 @@ namespace API.Controllers
                                 questionId = q.Id,
                                 questionNo = q.Question,
                                 marks = (decimal?)null,
+                                typeId = q.QuestionTypeId,
+                                questionTypeId = q.QuestionTypeId,
                                 type = q.Type,
                                 isOptional = !string.IsNullOrEmpty(q.Group),
                                 optionalGroupCode = q.Group,
