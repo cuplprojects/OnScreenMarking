@@ -166,19 +166,21 @@ export default function StudentPortal() {
                         <td className="py-2.5 md:px-6 px-4">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-teal-50 text-teal-700 rounded-xl flex items-center justify-center font-bold text-sm shrink-0">
-                              {script.paperCode.substring(0, 2)}
+                              {(script.paperCode || script.paperName || 'NA').substring(0, 2).toUpperCase()}
                             </div>
                             <div>
-                              <p className="font-bold text-gray-900 leading-tight">{script.paperName}</p>
-                              <p className="text-xs text-gray-500 mt-1">Code: {script.paperCode} | Subject: {script.subjectName}</p>
+                              <p className="font-bold text-gray-900 leading-tight">{script.paperName || '—'}</p>
+                              <p className="text-xs text-gray-500 mt-1">Code: {script.paperCode || '—'} | Subject: {script.subjectName || '—'}</p>
                             </div>
                           </div>
                         </td>
                         <td className="py-2.5 text-center md:px-6 px-4">
-                          <span className="font-bold text-gray-800 text-sm">{script.totalMarks}</span>
+                          <span className="font-bold text-gray-800 text-sm">{script.totalMarks ?? '—'}</span>
                         </td>
                         <td className="py-2.5 text-center md:px-6 px-4">
-                          <span className="font-semibold text-gray-700 text-sm">{script.percentage.toFixed(1)}%</span>
+                          <span className="font-semibold text-gray-700 text-sm">
+                            {typeof script.percentage === 'number' ? `${script.percentage.toFixed(1)}%` : '—'}
+                          </span>
                         </td>
                         <td className="py-2.5 text-center md:px-6 px-4">
                           {script.isReEvaluationRequested ? (

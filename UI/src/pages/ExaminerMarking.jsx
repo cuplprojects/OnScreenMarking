@@ -108,692 +108,14 @@ const compareFaces = (face1, face2) => {
   return sumDist / len;
 };
 
-const formatCountdown = (totalSec) => {
-  if (!totalSec || totalSec <= 0) return "00:00";
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-};
-
-// Subcomponents for ExaminerMarking
-const MarkingLoadingView = () => (
-  <div className="h-screen flex flex-col items-center justify-center bg-gray-50">
-    <Loader className="w-12 h-12 text-teal-700 animate-spin mb-4" />
-    <p className="text-gray-600 font-bold animate-pulse">Initializing Marking Interface...</p>
-  </div>
-);
-
-const MarkingErrorView = ({ error, onBack }) => (
-  <div className="h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
-    <AlertCircle className="w-12 h-12 text-red-600 mb-4" />
-    <p className="text-gray-600 font-bold text-center mb-6">{error}</p>
-    <button
-      onClick={onBack}
-      className="py-2 bg-teal-700 text-white rounded-lg hover:bg-teal-800 transition-colors md:px-6 px-4 cursor-pointer"
-    >
-      Back to Scripts
-    </button>
-  </div>
-);
-
-const SecurityOverlays = ({ isBlurred }) => (
-  <>
-    {isBlurred && (
-      <div className="absolute inset-0 bg-gray-900/90 z-[9999] flex flex-col items-center justify-center text-center select-none pointer-events-auto p-4 md:p-6">
-        <div className="w-20 h-20 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center justify-center text-red-500 mb-6 shadow-lg animate-pulse">
-          <AlertCircle size={44} />
-        </div>
-        <h2 className="text-2xl font-black text-white uppercase tracking-wider mb-2">Screen Capture Protection Active</h2>
-        <p className="text-gray-450 text-sm max-w-md font-semibold leading-relaxed">
-          Screenshots and window switching are strictly restricted. Please refocus your browser window to resume marking.
-        </p>
-      </div>
-    )}
-
-    <div 
-      id="secure-screenshot-mask" 
-      className="fixed inset-0 bg-gray-950 z-[99999] hidden flex-col items-center justify-center text-center select-none pointer-events-auto p-4 md:p-6"
-    >
-      <div className="w-20 h-20 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center justify-center text-red-500 mb-6 shadow-lg animate-pulse">
-        <AlertCircle size={44} />
-      </div>
-      <h2 className="text-2xl font-black text-white uppercase tracking-wider mb-2">Screen Capture Prohibited</h2>
-      <p className="text-gray-400 text-sm max-w-md font-medium leading-relaxed">
-        The PrintScreen key is disabled. Screen captures are strictly prohibited on this secure marking page.
-      </p>
-    </div>
-  </>
-);
-
-const MarkingHeader = ({
-  paperInfo,
-  isMarkingSubmitted,
-  timePerCopyMinutes,
-  remainingSeconds,
-  totalObtained,
-  saving,
-  isSubmitDisabled,
-  submitDisabledReason,
-  onSubmitMarking,
-  onNavigateBack
-}) => (
-  <header className="bg-white text-gray-900 shadow-md py-1 flex justify-between items-center z-50 border-b border-gray-200 md:px-6 px-4">
-    <div className="flex items-center gap-6">
-      <button
-        onClick={onNavigateBack}
-        className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
-        title="Back to Scripts"
-      >
-        <ChevronLeft className="text-gray-600" size={24} />
-      </button>
-      
-      <div className="border-r border-gray-300 pr-6">
-        <h1 className="text-2xl font-bold text-gray-900 leading-tight">
-          OSM <span className="text-teal-700">Marking</span>
-        </h1>
-        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Answer Sheet Evaluation</p>
-      </div>
-
-      <div className="hidden md:block bg-gray-50 px-3 py-1 rounded-lg border border-gray-200">
-        <p className="text-[10px] uppercase font-bold text-gray-500">Paper</p>
-        <p className="font-semibold text-xs text-gray-900">
-          {paperInfo?.paperName} <span className="text-gray-400">({paperInfo?.paperCode})</span>
-        </p>
-      </div>
-
-      <div className="bg-gray-50 px-3 py-1 rounded-lg border border-gray-200">
-        <p className="text-[10px] uppercase font-bold text-gray-500">Max Marks</p>
-        <p className="font-bold text-sm text-gray-900">
-          {paperInfo?.maxMarks}
-        </p>
-      </div>
-
-      {isMarkingSubmitted && (
-        <div className="flex items-center gap-1.5 bg-amber-100 border-2 border-amber-400 text-amber-900 px-3 py-1.5 rounded-lg text-xs font-extrabold shadow-sm">
-          <Lock size={14} className="text-amber-700" />
-          <span>Submitted (Locked)</span>
-        </div>
-      )}
-    </div>
-
-    <div className="flex items-center gap-3">
-      {/* {timePerCopyMinutes > 0 && !isMarkingSubmitted && (
-        <div
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all shadow-sm ${
-            remainingSeconds > 0
-              ? 'bg-amber-50 border-amber-300 text-amber-900 animate-pulse'
-              : 'bg-emerald-50 border-emerald-300 text-emerald-800'
-          }`}
-          title={
-            remainingSeconds > 0
-              ? `Required evaluation time: ${timePerCopyMinutes} min. Save & Submit unlock in ${formatCountdown(remainingSeconds)}.`
-              : 'Minimum required time met. You may save or submit.'
-          }
-        >
-          <Clock size={16} className={remainingSeconds > 0 ? 'text-amber-600' : 'text-emerald-600'} />
-          <div>
-            <p className="text-[9px] uppercase font-extrabold tracking-wider leading-none">
-              {remainingSeconds > 0 ? 'Required Time' : 'Time Requirement Met'}
-            </p>
-            <p className="text-sm font-black font-mono leading-tight">
-              {remainingSeconds > 0 ? `${formatCountdown(remainingSeconds)} left` : 'Unlocked'}
-            </p>
-          </div>
-        </div>
-      )} */}
-
-      <div className="bg-teal-50 py-1.5 rounded-lg border border-teal-200 flex flex-col items-center md:px-4 px-3">
-        <p className="text-[10px] uppercase font-bold text-teal-700">Total Score</p>
-        <p className="text-2xl font-bold text-teal-900 leading-none">
-          {totalObtained.toFixed(1)} <span className="text-xs font-normal text-teal-700">/ {paperInfo?.maxMarks}</span>
-        </p>
-      </div>
-      
-      {!isMarkingSubmitted && (
-        <button
-          onClick={!isSubmitDisabled ? onSubmitMarking : undefined}
-          disabled={isSubmitDisabled}
-          className={`py-2 rounded-md font-bold uppercase text-xs transition-colors shadow-md md:px-5 px-4 flex items-center gap-1.5 ${
-            isSubmitDisabled
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-teal-700 hover:bg-teal-800 text-white cursor-pointer'
-          }`}
-          title={submitDisabledReason || 'Submit evaluation'}
-        >
-          {saving ? 'Saving...' : remainingSeconds > 0 ? `Submit (${formatCountdown(remainingSeconds)})` : 'Submit'}
-        </button>
-      )}
-    </div>
-  </header>
-);
-
-const ProctorWarningBanner = ({ proctorWarning }) => {
-  if (!proctorWarning) return null;
-  return (
-    <div className="bg-red-600 text-white text-xs font-bold py-2.5 flex items-center justify-between border-b border-red-700 animate-pulse select-none z-50 shrink-0 md:px-6 px-4">
-      <div className="flex items-center gap-2">
-        <AlertCircle size={16} />
-        <span>
-          <strong>PROCTOR ALERT:</strong> {
-            proctorWarning === "No Face"
-              ? "No face detected in the live camera feed. Please ensure your face is fully visible and looking at the screen."
-              : proctorWarning === "Multiple Faces"
-              ? "Multiple people detected in frame. Proctoring rules permit only the assigned examiner to mark papers."
-              : "Identity verification mismatch. The person in front of the camera does not match the registered profile picture."
-          }
-        </span>
-      </div>
-      <span className="text-[10px] bg-red-700/80 px-2 py-0.5 rounded border border-red-500/20 uppercase font-extrabold tracking-wider">Action Required</span>
-    </div>
-  );
-};
-
-const QuestionPaperViewer = ({
-  effectiveQpPdfUrl,
-  isQpCollapsed,
-  qpWidth,
-  qpDragRef,
-  onCollapse,
-  onDragStart
-}) => {
-  if (!effectiveQpPdfUrl || isQpCollapsed) return null;
-
-  return (
-    <>
-      <section
-        className="shrink-0 bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden flex flex-col transition-none"
-        style={{ width: qpWidth }}
-      >
-        <div className="bg-gray-900 text-white px-3 py-2 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <FileText size={14} className="text-teal-400" />
-            <h3 className="font-semibold text-xs uppercase tracking-wide">Question Paper</h3>
-          </div>
-          <button 
-            type="button"
-            onClick={onCollapse}
-            className="p-1 hover:bg-gray-800 text-gray-300 hover:text-white rounded transition-colors flex items-center gap-1 text-[11px] cursor-pointer"
-            title="Collapse Question Paper"
-          >
-            <ChevronLeft size={16} />
-            <span className="hidden sm:inline">Collapse</span>
-          </button>
-        </div>
-        <div className="flex-1 bg-gray-100">
-          <iframe 
-            src={
-              effectiveQpPdfUrl.startsWith('http')
-                ? effectiveQpPdfUrl
-                : `${import.meta.env.VITE_API_URL.replace('/api', '')}/${effectiveQpPdfUrl.replace(/^\//, '')}`
-            }
-            className="w-full h-full border-0"
-            title="Question Paper"
-          />
-        </div>
-      </section>
-
-      {/* Drag handle to resize QP panel */}
-      <div
-        ref={qpDragRef}
-        onMouseDown={onDragStart}
-        className="w-1.5 shrink-0 rounded-full cursor-col-resize bg-gray-200 hover:bg-teal-400 active:bg-teal-500 transition-colors self-stretch relative group"
-        title="Drag to resize Question Paper panel"
-      >
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <span className="w-1 h-1 rounded-full bg-teal-600" />
-          <span className="w-1 h-1 rounded-full bg-teal-600" />
-          <span className="w-1 h-1 rounded-full bg-teal-600" />
-        </div>
-      </div>
-    </>
-  );
-};
-
-const QuestionItem = ({
-  question: q,
-  section: sec,
-  questionMarks,
-  selectedQuestion,
-  isEffectiveReadOnly,
-  attemptedCount,
-  getConflictingGroupQuestion,
-  onSelectQuestion,
-  onGroupSwitch
-}) => {
-  const m = questionMarks[q.questionId] || {};
-  const isSelected = selectedQuestion === q.questionId;
-  const isSkipped = m.isSkipped === true;
-  const thisQuestionHasMarks = ((Number(m.marksAwarded) > 0) || m.isAttempted) && !isSkipped;
-  const hasMarks = Number(m.marksAwarded) > 0 || isSkipped;
-  const displayMark = m.marksAwarded !== undefined ? m.marksAwarded : 0;
-  const isSectionMaxMet = sec.maxQuestionsToAttempt > 0 && attemptedCount >= sec.maxQuestionsToAttempt && !hasMarks;
-  const isCompleted = hasMarks || m.isAttempted || isSkipped;
-
-  // Optional group checks
-  const conflictingGroupQ = getConflictingGroupQuestion(q);
-  const otherQuestionHasMarks = Boolean(conflictingGroupQ);
-  const groupCode = q.optionalGroupCode?.trim();
-
-  // If BOTH this question and another question have marks -> group conflict! Neither is disabled
-  const isGroupConflict = thisQuestionHasMarks && otherQuestionHasMarks;
-  // A question is ONLY disabled if it has NO marks and another question in the group DOES have marks
-  const isGroupDisabled = !thisQuestionHasMarks && otherQuestionHasMarks;
-
-  const handleClick = () => {
-    if (isGroupDisabled) {
-      if (isEffectiveReadOnly) {
-        message.warning(`Question ${q.questionNo} is optional and Question ${conflictingGroupQ.questionNo} in Group '${groupCode}' was attempted.`);
-        return;
-      }
-      onGroupSwitch({
-        targetQuestion: q,
-        conflictingQuestion: conflictingGroupQ,
-        groupCode
-      });
-      return;
-    }
-    onSelectQuestion(q);
-  };
-
-  return (
-    <div 
-      onClick={handleClick}
-      className={`relative h-11 flex flex-col items-center justify-center rounded transition-all border ${
-        isGroupConflict
-          ? "bg-amber-100 border-amber-500 text-amber-950 ring-2 ring-amber-400 font-bold z-10 scale-105 shadow-sm cursor-pointer"
-          : isGroupDisabled
-          ? "bg-gray-100 border-gray-200 text-gray-400 cursor-pointer opacity-60 shadow-none hover:bg-amber-50 hover:border-amber-300 hover:text-amber-800"
-          : isSelected 
-          ? (hasMarks 
-              ? "bg-green-700 text-white border-green-800 ring-2 ring-green-400 font-bold z-10 scale-105 shadow-sm cursor-pointer" 
-              : "bg-red-700 text-white border-red-800 ring-2 ring-red-400 font-bold z-10 scale-105 shadow-sm cursor-pointer")
-          : (hasMarks
-              ? "bg-green-50 border-green-300 text-green-900 hover:bg-green-100 font-semibold cursor-pointer"
-              : isSectionMaxMet
-              ? "bg-gray-100 border-gray-300 text-gray-500 hover:bg-gray-200 font-normal opacity-75 cursor-pointer"
-              : "bg-red-50 border-red-300 text-red-900 hover:bg-red-100 font-semibold cursor-pointer")
-      }`}
-      title={
-        isGroupConflict
-          ? `Q${q.questionNo} (Group ${groupCode}): CONFLICT - Both Q${q.questionNo} and Q${conflictingGroupQ.questionNo} have marks. Click to edit or clear marks.`
-          : isGroupDisabled
-          ? `Q${q.questionNo} (Group ${groupCode}): Locked - Q${conflictingGroupQ.questionNo} has marks. Click to switch to Q${q.questionNo}.`
-          : `Q${q.questionNo}${groupCode ? ` (Group ${groupCode})` : ''}: ${
-              isSkipped
-                ? 'Marked as Skipped'
-                : hasMarks
-                ? `${displayMark} marks`
-                : isSectionMaxMet
-                ? `Optional (Section limit ${sec.maxQuestionsToAttempt} reached)`
-                : '0 marks'
-            } (Click to ${isCompleted ? 'edit/clear marks' : 'award marks'})`
-      }
-    >
-      {groupCode && (
-        <span 
-          className={`absolute -top-1 -right-1 text-[7.5px] font-extrabold px-1 py-0.2 rounded-full border shadow-xs leading-none z-10 ${
-            isGroupConflict
-              ? 'bg-amber-400 text-amber-950 border-amber-600'
-              : isGroupDisabled
-              ? 'bg-gray-200 text-gray-500 border-gray-300'
-              : isSelected
-              ? 'bg-white text-teal-800 border-teal-300'
-              : 'bg-amber-100 text-amber-800 border-amber-300'
-          }`}
-          title={`Optional Group ${groupCode}`}
-        >
-          {groupCode}
-        </span>
-      )}
-      <span className="font-bold text-[11px] leading-tight">{q.questionNo}</span>
-      <span className={`text-[8.5px] font-bold leading-tight mt-0.5 ${
-        isGroupConflict
-          ? 'text-amber-950 font-extrabold'
-          : isGroupDisabled 
-          ? 'text-gray-400 font-normal' 
-          : isSelected 
-          ? 'text-white' 
-          : (hasMarks ? 'text-green-800' : isSectionMaxMet ? 'text-gray-500' : 'text-red-700')
-      }`}>
-        {isGroupConflict ? (
-          <span className="inline-flex items-center gap-0.5">
-            <AlertTriangle size={9} className="text-amber-800 shrink-0" />
-            <span>Conf</span>
-          </span>
-        ) : isGroupDisabled ? 'Lock' : isSkipped ? 'Skip' : isSectionMaxMet ? 'Opt' : `${displayMark}m`}
-      </span>
-    </div>
-  );
-};
-
-const SectionAccordion = ({
-  section: sec,
-  expandedSections,
-  questionMarks,
-  selectedQuestion,
-  isEffectiveReadOnly,
-  getSectionMarks,
-  getConflictingGroupQuestion,
-  onToggleSection,
-  onSelectQuestion,
-  onGroupSwitch
-}) => {
-  const attemptedCount = sec.questions?.filter(q => {
-    const marks = questionMarks[q.questionId];
-    return (marks?.isAttempted || (marks?.marksAwarded && marks.marksAwarded > 0)) && !marks?.isSkipped;
-  }).length || 0;
-
-  const hasGroupConflict = sec.questions?.some(sq => {
-    const sm = questionMarks[sq.questionId] || {};
-    const hasSm = ((Number(sm.marksAwarded) > 0) || sm.isAttempted) && !sm.isSkipped;
-    const cq = getConflictingGroupQuestion(sq);
-    return hasSm && cq;
-  });
-
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 shadow-xs overflow-hidden">
-      <div 
-        onClick={() => onToggleSection(sec.id)}
-        className="flex justify-between items-center bg-gray-100 px-2.5 py-1.5 border-b border-gray-200 cursor-pointer hover:bg-gray-200 transition-colors"
-      >
-        <div className="flex-1">
-          <span className="font-bold text-[11px] text-gray-900 uppercase">{sec.name}</span>
-          {sec.maxQuestionsToAttempt > 0 ? (
-            <p className={`text-[9px] font-semibold leading-none mt-0.5 ${
-              attemptedCount >= sec.maxQuestionsToAttempt ? 'text-green-700' : 'text-gray-500'
-            }`}>
-              Attempts: {attemptedCount}/{sec.maxQuestionsToAttempt}
-            </p>
-          ) : (
-            <p className="text-[9px] text-gray-500 leading-none mt-0.5">
-              Attempted: {attemptedCount}/{sec.questions?.length || 0}
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">
-            {getSectionMarks(sec.id)} / {sec.totalMarks}
-          </span>
-          {expandedSections[sec.id] ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-        </div>
-      </div>
-
-      {expandedSections[sec.id] && (
-        <div className="bg-white">
-          {hasGroupConflict && (
-            <div className="bg-amber-50 border-b border-amber-200 p-2 text-[10px] text-amber-800 font-semibold leading-tight flex items-start gap-1.5">
-              <AlertTriangle size={13} className="text-amber-600 shrink-0 mt-0.5" />
-              <span>Group conflict detected! Multiple questions in an optional group have marks. Click either question to edit or clear marks.</span>
-            </div>
-          )}
-
-          <div className="p-1.5 grid grid-cols-5 gap-1">
-            {sec.questions?.map((q) => (
-              <QuestionItem
-                key={q.questionId}
-                question={q}
-                section={sec}
-                questionMarks={questionMarks}
-                selectedQuestion={selectedQuestion}
-                isEffectiveReadOnly={isEffectiveReadOnly}
-                attemptedCount={attemptedCount}
-                getConflictingGroupQuestion={getConflictingGroupQuestion}
-                onSelectQuestion={onSelectQuestion}
-                onGroupSwitch={onGroupSwitch}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const QuestionPalette = ({
-  sections,
-  expandedSections,
-  questionMarks,
-  selectedQuestion,
-  isEffectiveReadOnly,
-  getSectionMarks,
-  getConflictingGroupQuestion,
-  onToggleSection,
-  onSelectQuestion,
-  onGroupSwitch
-}) => (
-  <div className="bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden shadow-md flex-1 min-h-0">
-    <div className="bg-gray-900 text-white px-3 py-2 flex justify-between items-center shrink-0">
-      <div className="flex items-center gap-1.5">
-        <FileText size={14} className="text-teal-400" />
-        <h3 className="font-semibold text-xs uppercase tracking-wide">Questions</h3>
-      </div>
-      <div className="flex items-center gap-1">
-        <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
-        <span className="text-[10px] font-medium uppercase text-gray-300">Active</span>
-      </div>
-    </div>
-    
-    <div className="flex-1 overflow-y-auto p-2 bg-gray-50 space-y-2">
-      {sections.length === 0 && (
-        <div className="h-full flex flex-col items-center justify-center text-center text-gray-400 p-3">
-          <AlertCircle size={30} className="mb-1.5 opacity-30" />
-          <p className="text-[11px] font-medium uppercase">No sections loaded</p>
-        </div>
-      )}
-
-      {sections.map((sec) => (
-        <SectionAccordion
-          key={sec.id}
-          section={sec}
-          expandedSections={expandedSections}
-          questionMarks={questionMarks}
-          selectedQuestion={selectedQuestion}
-          isEffectiveReadOnly={isEffectiveReadOnly}
-          getSectionMarks={getSectionMarks}
-          getConflictingGroupQuestion={getConflictingGroupQuestion}
-          onToggleSection={onToggleSection}
-          onSelectQuestion={onSelectQuestion}
-          onGroupSwitch={onGroupSwitch}
-        />
-      ))}
-    </div>
-  </div>
-);
-
-const MarkingActions = ({
-  isMarkingSubmitted,
-  isEffectiveReadOnly,
-  remainingSeconds,
-  timePerCopyMinutes,
-  onSaveMarks
-}) => {
-  if (isMarkingSubmitted) return null;
-  return (
-    <div className="flex flex-col gap-2 shrink-0">
-      <div className="grid gap-2 grid-cols-2">
-        <button 
-          onClick={onSaveMarks}
-          disabled={isEffectiveReadOnly || remainingSeconds > 0}
-          className="flex items-center justify-center gap-1.5 bg-white border border-teal-200 text-teal-700 hover:bg-teal-50 disabled:bg-gray-100 disabled:text-gray-400 font-semibold py-2 rounded-md shadow-sm transition-colors text-xs uppercase disabled:cursor-not-allowed cursor-pointer"
-          title={remainingSeconds > 0 ? `Save locked. Spend at least ${timePerCopyMinutes} min on this copy (${formatCountdown(remainingSeconds)} left)` : "Save draft marks"}
-        >
-          <Save size={15} /> Save {remainingSeconds > 0 ? `(${formatCountdown(remainingSeconds)})` : ''}
-        </button>
-        <button 
-          onClick={() => { if (window.confirm("Reset all marks?")) window.location.reload(); }}
-          disabled={isEffectiveReadOnly}
-          className="flex items-center justify-center gap-1.5 bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400 font-semibold py-2 rounded-md shadow-sm transition-colors text-xs uppercase disabled:cursor-not-allowed cursor-pointer"
-        >
-          <RotateCcw size={15} /> Reset
-        </button>
-      </div>
-    </div>
-  );
-};
-
-const RemarksSection = ({ remarks, onOpenRemarksModal }) => (
-  <div className="shrink-0">
-    <button
-      onClick={onOpenRemarksModal}
-      className="w-full flex items-center justify-between px-3 py-1.5 bg-white border border-gray-300 hover:border-teal-500 rounded-lg shadow-xs text-xs font-semibold text-gray-700 hover:bg-teal-50 hover:text-teal-900 transition-all cursor-pointer"
-      title="Add or edit examiner remarks"
-    >
-      <div className="flex items-center gap-1.5 truncate">
-        <Type size={13} className="text-teal-600 shrink-0" />
-        <span className="truncate text-[11px]">{remarks ? `Remarks: "${remarks.slice(0, 16)}..."` : "Add Remarks"}</span>
-      </div>
-      <span className="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200 shrink-0 uppercase font-bold">
-        {remarks ? "Edit" : "+"}
-      </span>
-    </button>
-  </div>
-);
-
-const RemarksModal = ({ isOpen, remarks, onClose, onSave }) => {
-  const [localRemarks, setLocalRemarks] = useState(remarks);
-
-  useEffect(() => {
-    setLocalRemarks(remarks);
-  }, [remarks, isOpen]);
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-[80] p-4">
-      <div className="bg-white rounded-xl border border-gray-200 shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-150 overflow-hidden">
-        <div className="bg-gray-900 text-white px-4 py-3 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Type size={16} className="text-teal-400" />
-            <h3 className="font-bold text-sm uppercase tracking-wide">Examiner Remarks</h3>
-          </div>
-          <button 
-            onClick={onClose}
-            className="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-800 transition-colors cursor-pointer"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <div className="p-4 space-y-3">
-          <p className="text-xs text-gray-600">Provide overall feedback or observations for this answer script:</p>
-          <textarea
-            value={localRemarks}
-            onChange={(e) => setLocalRemarks(e.target.value)}
-            placeholder="Enter feedback or examiner observations..."
-            className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-sm font-medium focus:border-teal-500 focus:bg-white focus:ring-2 focus:ring-teal-100 outline-none transition-all"
-            rows="4"
-            autoFocus
-          />
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              onClick={() => {
-                onSave(localRemarks);
-                onClose();
-              }}
-              className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-bold transition-colors shadow-sm cursor-pointer"
-            >
-              Save Remarks
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const LiveCameraPip = ({ videoRef, proctorWarning }) => (
-  <div className={`fixed bottom-6 left-6 z-40 bg-gray-900 border-2 ${proctorWarning ? 'border-red-600 animate-pulse scale-105 shadow-red-500/40' : 'border-teal-500 shadow-teal-500/10'} rounded-xl overflow-hidden shadow-2xl w-44 h-32 flex flex-col group hover:scale-105 transition-all`}>
-    <video 
-      ref={videoRef} 
-      autoPlay 
-      playsInline 
-      muted 
-      className="w-full h-full object-cover bg-gray-800"
-      style={{ transform: 'scaleX(-1)' }}
-    />
-    <div className={`absolute top-2 left-2 ${proctorWarning ? 'bg-red-600/90' : 'bg-teal-700/90'} text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm`}>
-      <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></div>
-      {proctorWarning ? "PROCTOR ALERT" : "PROCTOR ACTIVE"}
-    </div>
-    
-    {proctorWarning && (
-      <div className="absolute inset-0 bg-red-950/90 backdrop-blur-[2px] flex flex-col items-center justify-center p-2 text-center select-none animate-fade-in z-20">
-        <AlertTriangle size={20} className="text-red-300" />
-        <h4 className="font-extrabold text-red-200 text-[10px] leading-tight mt-1 uppercase tracking-wider">
-          {proctorWarning === "No Face" 
-            ? "No Face" 
-            : proctorWarning === "Multiple Faces"
-            ? "Multiple People!"
-            : "Mismatch!"}
-        </h4>
-        <p className="text-[8px] text-red-300 mt-0.5 leading-tight">
-          {proctorWarning === "No Face"
-            ? "Please look at camera feed."
-            : proctorWarning === "Multiple Faces"
-            ? "Only one person permitted."
-            : "Identity does not match."}
-        </p>
-      </div>
-    )}
-  </div>
-);
-
-const GroupSwitchModal = ({
-  modalData,
-  questionMarks,
-  onConfirmSwitch,
-  onClose
-}) => {
-  if (!modalData) return null;
-  const { targetQuestion, conflictingQuestion, groupCode } = modalData;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-[80] p-4">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full p-5 animate-in zoom-in-95 duration-150">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
-            <AlertCircle size={22} className="text-amber-600" />
-          </div>
-          <div>
-            <h3 className="font-bold text-gray-900 text-sm">Switch to Question {targetQuestion.questionNo}?</h3>
-            <p className="text-xs text-gray-500">Optional Group {groupCode} allows only 1 question to be evaluated</p>
-          </div>
-        </div>
-
-        <div className="bg-amber-50/80 border border-amber-200 rounded-lg p-3 text-xs text-gray-700 mb-4 space-y-1.5">
-          <p>
-            <strong>Question {conflictingQuestion.questionNo}</strong> currently holds{' '}
-            <span className="font-bold text-teal-800">
-              {questionMarks[conflictingQuestion.questionId]?.marksAwarded || 0} marks
-            </span> in Optional Group {groupCode}.
-          </p>
-          <p className="text-gray-600">
-            To evaluate <strong>Question {targetQuestion.questionNo}</strong> instead, the marks and annotation for Question {conflictingQuestion.questionNo} will be cleared.
-          </p>
-        </div>
-
-        <div className="flex gap-2 justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3.5 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onConfirmSwitch(targetQuestion, conflictingQuestion);
-              onClose();
-            }}
-            className="px-3.5 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition-colors cursor-pointer flex items-center gap-1.5"
-          >
-            <span>Clear Q{conflictingQuestion.questionNo} & Mark Q{targetQuestion.questionNo}</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
+// Modular Subcomponents
+import { MarkingLoadingView, MarkingErrorView, ProctorWarningBanner, SecurityOverlays } from "../components/examiner/MarkingStatusViews";
+import { MarkingHeader, formatCountdown } from "../components/examiner/MarkingHeader";
+import { QuestionPaperViewer } from "../components/examiner/QuestionPaperViewer";
+import { QuestionPalette } from "../components/examiner/QuestionPalette";
+import { MarkingActions, RemarksSection } from "../components/examiner/MarkingActions";
+import { RemarksModal, GroupSwitchModal } from "../components/examiner/Modals";
+import { LiveCameraPip } from "../components/examiner/LiveCameraPip";
 
 const ExaminerMarking = () => {
   const location = useLocation();
@@ -814,12 +136,14 @@ const ExaminerMarking = () => {
   const [batchId, setBatchId] = useState(rawBatchId ? decryptId(rawBatchId) : null);
   const rawAllocationId = location.state?.allocationId || queryParams.get('allocationId');
   const [allocationId, setAllocationId] = useState(rawAllocationId ? decryptId(rawAllocationId) : null);
-  const examinerId = location.state?.examinerId || queryParams.get('examinerId') || user?.id;
+  // Derive examiner strictly from verified session user
+  const examinerId = user?.id;
   const [studentName, setStudentName] = useState(location.state?.studentName || queryParams.get('studentName'));
   const [rollNo, setRollNo] = useState(location.state?.rollNo || queryParams.get('rollNo'));
   const [subject, setSubject] = useState(location.state?.subject || queryParams.get('subject'));
   const [cleanPdfUrl, setCleanPdfUrl] = useState(location.state?.cleanPdfUrl || queryParams.get('cleanPdfUrl'));
-  const [rawQpPdfUrl, setRawQpPdfUrl] = useState(location.state?.questionPaperPdfUrl || queryParams.get('questionPaperPdfUrl'));
+  // Avoid accepting arbitrary external URLs from query parameters
+  const [rawQpPdfUrl, setRawQpPdfUrl] = useState(location.state?.questionPaperPdfUrl || null);
   const isReadOnly = location.state?.readOnly === true || queryParams.get('readOnly') === 'true';
   const apiBaseUrl = import.meta.env.VITE_API_URL;
   const pdfUrl = scriptId ? `${apiBaseUrl}/Scripts/${scriptId}/pdf` : null;
@@ -846,13 +170,6 @@ const ExaminerMarking = () => {
   const isEffectiveReadOnly = isReadOnly || isMarkingSubmitted; 
   const [saving, setSaving] = useState(false);
   const [groupSwitchModal, setGroupSwitchModal] = useState(null);
-
-  // Debug log for marking status
-  useEffect(() => {
-    console.log('Marking Status Changed:', markingStatus);
-    console.log('Is Marking Submitted:', isMarkingSubmitted);
-    console.log('Is Effective ReadOnly:', isEffectiveReadOnly);
-  }, [markingStatus, isMarkingSubmitted, isEffectiveReadOnly]);
 
   // TimePerCopy timer state
   const [timePerCopyMinutes, setTimePerCopyMinutes] = useState(0);
@@ -1164,13 +481,9 @@ const ExaminerMarking = () => {
         let profileImageBase64 = user?.profileImage;
         if (!profileImageBase64 && examinerId) {
           try {
-            console.log(`OSM Proctoring: Profile image not found locally. Fetching details for user: ${examinerId}...`);
             const fetchedUser = await userService.getUserById(examinerId);
             if (fetchedUser && fetchedUser.profileImage) {
               profileImageBase64 = fetchedUser.profileImage;
-              console.log("OSM Proctoring: Successfully fetched profile image.");
-            } else {
-              console.warn("OSM Proctoring: Fetched user does not have a profile image.");
             }
           } catch (e) {
             console.error("OSM Proctoring: Failed to fetch user profile image:", e);
@@ -1178,30 +491,20 @@ const ExaminerMarking = () => {
         }
 
         if (profileImageBase64) {
-          console.log("OSM Proctoring: Profile image found. Extracting registered landmarks...");
           const landmarks = await extractImageLandmarks(profileImageBase64, localLandmarker);
           if (landmarks) {
             registeredLandmarksRef.current = landmarks;
-            console.log("OSM Proctoring: Registered profile landmarks cached successfully!");
-          } else {
-            console.error("OSM Proctoring: Failed to extract landmarks from registered profile image.");
           }
-        } else {
-          console.error("OSM Proctoring: No registered profile image available in local storage, user context, or database!");
         }
 
         const runVerificationCheck = () => {
           if (!videoRef.current || !landmarkerRef.current) {
-            console.log("OSM Proctoring check skipped: Video ref or landmarker not initialized.");
             return;
           }
           const video = videoRef.current;
           if (video.readyState < 2) {
-            console.log("OSM Proctoring check skipped: Video is not ready yet.");
             return;
           }
-
-          console.log("OSM Proctoring: Executing periodic face matching check...");
 
           try {
             const tempCanvas = document.createElement("canvas");
@@ -1216,8 +519,6 @@ const ExaminerMarking = () => {
             const results = landmarkerRef.current.detect(tempCanvas);
             const facesCount = results.faceLandmarks ? results.faceLandmarks.length : 0;
 
-            console.log(`OSM Proctoring: Detected ${facesCount} face(s) in frame.`);
-
             let currentCheckWarning = "";
 
             if (facesCount === 0) {
@@ -1228,20 +529,14 @@ const ExaminerMarking = () => {
               const currentLandmarks = results.faceLandmarks[0];
               if (registeredLandmarksRef.current) {
                 const distance = compareFaces(registeredLandmarksRef.current, currentLandmarks);
-                console.log(`OSM Proctoring: Face match distance: ${distance.toFixed(4)} (Threshold: 0.15)`);
-                
                 if (distance > 0.15) {
                   currentCheckWarning = "Mismatch";
                 }
-              } else {
-                console.warn("OSM Proctoring: Registered landmarks missing, defaulting to presence check.");
               }
             }
 
             if (currentCheckWarning !== "") {
               consecutiveMismatchesRef.current = (consecutiveMismatchesRef.current || 0) + 1;
-              console.warn(`OSM Proctoring: Check failed (${currentCheckWarning}). Consecutive failures: ${consecutiveMismatchesRef.current}/3`);
-              
               if (consecutiveMismatchesRef.current >= 3) {
                 setProctorWarning((prevWarning) => {
                   if (prevWarning !== currentCheckWarning) {
@@ -1251,9 +546,6 @@ const ExaminerMarking = () => {
                 });
               }
             } else {
-              if (consecutiveMismatchesRef.current > 0) {
-                console.log("OSM Proctoring: Verification succeeded, resetting failure counter.");
-              }
               consecutiveMismatchesRef.current = 0;
               setProctorWarning("");
             }
@@ -1411,10 +703,8 @@ const ExaminerMarking = () => {
 
       // Fetch marking status from markings table
       if (scriptId) {
-        console.log('Fetching marking status for scriptId from markings table:', scriptId);
         try {
           const existingMarking = await markingService.getMarkingByScript(scriptId);
-          console.log('Marking Data from Markings Table:', existingMarking);
           if (existingMarking?.status) {
             const mStatus = existingMarking.status?.toLowerCase();
             setMarkingStatus(mStatus);
@@ -1429,7 +719,7 @@ const ExaminerMarking = () => {
             setMarkingStartedAt(existingMarking.startedAt);
           }
         } catch (err) {
-          console.log('No prior marking found by scriptId or failed to fetch:', err);
+          // No prior marking
         }
       }
 
@@ -1457,7 +747,6 @@ const ExaminerMarking = () => {
           setMarkingStatus(mStatus);
           if (mStatus === MarkingStatus.SUBMITTED) {
             setSubmitted(true);
-            console.log('Marking is submitted - buttons and annotation tools will not be rendered');
           }
         }
         return markingResponse.id;
@@ -2167,7 +1456,6 @@ const ExaminerMarking = () => {
         if (updatedMarking?.status) {
           const status = updatedMarking.status?.toLowerCase();
           setMarkingStatus(status);
-          console.log('Marking status after submit:', status);
         }
       } catch (err) {
         console.error('Failed to refresh marking status after submit:', err);
