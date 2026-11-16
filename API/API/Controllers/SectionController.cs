@@ -55,12 +55,77 @@ namespace API.Controllers
         }
 
         [HttpGet("Masters")]
-        public async Task<ActionResult<IEnumerable<object>>> GetSectionMasters()
+        public async Task<ActionResult> GetSectionMasters(
+            int page = 1,
+            int pageSize = 10,
+            string search = "",
+            int? batchId = null,
+            string sortField = "batchId",
+            string sortOrder = "asc")
         {
             try
             {
-                var masters = await _context.SectionMasters.OrderBy(m => m.BatchId).ThenBy(m => m.StartQuestion).ToListAsync();
-                if (!masters.Any())
+                // Validate pagination parameters
+                if (pageSize <= 0) pageSize = 10;
+                if (pageSize > 100) pageSize = 100;
+                if (page <= 0) page = 1;
+
+                // Get all masters first
+                var query = _context.SectionMasters.AsQueryable();
+
+                // Apply batchId filter
+                if (batchId.HasValue && batchId.Value > 0)
+                {
+                    query = query.Where(m => m.BatchId == batchId.Value);
+                }
+
+                // Apply search filter
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    var searchLower = search.ToLower().Trim();
+                    query = query.Where(m =>
+                        m.Name.ToLower().Contains(searchLower) ||
+                        m.Description.ToLower().Contains(searchLower) ||
+                        m.BatchId.ToString().Contains(searchLower)
+                    );
+                }
+
+                // Get total count before pagination
+                var totalCount = await query.CountAsync();
+
+                // Apply sorting
+                if (sortField.ToLower() == "name")
+                {
+                    query = sortOrder.ToLower() == "desc"
+                        ? query.OrderByDescending(m => m.Name)
+                        : query.OrderBy(m => m.Name);
+                }
+                else if (sortField.ToLower() == "marks")
+                {
+                    query = sortOrder.ToLower() == "desc"
+                        ? query.OrderByDescending(m => m.TotalMarks)
+                        : query.OrderBy(m => m.TotalMarks);
+                }
+                else if (sortField.ToLower() == "questions")
+                {
+                    query = sortOrder.ToLower() == "desc"
+                        ? query.OrderByDescending(m => m.TotalQuestions)
+                        : query.OrderBy(m => m.TotalQuestions);
+                }
+                else // default: batchId
+                {
+                    query = sortOrder.ToLower() == "desc"
+                        ? query.OrderByDescending(m => m.BatchId).ThenByDescending(m => m.StartQuestion)
+                        : query.OrderBy(m => m.BatchId).ThenBy(m => m.StartQuestion);
+                }
+
+                // Apply pagination
+                var masters = await query
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                if (!masters.Any() && totalCount == 0)
                 {
                     var defaultMasters = new List<SectionMaster>
                     {
@@ -104,6 +169,7 @@ namespace API.Controllers
                     _context.SectionMasters.AddRange(defaultMasters);
                     await _context.SaveChangesAsync();
                     masters = defaultMasters;
+                    totalCount = masters.Count;
                 }
 
                 // Load all QuestionMasters corresponding to these masters' BatchIds
@@ -116,7 +182,7 @@ namespace API.Controllers
                 var allQTypes = await _context.QuestionTypes.ToListAsync();
                 var defQt = allQTypes.FirstOrDefault(t => t.QuestionTypeName == "MCQ") ?? allQTypes.FirstOrDefault();
 
-                // If any section in SectionMasters doesn't have QuestionMasters yet, auto-create them so questions are never missing
+                // If any section in SectionMasters doesn't have QuestionMasters yet, auto-create them
                 bool needSave = false;
                 foreach (var m in masters)
                 {
@@ -177,14 +243,10 @@ namespace API.Controllers
                                 if (string.IsNullOrEmpty(typeName)) typeName = defQt.QuestionTypeName;
                             }
 
-                            // Use individual question marks from QuestionMasters table, fallback to average
                             decimal questionMarks = q.Marks > 0 ? q.Marks : qMarks;
-
-                            // If maxQuestionsToAttempt < totalQuestions, mark all questions as optional
                             bool isOptional = !string.IsNullOrEmpty(q.Group) || (m.MaxQuestionsToAttempt > 0 && m.MaxQuestionsToAttempt < m.TotalQuestions);
                             string groupCode = q.Group;
                             
-                            // If section has attempt limit, create a group for all questions in this section
                             if (m.MaxQuestionsToAttempt > 0 && m.MaxQuestionsToAttempt < m.TotalQuestions && string.IsNullOrEmpty(groupCode))
                             {
                                 groupCode = $"{m.Name}-Optional";
@@ -220,7 +282,16 @@ namespace API.Controllers
                     };
                 }).ToList();
 
-                return Ok(response);
+                var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+
+                return Ok(new
+                {
+                    items = response,
+                    totalCount = totalCount,
+                    page = page,
+                    pageSize = pageSize,
+                    totalPages = totalPages
+                });
             }
             catch (Exception ex)
             {
@@ -573,6 +644,10 @@ namespace API.Controllers
                     pp.IsSectionConfigured = true;
                     pp.UpdatedAt = DateTime.UtcNow;
                 }
+
+                // Also update the Paper's BatchId in Papers table
+                paper.BatchId = finalBatchId;
+                paper.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
 
                 // 2. Handle SectionMaster for this batch and section name
@@ -725,6 +800,26 @@ namespace API.Controllers
 
                 _context.Sections.Update(section);
                 await _context.SaveChangesAsync();
+
+                // Also ensure Paper and ProjectPapers reflect this section's BatchId
+                if (section.PaperId > 0 && section.BatchId > 0)
+                {
+                    var paper = await _context.Papers.FindAsync(section.PaperId);
+                    if (paper != null)
+                    {
+                        paper.BatchId = section.BatchId;
+                        paper.UpdatedAt = DateTime.UtcNow;
+                    }
+
+                    var linkedPps = await _context.ProjectPapers.Where(pp => pp.PaperId == section.PaperId).ToListAsync();
+                    foreach (var pp in linkedPps)
+                    {
+                        pp.BatchId = section.BatchId;
+                        pp.IsSectionConfigured = true;
+                        pp.UpdatedAt = DateTime.UtcNow;
+                    }
+                    await _context.SaveChangesAsync();
+                }
 
                 // Handle SectionMaster updates
                 var masterName = section.Name.Trim();
@@ -1059,6 +1154,29 @@ namespace API.Controllers
                         _context.QuestionMasters.AddRange(qmImport);
                         await _context.SaveChangesAsync();
                     }
+
+                    var targetPaper = await _context.Papers.FindAsync(targetPaperId);
+                    if (targetPaper != null && sourceSections.Any())
+                    {
+                        var firstSecBatch = sourceSections.FirstOrDefault(s => s.BatchId > 0)?.BatchId;
+                        if (firstSecBatch.HasValue && firstSecBatch.Value > 0)
+                        {
+                            targetPaper.BatchId = firstSecBatch.Value;
+                            targetPaper.UpdatedAt = DateTime.UtcNow;
+                        }
+                    }
+                    var targetPps = await _context.ProjectPapers.Where(pp => pp.PaperId == targetPaperId).ToListAsync();
+                    foreach (var pp in targetPps)
+                    {
+                        var firstSecBatch = sourceSections.FirstOrDefault(s => s.BatchId > 0)?.BatchId;
+                        if (firstSecBatch.HasValue && firstSecBatch.Value > 0)
+                        {
+                            pp.BatchId = firstSecBatch.Value;
+                        }
+                        pp.IsSectionConfigured = true;
+                        pp.UpdatedAt = DateTime.UtcNow;
+                    }
+                    await _context.SaveChangesAsync();
                     
                     importedCount++;
                 }
@@ -1244,6 +1362,21 @@ namespace API.Controllers
                         await _context.SaveChangesAsync();
                         importedCount++;
                     }
+
+                    int masterBatchId = masters.FirstOrDefault()?.BatchId ?? 1;
+                    if (paper != null)
+                    {
+                        paper.BatchId = masterBatchId;
+                        paper.UpdatedAt = DateTime.UtcNow;
+                    }
+                    var linkedPps = await _context.ProjectPapers.Where(pp => pp.PaperId == paperId).ToListAsync();
+                    foreach (var pp in linkedPps)
+                    {
+                        pp.BatchId = masterBatchId;
+                        pp.IsSectionConfigured = true;
+                        pp.UpdatedAt = DateTime.UtcNow;
+                    }
+                    await _context.SaveChangesAsync();
                 }
 
                 return Ok(new { success = true, message = $"Successfully imported {importedCount} sections" });
@@ -1348,6 +1481,12 @@ namespace API.Controllers
                         pp.IsSectionConfigured = false;
                     }
                     pp.UpdatedAt = DateTime.UtcNow;
+                }
+
+                if (paper != null)
+                {
+                    paper.BatchId = targetBatchId > 0 ? targetBatchId : (int?)null;
+                    paper.UpdatedAt = DateTime.UtcNow;
                 }
                 await _context.SaveChangesAsync();
                 return Ok(new { success = true, message = "Paper master section mapping updated successfully" });

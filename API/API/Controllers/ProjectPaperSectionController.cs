@@ -375,6 +375,17 @@ namespace API.Controllers
                 projectPaper.BatchId             = resolvedBatchId;
                 projectPaper.UpdatedAt           = DateTime.UtcNow;
                 _context.ProjectPapers.Update(projectPaper);
+
+                if (projectPaper.PaperId > 0)
+                {
+                    var paper = await _context.Papers.FindAsync(projectPaper.PaperId);
+                    if (paper != null)
+                    {
+                        paper.BatchId = resolvedBatchId;
+                        paper.UpdatedAt = DateTime.UtcNow;
+                        _context.Papers.Update(paper);
+                    }
+                }
                 await _context.SaveChangesAsync();
 
                 // ── Update existing Scripts with BatchId ─────────────────────────────
@@ -662,6 +673,17 @@ namespace API.Controllers
                         projectPaper.IsSectionConfigured = true;
                         projectPaper.UpdatedAt           = DateTime.UtcNow;
                         _context.ProjectPapers.Update(projectPaper);
+
+                        if (projectPaper.PaperId > 0)
+                        {
+                            var paper = await _context.Papers.FindAsync(projectPaper.PaperId);
+                            if (paper != null)
+                            {
+                                paper.BatchId = newBatchId;
+                                paper.UpdatedAt = DateTime.UtcNow;
+                                _context.Papers.Update(paper);
+                            }
+                        }
                     }
 
                     await _context.SaveChangesAsync();
@@ -754,12 +776,23 @@ namespace API.Controllers
                         }
                     }
 
-                    if (projectPaper != null && projectPaper.BatchId != master.BatchId)
+                    if (projectPaper != null)
                     {
                         projectPaper.BatchId             = master.BatchId;
                         projectPaper.IsSectionConfigured = true;
                         projectPaper.UpdatedAt           = DateTime.UtcNow;
                         _context.ProjectPapers.Update(projectPaper);
+
+                        if (projectPaper.PaperId > 0)
+                        {
+                            var paper = await _context.Papers.FindAsync(projectPaper.PaperId);
+                            if (paper != null)
+                            {
+                                paper.BatchId = master.BatchId;
+                                paper.UpdatedAt = DateTime.UtcNow;
+                                _context.Papers.Update(paper);
+                            }
+                        }
                     }
 
                     await _context.SaveChangesAsync();
@@ -971,6 +1004,17 @@ namespace API.Controllers
                 projectPaper.BatchId             = batchId;
                 projectPaper.UpdatedAt           = DateTime.UtcNow;
                 _context.ProjectPapers.Update(projectPaper);
+
+                if (projectPaper.PaperId > 0)
+                {
+                    var paper = await _context.Papers.FindAsync(projectPaper.PaperId);
+                    if (paper != null)
+                    {
+                        paper.BatchId = batchId;
+                        paper.UpdatedAt = DateTime.UtcNow;
+                        _context.Papers.Update(paper);
+                    }
+                }
                 await _context.SaveChangesAsync();
 
                 int? targetUniId = projectPaper.Paper?.UniversityId;
@@ -1092,6 +1136,17 @@ namespace API.Controllers
                 projectPaper.BatchId             = resolvedBatchId;
                 projectPaper.UpdatedAt           = DateTime.UtcNow;
                 _context.ProjectPapers.Update(projectPaper);
+
+                if (projectPaper.PaperId > 0)
+                {
+                    var paper = await _context.Papers.FindAsync(projectPaper.PaperId);
+                    if (paper != null)
+                    {
+                        paper.BatchId = resolvedBatchId;
+                        paper.UpdatedAt = DateTime.UtcNow;
+                        _context.Papers.Update(paper);
+                    }
+                }
                 await _context.SaveChangesAsync();
 
                 int? targetUniId = projectPaper.Paper?.UniversityId;

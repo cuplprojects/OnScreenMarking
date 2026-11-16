@@ -1,9 +1,17 @@
 import apiCall from './api';
 
 export const sectionService = {
-  // Get all section masters
-  getSectionMasters: async () => {
-    return apiCall('/section/Masters');
+  // Get all section masters with pagination, search, sorting, and batch filtering
+  getSectionMasters: async (params = {}) => {
+    const queryParams = new URLSearchParams();
+    if (params.page) queryParams.append('page', params.page);
+    if (params.pageSize) queryParams.append('pageSize', params.pageSize);
+    if (params.search) queryParams.append('search', params.search);
+    if (params.batchId) queryParams.append('batchId', params.batchId);
+    if (params.sortField) queryParams.append('sortField', params.sortField);
+    if (params.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+    const qs = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return apiCall(`/section/Masters${qs}`);
   },
 
   createSectionMaster: async (data) => {
