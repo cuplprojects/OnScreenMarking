@@ -93,8 +93,8 @@ export default function ForgotPassword() {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setError('New password must be at least 6 characters long.');
+    if (newPassword.length < 8) {
+      setError('New password must be at least 8 characters long.');
       return;
     }
 

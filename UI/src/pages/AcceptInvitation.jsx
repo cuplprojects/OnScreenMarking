@@ -270,7 +270,6 @@ const AcceptInvitation = () => {
                 video: { deviceId: { exact: dev.deviceId } }
               });
               if (stream) {
-                console.log("Connected to camera device:", dev.label || dev.deviceId);
                 break;
               }
             } catch (devErr) {
@@ -592,6 +591,11 @@ const AcceptInvitation = () => {
 
     if (!formData.name || !formData.password || !formData.confirmPassword) {
       setError('Please fill in all required fields marked with *');
+      return;
+    }
+
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters long.');
       return;
     }
 

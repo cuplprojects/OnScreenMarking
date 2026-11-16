@@ -19,6 +19,11 @@ import { useTable } from "../services/tableService";
 import TablePagination from "../components/TablePagination";
 import ColumnFilter from "../components/ColumnFilter";
 
+const getInitialsAvatar = (name) => {
+  const initial = (name || 'U').trim().charAt(0).toUpperCase() || 'U';
+  return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" fill="%230D9488"/><text x="50%" y="54%" font-size="28" font-family="sans-serif" font-weight="600" fill="%23ffffff" dominant-baseline="middle" text-anchor="middle">${encodeURIComponent(initial)}</text></svg>`;
+};
+
 const SubjectMultiSelect = ({ subjects, selectedSubjects, toggleSubject }) => {
   const [isOpen, setIsOpen] = useState(false);
   const wrapperRef = useRef(null);
@@ -1149,10 +1154,6 @@ export default function PapersManagement({ isTab = false }) {
       const loadedPapers = papersRes?.items || [];
       const loadedExaminers = Array.isArray(examinersRes) ? examinersRes : (examinersRes?.items || []);
       
-      console.log('loadBulkAssignData - Loaded Papers:', loadedPapers.length);
-      console.log('loadBulkAssignData - Loaded Examiners count:', loadedExaminers.length);
-      console.log('loadBulkAssignData - Loaded Examiners sample:', loadedExaminers.slice(0, 3));
-      
       setBulkPapers(loadedPapers);
       setBulkExaminers(loadedExaminers);
       const initialCatches = {};
@@ -1412,15 +1413,19 @@ export default function PapersManagement({ isTab = false }) {
       return;
     }
 
+    // Size limit check (max 10MB) to mitigate ReDoS and high memory exhaustion
+    if (file.size > 10 * 1024 * 1024) {
+      message.error("File size exceeds 10MB limit. Please upload a smaller file.");
+      if (excelFileInputRef.current) excelFileInputRef.current.value = '';
+      return;
+    }
+
     // Check if examiners are loaded
     if (!bulkExaminers || bulkExaminers.length === 0) {
       message.error("Examiners data not loaded yet. Please wait a moment and try again.");
       if (excelFileInputRef.current) excelFileInputRef.current.value = '';
       return;
     }
-
-    console.log('Excel Upload - bulkExaminers count:', bulkExaminers.length);
-    console.log('Excel Upload - bulkExaminers sample:', bulkExaminers.slice(0, 3));
 
     setExcelFileName(file.name);
     const reader = new FileReader();
@@ -3269,7 +3274,7 @@ export default function PapersManagement({ isTab = false }) {
                                   >
                                     <div className="flex items-center gap-2.5 min-w-0">
                                       <img
-                                        src={selectedEx.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedEx.name || 'User')}&background=0D9488&color=fff`}
+                                        src={selectedEx.profileImage || getInitialsAvatar(selectedEx.name)}
                                         alt=""
                                         className="w-6 h-6 rounded-full border border-teal-200 object-cover shrink-0 shadow-2xs"
                                       />
@@ -3363,7 +3368,7 @@ export default function PapersManagement({ isTab = false }) {
                                             >
                                               <div className="flex items-center gap-2.5 min-w-0">
                                                 <img
-                                                  src={ex.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(ex.name || 'User')}&background=0D9488&color=fff`}
+                                                  src={ex.profileImage || getInitialsAvatar(ex.name)}
                                                   alt=""
                                                   className="w-7 h-7 rounded-full border border-gray-200 object-cover shrink-0 shadow-2xs"
                                                 />
@@ -3650,7 +3655,7 @@ export default function PapersManagement({ isTab = false }) {
                                             className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 bg-teal-50 border border-teal-200 rounded-lg text-xs font-bold text-teal-900 shadow-2xs"
                                           >
                                             <img
-                                              src={ex.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(ex.name || 'User')}&background=0D9488&color=fff`}
+                                              src={ex.profileImage || getInitialsAvatar(ex.name)}
                                               alt=""
                                               className="w-5 h-5 rounded-full border border-white object-cover shrink-0"
                                             />
@@ -3743,7 +3748,7 @@ export default function PapersManagement({ isTab = false }) {
                                                 >
                                                   <div className="flex items-center gap-2.5 min-w-0">
                                                     <img
-                                                      src={ex.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(ex.name || 'User')}&background=0D9488&color=fff`}
+                                                      src={ex.profileImage || getInitialsAvatar(ex.name)}
                                                       alt=""
                                                       className="w-7 h-7 rounded-full border border-gray-200 object-cover shrink-0 shadow-2xs"
                                                     />
@@ -4212,7 +4217,7 @@ export default function PapersManagement({ isTab = false }) {
                           className="flex items-center justify-between p-3 bg-gray-50/50 hover:bg-teal-50 border border-gray-100 hover:border-teal-300 rounded-xl group transition-all cursor-pointer select-none"
                         >
                             <div className="flex items-center gap-3">
-                              <img src={examiner.profileImage || "https://ui-avatars.com/api/?name=" + examiner.name} alt="" className="w-8 h-8 rounded-full bg-gray-200 border-2 border-white shadow-sm" />
+                              <img src={examiner.profileImage || getInitialsAvatar(examiner.name)} alt="" className="w-8 h-8 rounded-full bg-gray-200 border-2 border-white shadow-sm" />
                               <div><p className="text-xs font-bold text-gray-800 group-hover:text-teal-900 transition-colors">{examiner.name}</p></div>
                             </div>
                             <div className="p-1.5 bg-white text-teal-700 rounded-lg shadow-sm border border-gray-100 opacity-0 group-hover:opacity-100 transition-all group-hover:scale-110">
@@ -4237,7 +4242,7 @@ export default function PapersManagement({ isTab = false }) {
                             <div key={assignment.id} className="flex items-center justify-between p-3 bg-teal-50 border border-teal-100 rounded-xl">
                             <div className="flex items-center gap-3">
                                 <div className="relative">
-                                <img src={assignment.examiner?.profileImage || "https://ui-avatars.com/api/?name=" + assignment.examiner?.name} alt="" className="w-8 h-8 rounded-full border-2 border-white shadow-sm" />
+                                <img src={assignment.examiner?.profileImage || getInitialsAvatar(assignment.examiner?.name)} alt="" className="w-8 h-8 rounded-full border-2 border-white shadow-sm" />
                                 <div className="absolute -top-1 -right-1 bg-emerald-500 border-2 border-white w-3 h-3 rounded-full"></div>
                                 </div>
                                 <div>

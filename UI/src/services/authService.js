@@ -2,93 +2,94 @@ import apiCall from './api';
 
 const authService = {
   login: async (email, password) => {
-    return apiCall('/Auth/login', {
+    return apiCall('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password })
+      body: { email, password }
     });
   },
 
   register: async (userData) => {
-    return apiCall('/Auth/register', {
+    return apiCall('/auth/register', {
       method: 'POST',
-      body: JSON.stringify(userData)
+      body: userData
     });
   },
 
   getInvitationDetails: async (token) => {
-    return apiCall(`/Auth/invitation-details?token=${encodeURIComponent(token)}`);
+    return apiCall(`/auth/invitation-details?token=${encodeURIComponent(token)}`);
   },
 
   acceptInvitation: async (acceptData) => {
-    return apiCall('/Auth/accept-invitation', {
+    return apiCall('/auth/accept-invitation', {
       method: 'POST',
-      body: JSON.stringify(acceptData)
+      body: acceptData
     });
   },
 
   sendEmailOtp: async (email) => {
-    return apiCall('/Auth/send-email-otp', {
+    return apiCall('/auth/send-email-otp', {
       method: 'POST',
-      body: JSON.stringify({ email })
+      body: { email }
     });
   },
 
   verifyEmailOtp: async (email, otp) => {
-    return apiCall('/Auth/verify-email-otp', {
+    return apiCall('/auth/verify-email-otp', {
       method: 'POST',
-      body: JSON.stringify({ email, otp })
+      body: { email, otp }
     });
   },
 
   sendPhoneOtp: async (phone) => {
-    return apiCall('/Auth/send-phone-otp', {
+    return apiCall('/auth/send-phone-otp', {
       method: 'POST',
-      body: JSON.stringify({ phone })
+      body: { phone }
     });
   },
 
   verifyPhoneOtp: async (phone, otp) => {
-    return apiCall('/Auth/verify-phone-otp', {
+    return apiCall('/auth/verify-phone-otp', {
       method: 'POST',
-      body: JSON.stringify({ phone, otp })
+      body: { phone, otp }
     });
   },
 
   forgotPassword: async (email) => {
-    return apiCall('/Auth/forgot-password', {
+    return apiCall('/auth/forgot-password', {
       method: 'POST',
-      body: JSON.stringify({ email })
+      body: { email }
     });
   },
 
   verifyResetOtp: async (email, otp) => {
-    return apiCall('/Auth/verify-reset-otp', {
+    return apiCall('/auth/verify-reset-otp', {
       method: 'POST',
-      body: JSON.stringify({ email, otp })
+      body: { email, otp }
     });
   },
 
   resetPassword: async (email, otp, newPassword) => {
-    return apiCall('/Auth/reset-password', {
+    return apiCall('/auth/reset-password', {
       method: 'POST',
-      body: JSON.stringify({ email, otp, newPassword })
+      body: { email, otp, newPassword }
     });
   },
 
   changePassword: async (currentPassword, newPassword) => {
-    return apiCall('/Auth/change-password', {
+    return apiCall('/auth/change-password', {
       method: 'POST',
-      body: JSON.stringify({ currentPassword, newPassword })
+      body: { currentPassword, newPassword }
     });
   },
 
   logout: async () => {
     try {
-      await apiCall('/Auth/logout', { method: 'POST', hideErrorToast: true, ignoreAuthRedirect: true });
+      await apiCall('/auth/logout', { method: 'POST', hideErrorToast: true, ignoreAuthRedirect: true });
     } catch (e) {}
     try {
       sessionStorage.clear();
     } catch (e) {}
+    window.location.href = '/login';
   }
 };
 

@@ -379,7 +379,10 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
         credentials: 'include'
       });
       const arrayBuffer = await response.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const pdf = await pdfjsLib.getDocument({
+        data: arrayBuffer,
+        isEvalSupported: false // Hardening against arbitrary JS execution in untrusted PDFs
+      }).promise;
       const pages = [];
 
       for (let i = 1; i <= pdf.numPages; i++) {

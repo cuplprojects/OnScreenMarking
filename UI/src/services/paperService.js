@@ -134,20 +134,10 @@ const paperService = {
     const formData = new FormData();
     formData.append('file', file);
     const query = projectId ? `?projectId=${projectId}` : '';
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/papers/${paperId}/question-paper${query}`, {
+    return apiCall(`/papers/${paperId}/question-paper${query}`, {
       method: 'POST',
-      credentials: 'include',
       body: formData
     });
-    if (!res.ok) {
-      let errMsg = 'Failed to upload question paper';
-      try {
-        const errObj = await res.json();
-        errMsg = errObj.message || errMsg;
-      } catch (e) {}
-      throw new Error(errMsg);
-    }
-    return res.json();
   },
 
   // Remove question paper PDF
@@ -165,19 +155,10 @@ const paperService = {
       formData.append('files', files[i]);
     }
     const query = projectId ? `?projectId=${projectId}` : '';
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/papers/bulk-upload-question-papers${query}`, {
+    return apiCall(`/papers/bulk-upload-question-papers${query}`, {
       method: 'POST',
-      credentials: 'include',
       body: formData
     });
-    if (!res.ok) {
-      let errMsg = 'Failed to bulk upload question papers';
-      try {
-        const errObj = await res.json();
-        errMsg = errObj.message || errMsg;
-      } catch (e) {}
-      throw new Error(errMsg);
-    }
   },
 
   // Subject Paper Requests (Coordinator / Admin)

@@ -1,34 +1,13 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import apiCall, { setSessionId, clearSessionId } from '../services/api';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import apiCall from '../services/api';
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  // Session-based authentication backed by Redis with sessionStorage persistence
-  const [user, setUser] = useState(() => {
-    try {
-      const stored = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('user') : null;
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
-
-  const [permissions, setPermissions] = useState(() => {
-    try {
-      const stored = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('permissions') : null;
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const [loading, setLoading] = useState(() => {
-    const hasToken = typeof sessionStorage !== 'undefined' && !!sessionStorage.getItem('token');
-    const hasUser = typeof sessionStorage !== 'undefined' && !!sessionStorage.getItem('user');
-    return !(hasToken && hasUser);
-  });
-
+  // Authentication state validated strictly from server session
+  const [user, setUser] = useState(null);
+  const [permissions, setPermissions] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const clearStorage = () => {
@@ -46,37 +25,9 @@ export function AuthProvider({ children }) {
     } catch (e) {}
   };
 
-  const syncUserToStorage = (userData) => {
-    if (!userData) return;
-    try {
-      sessionStorage.setItem('user', JSON.stringify(userData));
-      if (userData.userType) sessionStorage.setItem('userType', userData.userType);
-      if (userData.name) sessionStorage.setItem('userName', userData.name);
-      if (userData.id) sessionStorage.setItem('userId', String(userData.id));
-      if (userData.email) sessionStorage.setItem('userEmail', userData.email);
-      if (userData.profileImage) sessionStorage.setItem('profileImage', userData.profileImage);
-      if (userData.universityId) sessionStorage.setItem('universityId', String(userData.universityId));
-      if (userData.subjectId1) sessionStorage.setItem('subjectId1', String(userData.subjectId1));
-    } catch (e) {}
-  };
-
-  // Validate or refresh session on app initialization
-  useEffect(() => {
-    const token = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('token') : null;
-    if (token) {
-      setSessionId(token);
-      fetchUserData();
-    } else {
-      setLoading(false);
-    }
-  }, []);
-
   const fetchUserPermissions = async (userData) => {
     if (userData?.permissions && Array.isArray(userData.permissions) && userData.permissions.length > 0) {
       setPermissions(userData.permissions);
-      try {
-        sessionStorage.setItem('permissions', JSON.stringify(userData.permissions));
-      } catch (e) {}
       return userData.permissions;
     }
 
@@ -86,33 +37,22 @@ export function AuthProvider({ children }) {
       if (response && response.success && response.data) {
         const perms = Array.isArray(response.data) ? response.data : [];
         setPermissions(perms);
-        try {
-          sessionStorage.setItem('permissions', JSON.stringify(perms));
-        } catch (e) {}
         return perms;
       }
     } catch (e) {
-      console.error('Failed to fetch user permissions:', e);
+      console.warn('Failed to fetch user permissions:', e);
     }
     return [];
   };
 
-  const fetchUserData = async () => {
+  const fetchUserData = useCallback(async () => {
     try {
-      if (!user && (typeof sessionStorage === 'undefined' || !sessionStorage.getItem('user'))) {
-        setLoading(true);
-      }
-      // Validates session against backend using token header & cookie
+      // Validates session against backend via HttpOnly cookie
       const userData = await apiCall('/users/me', { ignoreAuthRedirect: true, hideErrorToast: true });
       if (userData && userData.id) {
         setUser(userData);
-        syncUserToStorage(userData);
-
         if (userData.permissions && Array.isArray(userData.permissions)) {
           setPermissions(userData.permissions);
-          try {
-            sessionStorage.setItem('permissions', JSON.stringify(userData.permissions));
-          } catch (e) {}
         } else {
           await fetchUserPermissions(userData);
         }
@@ -120,20 +60,21 @@ export function AuthProvider({ children }) {
       } else {
         setUser(null);
         setPermissions([]);
-        clearSessionId();
         clearStorage();
       }
     } catch (err) {
-      if (err.message === 'Session expired') {
-        setUser(null);
-        setPermissions([]);
-        clearSessionId();
-        clearStorage();
-      }
+      setUser(null);
+      setPermissions([]);
+      clearStorage();
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // Validate session against server on app initialization
+  useEffect(() => {
+    fetchUserData();
+  }, [fetchUserData]);
 
   const login = async (email, password) => {
     try {
@@ -142,23 +83,14 @@ export function AuthProvider({ children }) {
       
       const response = await apiCall('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password })
+        body: { email, password }
       });
 
-      if (response.token) {
-        setSessionId(response.token);
-      }
-      
-      // Set user data and permissions in React state and sessionStorage
       const userObj = response.user;
       setUser(userObj);
-      syncUserToStorage(userObj);
 
       if (userObj?.permissions && Array.isArray(userObj.permissions)) {
         setPermissions(userObj.permissions);
-        try {
-          sessionStorage.setItem('permissions', JSON.stringify(userObj.permissions));
-        } catch (e) {}
       } else {
         await fetchUserPermissions(userObj);
       }
@@ -179,9 +111,7 @@ export function AuthProvider({ children }) {
       // Ignore network errors on logout
     }
 
-    clearSessionId();
     clearStorage();
-    
     setUser(null);
     setPermissions([]);
     setError(null);
@@ -193,11 +123,13 @@ export function AuthProvider({ children }) {
   };
 
   const hasPermission = (permissionName) => {
-    // Admin fallback
-    if (user?.userType === 'admin') return true;
+    if (!user) return false;
 
-    // Coordinator fallback (grant default coordinator permissions)
-    if (user?.userType === 'coordinator') {
+    // Admin has full permissions
+    if (user.userType === 'admin') return true;
+
+    // Coordinator standard permissions
+    if (user.userType === 'coordinator') {
       const coordinatorPerms = [
         "READ_SCRIPT", "READ_MARKING", "CREATE_MARKING", "UPDATE_MARKING", 
         "VIEW_REPORTS", "READ_ALLOCATION", "CREATE_ALLOCATION", "UPDATE_ALLOCATION", 
@@ -208,8 +140,8 @@ export function AuthProvider({ children }) {
       }
     }
 
-    // Examiner fallback (grant default examiner permissions)
-    if (user?.userType === 'examiner') {
+    // Examiner standard permissions
+    if (user.userType === 'examiner') {
       const examinerPerms = ["READ_SCRIPT", "READ_MARKING", "CREATE_MARKING", "UPDATE_MARKING", "VIEW_REPORTS", "READ_ALLOCATION"];
       if (examinerPerms.includes(permissionName)) {
         return true;
@@ -233,7 +165,6 @@ export function AuthProvider({ children }) {
     refreshUser,
     updateUser: (userData) => {
       setUser(userData);
-      syncUserToStorage(userData);
     },
     isAuthenticated: !!user,
     userType: user?.userType,

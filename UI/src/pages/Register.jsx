@@ -96,6 +96,7 @@ const Register = () => {
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [emailOtp, setEmailOtp] = useState("");
   const [phoneOtp, setPhoneOtp] = useState("");
+  const [phoneOtpAttempts, setPhoneOtpAttempts] = useState(0);
   const [showEmailOtp, setShowEmailOtp] = useState(false);
   const [showPhoneOtp, setShowPhoneOtp] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
@@ -321,7 +322,6 @@ const Register = () => {
                 video: { deviceId: { exact: dev.deviceId } }
               });
               if (stream) {
-                console.log("Connected to camera device:", dev.label || dev.deviceId);
                 break;
               }
             } catch (devErr) {
@@ -687,14 +687,9 @@ const Register = () => {
       const response = await authService.sendPhoneOtp(formData.phone);
       setShowPhoneOtp(true);
       setResendTimer(60);
+      setPhoneOtpAttempts(0);
       
-      // For development - show OTP since SMS is not configured
-      if (response.otp) {
-        console.log("Phone OTP:", response.otp);
-        message.success(`OTP sent! (Dev Mode: ${response.otp})`, 8000);
-      } else {
-        message.success("OTP sent to your phone successfully");
-      }
+      message.success("OTP sent to your phone successfully");
     } catch (err) {
       console.error("Failed to send phone OTP:", err);
     } finally {
@@ -703,6 +698,11 @@ const Register = () => {
   };
 
   const handleVerifyPhoneOtp = async () => {
+    if (phoneOtpAttempts >= 5) {
+      message.error("Too many failed attempts. Please request a new OTP.");
+      return;
+    }
+
     if (!phoneOtp || phoneOtp.length !== 6) {
       message.error("Please enter a valid 6-digit OTP");
       return;
@@ -715,7 +715,9 @@ const Register = () => {
       setPhoneVerified(true);
       setShowPhoneOtp(false);
       setPhoneOtp("");
+      setPhoneOtpAttempts(0);
     } catch (err) {
+      setPhoneOtpAttempts(prev => prev + 1);
       console.error("Failed to verify phone OTP:", err);
     } finally {
       setOtpLoading(false);

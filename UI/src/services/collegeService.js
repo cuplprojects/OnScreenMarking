@@ -12,14 +12,14 @@ const collegeService = {
   createCollege: async (collegeData) => {
     return apiCall('/colleges', {
       method: 'POST',
-      body: JSON.stringify(collegeData)
+      body: collegeData
     });
   },
 
   updateCollege: async (id, collegeData) => {
     return apiCall(`/colleges/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(collegeData)
+      body: collegeData
     });
   },
 
@@ -30,25 +30,18 @@ const collegeService = {
   },
 
   getTemplateUrl: () => {
-    return `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/colleges/template`;
+    const baseUrl = import.meta.env.VITE_API_URL || '/api';
+    return `${baseUrl}/colleges/template`;
   },
 
   importColleges: async (file) => {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/colleges/import`, {
+    return apiCall('/colleges/import', {
       method: 'POST',
-      credentials: 'include',
       body: formData
     });
-
-    if (!response.ok) {
-      const errData = await response.json();
-      throw new Error(errData.message || 'Import failed');
-    }
-
-    return response.json();
   }
 };
 
