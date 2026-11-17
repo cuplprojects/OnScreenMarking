@@ -71,9 +71,14 @@ namespace API.Controllers
                     query = query.OrderBy(u => u.UniversityName);
                 }
 
-                if (page > 0 && pageSize > 0)
+                pageSize = Math.Clamp(pageSize <= 0 ? 50 : pageSize, 1, 200);
+                if (page > 0)
                 {
                     query = query.Skip((page - 1) * pageSize).Take(pageSize);
+                }
+                else
+                {
+                    query = query.Take(pageSize);
                 }
 
                 var universities = await query
@@ -120,7 +125,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -151,7 +156,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -169,6 +174,10 @@ namespace API.Controllers
                 if (userType != "admin")
                     return Forbid();
 
+                university.UniversityId = 0; // Prevent mass assignment ID injection (M8)
+                university.CreatedAt = DateTime.UtcNow;
+                university.UpdatedAt = DateTime.UtcNow;
+
                 _context.Universities.Add(university);
                 await _context.SaveChangesAsync();
 
@@ -176,7 +185,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -200,12 +209,11 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
         [HttpGet("{id}/departments")]
-        [AllowAnonymous]
         public async Task<ActionResult<IEnumerable<Department>>> GetUniversityDepartments(int id)
         {
             try
@@ -224,7 +232,7 @@ namespace API.Controllers
                 return StatusCode(500, new
                 {
                     success = false,
-                    message = ex.Message
+                    message = "An unexpected error occurred while processing your request."
                 });
             }
         }
@@ -267,7 +275,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -293,6 +301,9 @@ namespace API.Controllers
                 }
 
                 var totalCount = await baseQuery.CountAsync();
+
+                skip = Math.Max(0, skip);
+                take = Math.Clamp(take <= 0 ? 10 : take, 1, 100);
 
                 // Order by name and apply pagination
                 var results = await baseQuery
@@ -322,7 +333,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -462,7 +473,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -540,7 +551,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
     }

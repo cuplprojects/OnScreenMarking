@@ -17,10 +17,18 @@ namespace API.Controllers
     public class UsersController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IConfiguration _configuration;
         private readonly IEmailService _emailService;
         private readonly IPasswordGenerationService _passwordGenerationService;
         private readonly IDistributedCache _cache;
         private readonly IPermissionService _permissionService;
+        private readonly ILoggingService _loggingService;
+        private readonly IPasswordHasherService _passwordHasher;
+
+        private static readonly HashSet<string> AllowedRoles = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "admin", "coordinator", "examiner"
+        };
 
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
@@ -31,25 +39,22 @@ namespace API.Controllers
 
         public UsersController(
             ApplicationDbContext context, 
+            IConfiguration configuration,
             IEmailService emailService, 
             IPasswordGenerationService passwordGenerationService,
             IDistributedCache cache,
-            IPermissionService permissionService)
+            IPermissionService permissionService,
+            ILoggingService loggingService,
+            IPasswordHasherService passwordHasher)
         {
             _context = context;
+            _configuration = configuration;
             _emailService = emailService;
             _passwordGenerationService = passwordGenerationService;
             _cache = cache;
             _permissionService = permissionService;
-        }
-
-        private static string HashPassword(string password)
-        {
-            using (var sha256 = System.Security.Cryptography.SHA256.Create())
-            {
-                var hashedBytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(password));
-                return Convert.ToBase64String(hashedBytes);
-            }
+            _loggingService = loggingService;
+            _passwordHasher = passwordHasher;
         }
 
         private async Task<bool> HasPermissionAsync(string permission)
@@ -157,7 +162,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -234,38 +239,49 @@ namespace API.Controllers
                 }
 
                 // Pagination
-                if (pageSize > 0)
-                {
-                    query = query.Skip((page - 1) * pageSize).Take(pageSize);
-                }
+                page = Math.Max(1, page);
+                pageSize = Math.Clamp(pageSize <= 0 ? 10 : pageSize, 1, 200);
+                query = query.Skip((page - 1) * pageSize).Take(pageSize);
 
                 var users = await query.Include(u => u.University).ToListAsync();
 
-                var userDtos = users.Select(u => new UserDto
+                var loggedInUserType = User.FindFirst("userType")?.Value?.ToLower();
+                var loggedInUserIdStr = User.FindFirst("id")?.Value;
+                int.TryParse(loggedInUserIdStr, out int loggedInUserId);
+                var caller = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == loggedInUserId);
+                bool isAdmin = loggedInUserType == "admin";
+                bool isCoordinator = loggedInUserType == "coordinator";
+
+                var userDtos = users.Select(u =>
                 {
-                    Id = u.Id,
-                    Name = u.Name,
-                    Email = u.Email,
-                    UserType = u.UserType,
-                    UniversityId = u.UniversityId,
-                    SubjectId1 = u.SubjectId1,
-                    SubjectId2 = u.SubjectId2,
-                    SubjectId3 = u.SubjectId3,
-                    EmpId = u.EmpId,
-                    Fname = u.Fname,
-                    AadharNo = u.AadharNo,
-                    PanNo = u.PanNo,
-                    CollegeId = u.CollegeId,
-                    Experience = u.Experience,
-                    Phone = u.Phone,
-                    Address = u.Address,
-                    ProfileImage = u.ProfileImage,
-                    IsActive = u.IsActive,
-                    IsApproved = u.IsApproved,
-                    University = u.University != null ? new University { UniversityId = u.University.UniversityId, UniversityName = u.University.UniversityName } : null
+                    bool canViewPii = isAdmin || (isCoordinator && caller?.UniversityId.HasValue == true && caller.UniversityId == u.UniversityId) || loggedInUserId == u.Id;
+
+                    return new UserDto
+                    {
+                        Id = u.Id,
+                        Name = u.Name,
+                        Email = u.Email,
+                        UserType = u.UserType,
+                        UniversityId = u.UniversityId,
+                        SubjectId1 = u.SubjectId1,
+                        SubjectId2 = u.SubjectId2,
+                        SubjectId3 = u.SubjectId3,
+                        EmpId = u.EmpId,
+                        Fname = u.Fname,
+                        AadharNo = canViewPii ? u.AadharNo : (string.IsNullOrEmpty(u.AadharNo) ? "" : "***" + (u.AadharNo.Length > 4 ? u.AadharNo.Substring(u.AadharNo.Length - 4) : "")),
+                        PanNo = canViewPii ? u.PanNo : (string.IsNullOrEmpty(u.PanNo) ? "" : "***" + (u.PanNo.Length > 4 ? u.PanNo.Substring(u.PanNo.Length - 4) : "")),
+                        CollegeId = u.CollegeId,
+                        Experience = u.Experience,
+                        Phone = canViewPii ? u.Phone : (string.IsNullOrEmpty(u.Phone) ? "" : "***" + (u.Phone.Length > 4 ? u.Phone.Substring(u.Phone.Length - 4) : "")),
+                        Address = canViewPii ? u.Address : "",
+                        ProfileImage = u.ProfileImage,
+                        IsActive = u.IsActive,
+                        IsApproved = u.IsApproved,
+                        University = u.University != null ? new University { UniversityId = u.University.UniversityId, UniversityName = u.University.UniversityName } : null
+                    };
                 }).ToList();
 
-                var totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 1;
+                var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
                 return Ok(new
                 {
@@ -276,7 +292,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -308,7 +324,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -372,7 +388,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -380,11 +396,29 @@ namespace API.Controllers
         [HttpGet("examiners/workload")]
         public async Task<IActionResult> GetExaminersWorkload([FromQuery] int universityId)
         {
+            if (!await HasPermissionAsync("READ_USER") && !await HasPermissionAsync("VIEW_REPORTS") && !await HasPermissionAsync("MANAGE_ALLOCATIONS"))
+            {
+                return StatusCode(403, new { success = false, message = "You do not have permission to view examiner workload." });
+            }
+
             try
             {
+                int effectiveUniId = universityId;
+                var userType = User.FindFirst("userType")?.Value?.ToLower();
+                var userIdStr = User.FindFirst("id")?.Value;
+                if (userType == "coordinator" && !string.IsNullOrEmpty(userIdStr) && int.TryParse(userIdStr, out int currentUserId))
+                {
+                    var currentUser = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == currentUserId);
+                    if (currentUser?.UniversityId.HasValue == true)
+                    {
+                        effectiveUniId = currentUser.UniversityId.Value;
+                    }
+                }
+
                 var examiners = await _context.Users
                     .AsNoTracking()
-                    .Where(u => u.UniversityId == universityId && u.UserType.ToLower() == "examiner")
+                    .Where(u => u.UniversityId == effectiveUniId && u.UserType.ToLower() == "examiner")
+                    .Take(200)
                     .Select(u => new
                     {
                         id = u.Id,
@@ -399,7 +433,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An error occurred while loading examiner workload." });
             }
         }
 
@@ -486,11 +520,31 @@ namespace API.Controllers
                     Console.WriteLine($"[Redis Cache] Failed to cache user {id}: {ex.Message}");
                 }
 
+                // Mask PII if caller is not an admin, the coordinator of the same university, or the user themselves
+                var callerType = User.FindFirst("userType")?.Value?.ToLower();
+                var callerIdStr = User.FindFirst("id")?.Value;
+                int.TryParse(callerIdStr, out int callerId);
+
+                bool canViewFullPii = callerType == "admin" || callerId == id;
+                if (!canViewFullPii && callerType == "coordinator")
+                {
+                    var callerUser = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == callerId);
+                    canViewFullPii = callerUser?.UniversityId.HasValue == true && callerUser.UniversityId == userDto.UniversityId;
+                }
+
+                if (!canViewFullPii)
+                {
+                    userDto.AadharNo = string.IsNullOrEmpty(userDto.AadharNo) ? "" : "***" + (userDto.AadharNo.Length > 4 ? userDto.AadharNo.Substring(userDto.AadharNo.Length - 4) : "");
+                    userDto.PanNo = string.IsNullOrEmpty(userDto.PanNo) ? "" : "***" + (userDto.PanNo.Length > 4 ? userDto.PanNo.Substring(userDto.PanNo.Length - 4) : "");
+                    userDto.Phone = string.IsNullOrEmpty(userDto.Phone) ? "" : "***" + (userDto.Phone.Length > 4 ? userDto.Phone.Substring(userDto.Phone.Length - 4) : "");
+                    userDto.Address = "";
+                }
+
                 return Ok(userDto);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -536,11 +590,11 @@ namespace API.Controllers
                     SubjectId3 = u.SubjectId3,
                     EmpId = u.EmpId,
                     Fname = u.Fname,
-                    AadharNo = u.AadharNo,
-                    PanNo = u.PanNo,
+                    AadharNo = "", // Strip PII
+                    PanNo = "",    // Strip PII
                     CollegeId = u.CollegeId,
                     Experience = u.Experience,
-                    Phone = u.Phone,
+                    Phone = "",    // Strip PII
                     ProfileImage = u.ProfileImage,
                     IsActive = u.IsActive
                 }).ToList();
@@ -549,7 +603,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -598,19 +652,21 @@ namespace API.Controllers
                     return StatusCode(403, new { success = false, message = "Only coordinators or admins can approve users." });
                 }
 
-                // Generate autogenerated password upon approval and email the examiner
+                // Generate secure temporary password upon approval and email the examiner; never store in plaintext
                 string generatedPassword = "";
-                if (string.IsNullOrWhiteSpace(targetUser.PasswordHash) || string.IsNullOrWhiteSpace(targetUser.AutoGeneratedPassword))
+                if (string.IsNullOrWhiteSpace(targetUser.PasswordHash))
                 {
                     generatedPassword = _passwordGenerationService.GeneratePassword();
-                    targetUser.AutoGeneratedPassword = generatedPassword;
-                    targetUser.PasswordHash = HashPassword(generatedPassword);
+                    targetUser.PasswordHash = _passwordHasher.HashPassword(generatedPassword);
                 }
-                else if (!string.IsNullOrWhiteSpace(targetUser.AutoGeneratedPassword))
+                else
                 {
-                    generatedPassword = targetUser.AutoGeneratedPassword;
+                    // Generate a new temporary credential for the approved user
+                    generatedPassword = _passwordGenerationService.GeneratePassword();
+                    targetUser.PasswordHash = _passwordHasher.HashPassword(generatedPassword);
                 }
 
+                targetUser.AutoGeneratedPassword = ""; // Never store plaintext password in database
                 targetUser.IsApproved = true;
                 targetUser.IsActive = true;
                 targetUser.UpdatedAt = DateTime.UtcNow;
@@ -644,7 +700,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -679,15 +735,44 @@ namespace API.Controllers
                     return Unauthorized(new { success = false, message = "User not found" });
                 }
 
-                // Verify permissions
+                string targetUserType;
+                int targetUniversityId;
+
+                // Verify permissions and university scoping
                 if (loggedInUserType == "coordinator")
                 {
-                    if (request.UniversityId != currentUser.UniversityId)
+                    if (!currentUser.UniversityId.HasValue)
                     {
-                        return StatusCode(403, new { success = false, message = "You can only invite examiners for your own university." });
+                        return StatusCode(403, new { success = false, message = "Coordinator is not associated with any university." });
                     }
+
+                    // Force target university to coordinator's university
+                    targetUniversityId = currentUser.UniversityId.Value;
+
+                    // Coordinators can ONLY invite examiners (cannot invite admin or coordinator!)
+                    if (!string.IsNullOrWhiteSpace(request.UserType) && string.Compare(request.UserType.Trim(), "examiner", StringComparison.OrdinalIgnoreCase) != 0)
+                    {
+                        return StatusCode(403, new { success = false, message = "Coordinators can only invite examiners. Only administrators can invite coordinators or administrators." });
+                    }
+
+                    targetUserType = "examiner";
                 }
-                else if (loggedInUserType != "admin")
+                else if (loggedInUserType == "admin")
+                {
+                    targetUserType = string.IsNullOrWhiteSpace(request.UserType) ? "examiner" : request.UserType.Trim().ToLower();
+                    if (!AllowedRoles.Contains(targetUserType))
+                    {
+                        return BadRequest(new { success = false, message = $"Invalid role '{request.UserType}'. Allowed roles: admin, coordinator, examiner." });
+                    }
+
+                    if (!await _context.Universities.AnyAsync(u => u.UniversityId == request.UniversityId))
+                    {
+                        return BadRequest(new { success = false, message = "Invalid university specified." });
+                    }
+
+                    targetUniversityId = request.UniversityId;
+                }
+                else
                 {
                     return StatusCode(403, new { success = false, message = "Only coordinators or admins can invite users." });
                 }
@@ -706,18 +791,31 @@ namespace API.Controllers
                 {
                     Email = request.Email.Trim().ToLower(),
                     Token = token,
-                    UniversityId = request.UniversityId,
+                    UniversityId = targetUniversityId,
                     DepartmentId = request.DepartmentId,
-                    UserType = string.IsNullOrWhiteSpace(request.UserType) ? "examiner" : request.UserType.Trim().ToLower(),
-                    ExpiresAt = DateTime.UtcNow.AddMinutes(30),
+                    UserType = targetUserType,
+                    ExpiresAt = DateTime.UtcNow.AddDays(7),
                     IsUsed = false
                 };
 
                 _context.Invitations.Add(invitation);
                 await _context.SaveChangesAsync();
 
-                // Build a simulated invitation link
-                var invitationLink = $"http://localhost:5173/accept-invitation?token={token}";
+                // Build invitation link dynamically
+                var clientBaseUrl = _configuration["FrontendUrl"]?.TrimEnd('/');
+                if (string.IsNullOrWhiteSpace(clientBaseUrl))
+                {
+                    var origin = Request.Headers["Origin"].FirstOrDefault() ?? Request.Headers["Referer"].FirstOrDefault();
+                    if (!string.IsNullOrWhiteSpace(origin) && Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+                    {
+                        clientBaseUrl = $"{uri.Scheme}://{uri.Authority}";
+                    }
+                    else
+                    {
+                        clientBaseUrl = $"{Request.Scheme}://{Request.Host.Value}";
+                    }
+                }
+                var invitationLink = $"{clientBaseUrl}/accept-invitation?token={token}";
 
                 bool emailSent = true;
                 string emailError = null;
@@ -755,7 +853,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -852,7 +950,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -872,6 +970,18 @@ namespace API.Controllers
                 }
 
                 var loggedInUserType = User.FindFirst("userType")?.Value;
+                var loggedInUserIdStr = User.FindFirst("id")?.Value;
+                if (!int.TryParse(loggedInUserIdStr, out int loggedInUserId))
+                {
+                    return Unauthorized(new { success = false, message = "Invalid token claims" });
+                }
+
+                var currentUser = await _context.Users.FindAsync(loggedInUserId);
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { success = false, message = "Current user not found" });
+                }
+
                 if (loggedInUserType != "admin" && loggedInUserType != "coordinator")
                 {
                     return StatusCode(403, new { success = false, message = "Only coordinators or admins can update users." });
@@ -883,14 +993,79 @@ namespace API.Controllers
                     return NotFound(new { success = false, message = "User not found" });
                 }
 
+                // Enforce scope and restrictions for coordinators
+                if (loggedInUserType == "coordinator")
+                {
+                    // 1. Coordinators can only manage users within their own university
+                    if (!currentUser.UniversityId.HasValue || user.UniversityId != currentUser.UniversityId)
+                    {
+                        return StatusCode(403, new { success = false, message = "Coordinators can only manage users within their own university." });
+                    }
+
+                    // 2. Coordinators cannot modify admin accounts or other coordinator accounts
+                    if (string.Compare(user.UserType, "admin", StringComparison.OrdinalIgnoreCase) == 0 ||
+                        (string.Compare(user.UserType, "coordinator", StringComparison.OrdinalIgnoreCase) == 0 && user.Id != currentUser.Id))
+                    {
+                        return StatusCode(403, new { success = false, message = "Coordinators cannot modify admin or other coordinator accounts." });
+                    }
+
+                    // 3. Coordinators cannot change user roles (e.g. self-escalate to admin or change examiner to coordinator/admin)
+                    if (!string.IsNullOrWhiteSpace(request.UserType) && string.Compare(request.UserType.Trim(), user.UserType, StringComparison.OrdinalIgnoreCase) != 0)
+                    {
+                        return StatusCode(403, new { success = false, message = "Only administrators may assign or change user roles." });
+                    }
+
+                    // 4. Coordinators cannot reassign users to a different university
+                    if (request.UniversityId.HasValue && request.UniversityId.Value != currentUser.UniversityId.Value)
+                    {
+                        return StatusCode(403, new { success = false, message = "Coordinators cannot reassign users to a different university." });
+                    }
+                }
+
+                // Handle Role Updates (Only Admin can change roles, with whitelisting and audit logging)
                 if (!string.IsNullOrWhiteSpace(request.UserType))
                 {
-                    user.UserType = request.UserType.Trim().ToLower();
+                    var newRole = request.UserType.Trim().ToLower();
+                    if (!AllowedRoles.Contains(newRole))
+                    {
+                        return BadRequest(new { success = false, message = $"Invalid role '{request.UserType}'. Allowed roles: admin, coordinator, examiner." });
+                    }
+
+                    if (string.Compare(user.UserType, newRole, StringComparison.OrdinalIgnoreCase) != 0)
+                    {
+                        if (loggedInUserType != "admin")
+                        {
+                            return StatusCode(403, new { success = false, message = "Only administrators may assign admin or coordinator roles." });
+                        }
+
+                        var oldRole = user.UserType;
+                        user.UserType = newRole;
+
+                        // Audit role change
+                        _loggingService.LogEvent(
+                            message: $"Role changed for user {user.Id} ({user.Email}) from '{oldRole}' to '{newRole}' by user {loggedInUserId} ({loggedInUserType}).",
+                            category: "SECURITY_ROLE_CHANGE",
+                            triggeredBy: loggedInUserId,
+                            oldValue: oldRole,
+                            newValue: newRole
+                        );
+                    }
                 }
 
                 if (request.UniversityId.HasValue)
                 {
-                    user.UniversityId = request.UniversityId.Value > 0 ? request.UniversityId.Value : null;
+                    if (request.UniversityId.Value > 0)
+                    {
+                        if (!await _context.Universities.AnyAsync(u => u.UniversityId == request.UniversityId.Value))
+                        {
+                            return BadRequest(new { success = false, message = "Invalid university specified." });
+                        }
+                        user.UniversityId = request.UniversityId.Value;
+                    }
+                    else if (loggedInUserType == "admin")
+                    {
+                        user.UniversityId = null;
+                    }
                 }
 
                 if (request.SubjectId1.HasValue) user.SubjectId1 = request.SubjectId1.Value > 0 ? request.SubjectId1.Value : null;
@@ -914,7 +1089,18 @@ namespace API.Controllers
                 if (request.Experience != null) user.Experience = request.Experience;
                 
                 if (!string.IsNullOrWhiteSpace(request.Name)) user.Name = request.Name;
-                if (!string.IsNullOrWhiteSpace(request.Email)) user.Email = request.Email;
+                if (!string.IsNullOrWhiteSpace(request.Email))
+                {
+                    var normalizedEmail = request.Email.Trim().ToLower();
+                    if (string.Compare(user.Email, normalizedEmail, StringComparison.OrdinalIgnoreCase) != 0)
+                    {
+                        if (await _context.Users.AnyAsync(u => u.Id != user.Id && u.Email.ToLower() == normalizedEmail))
+                        {
+                            return BadRequest(new { success = false, message = "Email is already in use by another account." });
+                        }
+                        user.Email = normalizedEmail;
+                    }
+                }
                 if (request.IsActive.HasValue) user.IsActive = request.IsActive.Value;
 
                 user.UpdatedAt = DateTime.UtcNow;
@@ -935,7 +1121,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
         [HttpGet("project-examiners/{projectId}")]
@@ -1068,7 +1254,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
     }

@@ -62,48 +62,7 @@ namespace API.Controllers
                 var masters = await _context.SectionMasters.OrderBy(m => m.BatchId).ThenBy(m => m.StartQuestion).ToListAsync();
                 if (!masters.Any())
                 {
-                    var defaultMasters = new List<SectionMaster>
-                    {
-                        new SectionMaster
-                        {
-                            BatchId = 1,
-                            Name = "Section A",
-                            Description = "Multiple Choice Questions",
-                            StartQuestion = 1,
-                            EndQuestion = 10,
-                            TotalQuestions = 10,
-                            TotalMarks = 20,
-                            MaxQuestionsToAttempt = 10,
-                            CreatedAt = DateTime.UtcNow
-                        },
-                        new SectionMaster
-                        {
-                            BatchId = 1,
-                            Name = "Section B",
-                            Description = "Short Answer Questions",
-                            StartQuestion = 11,
-                            EndQuestion = 15,
-                            TotalQuestions = 5,
-                            TotalMarks = 30,
-                            MaxQuestionsToAttempt = 5,
-                            CreatedAt = DateTime.UtcNow
-                        },
-                        new SectionMaster
-                        {
-                            BatchId = 1,
-                            Name = "Section C",
-                            Description = "Long Answer Questions",
-                            StartQuestion = 16,
-                            EndQuestion = 20,
-                            TotalQuestions = 5,
-                            TotalMarks = 50,
-                            MaxQuestionsToAttempt = 3,
-                            CreatedAt = DateTime.UtcNow
-                        }
-                    };
-                    _context.SectionMasters.AddRange(defaultMasters);
-                    await _context.SaveChangesAsync();
-                    masters = defaultMasters;
+                    return Ok(new List<object>());
                 }
 
                 // Load all QuestionMasters corresponding to these masters' BatchIds
@@ -116,38 +75,7 @@ namespace API.Controllers
                 var allQTypes = await _context.QuestionTypes.ToListAsync();
                 var defQt = allQTypes.FirstOrDefault(t => t.QuestionTypeName == "MCQ") ?? allQTypes.FirstOrDefault();
 
-                // If any section in SectionMasters doesn't have QuestionMasters yet, auto-create them so questions are never missing
-                bool needSave = false;
-                foreach (var m in masters)
-                {
-                    var matching = allQuestions.Where(q => q.BatchId == m.BatchId && q.Section == m.Name).ToList();
-                    if (!matching.Any())
-                    {
-                        int start = m.StartQuestion > 0 ? m.StartQuestion : 1;
-                        int end = m.EndQuestion >= start ? m.EndQuestion : (start + (m.TotalQuestions > 0 ? m.TotalQuestions - 1 : 0));
-                        for (int qNo = start; qNo <= end; qNo++)
-                        {
-                            var newQ = new QuestionMaster
-                            {
-                                BatchId = m.BatchId,
-                                Section = m.Name,
-                                Question = qNo.ToString(),
-                                QuestionTypeId = defQt?.QuestionTypeId ?? 1,
-                                Type = defQt?.QuestionTypeName ?? "MCQ",
-                                Group = null,
-                                Status = true,
-                                CreatedAt = DateTime.UtcNow
-                            };
-                            _context.QuestionMasters.Add(newQ);
-                            allQuestions.Add(newQ);
-                            needSave = true;
-                        }
-                    }
-                }
-                if (needSave)
-                {
-                    await _context.SaveChangesAsync();
-                }
+
 
                 var response = masters.Select(m =>
                 {
@@ -224,7 +152,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -241,7 +169,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -301,7 +229,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -394,7 +322,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -434,7 +362,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -457,7 +385,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -481,7 +409,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -502,7 +430,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -699,7 +627,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -794,7 +722,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -828,7 +756,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -954,7 +882,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -1067,7 +995,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -1100,7 +1028,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -1126,7 +1054,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -1250,7 +1178,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -1284,7 +1212,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -1354,7 +1282,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
     }

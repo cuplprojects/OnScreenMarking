@@ -72,10 +72,9 @@ namespace API.Controllers
 
                 var total = await query.CountAsync();
                 
-                if (limit > 0)
-                {
-                    query = query.Skip((page - 1) * limit).Take(limit);
-                }
+                page = Math.Max(1, page);
+                limit = Math.Clamp(limit <= 0 ? 10 : limit, 1, 200);
+                query = query.Skip((page - 1) * limit).Take(limit);
 
                 var allocations = await query
                     .Include(a => a.Script)
@@ -83,13 +82,48 @@ namespace API.Controllers
                     .OrderByDescending(a => a.AllocatedAt)
                     .ToListAsync();
 
-                Response.Headers.Add("X-Total-Count", total.ToString());
+                Response.Headers.Append("X-Total-Count", total.ToString());
 
-                return Ok(allocations);
+                // Scrub full User entity to prevent leaking PII (Aadhaar, PAN, Address, Phone, PasswordHash)
+                var safeAllocations = allocations.Select(a => new
+                {
+                    a.AllocationId,
+                    a.ScriptId,
+                    a.ExaminerId,
+                    a.ProjectId,
+                    a.AllocatedAt,
+                    a.Deadline,
+                    a.Status,
+                    a.AssignmentStatus,
+                    Examiner = a.Examiner != null ? new
+                    {
+                        a.Examiner.Id,
+                        a.Examiner.Name,
+                        a.Examiner.Email,
+                        a.Examiner.UserType,
+                        a.Examiner.IsActive
+                    } : null,
+                    Script = a.Script != null ? new
+                    {
+                        a.Script.Id,
+                        a.Script.ProjectPaperId,
+                        a.Script.ProjectId,
+                        a.Script.BatchId,
+                        a.Script.RollNumber,
+                        a.Script.Status,
+                        a.Script.GeneratedBarcode,
+                        a.Script.InBuiltBarcode,
+                        a.Script.CleanPdfUrl,
+                        a.Script.TotalMarks,
+                        a.Script.Percentage
+                    } : null
+                });
+
+                return Ok(safeAllocations);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -117,11 +151,44 @@ namespace API.Controllers
                     }
                 }
 
-                return Ok(allocation);
+                // Return safe DTO without sensitive examiner PII
+                return Ok(new
+                {
+                    allocation.AllocationId,
+                    allocation.ScriptId,
+                    allocation.ExaminerId,
+                    allocation.ProjectId,
+                    allocation.AllocatedAt,
+                    allocation.Deadline,
+                    allocation.Status,
+                    allocation.AssignmentStatus,
+                    Examiner = allocation.Examiner != null ? new
+                    {
+                        allocation.Examiner.Id,
+                        allocation.Examiner.Name,
+                        allocation.Examiner.Email,
+                        allocation.Examiner.UserType,
+                        allocation.Examiner.IsActive
+                    } : null,
+                    Script = allocation.Script != null ? new
+                    {
+                        allocation.Script.Id,
+                        allocation.Script.ProjectPaperId,
+                        allocation.Script.ProjectId,
+                        allocation.Script.BatchId,
+                        allocation.Script.RollNumber,
+                        allocation.Script.Status,
+                        allocation.Script.GeneratedBarcode,
+                        allocation.Script.InBuiltBarcode,
+                        allocation.Script.CleanPdfUrl,
+                        allocation.Script.TotalMarks,
+                        allocation.Script.Percentage
+                    } : null
+                });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -199,7 +266,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -232,7 +299,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -282,7 +349,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -318,7 +385,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -345,11 +412,45 @@ namespace API.Controllers
                     .OrderByDescending(a => a.AllocatedAt)
                     .ToListAsync();
 
-                return Ok(allocations);
+                var safeAllocations = allocations.Select(a => new
+                {
+                    a.AllocationId,
+                    a.ScriptId,
+                    a.ExaminerId,
+                    a.ProjectId,
+                    a.AllocatedAt,
+                    a.Deadline,
+                    a.Status,
+                    a.AssignmentStatus,
+                    Examiner = a.Examiner != null ? new
+                    {
+                        a.Examiner.Id,
+                        a.Examiner.Name,
+                        a.Examiner.Email,
+                        a.Examiner.UserType,
+                        a.Examiner.IsActive
+                    } : null,
+                    Script = a.Script != null ? new
+                    {
+                        a.Script.Id,
+                        a.Script.ProjectPaperId,
+                        a.Script.ProjectId,
+                        a.Script.BatchId,
+                        a.Script.RollNumber,
+                        a.Script.Status,
+                        a.Script.GeneratedBarcode,
+                        a.Script.InBuiltBarcode,
+                        a.Script.CleanPdfUrl,
+                        a.Script.TotalMarks,
+                        a.Script.Percentage
+                    } : null
+                });
+
+                return Ok(safeAllocations);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -394,7 +495,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -484,7 +585,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -500,20 +601,39 @@ namespace API.Controllers
                 if (request.PaperId <= 0)
                     return BadRequest(new { success = false, message = "Valid Paper ID is required" });
 
-                var projectPaper = await _context.ProjectPapers
+                var projectPaperQuery = _context.ProjectPapers
                     .Include(pp => pp.Project)
-                    .FirstOrDefaultAsync(pp => pp.PaperId == request.PaperId);
+                    .Where(pp => pp.PaperId == request.PaperId);
+
+                if (request.ProjectId.HasValue && request.ProjectId.Value > 0)
+                {
+                    projectPaperQuery = projectPaperQuery.Where(pp => pp.ProjectId == request.ProjectId.Value);
+                }
+
+                var projectPaper = await projectPaperQuery.FirstOrDefaultAsync();
                 if (projectPaper == null || string.IsNullOrEmpty(projectPaper.QuestionPaperPdfUrl))
                     return BadRequest(new { success = false, message = "Cannot allocate scripts because the Question Paper PDF is not uploaded for this paper." });
 
                 if (projectPaper.Project != null && !projectPaper.Project.IsActive)
                     return BadRequest(new { success = false, message = "Cannot allocate scripts for an inactive project. Please activate the project first." });
 
-                // Get pending scripts for this paper
-                var pendingScripts = await _context.Scripts
+                // Get pending scripts for this paper within project scope (M9.2)
+                var pendingScriptsQuery = _context.Scripts
+                    .Include(s => s.ProjectPaper)
+                    .Include(s => s.Allocations)
                     .Where(s => s.ProjectPaper.PaperId == request.PaperId && 
-                               (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any())))
-                    .ToListAsync();
+                               (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any(a => a.AssignmentStatus))));
+
+                if (request.ProjectId.HasValue && request.ProjectId.Value > 0)
+                {
+                    pendingScriptsQuery = pendingScriptsQuery.Where(s => s.ProjectId == request.ProjectId.Value || (s.ProjectPaper != null && s.ProjectPaper.ProjectId == request.ProjectId.Value));
+                }
+                else if (projectPaper != null)
+                {
+                    pendingScriptsQuery = pendingScriptsQuery.Where(s => s.ProjectId == projectPaper.ProjectId || (s.ProjectPaper != null && s.ProjectPaper.ProjectId == projectPaper.ProjectId));
+                }
+
+                var pendingScripts = await pendingScriptsQuery.ToListAsync();
 
                 var totalRequested = request.Allocations.Sum(a => a.Count);
                 if (totalRequested > pendingScripts.Count)
@@ -547,11 +667,11 @@ namespace API.Controllers
 
                             var script = shuffledScripts[scriptIndex++];
 
-                            // Check if allocation already exists
-                            var existingAllocation = await _context.Allocations
-                                .FirstOrDefaultAsync(a => a.ScriptId == script.Id && a.AssignmentStatus);
+                            // Check if allocation already exists (database or tracked in current context) (M9.3)
+                            var alreadyAllocated = _context.Allocations.Local.Any(a => a.ScriptId == script.Id && a.AssignmentStatus) ||
+                                await _context.Allocations.AnyAsync(a => a.ScriptId == script.Id && a.AssignmentStatus);
 
-                            if (existingAllocation != null)
+                            if (alreadyAllocated)
                             {
                                 errors.Add($"Script {script.Id} already allocated");
                                 continue;
@@ -616,7 +736,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
         
@@ -652,7 +772,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
         
@@ -689,7 +809,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -737,7 +857,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
         
@@ -875,19 +995,46 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
         [HttpPost("cleanup-expired")]
-        [Authorize]
+        [Authorize(Roles = "admin,coordinator")]
         public async Task<IActionResult> CleanupExpiredAllocations()
         {
             try
             {
-                var expiredAllocations = await _context.Allocations
-                    .Include(a => a.Script)
-                    .Where(a => a.AssignmentStatus && a.Deadline.HasValue && a.Deadline.Value < DateTime.UtcNow && !_context.Markings.Any(m => m.AllocationId == a.AllocationId && m.Status == MarkingStatus.submitted))
-                    .ToListAsync();
+                var loggedInUserType = User.FindFirst("userType")?.Value;
+                var loggedInUserIdStr = User.FindFirst("id")?.Value;
+                if (!int.TryParse(loggedInUserIdStr, out int loggedInUserId))
+                {
+                    return Unauthorized(new { success = false, message = "Invalid token claims" });
+                }
+
+                var currentUser = await _context.Users.FindAsync(loggedInUserId);
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { success = false, message = "User not found" });
+                }
+
+                var query = _context.Allocations
+                    .Include(a => a.Script).ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
+                    .Include(a => a.Script).ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.Project)
+                    .Where(a => a.AssignmentStatus && a.Deadline.HasValue && a.Deadline.Value < DateTime.UtcNow && !_context.Markings.Any(m => m.AllocationId == a.AllocationId && m.Status == MarkingStatus.submitted));
+
+                // University scoping: Coordinators can only clean up expired allocations within their own university
+                if (loggedInUserType == "coordinator")
+                {
+                    if (!currentUser.UniversityId.HasValue)
+                    {
+                        return StatusCode(403, new { success = false, message = "Coordinator is not associated with any university." });
+                    }
+                    int coordUnivId = currentUser.UniversityId.Value;
+                    query = query.Where(a => (a.Script.ProjectPaper != null && a.Script.ProjectPaper.Paper != null && a.Script.ProjectPaper.Paper.UniversityId == coordUnivId) ||
+                                             (a.Script.ProjectPaper != null && a.Script.ProjectPaper.Project != null && a.Script.ProjectPaper.Project.UniversityId == coordUnivId));
+                }
+
+                var expiredAllocations = await query.ToListAsync();
                     
                 if (!expiredAllocations.Any())
                     return Ok(new { success = true, message = "No expired allocations found.", count = 0 });
@@ -910,7 +1057,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
         
@@ -1002,7 +1149,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -1096,7 +1243,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -1202,7 +1349,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -1226,7 +1373,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -1249,7 +1396,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -1273,7 +1420,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -1292,7 +1439,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
     }
@@ -1310,6 +1457,7 @@ namespace API.Controllers
 
     public class BulkAllocationRequest
     {
+        public int? ProjectId { get; set; }
         public int PaperId { get; set; }
         public List<AllocationItem> Allocations { get; set; }
     }

@@ -8,7 +8,7 @@ namespace API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]
+    [Authorize(Roles = "admin,Admin,coordinator,Coordinator")]
     public class ReportsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -28,12 +28,10 @@ namespace API.Controllers
                 var pendingScripts = await _context.Scripts.CountAsync(s => s.Status == ScriptStatus.pending);
                 var inProgressScripts = await _context.Scripts.CountAsync(s => s.Status == ScriptStatus.in_progress || s.Status == ScriptStatus.marking);
 
-                var completedMarkings = await _context.Markings
-                    .Where(m => m.Status == MarkingStatus.submitted)
-                    .ToListAsync();
-
-                decimal totalMarks = completedMarkings.Sum(m => m.TotalMarks);
-                decimal averageScore = completedMarkings.Count > 0 ? totalMarks / completedMarkings.Count : 0;
+                var completedMarkingsQuery = _context.Markings.Where(m => m.Status == MarkingStatus.submitted);
+                var completedCount = await completedMarkingsQuery.CountAsync();
+                decimal totalMarks = completedCount > 0 ? await completedMarkingsQuery.SumAsync(m => m.TotalMarks) : 0m;
+                decimal averageScore = completedCount > 0 ? totalMarks / completedCount : 0m;
 
                 return Ok(new
                 {
@@ -49,9 +47,9 @@ namespace API.Controllers
                     }
                 });
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An error occurred while generating dashboard stats." });
             }
         }
 
@@ -61,6 +59,7 @@ namespace API.Controllers
             try
             {
                 var departments = await _context.Departments
+                    .AsNoTracking()
                     .Where(d => d.IsActive)
                     .ToListAsync();
 
@@ -81,44 +80,27 @@ namespace API.Controllers
                         .Distinct()
                         .ToListAsync();
 
-                    // Get scripts
-                    var scripts = await _context.Scripts
+                    // SQL aggregates instead of loading all scripts into memory (H14)
+                    var totalScriptsCount = await _context.Scripts
                         .Where(s => paperIds.Contains(s.ProjectPaper.PaperId))
-                        .ToListAsync();
+                        .CountAsync();
 
-                    var scriptIds = scripts
-                        .Select(s => s.Id)
-                        .ToList();
+                    var markingsQuery = _context.Markings
+                        .Where(m => paperIds.Contains(m.Script.ProjectPaper.PaperId) && m.Status == MarkingStatus.submitted);
 
-                    // Get submitted markings
-                    var markings = await _context.Markings
-                        .Where(m =>
-                            scriptIds.Contains(m.ScriptId) &&
-                            m.Status == MarkingStatus.submitted)
-                        .ToListAsync();
-
-                    decimal totalMarks = markings.Sum(m => m.TotalMarks);
-
-                    decimal avgScore = markings.Count > 0
-                        ? totalMarks / markings.Count
-                        : 0;
+                    var evaluatedCount = await markingsQuery.CountAsync();
+                    decimal totalMarks = evaluatedCount > 0 ? await markingsQuery.SumAsync(m => m.TotalMarks) : 0m;
+                    decimal avgScore = evaluatedCount > 0 ? totalMarks / evaluatedCount : 0m;
 
                     departmentStats.Add(new
                     {
                         department = department.Name,
-
-                        total = scripts.Count,
-
-                        evaluated = markings.Count,
-
-                        pending = scripts.Count - markings.Count,
-
+                        total = totalScriptsCount,
+                        evaluated = evaluatedCount,
+                        pending = Math.Max(0, totalScriptsCount - evaluatedCount),
                         avgScore = Math.Round(avgScore, 2),
-
-                        progress = scripts.Count > 0
-                            ? Math.Round(
-                                (markings.Count / (decimal)scripts.Count) * 100,
-                                2)
+                        progress = totalScriptsCount > 0
+                            ? Math.Round((evaluatedCount / (decimal)totalScriptsCount) * 100, 2)
                             : 0
                     });
                 }
@@ -129,12 +111,12 @@ namespace API.Controllers
                     data = departmentStats
                 });
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return StatusCode(500, new
                 {
                     success = false,
-                    message = ex.Message
+                    message = "An error occurred while generating department stats."
                 });
             }
         }
@@ -154,11 +136,25 @@ namespace API.Controllers
                 foreach (var examiner in examiners)
                 {
                     var markings = await _context.Markings
+                        .Include(m => m.Script)
                         .Where(m => m.ExaminerId == examiner.Id && m.Status == MarkingStatus.submitted)
                         .ToListAsync();
 
                     decimal totalMarks = markings.Sum(m => m.TotalMarks);
                     decimal avgMarks = markings.Count > 0 ? totalMarks / markings.Count : 0;
+
+                    // Calculate real accuracy rate dynamically based on re-evaluation dispute ratios
+                    string accuracy;
+                    if (markings.Count == 0)
+                    {
+                        accuracy = "N/A";
+                    }
+                    else
+                    {
+                        int contestedCount = markings.Count(m => m.Script != null && m.Script.IsReEvaluationRequested == true);
+                        decimal accuracyPct = ((decimal)(markings.Count - contestedCount) / markings.Count) * 100m;
+                        accuracy = $"{Math.Round(accuracyPct, 1)}%";
+                    }
 
                     performanceData.Add(new
                     {
@@ -166,7 +162,7 @@ namespace API.Controllers
                         email = examiner.Email,
                         scriptsEvaluated = markings.Count,
                         avgMarks = Math.Round(avgMarks, 2),
-                        accuracy = "95%"
+                        accuracy
                     });
                 }
 
@@ -174,7 +170,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -239,7 +235,7 @@ namespace API.Controllers
                 return StatusCode(500, new
                 {
                     success = false,
-                    message = ex.Message
+                    message = "An unexpected error occurred while processing your request."
                 });
             }
         }

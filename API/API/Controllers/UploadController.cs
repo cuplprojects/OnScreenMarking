@@ -51,6 +51,49 @@ namespace API.Controllers
                     return BadRequest(new { success = false, message = "No file uploaded" });
                 }
 
+                // Whitelist allowed extensions and prevent executable/script uploads (Stored XSS defense)
+                var allowedExtensions = new[] { ".pdf", ".jpg", ".jpeg", ".png" };
+                var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+                if (!allowedExtensions.Contains(ext))
+                {
+                    return BadRequest(new { success = false, message = "Invalid file type. Only PDF and image files (.jpg, .jpeg, .png) are permitted." });
+                }
+
+                if (file.Length > 52428800) // 50MB
+                {
+                    return BadRequest(new { success = false, message = "File size exceeds the 50MB limit." });
+                }
+
+                // Verify file header signature (magic bytes)
+                using (var stream = file.OpenReadStream())
+                {
+                    var header = new byte[8];
+                    int bytesRead = await stream.ReadAsync(header, 0, header.Length);
+                    if (bytesRead < 4)
+                    {
+                        return BadRequest(new { success = false, message = "Corrupted or empty file." });
+                    }
+
+                    bool isValid = false;
+                    if (ext == ".pdf" && header[0] == 0x25 && header[1] == 0x50 && header[2] == 0x44 && header[3] == 0x46) // %PDF
+                    {
+                        isValid = true;
+                    }
+                    else if ((ext == ".jpg" || ext == ".jpeg") && header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF) // JPEG
+                    {
+                        isValid = true;
+                    }
+                    else if (ext == ".png" && header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47) // PNG
+                    {
+                        isValid = true;
+                    }
+
+                    if (!isValid)
+                    {
+                        return BadRequest(new { success = false, message = "File content signature does not match the file extension." });
+                    }
+                }
+
                 // If markingId is passed, dynamically map to BaseOsmPath\{projectId}\{barcode}_evaluated.pdf
                 if (markingId.HasValue)
                 {
@@ -192,7 +235,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
     }

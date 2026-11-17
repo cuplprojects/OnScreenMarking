@@ -95,6 +95,10 @@ namespace API.Services
                 return AuthenticateResult.NoResult();
             }
 
+            var rawRole = (session.UserType ?? string.Empty).Trim();
+            var lowerRole = rawRole.ToLowerInvariant();
+            var titleRole = lowerRole.Length > 0 ? (char.ToUpperInvariant(lowerRole[0]) + (lowerRole.Length > 1 ? lowerRole.Substring(1) : "")) : "";
+
             var claims = new List<Claim>
             {
                 new Claim("id", session.Id.ToString()),
@@ -103,10 +107,15 @@ namespace API.Services
                 new Claim(ClaimTypes.Email, session.Email ?? string.Empty),
                 new Claim("name", session.Name ?? string.Empty),
                 new Claim(ClaimTypes.Name, session.Name ?? string.Empty),
-                new Claim("userType", session.UserType ?? string.Empty),
-                new Claim(ClaimTypes.Role, session.UserType ?? string.Empty),
+                new Claim("userType", lowerRole),
+                new Claim(ClaimTypes.Role, lowerRole),
                 new Claim("sessionId", sessionId)
             };
+
+            if (!string.IsNullOrEmpty(titleRole) && titleRole != lowerRole)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, titleRole));
+            }
 
             if (session.UniversityId.HasValue)
             {
