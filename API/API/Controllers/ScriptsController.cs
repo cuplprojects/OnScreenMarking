@@ -19,17 +19,20 @@ namespace API.Controllers
         private readonly IConfiguration _configuration;
         private readonly IDailyAllocationService _dailyAllocationService;
         private readonly IWebHostEnvironment _environment;
+        private readonly IScriptSecurityService _scriptSecurityService;
 
         public ScriptsController(
             ApplicationDbContext context, 
             IConfiguration configuration,
             IDailyAllocationService dailyAllocationService,
-            IWebHostEnvironment environment)
+            IWebHostEnvironment environment,
+            IScriptSecurityService scriptSecurityService)
         {
             _context = context;
             _configuration = configuration;
             _dailyAllocationService = dailyAllocationService;
             _environment = environment;
+            _scriptSecurityService = scriptSecurityService;
         }
 
         [HttpGet]
@@ -41,7 +44,34 @@ namespace API.Controllers
         {
             try
             {
+                var (userId, userType) = _scriptSecurityService.GetUserInfo(User);
+                if (!userId.HasValue)
+                {
+                    return Unauthorized(new { success = false, message = "Authentication required." });
+                }
+
                 var query = _context.Scripts.AsQueryable();
+
+                if (userType == "examiner")
+                {
+                    // Examiners can strictly ONLY view their actively allocated scripts
+                    var allocatedScriptIds = await _context.Allocations
+                        .Where(a => a.ExaminerId == userId.Value && a.AssignmentStatus)
+                        .Select(a => a.ScriptId)
+                        .ToListAsync();
+                    query = query.Where(s => allocatedScriptIds.Contains(s.Id));
+                }
+                else if (userType == "coordinator")
+                {
+                    // Coordinators can strictly ONLY view scripts belonging to their allocated university
+                    var coordUniId = await _scriptSecurityService.GetUserUniversityIdAsync(User);
+                    if (!coordUniId.HasValue || coordUniId.Value <= 0)
+                    {
+                        return StatusCode(403, new { success = false, message = "Access denied. Coordinator has no assigned university." });
+                    }
+                    query = query.Where(s => (s.ProjectPaper != null && s.ProjectPaper.Paper != null && s.ProjectPaper.Paper.UniversityId == coordUniId.Value) ||
+                                             (s.Project != null && s.Project.UniversityId == coordUniId.Value));
+                }
 
                 if (!string.IsNullOrEmpty(status) && Enum.TryParse<ScriptStatus>(status.Replace("-", "_"), true, out var parsedStatus))
                     query = query.Where(s => s.Status == parsedStatus);
@@ -104,6 +134,12 @@ namespace API.Controllers
         {
             try
             {
+                var (allowed, reason, statusCode) = await _scriptSecurityService.CanViewScriptAsync(User, id);
+                if (!allowed)
+                {
+                    return StatusCode(statusCode, new { success = false, message = reason });
+                }
+
                 var script = await _context.Scripts
                     .Include(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                         .ThenInclude(p => p.SubjectPapers)
@@ -717,6 +753,21 @@ namespace API.Controllers
         {
             try
             {
+                var (userId, userType) = _scriptSecurityService.GetUserInfo(User);
+                if (userType == "coordinator")
+                {
+                    var coordUniId = await _scriptSecurityService.GetUserUniversityIdAsync(User);
+                    var scriptUniId = await _context.Scripts
+                        .Where(s => s.Id == id)
+                        .Select(s => (int?)(s.ProjectPaper != null && s.ProjectPaper.Paper != null ? s.ProjectPaper.Paper.UniversityId : (s.Project != null ? s.Project.UniversityId : null)))
+                        .FirstOrDefaultAsync();
+
+                    if (!coordUniId.HasValue || !scriptUniId.HasValue || coordUniId.Value != scriptUniId.Value)
+                    {
+                        return StatusCode(403, new { success = false, message = "Access denied. You can only assign scripts belonging to your university." });
+                    }
+                }
+
                 var script = await _context.Scripts
                     .Include(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                     .FirstOrDefaultAsync(s => s.Id == id);
@@ -769,6 +820,11 @@ namespace API.Controllers
         {
             try
             {
+                var (allowed, reason, statusCode) = await _scriptSecurityService.CanViewExaminerScriptsAsync(User, examinerId);
+                if (!allowed)
+                {
+                    return StatusCode(statusCode, new { success = false, message = reason });
+                }
                 var allocations = await _context.Allocations
                     .AsNoTracking()
                     .Where(a => a.ExaminerId == examinerId)
@@ -923,8 +979,26 @@ namespace API.Controllers
         {
             try
             {
-                var scripts = await _context.Scripts
-                    .Where(s => s.ProjectPaper.PaperId == paperId)
+                var (allowed, reason, statusCode) = await _scriptSecurityService.CanViewPaperScriptsAsync(User, paperId);
+                if (!allowed)
+                {
+                    return StatusCode(statusCode, new { success = false, message = reason });
+                }
+
+                var (userId, userType) = _scriptSecurityService.GetUserInfo(User);
+                var query = _context.Scripts
+                    .Where(s => s.ProjectPaper.PaperId == paperId);
+
+                if (userType == "examiner" && userId.HasValue)
+                {
+                    var allocatedScriptIds = await _context.Allocations
+                        .Where(a => a.ExaminerId == userId.Value && a.AssignmentStatus)
+                        .Select(a => a.ScriptId)
+                        .ToListAsync();
+                    query = query.Where(s => allocatedScriptIds.Contains(s.Id));
+                }
+
+                var scripts = await query
                     .Include(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                     .OrderByDescending(s => s.CreatedAt)
                     .ToListAsync();
@@ -965,6 +1039,7 @@ namespace API.Controllers
         /// </summary>
         [HttpGet("pending")]
         [HttpGet("unallocated")]
+        [Authorize(Roles = "admin,coordinator")]
         public async Task<IActionResult> GetPendingScripts(
             [FromQuery] int? projectId = null,
             [FromQuery] int? paperId = null,
@@ -979,23 +1054,22 @@ namespace API.Controllers
                 if (pageSize > 500) pageSize = 500;
                 if (page <= 0) page = 1;
 
-                // 1. Get logged-in user's UniversityId from Users table
-                int? targetUniversityId = universityId;
-                if (!targetUniversityId.HasValue || targetUniversityId.Value <= 0)
-                {
-                    var loggedInUserIdStr = User.FindFirst("id")?.Value;
-                    if (int.TryParse(loggedInUserIdStr, out int userId))
-                    {
-                        var userRecord = await _context.Users
-                            .Where(u => u.Id == userId)
-                            .Select(u => new { u.UniversityId })
-                            .FirstOrDefaultAsync();
+                var (currentUserId, currentUserType) = _scriptSecurityService.GetUserInfo(User);
 
-                        if (userRecord?.UniversityId != null && userRecord.UniversityId > 0)
-                        {
-                            targetUniversityId = userRecord.UniversityId;
-                        }
+                // 1. Get logged-in user's UniversityId
+                int? targetUniversityId = universityId;
+                if (currentUserType == "coordinator")
+                {
+                    var coordUniId = await _scriptSecurityService.GetUserUniversityIdAsync(User);
+                    if (!coordUniId.HasValue || coordUniId.Value <= 0)
+                    {
+                        return StatusCode(403, new { success = false, message = "Access denied. Coordinator has no assigned university." });
                     }
+                    targetUniversityId = coordUniId.Value;
+                }
+                else if (!targetUniversityId.HasValue || targetUniversityId.Value <= 0)
+                {
+                    targetUniversityId = await _scriptSecurityService.GetUserUniversityIdAsync(User);
                 }
 
                 // 2. Base query: Scripts -> ProjectPaper -> Paper

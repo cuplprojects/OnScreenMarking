@@ -18,6 +18,7 @@ namespace API.Models
         public decimal MaxMarks { get; set; } = 100;
         public int TotalQuestions { get; set; }
         public string? Description { get; set; }
+        public int? BatchId { get; set; }
         public bool IsActive { get; set; } = true;
         public int? UniversityId { get; set; }
         public University? University { get; set; }

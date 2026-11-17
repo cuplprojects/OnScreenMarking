@@ -123,15 +123,16 @@ export default function ProjectManagement() {
   const handleEdit = (project) => {
     setFormData({
       projectName: project.projectName,
-      sessionId: project.sessionId,
-      isActive: project.isActive
+      sessionId: project.sessionId || project.session?.sessionId || '',
+      universityId: project.universityId || activeUniversityId || 1,
+      isActive: project.isActive !== undefined ? project.isActive : true
     });
     setEditingId(project.projectId);
     setShowForm(true);
   };
 
   const handleCancel = () => {
-    setFormData({ projectName: '', sessionId: '', isActive: true });
+    setFormData({ projectName: '', sessionId: '', universityId: '', isActive: true });
     setEditingId(null);
     setShowForm(false);
   };
@@ -153,10 +154,14 @@ export default function ProjectManagement() {
 
   const handleProjectSubmit = async (data) => {
     try {
+      const payload = {
+        ...data,
+        universityId: data.universityId || formData.universityId || (activeUniversityId ? parseInt(activeUniversityId, 10) : 1)
+      };
       if (editingId) {
-        await projectService.updateProject(editingId, data);
+        await projectService.updateProject(editingId, payload);
       } else {
-        await projectService.createProject({ ...data, universityId: activeUniversityId ? parseInt(activeUniversityId, 10) : 1 });
+        await projectService.createProject(payload);
       }
       message.success(editingId ? 'Project updated successfully!' : 'Project created successfully!');
       refresh();

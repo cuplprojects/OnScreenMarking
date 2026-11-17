@@ -120,7 +120,7 @@ import { LiveCameraPip } from "../components/examiner/LiveCameraPip";
 const ExaminerMarking = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, userType } = useAuth();
   
   const { scriptId: routeScriptId } = useParams();
   
@@ -144,7 +144,14 @@ const ExaminerMarking = () => {
   const [cleanPdfUrl, setCleanPdfUrl] = useState(location.state?.cleanPdfUrl || queryParams.get('cleanPdfUrl'));
   // Avoid accepting arbitrary external URLs from query parameters
   const [rawQpPdfUrl, setRawQpPdfUrl] = useState(location.state?.questionPaperPdfUrl || null);
-  const isReadOnly = location.state?.readOnly === true || queryParams.get('readOnly') === 'true';
+  
+  const isAdmin = userType === 'admin' || userType === 'superadmin';
+  const isCoordinator = userType === 'coordinator';
+  const isReadOnly = location.state?.readOnly === true || 
+                     queryParams.get('readOnly') === 'true' || 
+                     isAdmin || 
+                     isCoordinator;
+
   const apiBaseUrl = import.meta.env.VITE_API_URL;
   const pdfUrl = scriptId ? `${apiBaseUrl}/Scripts/${scriptId}/pdf` : null;
 
@@ -575,15 +582,11 @@ const ExaminerMarking = () => {
       }
     };
   }, [loading, stream]); 
-  // Load script details if missing from state (e.g. direct URL visit / refresh)
+  // Load script details and verify access on mount / scriptId change
   useEffect(() => {
     if (!scriptId) {
       setError('No script selected. Please select a script from the Scripts page.');
       setLoading(false);
-      return;
-    }
-
-    if (paperId && allocationId && batchId) {
       return;
     }
 
@@ -592,24 +595,28 @@ const ExaminerMarking = () => {
         setLoading(true);
         const scriptData = await apiCall(`/scripts/${scriptId}`);
         if (scriptData) {
-          if (!paperId && scriptData.paperId) setPaperId(scriptData.paperId);
-          if (!projectPaperId && scriptData.projectPaperId) setProjectPaperId(scriptData.projectPaperId);
+          if (scriptData.paperId) setPaperId(scriptData.paperId);
+          if (scriptData.projectPaperId) setProjectPaperId(scriptData.projectPaperId);
           if (scriptData.batchId) setBatchId(scriptData.batchId);
           if (scriptData.maxMarks) {
             setPaperInfo(prev => ({ ...(prev || {}), maxMarks: scriptData.maxMarks }));
           }
           const allocId = scriptData.allocationId || scriptData.AllocationId;
-          if (!allocationId && allocId) setAllocationId(allocId);
-          if (!studentName && (scriptData.studentName || scriptData.rollNumber)) {
+          if (allocId) setAllocationId(allocId);
+          if (scriptData.studentName || scriptData.rollNumber) {
             setStudentName(scriptData.studentName || scriptData.rollNumber);
           }
-          if (!rollNo && scriptData.rollNumber) setRollNo(scriptData.rollNumber);
-          if (!subject && scriptData.subjectName) setSubject(scriptData.subjectName);
-          if (!rawQpPdfUrl && scriptData.questionPaperPdfUrl) setRawQpPdfUrl(scriptData.questionPaperPdfUrl);
-          if (!cleanPdfUrl && scriptData.cleanPdfUrl) setCleanPdfUrl(scriptData.cleanPdfUrl);
+          if (scriptData.rollNumber) setRollNo(scriptData.rollNumber);
+          if (scriptData.subjectName) setSubject(scriptData.subjectName);
+          if (scriptData.questionPaperPdfUrl) setRawQpPdfUrl(scriptData.questionPaperPdfUrl);
+          if (scriptData.cleanPdfUrl) setCleanPdfUrl(scriptData.cleanPdfUrl);
         }
       } catch (err) {
         console.error("Failed to load script details:", err);
+        const errMsg = err.response?.data?.message || err.message || "Access Denied: You are not authorized to view or evaluate this script.";
+        setError(errMsg);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -682,6 +689,30 @@ const ExaminerMarking = () => {
 
   const createMarkingSession = async () => {
     try {
+      // 1. For Admin, Coordinator, or Read-Only mode: retrieve existing marking without creating new draft session
+      if (isAdmin || isCoordinator || isEffectiveReadOnly) {
+        if (scriptId) {
+          try {
+            const existingMarking = await markingService.getMarkingByScript(scriptId);
+            if (existingMarking?.id) {
+              setMarkingId(existingMarking.id);
+              if (existingMarking.remarks) setRemarks(existingMarking.remarks);
+              if (existingMarking.timePerCopyMinutes) setTimePerCopyMinutes(existingMarking.timePerCopyMinutes);
+              if (existingMarking.startedAt) setMarkingStartedAt(existingMarking.startedAt);
+              const mStatus = existingMarking.status?.toLowerCase();
+              if (mStatus) {
+                setMarkingStatus(mStatus);
+                if (mStatus === MarkingStatus.SUBMITTED) setSubmitted(true);
+              }
+              return existingMarking.id;
+            }
+          } catch (e) {
+            console.warn("Read-only viewer: no existing marking found.", e);
+          }
+        }
+        return null;
+      }
+
       let currentAllocId = allocationId;
       if (!currentAllocId && scriptId) {
         try {
@@ -1301,9 +1332,9 @@ const ExaminerMarking = () => {
     setTimeout(() => setSaveStatus(null), 3500);
   };
 
-  // Auto-save draft marks
+  // Auto-save draft marks (only for active examiner in editable mode)
   useEffect(() => {
-    if (!loading && !isMarkingSubmitted && Object.keys(questionMarks).length > 0) {
+    if (!loading && !isEffectiveReadOnly && !isAdmin && !isCoordinator && Object.keys(questionMarks).length > 0) {
       const timer = setTimeout(async () => {
         try {
           await markingService.saveDraftMarks(scriptId, examinerId, questionMarks);
@@ -1314,9 +1345,13 @@ const ExaminerMarking = () => {
 
       return () => clearTimeout(timer);
     }
-  }, [questionMarks, loading, submitted, scriptId, examinerId]);
+  }, [questionMarks, loading, submitted, scriptId, examinerId, isEffectiveReadOnly, isAdmin, isCoordinator]);
 
   const handleSaveMarks = async () => {
+    if (isEffectiveReadOnly || isAdmin || isCoordinator) {
+      showStatus("warning", "You are in read-only mode and cannot save marks.");
+      return;
+    }
     if (remainingSeconds > 0) {
       showStatus("warning", `Save is disabled. You must spend at least ${timePerCopyMinutes} minutes evaluating this copy (${formatCountdown(remainingSeconds)} remaining).`);
       return;
@@ -1348,6 +1383,10 @@ const ExaminerMarking = () => {
   };
  
   const handleSubmitMarking = async () => {
+    if (isEffectiveReadOnly || isAdmin || isCoordinator) {
+      showStatus("warning", "You are in read-only mode and cannot submit marks.");
+      return;
+    }
     if (remainingSeconds > 0) {
       showStatus("warning", `Submit is disabled. You must spend at least ${timePerCopyMinutes} minutes evaluating this copy (${formatCountdown(remainingSeconds)} remaining).`);
       return;
@@ -1554,8 +1593,8 @@ const ExaminerMarking = () => {
     return <MarkingLoadingView />;
   }
 
-  if (error && !sections.length) {
-    return <MarkingErrorView error={error} onBack={() => navigate('/scripts')} />;
+  if (error) {
+    return <MarkingErrorView error={error} onBack={() => navigate(-1)} />;
   }
 
   return (
@@ -1574,6 +1613,35 @@ const ExaminerMarking = () => {
         onSubmitMarking={handleSubmitMarking}
         onNavigateBack={() => navigate('/scripts')}
       />
+
+      {/* Read-Only Status Banners */}
+      {isAdmin && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between text-amber-900 text-xs font-semibold z-10 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-base">🛡️</span>
+            <span><strong>Admin Inspection View:</strong> You have read-only access to view this script and evaluation marks. Marking updates and modifications are restricted.</span>
+          </div>
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-200 text-amber-900 border border-amber-300">Read-Only</span>
+        </div>
+      )}
+      {isCoordinator && (
+        <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 flex items-center justify-between text-blue-900 text-xs font-semibold z-10 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-base">📋</span>
+            <span><strong>Coordinator View:</strong> You have read-only access to inspect this script. Only the allocated examiner may allot or update marks.</span>
+          </div>
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-blue-200 text-blue-900 border border-blue-300">Read-Only</span>
+        </div>
+      )}
+      {!isAdmin && !isCoordinator && isMarkingSubmitted && (
+        <div className="bg-emerald-50 border-b border-emerald-200 px-4 py-2 flex items-center justify-between text-emerald-900 text-xs font-semibold z-10 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-base">🔒</span>
+            <span><strong>Submitted Evaluation:</strong> This script marking has been submitted and locked. Marks are displayed in read-only mode.</span>
+          </div>
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-200 text-emerald-900 border border-emerald-300">Submitted</span>
+        </div>
+      )}
 
       <ProctorWarningBanner proctorWarning={proctorWarning} />
 

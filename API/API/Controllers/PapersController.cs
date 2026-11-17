@@ -230,7 +230,7 @@ namespace API.Controllers
                     {
                         paperId = p.PaperId,
                         projectPaperId = p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.Id).FirstOrDefault(),
-                        batchId = p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.BatchId).FirstOrDefault(),
+                        batchId = p.BatchId ?? p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.BatchId).FirstOrDefault(),
                         universityId = p.UniversityId,
                         paperCode = p.PaperCode,
                         paperName = p.PaperName,
@@ -482,7 +482,7 @@ namespace API.Controllers
                         UniversityId = p.UniversityId,
                         ProjectId = projectId ?? p.ProjectPapers.Select(pp => (int?)pp.ProjectId).FirstOrDefault(),
                         ProjectPaperId = relevantPp?.Id,
-                        BatchId = relevantPp?.BatchId,
+                        BatchId = p.BatchId ?? relevantPp?.BatchId,
                         CatchNo = relevantPp?.CatchNo ?? "",
                         QuestionPaperPdfUrl = relevantPp?.QuestionPaperPdfUrl ?? "",
                         SubjectIds = p.SubjectPapers
@@ -548,6 +548,7 @@ namespace API.Controllers
                     UniversityId = paper.UniversityId,
                     ProjectId = firstProjectPaper?.ProjectId,
                     ProjectPaperId = firstProjectPaper?.Id,
+                    BatchId = paper.BatchId ?? firstProjectPaper?.BatchId,
                     SubjectIds = paper.SubjectPapers
                         .Select(sp => sp.SubjectId)
                         .ToList(),
@@ -709,6 +710,7 @@ namespace API.Controllers
                     TotalQuestions = paperDto.TotalQuestions,
                     Description = paperDto.Description,
                     UniversityId = resolvedUniversityId,
+                    BatchId = paperDto.BatchId,
                     IsActive = paperDto.IsActive,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -1014,6 +1016,7 @@ namespace API.Controllers
                 paper.MaxMarks = Math.Round(paperDto.MaxMarks, 2, MidpointRounding.AwayFromZero);
                 paper.TotalQuestions = paperDto.TotalQuestions;
                 paper.Description = paperDto.Description;
+                if (paperDto.BatchId.HasValue) paper.BatchId = paperDto.BatchId.Value;
                 paper.IsActive = paperDto.IsActive;
                 if (paperDto.UniversityId.HasValue && paperDto.UniversityId.Value > 0)
                 {

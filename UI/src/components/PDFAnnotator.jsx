@@ -36,6 +36,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
   const [pendingAnno, setPendingAnno] = useState(null);
   const [isSkipped, setIsSkipped] = useState(false);
   const [loadingPdf, setLoadingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState(null);
   const [isToolbarOpen, setIsToolbarOpen] = useState(true);
 
   // Notify parent of total pages
@@ -375,9 +376,26 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
   const loadPdfFromUrl = async (url) => {
     try {
       setLoadingPdf(true);
+      setPdfError(null);
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       const response = await fetch(url, {
-        credentials: 'include'
+        credentials: 'include',
+        headers
       });
+
+      if (!response.ok) {
+        const errorMsg = response.status === 403 
+          ? "Access Denied: You are not authorized to view this script PDF."
+          : (response.status === 401
+              ? "Authentication required. Please log in to view this script."
+              : `Failed to load script PDF (HTTP ${response.status})`);
+        throw new Error(errorMsg);
+      }
+
       const arrayBuffer = await response.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({
         data: arrayBuffer,
@@ -410,6 +428,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       }
     } catch (err) {
       console.error("Failed to load PDF:", err);
+      setPdfError(err.message || "Failed to load script PDF.");
     } finally {
       setLoadingPdf(false);
     }
@@ -1676,6 +1695,21 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
               <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-bounce" style={{ animationDelay: '150ms' }} />
               <span className="w-1.5 h-1.5 rounded-full bg-teal-300 animate-bounce" style={{ animationDelay: '300ms' }} />
             </div>
+          </div>
+        )}
+
+        {/* PDF Error / Access Restricted Overlay */}
+        {pdfError && (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/95 p-6 text-center">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 mb-3 shadow-inner">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </div>
+            <h3 className="text-base font-bold text-gray-800 mb-1">Access Restricted</h3>
+            <p className="text-sm text-red-600 max-w-md font-medium">{pdfError}</p>
           </div>
         )}
 

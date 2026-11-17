@@ -16,11 +16,16 @@ namespace API.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly IDailyAllocationService _dailyAllocationService;
+        private readonly IScriptSecurityService _scriptSecurityService;
 
-        public AllocationController(ApplicationDbContext context, IDailyAllocationService dailyAllocationService)
+        public AllocationController(
+            ApplicationDbContext context, 
+            IDailyAllocationService dailyAllocationService,
+            IScriptSecurityService scriptSecurityService)
         {
             _context = context;
             _dailyAllocationService = dailyAllocationService;
+            _scriptSecurityService = scriptSecurityService;
         }
 
         [HttpGet]
@@ -33,19 +38,27 @@ namespace API.Controllers
         {
             try
             {
-                var loggedInUserType = User.FindFirst("userType")?.Value;
-                var loggedInUserIdStr = User.FindFirst("id")?.Value;
-
-                if (loggedInUserType == "examiner")
+                var (userId, userType) = _scriptSecurityService.GetUserInfo(User);
+                if (!userId.HasValue)
                 {
-                    if (string.IsNullOrEmpty(loggedInUserIdStr))
-                    {
-                        return Unauthorized(new { success = false, message = "Invalid token claims" });
-                    }
-                    examinerId = int.Parse(loggedInUserIdStr);
+                    return Unauthorized(new { success = false, message = "Authentication required" });
                 }
 
                 var query = _context.Allocations.AsQueryable();
+
+                if (userType == "examiner")
+                {
+                    examinerId = userId.Value;
+                }
+                else if (userType == "coordinator")
+                {
+                    var coordUniId = await _scriptSecurityService.GetUserUniversityIdAsync(User);
+                    if (coordUniId.HasValue && coordUniId.Value > 0)
+                    {
+                        query = query.Where(a => (a.Script.ProjectPaper != null && a.Script.ProjectPaper.Paper != null && a.Script.ProjectPaper.Paper.UniversityId == coordUniId.Value) ||
+                                                 (a.Project != null && a.Project.UniversityId == coordUniId.Value));
+                    }
+                }
 
                 if (examinerId.HasValue)
                     query = query.Where(a => a.ExaminerId == examinerId.Value);
@@ -140,15 +153,10 @@ namespace API.Controllers
                 if (allocation == null)
                     return NotFound(new { success = false, message = "Allocation not found" });
 
-                var loggedInUserType = User.FindFirst("userType")?.Value;
-                var loggedInUserIdStr = User.FindFirst("id")?.Value;
-
-                if (loggedInUserType == "examiner")
+                var (allowed, reason, statusCode) = await _scriptSecurityService.CanViewScriptAsync(User, allocation.ScriptId);
+                if (!allowed)
                 {
-                    if (string.IsNullOrEmpty(loggedInUserIdStr) || allocation.ExaminerId != int.Parse(loggedInUserIdStr))
-                    {
-                        return StatusCode(403, new { success = false, message = "You can only view your own allocations." });
-                    }
+                    return StatusCode(statusCode, new { success = false, message = reason });
                 }
 
                 // Return safe DTO without sensitive examiner PII
@@ -394,15 +402,10 @@ namespace API.Controllers
         {
             try
             {
-                var loggedInUserType = User.FindFirst("userType")?.Value;
-                var loggedInUserIdStr = User.FindFirst("id")?.Value;
-
-                if (loggedInUserType == "examiner")
+                var (allowed, reason, statusCode) = await _scriptSecurityService.CanViewExaminerScriptsAsync(User, examinerId);
+                if (!allowed)
                 {
-                    if (string.IsNullOrEmpty(loggedInUserIdStr) || examinerId != int.Parse(loggedInUserIdStr))
-                    {
-                        return StatusCode(403, new { success = false, message = "You can only view your own allocations." });
-                    }
+                    return StatusCode(statusCode, new { success = false, message = reason });
                 }
 
                 var allocations = await _context.Allocations
@@ -459,6 +462,12 @@ namespace API.Controllers
         {
             try
             {
+                var (allowed, reason, statusCode) = await _scriptSecurityService.CanViewScriptAsync(User, scriptId);
+                if (!allowed)
+                {
+                    return StatusCode(statusCode, new { success = false, message = reason });
+                }
+
                 var allocation = await _context.Allocations
                     .AsNoTracking()
                     .Where(a => a.ScriptId == scriptId && a.AssignmentStatus)
@@ -479,17 +488,6 @@ namespace API.Controllers
 
                 if (allocation == null)
                     return NotFound(new { success = false, message = "No active allocation found for this script" });
-
-                var loggedInUserType = User.FindFirst("userType")?.Value;
-                var loggedInUserIdStr = User.FindFirst("id")?.Value;
-
-                if (loggedInUserType == "examiner")
-                {
-                    if (string.IsNullOrEmpty(loggedInUserIdStr) || allocation.examinerId != int.Parse(loggedInUserIdStr))
-                    {
-                        return StatusCode(403, new { success = false, message = "You can only view allocations assigned to you." });
-                    }
-                }
 
                 return Ok(allocation);
             }

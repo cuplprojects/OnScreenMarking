@@ -23,17 +23,20 @@ namespace API.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IConfiguration _configuration;
         private readonly IDailyAllocationService _dailyAllocationService;
+        private readonly IScriptSecurityService _scriptSecurityService;
 
         public UploadController(
             IWebHostEnvironment environment, 
             ApplicationDbContext context, 
             IConfiguration configuration,
-            IDailyAllocationService dailyAllocationService)
+            IDailyAllocationService dailyAllocationService,
+            IScriptSecurityService scriptSecurityService)
         {
             _environment = environment;
             _context = context;
             _configuration = configuration;
             _dailyAllocationService = dailyAllocationService;
+            _scriptSecurityService = scriptSecurityService;
         }
 
         [HttpPost]
@@ -97,6 +100,12 @@ namespace API.Controllers
                 // If markingId is passed, dynamically map to BaseOsmPath\{projectId}\{barcode}_evaluated.pdf
                 if (markingId.HasValue)
                 {
+                    var (allowed, reason, statusCode) = await _scriptSecurityService.CanUpdateMarkingAsync(User, markingId.Value);
+                    if (!allowed)
+                    {
+                        return StatusCode(statusCode, new { success = false, message = reason });
+                    }
+
                     var marking = await _context.Markings
                         .Include(m => m.Script)
                             .ThenInclude(s => s.ProjectPaper)

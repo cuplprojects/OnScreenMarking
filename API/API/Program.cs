@@ -127,7 +127,10 @@ builder.Services.AddHostedService<DailyAllocationBackgroundService>();
 // Add Payload & Response Encryption Service
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 
-// Add CORS with credentials support for strictly whitelisted origins
+// Add Script Security Service (Access control & external URL protection)
+builder.Services.AddScoped<IScriptSecurityService, ScriptSecurityService>();
+
+// Add CORS with credentials support for session cookies
 builder.Services.AddCors(options => {
     options.AddDefaultPolicy(policy => {
         policy.SetIsOriginAllowed(origin => {
