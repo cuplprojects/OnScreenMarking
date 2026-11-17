@@ -94,12 +94,12 @@ export default function SectionMasterManagement() {
     return grouped;
   }, [masters]);
 
-  // Sort batch IDs numerically
+  // Sort batch IDs numerically according to sortOrder
   const sortedBatchIds = useMemo(() => {
     return Object.keys(groupedByBatch)
       .map(Number)
-      .sort((a, b) => a - b);
-  }, [groupedByBatch]);
+      .sort((a, b) => sortOrder?.toLowerCase() === 'desc' ? b - a : a - b);
+  }, [groupedByBatch, sortOrder]);
 
   // Set breadcrumb
   useEffect(() => {
@@ -264,7 +264,7 @@ export default function SectionMasterManagement() {
     }));
   };
 
-  // Add section to batch with intelligent range continuation
+  // Add section to batch with intelligent range continuation and auto-generated questions
   const handleAddSectionToBatch = () => {
     let nextStart = 1;
     if (newBatchSections.length > 0) {
@@ -272,15 +272,47 @@ export default function SectionMasterManagement() {
       nextStart = maxEnd + 1;
     }
     const nextEnd = nextStart + 9;
+    const count = nextEnd - nextStart + 1;
+    const totalMarks = 10;
+    const marksPerQ = count > 0 ? parseFloat((totalMarks / count).toFixed(2)) : 0;
+    const defaultQt = questionTypesList.length > 0 ? questionTypesList[0] : null;
+    const defaultTypeId = defaultQt?.questionTypeId || defaultQt?.id || null;
+    const defaultTypeName = defaultQt?.questionTypeName || 'MCQ';
+
+    const autoQuestions = [];
+    for (let i = nextStart; i <= nextEnd; i++) {
+      let qMark = marksPerQ;
+      if (i === nextEnd && count > 1) {
+        const prevTotal = marksPerQ * (count - 1);
+        const diff = parseFloat((totalMarks - prevTotal).toFixed(2));
+        if (Math.abs(diff - marksPerQ) <= 0.05) {
+          qMark = diff;
+        }
+      }
+      autoQuestions.push({
+        id: null,
+        questionNo: String(i),
+        marks: qMark,
+        typeId: defaultTypeId,
+        questionTypeId: defaultTypeId,
+        type: defaultTypeName,
+        isOptional: false,
+        optionalGroupCode: '',
+      });
+    }
+
     const nextLetter = String.fromCharCode(65 + newBatchSections.length);
+    const usesDash = newBatchSections.some(s => s.name?.includes(' - '));
+    const secName = usesDash ? `Section - ${nextLetter}` : `Section ${nextLetter}`;
+
     const newSec = {
-      name: `Section - ${nextLetter}`,
+      name: secName,
       description: '',
       startQuestion: nextStart,
       endQuestion: nextEnd,
-      totalMarks: 10,
-      maxQuestionsToAttempt: 10,
-      questions: [],
+      totalMarks: totalMarks,
+      maxQuestionsToAttempt: count,
+      questions: autoQuestions,
     };
     setNewBatchSections(prev => [...prev, newSec]);
     setActiveSectionIdx(newBatchSections.length);
@@ -531,123 +563,74 @@ export default function SectionMasterManagement() {
     try {
       const defaultQt = questionTypesList[0] || null;
 
-      if (modalBatchId > 0) {
-        // === EDITING EXISTING BATCH ===
-        for (const sec of newBatchSections) {
-          const secPayload = {
-            batchId: modalBatchId,
-            name: sec.name.trim(),
-            description: sec.description || '',
-            startQuestion: parseInt(sec.startQuestion, 10) || 1,
-            endQuestion: parseInt(sec.endQuestion, 10) || 1,
-            totalMarks: parseFloat(sec.totalMarks) || 0,
-            maxQuestionsToAttempt: parseInt(sec.maxQuestionsToAttempt, 10) || 1,
-            totalQuestions: sec.questions.length,
-          };
-
-          if (sec.id) {
-            // Update existing section master
-            await sectionService.updateSectionMaster(sec.id, secPayload);
-
-            // Update questions if they have individual IDs
-            if (sec.questions && sec.questions.length > 0) {
-              for (const q of sec.questions) {
-                if (q.id) {
-                  const matchedQt = questionTypesList.find(qt => 
-                    (q.questionTypeId && String(qt.questionTypeId || qt.id) === String(q.questionTypeId)) ||
-                    (q.typeId && String(qt.questionTypeId || qt.id) === String(q.typeId)) || 
-                    (q.type && qt.questionTypeName?.toLowerCase() === q.type?.toLowerCase())
-                  );
-                  const resolvedTypeId = matchedQt?.questionTypeId || matchedQt?.id || q.questionTypeId || q.typeId || defaultQt?.questionTypeId || defaultQt?.id || null;
-                  const resolvedTypeName = matchedQt?.questionTypeName || q.type || defaultQt?.questionTypeName || 'MCQ';
-
-                  try {
-                    await sectionService.updateQuestion(q.id, {
-                      questionNo: String(q.questionNo || ''),
-                      type: resolvedTypeName,
-                      typeId: resolvedTypeId,
-                      questionTypeId: resolvedTypeId,
-                      marks: parseFloat(q.marks) || 0,
-                      isOptional: Boolean(q.isOptional),
-                      optionalGroupCode: q.optionalGroupCode || null,
-                    });
-                  } catch (qErr) {
-                    console.warn(`Could not update question ${q.id}`, qErr);
-                  }
-                }
-              }
-            }
-          } else {
-            // New section added to this existing batch
-            await sectionService.createSectionMaster({
-              ...secPayload,
-              batchId: modalBatchId,
-            });
-          }
-        }
-
-        // Delete any sections that were removed in modal
-        for (const delId of deletedSectionIds) {
-          try {
-            await sectionService.deleteSectionMaster(delId);
-          } catch (delErr) {
-            console.warn(`Could not delete section ${delId}`, delErr);
-          }
-        }
-
-        message.success(`Batch #${modalBatchId} updated successfully`);
-      } else {
-        // === CREATING BRAND NEW BATCH ===
-        const batchPayload = {
+      // Map sections and questions into clean batch payload with batchId: 0
+      // When editing an existing batch, this creates a brand new batch with the edited details
+      // while leaving the original batch intact in the database as requested.
+      const batchPayload = {
+        batchId: 0,
+        sections: newBatchSections.map(sec => ({
           batchId: 0,
-          sections: newBatchSections.map(sec => ({
-            batchId: 0,
-            name: sec.name.trim(),
-            description: sec.description || '',
-            startQuestion: parseInt(sec.startQuestion, 10) || 1,
-            endQuestion: parseInt(sec.endQuestion, 10) || 1,
-            totalMarks: parseFloat(sec.totalMarks) || 0,
-            maxQuestionsToAttempt: parseInt(sec.maxQuestionsToAttempt, 10) || 1,
-            totalQuestions: sec.questions.length,
-            questions: sec.questions.map(q => {
-              const matchedQt = questionTypesList.find(qt => 
-                (q.questionTypeId && String(qt.questionTypeId || qt.id) === String(q.questionTypeId)) ||
-                (q.typeId && String(qt.questionTypeId || qt.id) === String(q.typeId)) || 
-                (q.type && qt.questionTypeName?.toLowerCase() === q.type?.toLowerCase())
-              );
-              const resolvedTypeId = matchedQt?.questionTypeId || matchedQt?.id || q.questionTypeId || q.typeId || defaultQt?.questionTypeId || defaultQt?.id || null;
-              const resolvedTypeName = matchedQt?.questionTypeName || q.type || defaultQt?.questionTypeName || 'MCQ';
-              return {
-                questionNo: String(q.questionNo || ''),
-                type: resolvedTypeName,
-                typeId: resolvedTypeId,
-                questionTypeId: resolvedTypeId,
-                marks: parseFloat(q.marks) || 0,
-                isOptional: Boolean(q.isOptional),
-                optionalGroupCode: q.optionalGroupCode || null,
-              };
-            }),
-          }))
-        };
+          name: sec.name.trim(),
+          description: sec.description || '',
+          startQuestion: parseInt(sec.startQuestion, 10) || 1,
+          endQuestion: parseInt(sec.endQuestion, 10) || 1,
+          totalMarks: parseFloat(sec.totalMarks) || 0,
+          maxQuestionsToAttempt: parseInt(sec.maxQuestionsToAttempt, 10) || 1,
+          totalQuestions: sec.questions.length,
+          questions: sec.questions.map(q => {
+            const matchedQt = questionTypesList.find(qt => 
+              (q.questionTypeId && String(qt.questionTypeId || qt.id) === String(q.questionTypeId)) ||
+              (q.typeId && String(qt.questionTypeId || qt.id) === String(q.typeId)) || 
+              (q.type && qt.questionTypeName?.toLowerCase() === q.type?.toLowerCase())
+            );
+            const resolvedTypeId = matchedQt?.questionTypeId || matchedQt?.id || q.questionTypeId || q.typeId || defaultQt?.questionTypeId || defaultQt?.id || null;
+            const resolvedTypeName = matchedQt?.questionTypeName || q.type || defaultQt?.questionTypeName || 'MCQ';
+            return {
+              questionNo: String(q.questionNo || ''),
+              type: resolvedTypeName,
+              typeId: resolvedTypeId,
+              questionTypeId: resolvedTypeId,
+              marks: parseFloat(q.marks) || 0,
+              isOptional: Boolean(q.isOptional),
+              optionalGroupCode: q.optionalGroupCode || null,
+            };
+          }),
+        }))
+      };
 
-        try {
-          await sectionService.createSectionMastersBatch(batchPayload);
-        } catch (batchErr) {
-          // Fallback: sequential create with shared batchId
-          let assignedBatchId = 0;
-          for (let i = 0; i < batchPayload.sections.length; i++) {
-            const sec = batchPayload.sections[i];
-            const res = await sectionService.createSectionMaster({
-              ...sec,
-              batchId: assignedBatchId,
-            });
-            if (i === 0 && res?.batchId) {
-              assignedBatchId = res.batchId;
-            }
+      let newBatchId = null;
+      try {
+        const res = await sectionService.createSectionMastersBatch(batchPayload);
+        newBatchId = res?.batchId;
+      } catch (batchErr) {
+        console.warn('Batch create endpoint failed, falling back to sequential create:', batchErr);
+        // Fallback: sequential create with shared batchId
+        let assignedBatchId = 0;
+        for (let i = 0; i < batchPayload.sections.length; i++) {
+          const sec = batchPayload.sections[i];
+          const res = await sectionService.createSectionMaster({
+            ...sec,
+            batchId: assignedBatchId,
+          });
+          if (i === 0 && (res?.batchId || res?.master?.batchId)) {
+            assignedBatchId = res.batchId || res.master.batchId;
+            newBatchId = assignedBatchId;
           }
         }
+      }
 
-        message.success('Batch created successfully');
+      if (modalBatchId > 0) {
+        if (newBatchId) {
+          message.success(`New Batch #${newBatchId} created successfully with edited details (Batch #${modalBatchId} remains unchanged)`);
+        } else {
+          message.success(`New batch created successfully with edited details (Batch #${modalBatchId} remains unchanged)`);
+        }
+      } else {
+        if (newBatchId) {
+          message.success(`Batch #${newBatchId} created successfully`);
+        } else {
+          message.success('Batch created successfully');
+        }
       }
 
       setShowCreateBatchModal(false);
@@ -968,7 +951,7 @@ export default function SectionMasterManagement() {
                 </h2>
                 <p className="text-xs text-gray-500 mt-0.5">
                   {modalBatchId > 0
-                    ? `Edit existing sections or add new sections for Batch #${modalBatchId}.`
+                    ? `Edit sections for Batch #${modalBatchId}. Changes will be saved as a new batch template, keeping Batch #${modalBatchId} intact.`
                     : 'Define one or more sections for the new batch, then save all at once.'}
                 </p>
               </div>
@@ -1270,9 +1253,9 @@ export default function SectionMasterManagement() {
                   className="flex items-center gap-2 px-5 py-2 bg-teal-700 text-white rounded-lg text-sm font-bold hover:bg-teal-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer shadow-xs"
                 >
                   {newBatchSaving ? (
-                    <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> {modalBatchId > 0 ? 'Updating Batch...' : 'Saving Batch...'}</>
+                    <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> {modalBatchId > 0 ? 'Creating New Batch...' : 'Saving Batch...'}</>
                   ) : (
-                    <><Save size={14} /> {modalBatchId > 0 ? 'Update Batch' : 'Save Batch'}</>
+                    <><Save size={14} /> {modalBatchId > 0 ? 'Save as New Batch' : 'Save Batch'}</>
                   )}
                 </button>
               </div>
