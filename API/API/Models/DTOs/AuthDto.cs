@@ -1,29 +1,68 @@
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+
 namespace API.Models.DTOs
 {
     public class LoginRequest
     {
+        [Required(ErrorMessage = "Email is required.")]
+        [EmailAddress(ErrorMessage = "Invalid email format.")]
+        [MaxLength(255)]
         public string Email { get; set; }
+
+        [Required(ErrorMessage = "Password is required.")]
+        [MaxLength(128)]
         public string? Password { get; set; }
     }
 
     public class RegisterRequest
     {
+        [Required(ErrorMessage = "Name is required.")]
+        [MaxLength(150)]
         public string Name { get; set; }
+
+        [Required(ErrorMessage = "Email is required.")]
+        [EmailAddress(ErrorMessage = "Invalid email format.")]
+        [MaxLength(255)]
         public string Email { get; set; }
+
+        [MaxLength(128)]
         public string? Password { get; set; } = null;
+
+        [MaxLength(50)]
         public string? UserType { get; set; } // examiner, coordinator, admin
+
         public int? UniversityId { get; set; }
+
+        [MaxLength(100)]
+        public string? InvitationToken { get; set; }
+
         public int? SubjectId1 { get; set; }
         public int? SubjectId2 { get; set; }
         public int? SubjectId3 { get; set; }
         public int? EmpId { get; set; }
+
+        [MaxLength(150)]
         public string? Fname { get; set; }
+
+        [MaxLength(20)]
         public string? AadharNo { get; set; }
+
+        [MaxLength(20)]
         public string? PanNo { get; set; }
+
         public int? CollegeId { get; set; }
+
+        [MaxLength(100)]
         public string? Experience { get; set; }
+
+        [MaxLength(25)]
         public string? Phone { get; set; }
+
+        [MaxLength(500)]
         public string? Address { get; set; }
+
+        [MaxLength(3_000_000, ErrorMessage = "Profile image data exceeds maximum allowed size.")]
         public string? ProfileImage { get; set; } // Base64 encoded image or image URL
     }
 
@@ -97,11 +136,26 @@ namespace API.Models.DTOs
 
     public class AcceptInvitationRequest
     {
+        [Required(ErrorMessage = "Invitation token is required.")]
+        [MaxLength(100)]
         public string Token { get; set; }
+
+        [Required(ErrorMessage = "Name is required.")]
+        [MaxLength(150)]
         public string Name { get; set; }
+
+        [Required(ErrorMessage = "Password is required.")]
+        [MinLength(6, ErrorMessage = "Password must be at least 6 characters.")]
+        [MaxLength(128)]
         public string Password { get; set; }
+
+        [MaxLength(25)]
         public string Phone { get; set; }
+
+        [MaxLength(500)]
         public string Address { get; set; }
+
+        [MaxLength(3_000_000)]
         public string ProfileImage { get; set; }
     }
 
@@ -117,88 +171,171 @@ namespace API.Models.DTOs
 
     public class InviteRequest
     {
+        [Required(ErrorMessage = "Email is required.")]
+        [EmailAddress(ErrorMessage = "Invalid email format.")]
+        [MaxLength(255)]
         public string Email { get; set; }
+
+        [Required(ErrorMessage = "UniversityId is required.")]
         public int UniversityId { get; set; }
+
         public int? DepartmentId { get; set; }
+
+        [MaxLength(50)]
         public string UserType { get; set; } = "examiner";
     }
 
     public class UpdateUserRequest
     {
+        [MaxLength(150)]
         public string? Name { get; set; }
+
+        [EmailAddress(ErrorMessage = "Invalid email format.")]
+        [MaxLength(255)]
         public string? Email { get; set; }
+
+        [MaxLength(50)]
         public string UserType { get; set; }
+
         public int? UniversityId { get; set; }
         public int? SubjectId1 { get; set; }
         public int? SubjectId2 { get; set; }
         public int? SubjectId3 { get; set; }
         public int? EmpId { get; set; }
+
+        [MaxLength(150)]
         public string? Fname { get; set; }
+
+        [MaxLength(20)]
         public string? AadharNo { get; set; }
+
+        [MaxLength(20)]
         public string? PanNo { get; set; }
+
         public int? CollegeId { get; set; }
+
+        [MaxLength(100)]
         public string? Experience { get; set; }
+
         public bool? IsActive { get; set; }
         public List<int>? SubjectIds { get; set; }
     }
 
     public class ForgotPasswordRequest
     {
+        [Required(ErrorMessage = "Email is required.")]
+        [EmailAddress(ErrorMessage = "Invalid email format.")]
+        [MaxLength(255)]
         public string Email { get; set; } = string.Empty;
     }
 
     public class VerifyResetOtpRequest
     {
+        [Required(ErrorMessage = "Email is required.")]
+        [EmailAddress(ErrorMessage = "Invalid email format.")]
+        [MaxLength(255)]
         public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "OTP is required.")]
+        [MaxLength(20)]
         public string Otp { get; set; } = string.Empty;
     }
 
     public class ResetPasswordRequest
     {
+        [Required(ErrorMessage = "Email is required.")]
+        [EmailAddress(ErrorMessage = "Invalid email format.")]
+        [MaxLength(255)]
         public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "OTP is required.")]
+        [MaxLength(20)]
         public string Otp { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "New password is required.")]
+        [MinLength(6, ErrorMessage = "Password must be at least 6 characters.")]
+        [MaxLength(128)]
         public string NewPassword { get; set; } = string.Empty;
     }
 
     public class ChangePasswordRequest
     {
+        [Required(ErrorMessage = "Current password is required.")]
+        [MaxLength(128)]
         public string CurrentPassword { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "New password is required.")]
+        [MinLength(6, ErrorMessage = "Password must be at least 6 characters.")]
+        [MaxLength(128)]
         public string NewPassword { get; set; } = string.Empty;
     }
 
     public class UpdateProfileRequest
     {
+        [MaxLength(150)]
         public string? Name { get; set; }
+
+        [MaxLength(25)]
         public string? Phone { get; set; }
+
+        [MaxLength(500)]
         public string? Address { get; set; }
+
+        [MaxLength(3_000_000)]
         public string? ProfileImage { get; set; }
+
+        [MaxLength(150)]
         public string? Fname { get; set; }
+
+        [MaxLength(100)]
         public string? Experience { get; set; }
+
         public int? CollegeId { get; set; }
+
+        [MaxLength(20)]
         public string? AadharNo { get; set; }
+
+        [MaxLength(20)]
         public string? PanNo { get; set; }
+
         public List<int>? SubjectIds { get; set; }
     }
 
     public class SendOtpRequest
     {
+        [Required(ErrorMessage = "Email is required.")]
+        [EmailAddress(ErrorMessage = "Invalid email format.")]
+        [MaxLength(255)]
         public string Email { get; set; }
     }
 
     public class VerifyOtpRequest
     {
+        [Required(ErrorMessage = "Email is required.")]
+        [EmailAddress(ErrorMessage = "Invalid email format.")]
+        [MaxLength(255)]
         public string Email { get; set; }
+
+        [Required(ErrorMessage = "OTP is required.")]
+        [MaxLength(20)]
         public string Otp { get; set; }
     }
 
     public class SendPhoneOtpRequest
     {
+        [Required(ErrorMessage = "Phone number is required.")]
+        [MaxLength(25)]
         public string Phone { get; set; }
     }
 
     public class VerifyPhoneOtpRequest
     {
+        [Required(ErrorMessage = "Phone number is required.")]
+        [MaxLength(25)]
         public string Phone { get; set; }
+
+        [Required(ErrorMessage = "OTP is required.")]
+        [MaxLength(20)]
         public string Otp { get; set; }
     }
 }

@@ -125,7 +125,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -202,24 +202,69 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
         [HttpGet("{id:int}/pdf")]
+        [Authorize]
         public async Task<IActionResult> GetScriptPdf(int id)
         {
             try
             {
-                var (allowed, reason, statusCode) = await _scriptSecurityService.CanViewScriptAsync(User, id);
-                if (!allowed)
+                var loggedInUserType = User.FindFirst("userType")?.Value;
+                var loggedInUserIdStr = User.FindFirst("id")?.Value;
+                if (!int.TryParse(loggedInUserIdStr, out int loggedInUserId))
                 {
-                    return StatusCode(statusCode, new { success = false, message = reason });
+                    return Unauthorized(new { success = false, message = "Invalid token claims" });
                 }
 
-                var script = await _context.Scripts.FindAsync(id);
+                var currentUser = await _context.Users.FindAsync(loggedInUserId);
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { success = false, message = "User not found" });
+                }
+
+                var script = await _context.Scripts
+                    .Include(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
+                    .Include(s => s.ProjectPaper).ThenInclude(pp => pp.Project)
+                    .FirstOrDefaultAsync(s => s.Id == id);
+
                 if (script == null || string.IsNullOrEmpty(script.CleanPdfUrl))
                     return NotFound(new { success = false, message = "Script or PDF path not found" });
+
+                // Ownership / Authorization check
+                if (loggedInUserType == "admin")
+                {
+                    // Full access
+                }
+                else if (loggedInUserType == "coordinator")
+                {
+                    // Coordinators can only access scripts for their own university
+                    int? scriptUnivId = script.ProjectPaper?.Paper?.UniversityId 
+                                     ?? script.ProjectPaper?.Project?.UniversityId;
+                    if (scriptUnivId.HasValue && scriptUnivId != currentUser.UniversityId)
+                    {
+                        return StatusCode(403, new { success = false, message = "You do not have permission to view scripts outside your university." });
+                    }
+                }
+                else if (loggedInUserType == "examiner")
+                {
+                    // Examiners can only access scripts actively allocated to them or that they have marked
+                    var isAllocated = await _context.Allocations
+                        .AnyAsync(a => a.ScriptId == id && a.ExaminerId == loggedInUserId && a.AssignmentStatus);
+                    var hasMarked = await _context.Markings
+                        .AnyAsync(m => m.ScriptId == id && m.ExaminerId == loggedInUserId);
+
+                    if (!isAllocated && !hasMarked)
+                    {
+                        return StatusCode(403, new { success = false, message = "You do not have permission to access this script PDF." });
+                    }
+                }
+                else
+                {
+                    return StatusCode(403, new { success = false, message = "Unauthorized access to script PDF." });
+                }
 
                 var basePath = _configuration["StorageSettings:BasePath"] ?? "";
                 var fullPath = script.CleanPdfUrl;
@@ -240,7 +285,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -277,7 +322,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -377,7 +422,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -467,7 +512,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -531,9 +576,20 @@ namespace API.Controllers
                 var uploadedScripts = new List<Script>();
                 var targetUniIds = new HashSet<int>();
 
+                var candidateProjectPapers = targetProjectPaper != null 
+                    ? new List<ProjectPaper> { targetProjectPaper } 
+                    : await _context.ProjectPapers
+                        .Include(pp => pp.Paper)
+                        .Include(pp => pp.Project)
+                        .Where(p => !projectId.HasValue || p.ProjectId == projectId.Value)
+                        .ToListAsync();
+
                 foreach (var file in files)
                 {
                     if (file == null || file.Length == 0) continue;
+
+                    var fileExt = Path.GetExtension(file.FileName).ToLowerInvariant();
+                    if (fileExt != ".pdf") continue; // Enforce only PDF answer scripts
 
                     var originalFileName = Path.GetFileName(file.FileName);
                     var fileNameWithoutExt = Path.GetFileNameWithoutExtension(originalFileName)?.Trim() ?? "";
@@ -541,12 +597,14 @@ namespace API.Controllers
                     var pp = targetProjectPaper;
                     if (pp == null)
                     {
-                        pp = await _context.ProjectPapers
-                            .Include(pp => pp.Paper)
-                            .Include(pp => pp.Project)
-                            .FirstOrDefaultAsync(p => (!projectId.HasValue || p.ProjectId == projectId.Value) &&
-                                                      ((p.CatchNo != null && fileNameWithoutExt.Contains(p.CatchNo)) ||
-                                                       (p.Paper != null && fileNameWithoutExt.Contains(p.Paper.PaperCode))));
+                        var tokens = fileNameWithoutExt.Split(new[] { '_', '-', ' ', '.' }, StringSplitOptions.RemoveEmptyEntries);
+
+                        // Exact tokenized or exact name match to prevent substring misattachment (M9.1)
+                        pp = candidateProjectPapers.FirstOrDefault(p =>
+                            (p.CatchNo != null && tokens.Any(t => string.Equals(t, p.CatchNo, StringComparison.OrdinalIgnoreCase))) ||
+                            (p.Paper != null && !string.IsNullOrEmpty(p.Paper.PaperCode) && tokens.Any(t => string.Equals(t, p.Paper.PaperCode, StringComparison.OrdinalIgnoreCase))) ||
+                            (p.CatchNo != null && string.Equals(fileNameWithoutExt, p.CatchNo, StringComparison.OrdinalIgnoreCase)) ||
+                            (p.Paper != null && !string.IsNullOrEmpty(p.Paper.PaperCode) && string.Equals(fileNameWithoutExt, p.Paper.PaperCode, StringComparison.OrdinalIgnoreCase)));
                     }
 
                     if (pp == null) continue;
@@ -619,31 +677,64 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
         [HttpPut("{id:int}")]
+        [Authorize(Roles = "admin,coordinator")]
         public async Task<IActionResult> UpdateScript(int id, [FromBody] ScriptStatusUpdateRequest request)
         {
             try
             {
-                var (allowed, reason, statusCode) = await _scriptSecurityService.CanUpdateScriptAsync(User, id);
-                if (!allowed)
+                var loggedInUserType = User.FindFirst("userType")?.Value;
+                var loggedInUserIdStr = User.FindFirst("id")?.Value;
+                if (!int.TryParse(loggedInUserIdStr, out int loggedInUserId))
                 {
-                    return StatusCode(statusCode, new { success = false, message = reason });
+                    return Unauthorized(new { success = false, message = "Invalid token claims" });
                 }
 
-                var existingScript = await _context.Scripts.FindAsync(id);
+                var currentUser = await _context.Users.FindAsync(loggedInUserId);
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { success = false, message = "User not found" });
+                }
+
+                var existingScript = await _context.Scripts
+                    .Include(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
+                    .Include(s => s.ProjectPaper).ThenInclude(pp => pp.Project)
+                    .FirstOrDefaultAsync(s => s.Id == id);
+
                 if (existingScript == null)
                     return NotFound(new { success = false, message = "Script not found" });
+
+                if (loggedInUserType == "coordinator")
+                {
+                    int? scriptUnivId = existingScript.ProjectPaper?.Paper?.UniversityId 
+                                     ?? existingScript.ProjectPaper?.Project?.UniversityId;
+                    if (scriptUnivId.HasValue && scriptUnivId != currentUser.UniversityId)
+                    {
+                        return StatusCode(403, new { success = false, message = "Coordinators can only update scripts for their own university." });
+                    }
+                }
+
+                // Enforce state machine transitions
+                if (existingScript.Status == ScriptStatus.completed && request.Status != ScriptStatus.completed)
+                {
+                    if (existingScript.IsReEvaluationRequested != true && loggedInUserType != "admin")
+                    {
+                        return BadRequest(new { success = false, message = "Completed scripts cannot be reverted unless re-evaluation is requested." });
+                    }
+                    existingScript.SubmittedAt = null;
+                }
+                else if (request.Status == ScriptStatus.completed)
+                {
+                    existingScript.SubmittedAt = DateTime.UtcNow;
+                }
 
                 existingScript.Status = request.Status;
                 existingScript.Remarks = request.Remarks;
                 existingScript.UpdatedAt = DateTime.UtcNow;
-
-                if (request.Status == ScriptStatus.completed)
-                    existingScript.SubmittedAt = DateTime.UtcNow;
 
                 _context.Scripts.Update(existingScript);
                 await _context.SaveChangesAsync();
@@ -652,7 +743,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -711,7 +802,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -879,7 +970,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -935,7 +1026,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -1157,7 +1248,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
     }

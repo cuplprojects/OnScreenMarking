@@ -11,7 +11,7 @@ namespace API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]
+    [Authorize(Roles = "admin,Admin,coordinator,Coordinator")]
     public class StatsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -111,7 +111,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -152,10 +152,11 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
         [HttpGet("admin-counts")]
+        [Authorize(Roles = "admin,Admin")]
         public async Task<IActionResult> GetAdminCounts()
         {
             try
@@ -173,9 +174,9 @@ namespace API.Controllers
                     pendingScripts
                 });
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An error occurred while fetching admin counts." });
             }
         }
     }

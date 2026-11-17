@@ -46,21 +46,10 @@ namespace API.Controllers
         /// Lists all assignment types with DailyLimit and TimePerCopy
         /// </summary>
         [HttpGet]
-        [AllowAnonymous]
         public async Task<IActionResult> GetAll([FromQuery] int? universityId = null)
         {
             try
             {
-                // Auto-seed default assignment types if none exist
-                if (!await _context.AssignmentTypes.AnyAsync())
-                {
-                    _context.AssignmentTypes.AddRange(
-                        new AssignmentType { Type = "Single Evaluation", DailyLimit = 50, TimePerCopy = 15, ReassignmentHours = 24, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
-                        new AssignmentType { Type = "Double Evaluation", DailyLimit = 40, TimePerCopy = 20, ReassignmentHours = 24, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow }
-                    );
-                    await _context.SaveChangesAsync();
-                }
-
                 var query = _context.AssignmentTypes.AsQueryable();
                 if (universityId.HasValue && universityId.Value > 0)
                 {
@@ -86,7 +75,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -145,7 +134,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -199,7 +188,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -223,7 +212,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -345,7 +334,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -517,7 +506,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
     }

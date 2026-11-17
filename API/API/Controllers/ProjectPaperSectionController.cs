@@ -172,7 +172,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -220,7 +220,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -497,7 +497,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -823,7 +823,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -951,7 +951,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -1024,7 +1024,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -1156,7 +1156,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 

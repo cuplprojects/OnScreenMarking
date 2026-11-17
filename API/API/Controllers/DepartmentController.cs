@@ -18,7 +18,6 @@ namespace API.Controllers
         {
             _context = context;
         }
-        [AllowAnonymous]
         [HttpGet]
         public async Task<IActionResult> GetDepartments(
             [FromQuery] int? universityId = null,
@@ -31,6 +30,8 @@ namespace API.Controllers
         {
             try
             {
+                page = Math.Max(1, page);
+                pageSize = Math.Clamp(pageSize <= 0 ? 10 : pageSize, 1, 200);
                 var query = _context.Departments.AsQueryable();
 
                 if (universityId.HasValue)
@@ -108,7 +109,7 @@ namespace API.Controllers
                 return StatusCode(500, new
                 {
                     success = false,
-                    message = ex.Message
+                    message = "An unexpected error occurred while processing your request."
                 });
             }
         }
@@ -132,7 +133,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -166,6 +167,7 @@ namespace API.Controllers
                     }
                 }
 
+                department.DepartmentId = 0; // Prevent mass assignment ID injection (M8)
                 department.IsActive = true;
                 department.CreatedAt = DateTime.UtcNow;
                 department.UpdatedAt = DateTime.UtcNow;
@@ -177,7 +179,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -202,7 +204,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -227,7 +229,7 @@ namespace API.Controllers
                 return StatusCode(500, new
                 {
                     success = false,
-                    message = ex.Message
+                    message = "An unexpected error occurred while processing your request."
                 });
             }
         }
@@ -255,7 +257,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -278,7 +280,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -302,7 +304,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
     }

@@ -32,11 +32,14 @@ namespace API.Controllers
         {
             try
             {
-                var (userId, userType) = _scriptSecurityService.GetUserInfo(User);
-                if (!userId.HasValue || userId.Value != request.ExaminerId)
+                var loggedInUserIdStr = User.FindFirst("id")?.Value;
+                if (!int.TryParse(loggedInUserIdStr, out int authenticatedExaminerId))
                 {
-                    return StatusCode(403, new { success = false, message = "Access denied. You can only create marking sessions for your own examiner account." });
+                    return Unauthorized(new { success = false, message = "Invalid token claims" });
                 }
+
+                // Enforce examiner from authenticated claims
+                request.ExaminerId = authenticatedExaminerId;
 
                 // Verify allocation exists
                 var allocation = await _context.Allocations
@@ -47,8 +50,8 @@ namespace API.Controllers
                 if (allocation == null)
                     return BadRequest(new { success = false, message = "Allocation not found" });
 
-                if (allocation.ExaminerId != userId.Value || !allocation.AssignmentStatus)
-                    return StatusCode(403, new { success = false, message = "Access denied. This allocation is not actively assigned to your examiner account." });
+                if (allocation.ExaminerId != authenticatedExaminerId)
+                    return StatusCode(403, new { success = false, message = "Allocation not assigned to you." });
 
                 var timePerCopy = await GetTimePerCopyMinutesForScriptAsync(allocation.ScriptId);
 
@@ -159,7 +162,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -204,7 +207,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -253,7 +256,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -263,22 +266,30 @@ namespace API.Controllers
         {
             try
             {
-                var (allowed, reason, statusCode) = await _scriptSecurityService.CanUpdateScriptAsync(User, scriptId);
-                if (!allowed)
+                var loggedInUserIdStr = User.FindFirst("id")?.Value;
+                if (!int.TryParse(loggedInUserIdStr, out int authenticatedExaminerId))
                 {
-                    return StatusCode(statusCode, new { success = false, message = reason });
+                    return Unauthorized(new { success = false, message = "Invalid token claims" });
                 }
 
-                var (userId, _) = _scriptSecurityService.GetUserInfo(User);
-                if (!userId.HasValue || userId.Value != request.ExaminerId)
+                // Strictly derive examiner from authenticated claims
+                int examinerId = authenticatedExaminerId;
+
+                // Verify examiner is allocated to this script or has an existing marking
+                var hasAllocation = await _context.Allocations
+                    .AnyAsync(a => a.ScriptId == scriptId && a.ExaminerId == examinerId && a.AssignmentStatus);
+                var hasMarking = await _context.Markings
+                    .AnyAsync(m => m.ScriptId == scriptId && m.ExaminerId == examinerId);
+
+                if (!hasAllocation && !hasMarking)
                 {
-                    return StatusCode(403, new { success = false, message = "Access denied. Cannot save draft for another examiner." });
+                    return StatusCode(403, new { success = false, message = "You are not assigned to mark this script." });
                 }
 
                 // 1. Save to Redis Cache (for fast in-memory access)
                 try
                 {
-                    var cacheKey = $"draft_marks_{scriptId}_{request.ExaminerId}";
+                    var cacheKey = $"draft_marks_{scriptId}_{examinerId}";
                     var serializedData = JsonSerializer.Serialize(request.DraftData);
                     
                     var options = new DistributedCacheEntryOptions()
@@ -298,19 +309,19 @@ namespace API.Controllers
                         .Include(m => m.QuestionMarks)
                         .Include(m => m.Script)
                             .ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
-                        .FirstOrDefaultAsync(m => m.ScriptId == scriptId && m.ExaminerId == request.ExaminerId);
+                        .FirstOrDefaultAsync(m => m.ScriptId == scriptId && m.ExaminerId == examinerId);
 
                     if (marking == null)
                     {
                         var allocation = await _context.Allocations
-                            .FirstOrDefaultAsync(a => a.ScriptId == scriptId && a.ExaminerId == request.ExaminerId && a.AssignmentStatus);
+                            .FirstOrDefaultAsync(a => a.ScriptId == scriptId && a.ExaminerId == examinerId && a.AssignmentStatus);
 
                         if (allocation != null)
                         {
                             marking = new Marking
                             {
                                 ScriptId = scriptId,
-                                ExaminerId = request.ExaminerId,
+                                ExaminerId = examinerId,
                                 AllocationId = allocation.AllocationId,
                                 ProjectId = allocation.ProjectId,
                                 TotalMarks = 0,
@@ -427,7 +438,7 @@ namespace API.Controllers
             catch (Exception ex)
             {
                 // Return success=true to ignore errors
-                return Ok(new { success = true, message = "Draft save skipped due to error", error = ex.Message });
+                return Ok(new { success = true, message = "Draft save skipped due to error", error = "Draft save failed" });
             }
         }
 
@@ -436,16 +447,17 @@ namespace API.Controllers
         {
             try
             {
-                var (allowed, reason, statusCode) = await _scriptSecurityService.CanViewScriptAsync(User, scriptId);
-                if (!allowed)
+                var loggedInUserIdStr = User.FindFirst("id")?.Value;
+                var loggedInUserType = User.FindFirst("userType")?.Value;
+                if (!int.TryParse(loggedInUserIdStr, out int authenticatedUserId))
                 {
-                    return StatusCode(statusCode, new { success = false, message = reason });
+                    return Unauthorized(new { success = false, message = "Invalid token claims" });
                 }
 
-                var (userId, userType) = _scriptSecurityService.GetUserInfo(User);
-                if (userType == "examiner" && examinerId != userId.Value)
+                // Ownership check: Examiners can only access their own draft marks
+                if (loggedInUserType == "examiner" && examinerId != authenticatedUserId)
                 {
-                    return StatusCode(403, new { success = false, message = "Access denied. You can only view your own draft marks." });
+                    return StatusCode(403, new { success = false, message = "You can only view your own draft marks." });
                 }
 
                 // 1. Try Redis cache first
@@ -500,7 +512,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return Ok(new { success = true, draftData = (object)null, error = ex.Message });
+                return Ok(new { success = true, draftData = (object)null, error = "Failed to load draft" });
             }
         }
 
@@ -510,10 +522,11 @@ namespace API.Controllers
         {
             try
             {
-                var (allowed, reason, statusCode) = await _scriptSecurityService.CanUpdateMarkingAsync(User, id);
-                if (!allowed)
+                var loggedInUserIdStr = User.FindFirst("id")?.Value;
+                var loggedInUserType = User.FindFirst("userType")?.Value;
+                if (!int.TryParse(loggedInUserIdStr, out int authenticatedUserId))
                 {
-                    return StatusCode(statusCode, new { success = false, message = reason });
+                    return Unauthorized(new { success = false, message = "Invalid token claims" });
                 }
 
                 var marking = await _context.Markings
@@ -528,6 +541,12 @@ namespace API.Controllers
 
                 if (marking.Script == null)
                     return BadRequest(new { success = false, message = "Script not found for this marking" });
+
+                // Ownership check: Examiners can only submit their own markings
+                if (loggedInUserType == "examiner" && marking.ExaminerId != authenticatedUserId)
+                {
+                    return StatusCode(403, new { success = false, message = "You can only submit your own markings." });
+                }
 
                 // Allow re-submission if script status is not completed (means previous submit failed)
                 bool isResubmission = marking.Status == MarkingStatus.submitted && marking.Script.Status != ScriptStatus.completed;
@@ -587,7 +606,7 @@ namespace API.Controllers
             {
                 return StatusCode(500, new { 
                     success = false, 
-                    message = ex.Message,
+                    message = "An unexpected error occurred while processing your request.",
                     stackTrace = ex.StackTrace
                 });
             }
@@ -645,7 +664,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -706,7 +725,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -861,7 +880,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -1071,7 +1090,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
@@ -1110,7 +1129,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
             }
         }
 
