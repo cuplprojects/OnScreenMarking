@@ -1158,7 +1158,11 @@ export default function SectionMasterManagement() {
                                   <td className="py-1.5 px-3">
                                     <select
                                       id={`modal-qtype-${activeSectionIdx}-${qIdx}`}
-                                      value={q.questionTypeId || q.typeId || ""}
+                                      value={
+                                        q.questionTypeId || q.typeId || (
+                                          questionTypesList.find(qt => qt.questionTypeName?.toLowerCase() === q.type?.toLowerCase())?.questionTypeId
+                                        ) || ""
+                                      }
                                       onChange={e => updateSectionQuestion(activeSectionIdx, qIdx, 'typeSelect', e.target.value)}
                                       className={`w-full px-2 py-1 border rounded text-xs font-semibold outline-none bg-white ${
                                         !q.type && !q.typeId && !q.questionTypeId

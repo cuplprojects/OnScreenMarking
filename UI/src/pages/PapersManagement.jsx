@@ -368,10 +368,19 @@ export default function PapersManagement({ isTab = false }) {
         let papersData = [];
         
         if (selectedSourceProject === 'master') {
-          const res = await paperService.getPapers({ universityId: activeUniversityId, isMaster: true, pageSize: 0 });
+          const res = await paperService.getPapers({ 
+            universityId: activeUniversityId, 
+            isMaster: true, 
+            pageSize: 0,
+            excludeProjectId: projectId 
+          });
           papersData = res.items || res;
         } else {
-          const res = await paperService.getPapers({ projectId: selectedSourceProject, pageSize: 0 });
+          const res = await paperService.getPapers({ 
+            projectId: selectedSourceProject, 
+            pageSize: 0,
+            excludeProjectId: projectId 
+          });
           papersData = res.items || res;
         }
         
@@ -385,8 +394,10 @@ export default function PapersManagement({ isTab = false }) {
       }
     };
     
-    loadImportPapers();
-  }, [selectedSourceProject, activeUniversityId]);
+    if (activeInnerTab === 'import-papers') {
+      loadImportPapers();
+    }
+  }, [selectedSourceProject, activeUniversityId, projectId, activeInnerTab]);
 
   const fetchInitialData = async () => {
     try {
@@ -1020,7 +1031,9 @@ export default function PapersManagement({ isTab = false }) {
       
       // Switch back to papers-sections tab and refresh
       setActiveInnerTab('papers-sections');
+      const importedIds = [...selectedImportPaperIds];
       setSelectedImportPaperIds([]);
+      setImportPapers(prev => prev.filter(p => !importedIds.includes(p.paperId)));
       refreshTable();
     } catch (err) {
       message.error("Failed to import papers: " + (err.response?.data?.message || err.message));
@@ -2105,8 +2118,9 @@ export default function PapersManagement({ isTab = false }) {
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400">No Papers Found</p>
                 </div>
               ) : (
-            <div className="overflow-x-auto">
-              <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left">
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
                 <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
                   <tr>
                     <th className="px-3 py-3.5 w-10 text-center border-b border-gray-100">
@@ -2269,6 +2283,17 @@ export default function PapersManagement({ isTab = false }) {
                             </div>
                           </td>
 
+                          {/* Batch # */}
+                          <td className="px-3 py-2 text-center">
+                            {paperBatchId ? (
+                              <span className="inline-flex items-center gap-1 font-mono font-extrabold text-teal-800 bg-teal-50 border border-teal-200/60 px-2 py-0.5 rounded text-[11px]">
+                                #{paperBatchId}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 italic text-[11px]">-</span>
+                            )}
+                          </td>
+
                           {/* Total Questions */}
                           <td className="px-3 py-2 text-center">
                             <input
@@ -2388,6 +2413,15 @@ export default function PapersManagement({ isTab = false }) {
                               ? paper.subjectNames.join(', ') 
                               : (paper.subjectName || '-')}
                           </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-center font-bold text-gray-700 text-xs">
+                          {paperBatchId ? (
+                            <span className="inline-flex items-center gap-1 font-mono font-extrabold text-teal-800 bg-teal-50 border border-teal-200/60 px-2 py-0.5 rounded text-[11px]">
+                              #{paperBatchId}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 italic text-[11px]">-</span>
+                          )}
                         </td>
                         <td className="px-4 py-2.5 text-center font-bold text-gray-700 text-xs">
                           {paper.totalQuestions ?? 0}
@@ -2545,18 +2579,21 @@ export default function PapersManagement({ isTab = false }) {
                     );
                   })}
                 </tbody>
-              </table>
-              
-              {/* Pagination controls from useTable logic */}
-              <TablePagination 
-                page={page}
-                totalPages={totalPages}
-                totalCount={totalCount}
-                pageSize={pageSize}
-                setPage={setPage}
-                setPageSize={setPageSize}
-              />
-            </div>
+                    </table>
+                  </div>
+                  
+                  {/* Standard Centralized Table Pagination (outside overflow-x-auto, fixed/sticky) */}
+                  <div className="sticky bottom-0 z-10 bg-gray-50 rounded-b-xl border-t border-gray-100 shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
+                    <TablePagination 
+                      page={page}
+                      totalPages={totalPages}
+                      totalCount={totalCount}
+                      pageSize={pageSize}
+                      setPage={setPage}
+                      setPageSize={setPageSize}
+                    />
+                  </div>
+                </>
               )}
             </>
           )}
@@ -2643,8 +2680,9 @@ export default function PapersManagement({ isTab = false }) {
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400">No Papers Found in Selected Project</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
                     <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
                       <tr>
                         <th className="px-5 py-3.5 w-12 text-center border-b border-gray-100">
@@ -2745,17 +2783,20 @@ export default function PapersManagement({ isTab = false }) {
                         );
                       })}
                     </tbody>
-                  </table>
+                    </table>
+                  </div>
                   
-                  <TablePagination 
-                    page={importPage}
-                    totalPages={getFilteredImportPapers().totalPages}
-                    totalCount={getFilteredImportPapers().totalCount}
-                    pageSize={importPageSize}
-                    setPage={setImportPage}
-                    setPageSize={setImportPageSize}
-                  />
-                </div>
+                  <div className="sticky bottom-0 z-10 bg-gray-50 rounded-b-xl border-t border-gray-100 shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
+                    <TablePagination 
+                      page={importPage}
+                      totalPages={getFilteredImportPapers().totalPages}
+                      totalCount={getFilteredImportPapers().totalCount}
+                      pageSize={importPageSize}
+                      setPage={setImportPage}
+                      setPageSize={setImportPageSize}
+                    />
+                  </div>
+                </>
               )}
             </>
           )}
@@ -3833,6 +3874,7 @@ export default function PapersManagement({ isTab = false }) {
                       </table>
                     </div>
 
+                    <div className="sticky bottom-0 z-10 bg-gray-50 rounded-b-xl border-t border-gray-100 shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
                       <TablePagination 
                         page={bulkPage}
                         totalPages={totalBulkPages}
@@ -3841,6 +3883,7 @@ export default function PapersManagement({ isTab = false }) {
                         setPage={setBulkPage}
                         setPageSize={setBulkPageSize}
                       />
+                    </div>
                     </>
                   )}
 
@@ -3947,6 +3990,11 @@ export default function PapersManagement({ isTab = false }) {
                         <p className="text-xs text-gray-400 text-center py-4">No master sections available.</p>
                       ) : (
                         (() => {
+                          const selectedPapersList = papers.filter(p => selectedPaperIds.includes(p.paperId));
+                          const commonTotalQ = selectedPapersList.length > 0 && selectedPapersList.every(p => (p.totalQuestions || 0) === (selectedPapersList[0].totalQuestions || 0))
+                            ? (selectedPapersList[0].totalQuestions || 0)
+                            : 0;
+
                           // Group masters by batchId
                           const batchGroups = {};
                           sectionMasters.forEach(master => {
@@ -3957,7 +4005,25 @@ export default function PapersManagement({ isTab = false }) {
                             batchGroups[bId].push(master);
                           });
 
-                          return Object.entries(batchGroups).map(([bId, bSections]) => {
+                          let entries = Object.entries(batchGroups);
+                          if (commonTotalQ > 0) {
+                            entries = entries.filter(([bId, bSections]) => {
+                              const bTotalQ = bSections.reduce((sum, s) => sum + (parseInt(s.totalQuestions, 10) || 0), 0);
+                              return bTotalQ === commonTotalQ;
+                            });
+                          }
+
+                          if (entries.length === 0) {
+                            return (
+                              <p className="text-xs text-gray-500 text-center py-6">
+                                {commonTotalQ > 0
+                                  ? `No batch templates have exactly ${commonTotalQ} questions matching the selected paper(s).`
+                                  : "No master sections available."}
+                              </p>
+                            );
+                          }
+
+                          return entries.map(([bId, bSections]) => {
                             const bTotalQ = bSections.reduce((sum, s) => sum + (parseInt(s.totalQuestions, 10) || 0), 0);
                             const bTotalM = bSections.reduce((sum, s) => sum + (parseFloat(s.totalMarks) || 0), 0);
                             const isBatchApplied = bSections.length > 0 && bSections.every(s => selectedMasterSectionIds.includes(s.id));
@@ -4072,7 +4138,7 @@ export default function PapersManagement({ isTab = false }) {
                                               <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1.5 flex items-center justify-between">
                                                 <span>Questions ({questionsList.length}):</span>
                                                 <span className="text-teal-700 font-extrabold lowercase">
-                                                  ~{((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1)} marks each
+                                                  {((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1)} marks each
                                                 </span>
                                               </div>
                                               <div className="overflow-x-auto rounded-lg border border-gray-100 max-h-40 overflow-y-auto custom-scrollbar">
@@ -4419,7 +4485,15 @@ export default function PapersManagement({ isTab = false }) {
             if (!batchMap[bId]) batchMap[bId] = [];
             batchMap[bId].push(sm);
           });
-          const availableBatches = Object.keys(batchMap).map(Number).sort((a, b) => a - b);
+          const availableBatches = Object.keys(batchMap)
+            .map(Number)
+            .filter(bId => {
+              if (!parsedFormTotalQ || isNaN(parsedFormTotalQ) || parsedFormTotalQ <= 0) return true;
+              const bSections = batchMap[bId] || [];
+              const bTotalQ = bSections.reduce((sum, s) => sum + (parseInt(s.totalQuestions, 10) || 0), 0);
+              return bTotalQ === parsedFormTotalQ;
+            })
+            .sort((a, b) => a - b);
 
           return (
           <div className="w-full bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col overflow-hidden sticky top-6 max-h-[calc(100vh-3rem)] animate-in fade-in duration-200">
@@ -4872,7 +4946,7 @@ export default function PapersManagement({ isTab = false }) {
                                           <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1.5 flex items-center justify-between">
                                             <span>Questions Details ({questionsList.length}):</span>
                                             <span className="text-teal-700 font-extrabold lowercase">
-                                              ~{((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1)} marks each
+                                              {((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1)} marks each
                                             </span>
                                           </div>
                                           <div className="overflow-x-auto rounded-lg border border-gray-100 max-h-48 overflow-y-auto custom-scrollbar">
