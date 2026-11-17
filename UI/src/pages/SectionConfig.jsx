@@ -40,6 +40,7 @@ export default function SectionConfig() {
   const projectId = encryptedProjectId ? decryptId(encryptedProjectId) : null;
   const urlSubjectId = searchParams.get('subjectId') ? parseInt(decryptId(searchParams.get('subjectId')), 10) : null;
   const urlPaperId = searchParams.get('paperId') ? parseInt(decryptId(searchParams.get('paperId')), 10) : null;
+  const editBatchId = searchParams.get('editBatch') ? parseInt(searchParams.get('editBatch'), 10) : null;
   const isProjectMode = Boolean(projectId && urlPaperId);
   const { userType } = useAuth();
   const { setBreadcrumb } = useBreadcrumb();
@@ -130,7 +131,8 @@ export default function SectionConfig() {
   const fetchSectionMasters = async () => {
     try {
       const data = await sectionService.getSectionMasters();
-      setSectionMasters(data || []);
+      // Backend returns paginated response: { items, totalCount, page, pageSize, totalPages }
+      setSectionMasters(data?.items || data || []);
     } catch (err) {
       console.error("Failed to load section masters", err);
     }
@@ -142,6 +144,33 @@ export default function SectionConfig() {
       fetchSections();
     }
   }, [urlPaperId]);
+
+  // Handle automatic opening of add section form when coming from allocate sections
+  useEffect(() => {
+    const addSectionParam = searchParams.get('addSection');
+    if (addSectionParam === 'true' && !showSectionForm) {
+      setShowSectionForm(true);
+      // Clear the parameter from URL
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('addSection');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams, showSectionForm]);
+
+  // Handle edit batch mode - load sections from selected batch
+  useEffect(() => {
+    if (editBatchId && sectionMasters.length > 0) {
+      const batchSections = sectionMasters.filter(m => m.batchId === editBatchId);
+      if (batchSections.length > 0) {
+        // Automatically select and open the first section for editing
+        handleEditSection(batchSections[0]);
+        // Clear the editBatch parameter from URL
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('editBatch');
+        setSearchParams(newParams, { replace: true });
+      }
+    }
+  }, [editBatchId, sectionMasters]);
 
   const fetchPaperDetails = async () => {
     try {
@@ -202,16 +231,45 @@ export default function SectionConfig() {
         ? parseInt(value) || 0
         : value
     }));
+
+    // When totalMarks changes, automatically redistribute marks across existing questions!
+    if (name === 'totalMarks' && questions && questions.length > 0) {
+      const newTotal = parseFloat(value) || 0;
+      const qCount = questions.length;
+      const newMarksPerQ = qCount > 0 ? parseFloat((newTotal / qCount).toFixed(2)) : 0;
+      setQuestions(prev => prev.map((q, qIndex) => {
+        let mark = newMarksPerQ;
+        if (qIndex === qCount - 1 && qCount > 1) {
+          const prevTotal = newMarksPerQ * (qCount - 1);
+          const diff = parseFloat((newTotal - prevTotal).toFixed(2));
+          if (Math.abs(diff - newMarksPerQ) <= 0.05) {
+            mark = diff;
+          }
+        }
+        return {
+          ...q,
+          marks: mark,
+        };
+      }));
+    }
   };
 
   const generateQuestions = () => {
     const { startQuestion, endQuestion, totalMarks } = sectionForm;
-    const totalQuestions = endQuestion - startQuestion + 1;
-    const marksPerQuestion = totalQuestions > 0 ? totalMarks / totalQuestions : 0;
+    const start = parseInt(startQuestion, 10) || 1;
+    const end = parseInt(endQuestion, 10) || 1;
+    const totalQuestions = end - start + 1;
+
+    if (totalQuestions <= 0) {
+      message.error('End question must be greater than or equal to start question');
+      return;
+    }
+
+    const marksPerQuestion = totalQuestions > 0 ? parseFloat((totalMarks / totalQuestions).toFixed(2)) : 0;
 
     const generatedQuestions = [];
     const defaultQt = questionTypesList.length > 0 ? questionTypesList[0] : null;
-    for (let i = startQuestion; i <= endQuestion; i++) {
+    for (let i = start; i <= end; i++) {
       const qNoStr = i.toString();
       const existingQ = questions.find(q => String(q.questionNo) === qNoStr);
       const matchedQt = questionTypesList.find(qt => 
@@ -220,10 +278,20 @@ export default function SectionConfig() {
         (existingQ?.type && qt.questionTypeName?.toLowerCase() === existingQ.type?.toLowerCase())
       ) || defaultQt;
 
+      // Adjust last question mark if there is a tiny floating remainder so total sum is exact
+      let qMark = marksPerQuestion;
+      if (i === end && totalQuestions > 1) {
+        const prevTotal = marksPerQuestion * (totalQuestions - 1);
+        const diff = parseFloat((totalMarks - prevTotal).toFixed(2));
+        if (Math.abs(diff - marksPerQuestion) <= 0.05) {
+          qMark = diff;
+        }
+      }
+
       generatedQuestions.push({
         questionId: existingQ?.questionId || 0,
         questionNo: qNoStr,
-        marks: existingQ?.marks !== undefined ? existingQ.marks : parseFloat(marksPerQuestion.toFixed(2)),
+        marks: qMark,
         typeId: matchedQt?.questionTypeId || null,
         questionTypeId: matchedQt?.questionTypeId || null,
         type: matchedQt?.questionTypeName || existingQ?.type || '',
@@ -233,6 +301,7 @@ export default function SectionConfig() {
     }
     setQuestions(generatedQuestions);
     setShowQuestionPreview(true);
+    message.success(`Questions regenerated (${totalQuestions} questions, ${totalMarks} total marks, ${marksPerQuestion} marks each)`);
   };
 
   const handleAddQuestion = () => {

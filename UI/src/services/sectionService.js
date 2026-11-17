@@ -1,9 +1,18 @@
 import apiCall from './api';
 
 export const sectionService = {
-  // Get all section masters
-  getSectionMasters: async () => {
-    return apiCall('/section/Masters');
+  // Get all section masters with pagination, search, sorting, and batch filtering
+  getSectionMasters: async (params = {}) => {
+    const queryParams = new URLSearchParams();
+    if (params.page) queryParams.append('page', params.page);
+    if (params.pageSize) queryParams.append('pageSize', params.pageSize);
+    if (params.search) queryParams.append('search', params.search);
+    if (params.batchId) queryParams.append('batchId', params.batchId);
+    if (params.sortField) queryParams.append('sortField', params.sortField);
+    if (params.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+    if (params.all) queryParams.append('all', params.all);
+    const qs = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return apiCall(`/section/Masters${qs}`);
   },
 
   createSectionMaster: async (data) => {
@@ -17,6 +26,14 @@ export const sectionService = {
   createSectionMastersBatch: async (data) => {
     return apiCall('/section/Masters/Batch', {
       method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Update section masters in batch
+  updateSectionMastersBatch: async (batchId, data) => {
+    return apiCall(`/section/Masters/Batch/${batchId}`, {
+      method: 'PUT',
       body: JSON.stringify(data),
     });
   },
@@ -75,7 +92,7 @@ export const sectionService = {
   },
 
   updateQuestion: async (questionId, data) => {
-    return apiCall(`/section/questions/${questionId}`, {
+    return apiCall(`/section/question/${questionId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });

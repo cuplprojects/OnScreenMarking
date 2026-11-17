@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using API.Data;
 using API.Models;
 using API.Models.DTOs;
+using API.Services;
 using Microsoft.Extensions.Caching.Distributed;
 using System.Text.Json;
 
@@ -16,11 +17,13 @@ namespace API.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly IDistributedCache _cache;
+        private readonly IScriptSecurityService _scriptSecurityService;
 
-        public MarkingController(ApplicationDbContext context, IDistributedCache cache)
+        public MarkingController(ApplicationDbContext context, IDistributedCache cache, IScriptSecurityService scriptSecurityService)
         {
             _context = context;
             _cache = cache;
+            _scriptSecurityService = scriptSecurityService;
         }
 
         [HttpPost]
@@ -29,6 +32,12 @@ namespace API.Controllers
         {
             try
             {
+                var (userId, userType) = _scriptSecurityService.GetUserInfo(User);
+                if (!userId.HasValue || userId.Value != request.ExaminerId)
+                {
+                    return StatusCode(403, new { success = false, message = "Access denied. You can only create marking sessions for your own examiner account." });
+                }
+
                 // Verify allocation exists
                 var allocation = await _context.Allocations
                     .Include(a => a.Script)
@@ -38,8 +47,8 @@ namespace API.Controllers
                 if (allocation == null)
                     return BadRequest(new { success = false, message = "Allocation not found" });
 
-                if (allocation.ExaminerId != request.ExaminerId)
-                    return BadRequest(new { success = false, message = "Allocation not assigned to this examiner" });
+                if (allocation.ExaminerId != userId.Value || !allocation.AssignmentStatus)
+                    return StatusCode(403, new { success = false, message = "Access denied. This allocation is not actively assigned to your examiner account." });
 
                 var timePerCopy = await GetTimePerCopyMinutesForScriptAsync(allocation.ScriptId);
 
@@ -159,6 +168,12 @@ namespace API.Controllers
         {
             try
             {
+                var (allowed, reason, statusCode) = await _scriptSecurityService.CanViewMarkingAsync(User, id);
+                if (!allowed)
+                {
+                    return StatusCode(statusCode, new { success = false, message = reason });
+                }
+
                 var marking = await _context.Markings
                     .Include(m => m.Script)
                     .Include(m => m.Examiner)
@@ -167,17 +182,6 @@ namespace API.Controllers
 
                 if (marking == null)
                     return NotFound(new { success = false, message = "Marking not found" });
-
-                var loggedInUserType = User.FindFirst("userType")?.Value;
-                var loggedInUserIdStr = User.FindFirst("id")?.Value;
-
-                if (loggedInUserType == "examiner")
-                {
-                    if (string.IsNullOrEmpty(loggedInUserIdStr) || marking.ExaminerId != int.Parse(loggedInUserIdStr))
-                    {
-                        return StatusCode(403, new { success = false, message = "You do not have permission to view this marking." });
-                    }
-                }
 
                 var timePerCopy = await GetTimePerCopyMinutesForScriptAsync(marking.ScriptId);
 
@@ -210,6 +214,12 @@ namespace API.Controllers
         {
             try
             {
+                var (allowed, reason, statusCode) = await _scriptSecurityService.CanUpdateMarkingAsync(User, id);
+                if (!allowed)
+                {
+                    return StatusCode(statusCode, new { success = false, message = reason });
+                }
+
                 var existingMarking = await _context.Markings
                     .Include(m => m.Script)
                         .ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
@@ -217,12 +227,6 @@ namespace API.Controllers
 
                 if (existingMarking == null)
                     return NotFound(new { success = false, message = "Marking not found" });
-
-                var loggedInUserIdStr = User.FindFirst("id")?.Value;
-                if (!string.IsNullOrEmpty(loggedInUserIdStr) && existingMarking.ExaminerId != int.Parse(loggedInUserIdStr))
-                {
-                    return StatusCode(403, new { success = false, message = "You do not have permission to modify this marking." });
-                }
 
                 decimal maxMarks = existingMarking.Script?.ProjectPaper?.Paper?.MaxMarks ?? 100;
                 if (maxMarks <= 0) maxMarks = 100;
@@ -259,6 +263,18 @@ namespace API.Controllers
         {
             try
             {
+                var (allowed, reason, statusCode) = await _scriptSecurityService.CanUpdateScriptAsync(User, scriptId);
+                if (!allowed)
+                {
+                    return StatusCode(statusCode, new { success = false, message = reason });
+                }
+
+                var (userId, _) = _scriptSecurityService.GetUserInfo(User);
+                if (!userId.HasValue || userId.Value != request.ExaminerId)
+                {
+                    return StatusCode(403, new { success = false, message = "Access denied. Cannot save draft for another examiner." });
+                }
+
                 // 1. Save to Redis Cache (for fast in-memory access)
                 try
                 {
@@ -416,11 +432,22 @@ namespace API.Controllers
         }
 
         [HttpGet("{scriptId}/draft/{examinerId}")]
-        [Authorize(Roles = "examiner")]
         public async Task<IActionResult> GetDraftMarks(int scriptId, int examinerId)
         {
             try
             {
+                var (allowed, reason, statusCode) = await _scriptSecurityService.CanViewScriptAsync(User, scriptId);
+                if (!allowed)
+                {
+                    return StatusCode(statusCode, new { success = false, message = reason });
+                }
+
+                var (userId, userType) = _scriptSecurityService.GetUserInfo(User);
+                if (userType == "examiner" && examinerId != userId.Value)
+                {
+                    return StatusCode(403, new { success = false, message = "Access denied. You can only view your own draft marks." });
+                }
+
                 // 1. Try Redis cache first
                 var cacheKey = $"draft_marks_{scriptId}_{examinerId}";
                 string draftDataStr = null;
@@ -483,6 +510,12 @@ namespace API.Controllers
         {
             try
             {
+                var (allowed, reason, statusCode) = await _scriptSecurityService.CanUpdateMarkingAsync(User, id);
+                if (!allowed)
+                {
+                    return StatusCode(statusCode, new { success = false, message = reason });
+                }
+
                 var marking = await _context.Markings
                     .Include(m => m.Script)
                         .ThenInclude(s => s.ProjectPaper)
@@ -569,15 +602,10 @@ namespace API.Controllers
         {
             try
             {
-                var loggedInUserType = User.FindFirst("userType")?.Value;
-                var loggedInUserIdStr = User.FindFirst("id")?.Value;
-
-                if (loggedInUserType == "examiner")
+                var (allowed, reason, statusCode) = await _scriptSecurityService.CanViewExaminerScriptsAsync(User, examinerId);
+                if (!allowed)
                 {
-                    if (string.IsNullOrEmpty(loggedInUserIdStr) || examinerId != int.Parse(loggedInUserIdStr))
-                    {
-                        return StatusCode(403, new { success = false, message = "You can only view your own markings." });
-                    }
+                    return StatusCode(statusCode, new { success = false, message = reason });
                 }
 
                 var query = _context.Markings
@@ -626,6 +654,12 @@ namespace API.Controllers
         {
             try
             {
+                var (allowed, reason, statusCode) = await _scriptSecurityService.CanViewScriptAsync(User, scriptId);
+                if (!allowed)
+                {
+                    return StatusCode(statusCode, new { success = false, message = reason });
+                }
+
                 var loggedInUserType = User.FindFirst("userType")?.Value;
                 var loggedInUserIdStr = User.FindFirst("id")?.Value;
 
@@ -681,6 +715,12 @@ namespace API.Controllers
         {
             try
             {
+                var (allowed, reason, statusCode) = await _scriptSecurityService.CanViewMarkingAsync(User, markingId);
+                if (!allowed)
+                {
+                    return StatusCode(statusCode, new { success = false, message = reason });
+                }
+
                 var marking = await _context.Markings
                     .Include(m => m.Script)
                         .ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
@@ -691,17 +731,6 @@ namespace API.Controllers
 
                 if (marking == null)
                     return NotFound(new { success = false, message = "Marking not found" });
-
-                var loggedInUserType = User.FindFirst("userType")?.Value;
-                var loggedInUserIdStr = User.FindFirst("id")?.Value;
-
-                if (loggedInUserType == "examiner")
-                {
-                    if (string.IsNullOrEmpty(loggedInUserIdStr) || marking.ExaminerId != int.Parse(loggedInUserIdStr))
-                    {
-                        return StatusCode(403, new { success = false, message = "You do not have permission to view this marking." });
-                    }
-                }
 
                 int secBatchId = marking.Script?.BatchId ?? marking.Script?.ProjectPaper?.BatchId ?? 0;
                 if (secBatchId <= 0 && marking.Script?.ProjectPaper?.PaperId != null)
@@ -842,6 +871,12 @@ namespace API.Controllers
         {
             try
             {
+                var (allowed, reason, statusCode) = await _scriptSecurityService.CanUpdateMarkingAsync(User, markingId);
+                if (!allowed)
+                {
+                    return StatusCode(statusCode, new { success = false, message = reason });
+                }
+
                 var marking = await _context.Markings
                     .Include(m => m.Script)
                         .ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
@@ -849,12 +884,6 @@ namespace API.Controllers
 
                 if (marking == null)
                     return NotFound(new { success = false, message = "Marking not found" });
-
-                var loggedInUserIdStr = User.FindFirst("id")?.Value;
-                if (string.IsNullOrEmpty(loggedInUserIdStr) || marking.ExaminerId != int.Parse(loggedInUserIdStr))
-                {
-                    return StatusCode(403, new { success = false, message = "You do not have permission to modify this marking." });
-                }
 
                 // If previously submitted, allow re-evaluation — reset status so marks can be updated
                 if (marking.Status == MarkingStatus.submitted)
@@ -1051,20 +1080,15 @@ namespace API.Controllers
         {
             try
             {
+                var (allowed, reason, statusCode) = await _scriptSecurityService.CanViewMarkingAsync(User, markingId);
+                if (!allowed)
+                {
+                    return StatusCode(statusCode, new { success = false, message = reason });
+                }
+
                 var marking = await _context.Markings.FindAsync(markingId);
                 if (marking == null)
                     return NotFound(new { success = false, message = "Marking not found" });
-
-                var loggedInUserType = User.FindFirst("userType")?.Value;
-                var loggedInUserIdStr = User.FindFirst("id")?.Value;
-
-                if (loggedInUserType == "examiner")
-                {
-                    if (string.IsNullOrEmpty(loggedInUserIdStr) || marking.ExaminerId != int.Parse(loggedInUserIdStr))
-                    {
-                        return StatusCode(403, new { success = false, message = "You do not have permission to view this marking's question marks." });
-                    }
-                }
 
                 var questionMarks = await _context.QuestionMarks
                     .Where(qm => qm.MarkingId == markingId || (marking.ScriptId > 0 && qm.ScriptId == marking.ScriptId))

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { 
   FileText, Plus, Edit2, UserPlus, X, Search, CheckCircle2, Trash2, 
-  ChevronRight, ChevronDown, Filter, Users, BookOpen, Layers, Folder, AlertCircle, Copy, Upload, Info, Settings, Loader, FileCheck, Eye, UserCheck, Check, Download, AlertTriangle, Flag, SlidersHorizontal
+  ChevronRight, ChevronDown, Filter, Users, BookOpen, Layers, Folder, AlertCircle, Copy, Upload, Info, Settings, Loader, FileCheck, Eye, UserCheck, Check, Download, AlertTriangle, Flag, SlidersHorizontal, Hash
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { useAuth } from "../context/AuthContext";
@@ -489,8 +489,22 @@ export default function PapersManagement({ isTab = false }) {
         });
         message.success("Sections imported successfully");
       }
+      
       setShowImportSectionsModal(false);
       setSelectedPaperIds([]);
+      
+      // Navigate to SectionConfig for the first selected paper with add section modal open
+      if (selectedPaperIds.length > 0) {
+        const firstPaperId = selectedPaperIds[0];
+        const encryptedPaperId = encryptId(String(firstPaperId));
+        const encryptedProjectId = projectId ? encryptId(String(projectId)) : null;
+        
+        navigate(
+          `/section-config?paperId=${encryptedPaperId}${encryptedProjectId ? `&projectId=${encryptedProjectId}` : ''}&addSection=true`,
+          { replace: false }
+        );
+      }
+      
       refreshTable();
     } catch (err) {
       message.error("Failed to import sections: " + (err.response?.data?.message || err.message));
@@ -2108,6 +2122,7 @@ export default function PapersManagement({ isTab = false }) {
                     <SortHeader label="Catch No" field="catchNo" hasFilter={true} isCenter={true} />
                     <SortHeader label="Paper No" field="paperNumber" isCenter={true} />
                     <SortHeader label="Subject" field="subjectName" hasFilter={true} />
+                    <SortHeader label="Batch #" field="batchId" isCenter={true} />
                     <SortHeader label="Total Qs" field="totalQuestions" isCenter={true} />
                     <SortHeader label="Max Marks" field="maxMarks" isCenter={true} />
                     <th className="px-4 py-3.5 text-center border-b border-gray-100">Question Paper</th>
@@ -2130,6 +2145,7 @@ export default function PapersManagement({ isTab = false }) {
                   {papers.map((paper) => {
                     const isSelected = selectedPaperIds.includes(paper.paperId);
                     const isEditing = inlineEditingId === paper.paperId;
+                    const paperBatchId = paper.batchId || (paper.sections && paper.sections.find(s => s.batchId > 0)?.batchId) || null;
 
                     if (isEditing) {
                       return (

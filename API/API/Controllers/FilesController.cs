@@ -1,31 +1,85 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using System.IO;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
+using API.Data;
+using API.Services;
 
 namespace API.Controllers
 {
     [ApiController]
+    [Authorize]
     public class FilesController : ControllerBase
     {
         private readonly IConfiguration _configuration;
+        private readonly ApplicationDbContext _context;
+        private readonly IScriptSecurityService _scriptSecurityService;
 
-        public FilesController(IConfiguration configuration)
+        public FilesController(
+            IConfiguration configuration,
+            ApplicationDbContext context,
+            IScriptSecurityService scriptSecurityService)
         {
             _configuration = configuration;
+            _context = context;
+            _scriptSecurityService = scriptSecurityService;
         }
 
         [HttpGet("/osm/{**filePath}")]
-        public IActionResult GetOsmFile(string filePath)
+        public async Task<IActionResult> GetOsmFile(string filePath)
         {
             if (string.IsNullOrEmpty(filePath))
             {
                 return BadRequest("File path is required.");
             }
 
+            var (userId, userType) = _scriptSecurityService.GetUserInfo(User);
+            if (!userId.HasValue)
+            {
+                return Unauthorized(new { success = false, message = "Authentication required." });
+            }
+
+            var cleanPath = filePath.TrimStart('/', '\\').Replace('\\', '/');
+            var parts = cleanPath.Split('/', System.StringSplitOptions.RemoveEmptyEntries);
+
+            // Path pattern check: osm/{projectId}/{paperId}/...
+            if (parts.Length >= 2 && int.TryParse(parts[0], out int projectId) && int.TryParse(parts[1], out int paperId))
+            {
+                if (userType == "coordinator")
+                {
+                    var coordUniId = await _scriptSecurityService.GetUserUniversityIdAsync(User);
+                    var paperUniId = await _context.Papers
+                        .Where(p => p.PaperId == paperId)
+                        .Select(p => p.UniversityId)
+                        .FirstOrDefaultAsync();
+
+                    if (!coordUniId.HasValue || paperUniId != coordUniId.Value)
+                    {
+                        return StatusCode(403, new { success = false, message = "Access denied. File belongs to another university." });
+                    }
+                }
+                else if (userType == "examiner")
+                {
+                    var hasAccess = await _context.Allocations
+                        .AnyAsync(a => a.ExaminerId == userId.Value && 
+                                       a.AssignmentStatus && 
+                                       a.Script.ProjectPaper.PaperId == paperId);
+
+                    if (!hasAccess)
+                    {
+                        return StatusCode(403, new { success = false, message = "Access denied. You are not allocated to scripts in this paper." });
+                    }
+                }
+            }
+
             var basePath = _configuration["StorageSettings:BasePath"] 
                 ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "storage");
 
-            var requestedUrl = "OSM/" + filePath.TrimStart('/', '\\');
+            var requestedUrl = "OSM/" + cleanPath;
             var fullPath = Path.Combine(basePath, requestedUrl);
 
             if (!System.IO.File.Exists(fullPath))
@@ -34,7 +88,7 @@ namespace API.Controllers
             }
 
             var contentType = GetContentType(fullPath);
-            return PhysicalFile(fullPath, contentType);
+            return PhysicalFile(fullPath, contentType, enableRangeProcessing: true);
         }
 
         private string GetContentType(string path)

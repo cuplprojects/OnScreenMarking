@@ -189,12 +189,25 @@ namespace API.Controllers
                 if (project == null)
                     return NotFound(new { success = false, message = "Project not found" });
 
-                if (!project.IsActive && !projectDto.IsActive)
+                if (!string.IsNullOrWhiteSpace(projectDto.ProjectName))
                 {
-                    return BadRequest(new { success = false, message = "This project is inactive and cannot be modified. Activate it first to make changes." });
+                    project.ProjectName = projectDto.ProjectName.Trim();
                 }
 
-                project.ProjectName = projectDto.ProjectName;
+                if (projectDto.SessionId > 0)
+                {
+                    var sessionExists = await _context.Sessions.AnyAsync(s => s.SessionId == projectDto.SessionId);
+                    if (sessionExists)
+                    {
+                        project.SessionId = projectDto.SessionId;
+                    }
+                }
+
+                if (projectDto.UniversityId > 0)
+                {
+                    project.UniversityId = projectDto.UniversityId;
+                }
+
                 project.IsActive = projectDto.IsActive;
 
                 _context.Projects.Update(project);
