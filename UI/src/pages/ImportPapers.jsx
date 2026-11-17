@@ -144,10 +144,19 @@ export default function ImportPapers() {
       setError(null);
       let papersData = [];
       if (projId === 'master') {
-        const res = await paperService.getPapers({ universityId: activeUniversityId, isMaster: true, pageSize: 0 });
+        const res = await paperService.getPapers({ 
+          universityId: activeUniversityId, 
+          isMaster: true, 
+          pageSize: 0,
+          excludeProjectId: selectedTargetProjectId || undefined
+        });
         papersData = res.items || res;
       } else {
-        const res = await paperService.getPapers({ projectId: projId, pageSize: 0 });
+        const res = await paperService.getPapers({ 
+          projectId: projId, 
+          pageSize: 0,
+          excludeProjectId: selectedTargetProjectId || undefined
+        });
         papersData = res.items || res;
       }
       setAllProjectPapers(papersData || []);
@@ -167,7 +176,7 @@ export default function ImportPapers() {
       setAllProjectPapers([]);
       setSelectedPaperIds([]);
     }
-  }, [selectedSourceProject]);
+  }, [selectedSourceProject, selectedTargetProjectId]);
 
   const fetchFn = useCallback(async (params) => {
     if (!selectedSourceProject || allProjectPapers.length === 0) {
