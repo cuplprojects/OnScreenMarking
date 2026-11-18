@@ -12,6 +12,7 @@ const paperService = {
     const query = new URLSearchParams();
     if (params.universityId) query.append('universityId', params.universityId);
     if (params.projectId) query.append('projectId', params.projectId);
+    if (params.excludeProjectId) query.append('excludeProjectId', params.excludeProjectId);
     if (params.subjectId) query.append('subjectId', params.subjectId);
     if (params.isMaster) query.append('isMaster', params.isMaster);
     if (params.page) query.append('page', params.page);

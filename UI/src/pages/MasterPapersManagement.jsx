@@ -934,8 +934,9 @@ export default function MasterPapersManagement() {
               </div>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
                     <th
@@ -1029,6 +1030,9 @@ export default function MasterPapersManagement() {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            <div className="sticky bottom-0 z-10 bg-gray-50 rounded-b-2xl border-t border-gray-100 shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
               <TablePagination
                 page={page}
                 totalPages={totalPages}
@@ -1038,7 +1042,8 @@ export default function MasterPapersManagement() {
                 setPageSize={setPageSize}
               />
             </div>
-          )}
+          </>
+        )}
           </div>
         </div>
 

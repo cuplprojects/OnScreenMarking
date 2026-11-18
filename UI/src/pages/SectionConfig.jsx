@@ -343,12 +343,23 @@ export default function SectionConfig() {
   };
 
   const handleQuestionChange = (index, field, value) => {
-    const updatedQuestions = [...questions];
-    updatedQuestions[index] = {
-      ...updatedQuestions[index],
-      [field]: field === 'marks' ? parseFloat(value) || 0 : value
-    };
-    setQuestions(updatedQuestions);
+    setQuestions(prev => {
+      const updated = [...prev];
+      if (!updated[index]) return prev;
+
+      if (typeof field === 'object' && field !== null) {
+        updated[index] = {
+          ...updated[index],
+          ...field
+        };
+      } else {
+        updated[index] = {
+          ...updated[index],
+          [field]: field === 'marks' ? (value === '' ? '' : (parseFloat(value) || 0)) : value
+        };
+      }
+      return updated;
+    });
   };
 
   const handleImportBatch = async (bId, bSections) => {
@@ -986,21 +997,30 @@ export default function SectionConfig() {
                       <select
                         value={
                           questions.length > 0 && questions.every(q => {
-                            const firstId = questions[0].questionTypeId || questions[0].typeId;
-                            const curId = q.questionTypeId || q.typeId;
-                            return curId && curId === firstId;
+                            const firstId = questions[0].questionTypeId || questions[0].typeId || (
+                              questionTypesList.find(qt => qt.questionTypeName?.toLowerCase() === questions[0].type?.toLowerCase())?.questionTypeId
+                            );
+                            const curId = q.questionTypeId || q.typeId || (
+                              questionTypesList.find(qt => qt.questionTypeName?.toLowerCase() === q.type?.toLowerCase())?.questionTypeId
+                            );
+                            return curId && String(curId) === String(firstId);
                           })
-                            ? (questions[0].questionTypeId || questions[0].typeId || "")
+                            ? (
+                              questions[0].questionTypeId || questions[0].typeId || (
+                                questionTypesList.find(qt => qt.questionTypeName?.toLowerCase() === questions[0].type?.toLowerCase())?.questionTypeId
+                              ) || ""
+                            )
                             : ""
                         }
                         onChange={(e) => {
                           const val = e.target.value;
-                          const matched = questionTypesList.find(qt => String(qt.questionTypeId) === String(val));
+                          const matched = questionTypesList.find(qt => String(qt.questionTypeId || qt.id) === String(val));
                           if (matched) {
+                            const qTypeId = matched.questionTypeId || matched.id;
                             setQuestions(prev => prev.map(q => ({ 
                               ...q, 
-                              typeId: matched.questionTypeId, 
-                              questionTypeId: matched.questionTypeId, 
+                              typeId: qTypeId, 
+                              questionTypeId: qTypeId, 
                               type: matched.questionTypeName 
                             })));
                           }
@@ -1009,7 +1029,7 @@ export default function SectionConfig() {
                       >
                         <option value="">Choose Type...</option>
                         {questionTypesList.map(qt => (
-                          <option key={qt.questionTypeId} value={qt.questionTypeId}>
+                          <option key={qt.questionTypeId || qt.id} value={qt.questionTypeId || qt.id}>
                             {qt.questionTypeName}
                           </option>
                         ))}
@@ -1131,18 +1151,27 @@ export default function SectionConfig() {
                               <td className="px-4 py-2">
                                 <select
                                   id={`question-type-select-${idx}`}
-                                  value={q.questionTypeId || q.typeId || ""}
+                                  value={
+                                    q.questionTypeId || q.typeId || (
+                                      questionTypesList.find(qt => qt.questionTypeName?.toLowerCase() === q.type?.toLowerCase())?.questionTypeId
+                                    ) || ""
+                                  }
                                   onChange={(e) => {
                                     const val = e.target.value;
-                                    const matched = questionTypesList.find(qt => String(qt.questionTypeId) === String(val));
+                                    const matched = questionTypesList.find(qt => String(qt.questionTypeId || qt.id) === String(val));
                                     if (matched) {
-                                      handleQuestionChange(idx, 'typeId', matched.questionTypeId);
-                                      handleQuestionChange(idx, 'questionTypeId', matched.questionTypeId);
-                                      handleQuestionChange(idx, 'type', matched.questionTypeName);
+                                      const qTypeId = matched.questionTypeId || matched.id;
+                                      handleQuestionChange(idx, {
+                                        typeId: qTypeId,
+                                        questionTypeId: qTypeId,
+                                        type: matched.questionTypeName
+                                      });
                                     } else {
-                                      handleQuestionChange(idx, 'typeId', null);
-                                      handleQuestionChange(idx, 'questionTypeId', null);
-                                      handleQuestionChange(idx, 'type', '');
+                                      handleQuestionChange(idx, {
+                                        typeId: null,
+                                        questionTypeId: null,
+                                        type: ''
+                                      });
                                     }
                                   }}
                                   className={`w-full bg-gray-50 px-2 py-1 rounded-md border text-xs font-semibold outline-none ${
@@ -1151,7 +1180,7 @@ export default function SectionConfig() {
                                 >
                                   <option value="">Choose Type</option>
                                   {questionTypesList.map(qt => (
-                                    <option key={qt.questionTypeId} value={qt.questionTypeId}>
+                                    <option key={qt.questionTypeId || qt.id} value={qt.questionTypeId || qt.id}>
                                       {qt.questionTypeName}
                                     </option>
                                   ))}
@@ -1389,24 +1418,33 @@ export default function SectionConfig() {
             if (!batchMap[bId]) batchMap[bId] = [];
             batchMap[bId].push(sec);
           });
-          const availableBatches = Object.keys(batchMap).map(Number).sort((a, b) => a - b);
+          const targetTotalQ = parseInt(selectedPaper?.totalQuestions, 10) || 0;
+          const availableBatches = Object.keys(batchMap)
+            .map(Number)
+            .filter(bId => {
+              if (targetTotalQ <= 0) return true;
+              const bSections = batchMap[bId] || [];
+              const bTotalQ = bSections.reduce((sum, s) => sum + (parseInt(s.totalQuestions, 10) || 0), 0);
+              return bTotalQ === targetTotalQ;
+            })
+            .sort((a, b) => a - b);
           const currentPaperBatchId = sections.length > 0 ? (sections[0]?.batchId || null) : null;
 
           return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
               <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden border border-gray-100 flex flex-col max-h-[90vh]">
                 {/* Modal Header */}
-                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-teal-50/30 shrink-0">
+                <div className="px-5 py-3.5 sm:px-6 sm:py-4 border-b border-gray-100 flex items-center justify-between bg-teal-50/40 shrink-0">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-teal-700 text-white flex items-center justify-center font-bold shadow-xs">
                       <Sparkles size={18} />
                     </div>
                     <div>
-                      <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">
+                      <h3 className="text-sm sm:text-base font-black text-gray-900 uppercase tracking-wide">
                         Import Sections by Batch ID
                       </h3>
-                      <p className="text-[11px] text-gray-500 font-medium mt-0.5">
-                        For <span className="font-bold text-teal-800">{selectedPaper?.paperCode}: {selectedPaper?.paperName}</span>
+                      <p className="text-xs text-gray-600 font-medium mt-0.5">
+                        For <span className="font-extrabold text-teal-800">{selectedPaper?.paperCode}: {selectedPaper?.paperName}</span>
                         {selectedPaper?.totalQuestions ? ` • Target: ${selectedPaper.totalQuestions} Questions • ${selectedPaper.maxMarks || 0} Marks` : ''}
                       </p>
                     </div>
@@ -1416,215 +1454,316 @@ export default function SectionConfig() {
                       setShowImportMasterModal(false);
                       setPreviewModalBatchId(null);
                     }} 
-                    className="p-1.5 hover:bg-gray-200 rounded-lg text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                    className="p-1.5 hover:bg-gray-200 rounded-xl text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
                   >
                     <X size={18} />
                   </button>
                 </div>
 
                 {/* Modal Body */}
-                <div className="p-6 overflow-y-auto space-y-4 custom-scrollbar flex-1">
-                  <div>
-                    <span className="text-xs font-black uppercase text-teal-950 tracking-wider flex items-center gap-1.5">
-                      <Layers size={14} className="text-teal-700" />
-                      Select a Batch Template to Import
-                    </span>
-                  </div>
+                <div className="p-4 sm:p-5 overflow-y-auto space-y-3.5 custom-scrollbar flex-1">
+                  {previewModalBatchId ? (() => {
+                    const pSections = batchMap[previewModalBatchId] || [];
+                    const pTotalQ = pSections.reduce((sum, s) => sum + (parseInt(s.totalQuestions, 10) || 0), 0);
+                    const pTotalM = pSections.reduce((sum, s) => sum + (parseFloat(s.totalMarks) || 0), 0);
+                    const isCurrentBatch = currentPaperBatchId === previewModalBatchId;
 
-                  {availableBatches.length === 0 ? (
-                    <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                      <Layers className="mx-auto text-gray-300 mb-2" size={32} />
-                      <p className="text-xs font-bold text-gray-600">No Section Master Batches Found</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {availableBatches.map(bId => {
-                        const bSections = batchMap[bId] || [];
-                        const bTotalQ = bSections.reduce((sum, s) => sum + (parseInt(s.totalQuestions, 10) || 0), 0);
-                        const bTotalM = bSections.reduce((sum, s) => sum + (parseFloat(s.totalMarks) || 0), 0);
-                        const isCurrentBatch = currentPaperBatchId === bId;
-                        const isPreviewOpen = previewModalBatchId === bId;
-                        const isQuestionMismatch = selectedPaper?.totalQuestions && bTotalQ !== selectedPaper.totalQuestions;
+                    return (
+                      <div className="space-y-3.5 animate-in fade-in duration-150">
+                        {/* Top Navigation & Actions Bar */}
+                        <div className="flex items-center justify-between gap-2.5 p-3 bg-teal-50/80 border border-teal-200/90 rounded-xl flex-wrap">
+                          <div className="flex items-center gap-2.5">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewModalBatchId(null)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-gray-700 bg-white hover:bg-teal-50 hover:text-teal-900 border border-gray-200 transition-all cursor-pointer shadow-2xs"
+                              title="Back to batch options"
+                            >
+                              <ArrowLeft size={14} />
+                              <span>Back to Batches</span>
+                            </button>
+                            <div className="flex items-center gap-2">
+                              <span className="font-black text-xs px-2.5 py-1 rounded-md bg-teal-700 text-white shadow-xs">
+                                Batch #{previewModalBatchId}
+                              </span>
+                              <span className="text-xs sm:text-sm font-bold text-gray-900">
+                                Template Preview
+                              </span>
+                            </div>
+                          </div>
 
-                        return (
-                          <div
-                            key={bId}
-                            className={`rounded-xl border transition-all ${
+                          <button
+                            type="button"
+                            disabled={importingMasters}
+                            onClick={() => handleImportBatch(previewModalBatchId, pSections)}
+                            className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-2xs ${
                               isCurrentBatch
-                                ? "bg-teal-50/80 border-teal-400 shadow-xs ring-1 ring-teal-400"
-                                : "bg-white border-gray-200 hover:border-teal-200"
+                                ? "bg-teal-800 text-white"
+                                : "bg-teal-700 hover:bg-teal-800 text-white"
                             }`}
                           >
-                            {/* Batch Summary Row */}
-                            <div className="p-3.5 flex items-center justify-between gap-3 flex-wrap">
-                              <div className="flex items-center gap-3">
-                                <span className="font-extrabold text-xs px-2.5 py-1 rounded-lg bg-teal-700 text-white shadow-2xs">
-                                  Batch #{bId}
-                                </span>
-                                <div>
-                                  <span className="font-bold text-xs text-gray-900 block">
-                                    {bSections.map(s => s.name).join(", ")}
-                                  </span>
-                                  <span className="text-[11px] text-gray-500 font-medium flex items-center gap-1.5 mt-0.5">
-                                    <span>{bSections.length} Sections</span>
-                                    <span>&bull;</span>
-                                    <span className={isQuestionMismatch ? "text-amber-600 font-bold" : ""}>
-                                      {bTotalQ} Questions {isQuestionMismatch && `(Paper: ${selectedPaper.totalQuestions})`}
-                                    </span>
-                                    <span>&bull;</span>
-                                    <span>{bTotalM} Marks</span>
-                                  </span>
-                                </div>
-                              </div>
+                            {isCurrentBatch ? "✓ Current Batch" : (importingMasters ? "Importing..." : "Import This Batch")}
+                          </button>
+                        </div>
 
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setPreviewModalBatchId(prev => prev === bId ? null : bId)}
-                                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-teal-800 bg-teal-100/70 hover:bg-teal-100 transition-colors flex items-center gap-1 cursor-pointer"
-                                  title="Preview section & questions configuration inside this batch"
-                                >
-                                  <Eye size={12} />
-                                  {isPreviewOpen ? "Hide Config" : "Preview Config"}
-                                </button>
-
-                                <button
-                                  type="button"
-                                  disabled={importingMasters}
-                                  onClick={() => handleImportBatch(bId, bSections)}
-                                  className={`px-3.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer disabled:opacity-50 ${
-                                    isCurrentBatch
-                                      ? "bg-teal-700 text-white shadow-xs"
-                                      : "bg-gray-100 text-gray-700 hover:bg-teal-50 hover:text-teal-800 border border-gray-200"
-                                  }`}
-                                >
-                                  {isCurrentBatch ? "✓ Current Batch" : (importingMasters ? "Importing..." : "Import Batch")}
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Preview Section & Questions Config Inside This Batch */}
-                            {isPreviewOpen && (
-                              <div className="border-t border-teal-100 p-3.5 bg-teal-50/40 rounded-b-xl space-y-3 animate-in fade-in duration-150">
-                                <div className="text-[10px] font-extrabold uppercase tracking-wider text-teal-900 flex items-center justify-between">
-                                  <span>Section & Questions Configuration for Batch #{bId}:</span>
-                                  <span className="text-teal-700 normal-case">{bSections.length} Sections • {bTotalQ} Total Questions</span>
-                                </div>
-                                <div className="grid grid-cols-1 gap-2.5">
-                                  {bSections.map(sec => {
-                                    const questionsList = (sec.questions && sec.questions.length > 0)
-                                      ? sec.questions
-                                      : Array.from({ length: sec.totalQuestions || (sec.endQuestion - sec.startQuestion + 1) || 1 }, (_, i) => {
-                                          const qNum = (sec.startQuestion || 1) + i;
-                                          return {
-                                            questionNo: String(qNum),
-                                            type: 'MCQ',
-                                            marks: ((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1),
-                                            isOptional: false,
-                                            optionalGroupCode: null
-                                          };
-                                        });
-
-                                    return (
-                                      <div
-                                        key={sec.id}
-                                        className="p-3 bg-white rounded-xl border border-teal-100 space-y-2.5 shadow-2xs"
-                                      >
-                                        <div className="flex items-center justify-between text-xs flex-wrap gap-2">
-                                          <div>
-                                            <span className="font-extrabold text-gray-900">{sec.name}</span>
-                                            <span className="text-[11px] text-gray-500 ml-2 font-medium">
-                                              Q{sec.startQuestion} - Q{sec.endQuestion}
-                                            </span>
-                                            {sec.description && (
-                                              <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{sec.description}</p>
-                                            )}
-                                          </div>
-                                          <div className="flex items-center gap-1.5 shrink-0">
-                                            <span className="px-2 py-0.5 bg-gray-100 rounded text-gray-700 text-[10px] font-bold">
-                                              {sec.totalQuestions} Questions
-                                            </span>
-                                            <span className="px-2 py-0.5 bg-teal-50 text-teal-800 border border-teal-200/60 rounded text-[10px] font-extrabold">
-                                              {sec.totalMarks} Marks
-                                            </span>
-                                            <span className="text-gray-500 text-[10px] font-semibold">
-                                              Attempt {sec.maxQuestionsToAttempt || sec.totalQuestions}
-                                            </span>
-                                          </div>
-                                        </div>
-
-                                        {/* Questions Details Table */}
-                                        <div className="pt-2 border-t border-gray-100">
-                                          <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1.5 flex items-center justify-between">
-                                            <span>Questions Details ({questionsList.length}):</span>
-                                            <span className="text-teal-700 font-extrabold lowercase">
-                                              ~{((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1)} marks each
-                                            </span>
-                                          </div>
-                                          <div className="overflow-x-auto rounded-lg border border-gray-100 max-h-48 overflow-y-auto custom-scrollbar">
-                                            <table className="w-full text-left border-collapse text-[11px]">
-                                              <thead>
-                                                <tr className="bg-gray-50 text-[10px] font-bold uppercase tracking-wider text-gray-500 border-b border-gray-100 sticky top-0 z-10">
-                                                  <th className="py-1.5 px-2.5">Q#</th>
-                                                  <th className="py-1.5 px-2.5">Type</th>
-                                                  <th className="py-1.5 px-2.5">Marks</th>
-                                                  <th className="py-1.5 px-2.5">Choice / Group</th>
-                                                </tr>
-                                              </thead>
-                                              <tbody className="divide-y divide-gray-100 bg-white">
-                                                {questionsList.map((q, qIdx) => (
-                                                  <tr key={q.id || q.questionId || qIdx} className="hover:bg-teal-50/20">
-                                                    <td className="py-1 px-2.5 font-bold text-gray-900">
-                                                      {q.questionNo ? (String(q.questionNo).startsWith('Q') ? q.questionNo : `Q${q.questionNo}`) : `Q${(sec.startQuestion || 1) + qIdx}`}
-                                                    </td>
-                                                    <td className="py-1 px-2.5">
-                                                      <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-[10px] font-semibold">
-                                                        {q.type || 'MCQ'}
-                                                      </span>
-                                                    </td>
-                                                    <td className="py-1 px-2.5 font-extrabold text-teal-800">
-                                                      {q.marks !== undefined && q.marks !== null ? q.marks : ((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1)}
-                                                    </td>
-                                                    <td className="py-1 px-2.5">
-                                                      {q.isOptional || q.optionalGroupCode ? (
-                                                        <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
-                                                          {q.optionalGroupCode ? `Group: ${q.optionalGroupCode}` : 'Optional'}
-                                                        </span>
-                                                      ) : (
-                                                        <span className="text-gray-400 text-[10px]">Compulsory</span>
-                                                      )}
-                                                    </td>
-                                                  </tr>
-                                                ))}
-                                              </tbody>
-                                            </table>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
+                        {/* Summary Row */}
+                        <div className="p-3 bg-white border border-gray-200 rounded-xl flex items-center justify-between gap-2 flex-wrap">
+                          <div>
+                            <span className="font-bold text-xs sm:text-sm text-gray-900 block">
+                              {pSections.map(s => s.name).join(", ")}
+                            </span>
+                            <span className="text-[11px] text-gray-500 font-medium mt-0.5 block">
+                              {pSections.length} Sections &bull; {pTotalQ} Questions &bull; {pTotalM} Marks
+                            </span>
                           </div>
-                        );
-                      })}
-                    </div>
+                          {selectedPaper?.totalQuestions && pTotalQ === selectedPaper.totalQuestions && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 border border-emerald-300 text-emerald-800">
+                              ✓ Matches Target: {selectedPaper.totalQuestions} Questions
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Sections and Question Breakdown */}
+                        <div className="space-y-3">
+                          {pSections.map(sec => {
+                            const questionsList = (sec.questions && sec.questions.length > 0)
+                              ? sec.questions
+                              : Array.from({ length: sec.totalQuestions || (sec.endQuestion - sec.startQuestion + 1) || 1 }, (_, i) => {
+                                  const qNum = (sec.startQuestion || 1) + i;
+                                  return {
+                                    questionNo: String(qNum),
+                                    type: 'MCQ',
+                                    marks: ((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1),
+                                    isOptional: false,
+                                    optionalGroupCode: null
+                                  };
+                                });
+
+                            return (
+                              <div
+                                key={sec.id}
+                                className="p-3.5 sm:p-4 bg-white rounded-xl border border-gray-200 space-y-3 shadow-2xs"
+                              >
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      {/* Emphasized Section Name */}
+                                      <span className="font-black text-gray-900 text-sm sm:text-base">{sec.name}</span>
+                                      <span className="text-xs font-bold text-gray-500">
+                                        Q{sec.startQuestion} - Q{sec.endQuestion}
+                                      </span>
+                                    </div>
+                                    {sec.description && (
+                                      <p className="text-xs text-gray-500 font-medium mt-0.5">{sec.description}</p>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className="px-2.5 py-1 bg-gray-100 rounded-md text-gray-700 text-xs font-bold">
+                                      {sec.totalQuestions} Questions
+                                    </span>
+                                    <span className="px-2.5 py-1 bg-teal-50 text-teal-800 border border-teal-200/80 rounded-md text-xs font-black">
+                                      {sec.totalMarks} Marks
+                                    </span>
+                                    <span className="text-gray-600 text-xs font-medium">
+                                      Attempt {sec.maxQuestionsToAttempt || sec.totalQuestions}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Questions Details Table */}
+                                <div className="pt-2.5 border-t border-gray-100">
+                                  <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5 flex items-center justify-between">
+                                    <span>Questions Details ({questionsList.length}):</span>
+                                    <span className="text-teal-700 font-bold lowercase text-xs">
+                                      {((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1)} marks each
+                                    </span>
+                                  </div>
+                                  <div className="overflow-x-auto rounded-lg border border-gray-200 max-h-56 overflow-y-auto custom-scrollbar">
+                                    <table className="w-full text-left border-collapse">
+                                      <thead>
+                                        <tr className="bg-gray-50 text-[11px] font-bold uppercase tracking-wider text-gray-600 border-b border-gray-200 sticky top-0 z-10">
+                                          <th className="py-2 px-3">Q#</th>
+                                          <th className="py-2 px-3">Type</th>
+                                          <th className="py-2 px-3">Marks</th>
+                                          <th className="py-2 px-3">Choice / Group</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-gray-100 bg-white">
+                                        {questionsList.map((q, qIdx) => (
+                                          <tr key={q.id || q.questionId || qIdx} className="hover:bg-teal-50/20">
+                                            {/* Emphasized Question Number */}
+                                            <td className="py-2 px-3 font-black text-gray-900 text-sm">
+                                              {q.questionNo ? (String(q.questionNo).startsWith('Q') ? q.questionNo : `Q${q.questionNo}`) : `Q${(sec.startQuestion || 1) + qIdx}`}
+                                            </td>
+                                            <td className="py-2 px-3">
+                                              <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs font-semibold">
+                                                {q.type || 'MCQ'}
+                                              </span>
+                                            </td>
+                                            {/* Emphasized Question Marks */}
+                                            <td className="py-2 px-3 font-black text-teal-800 text-sm">
+                                              {q.marks !== undefined && q.marks !== null ? q.marks : ((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1)}
+                                            </td>
+                                            <td className="py-2 px-3">
+                                              {q.isOptional || q.optionalGroupCode ? (
+                                                <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold">
+                                                  {q.optionalGroupCode ? `Group: ${q.optionalGroupCode}` : 'Optional'}
+                                                </span>
+                                              ) : (
+                                                <span className="text-gray-400 text-xs font-medium">Compulsory</span>
+                                              )}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })() : (
+                    <>
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                          <span className="text-xs sm:text-sm font-bold uppercase text-teal-950 tracking-wider flex items-center gap-1.5">
+                            <Layers size={15} className="text-teal-700" />
+                            Select a Batch Template to Import
+                          </span>
+                          <p className="text-xs text-gray-500 font-medium mt-0.5">
+                            Importing a batch links its predefined sections and questions to this paper. Editing imported sections later will automatically branch into your paper's dedicated batch.
+                          </p>
+                        </div>
+                        {targetTotalQ > 0 && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-teal-50 border border-teal-200 text-teal-800">
+                            Matching {targetTotalQ} Questions
+                          </span>
+                        )}
+                      </div>
+
+                      {availableBatches.length === 0 ? (
+                        <div className="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                          <Layers className="mx-auto text-gray-300 mb-2" size={32} />
+                          <p className="text-xs font-bold text-gray-800">No Matching Batch Templates Found</p>
+                          {targetTotalQ > 0 ? (
+                            <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
+                              No batch templates have exactly <span className="font-bold text-gray-800">{targetTotalQ} questions</span> matching this paper's question count.
+                            </p>
+                          ) : (
+                            <p className="text-xs text-gray-500 mt-1">
+                              No predefined batches are available in Section Masters.
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {availableBatches.map(bId => {
+                            const bSections = batchMap[bId] || [];
+                            const bTotalQ = bSections.reduce((sum, s) => sum + (parseInt(s.totalQuestions, 10) || 0), 0);
+                            const bTotalM = bSections.reduce((sum, s) => sum + (parseFloat(s.totalMarks) || 0), 0);
+                            const isCurrentBatch = currentPaperBatchId === bId;
+
+                            return (
+                              <div
+                                key={bId}
+                                className={`rounded-xl border transition-all ${
+                                  isCurrentBatch
+                                    ? "bg-teal-50/80 border-teal-400 shadow-xs ring-1 ring-teal-400"
+                                    : "bg-white border-gray-200 hover:border-teal-300 shadow-2xs"
+                                }`}
+                              >
+                                {/* Batch Summary Row */}
+                                <div className="p-3.5 flex items-center justify-between gap-3 flex-wrap">
+                                  <div className="flex items-center gap-3">
+                                    <span className="font-bold text-xs px-2.5 py-1 rounded-lg bg-teal-700 text-white shadow-xs">
+                                      Batch #{bId}
+                                    </span>
+                                    <div>
+                                      <span className="font-bold text-xs sm:text-sm text-gray-900 block">
+                                        {bSections.map(s => s.name).join(", ")}
+                                      </span>
+                                      <span className="text-[11px] text-gray-500 font-medium flex items-center gap-1.5 mt-0.5">
+                                        <span>{bSections.length} Sections</span>
+                                        <span>&bull;</span>
+                                        <span>{bTotalQ} Questions</span>
+                                        <span>&bull;</span>
+                                        <span>{bTotalM} Marks</span>
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewModalBatchId(bId)}
+                                      className="px-3 py-1.5 rounded-lg text-xs font-bold text-teal-800 bg-teal-100/70 hover:bg-teal-100 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                      title="Preview section & questions configuration inside this batch"
+                                    >
+                                      <Eye size={13} />
+                                      <span>Preview Config</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      disabled={importingMasters}
+                                      onClick={() => handleImportBatch(bId, bSections)}
+                                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer disabled:opacity-50 shadow-2xs ${
+                                        isCurrentBatch
+                                          ? "bg-teal-700 text-white shadow-xs"
+                                          : "bg-gray-100 text-gray-800 hover:bg-teal-50 hover:text-teal-900 border border-gray-200"
+                                      }`}
+                                    >
+                                      {isCurrentBatch ? "✓ Current Batch" : (importingMasters ? "Importing..." : "Import Batch")}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 
                 {/* Modal Footer */}
-                <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/80 flex items-center justify-end shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowImportMasterModal(false);
-                      setPreviewModalBatchId(null);
-                    }}
-                    className="px-4 py-2 text-xs font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl transition-all cursor-pointer"
-                  >
-                    Close
-                  </button>
+                <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/80 flex items-center justify-between shrink-0">
+                  {previewModalBatchId ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewModalBatchId(null)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-100 rounded-lg transition-all cursor-pointer shadow-2xs"
+                      >
+                        <ArrowLeft size={14} />
+                        <span>Back to Batches</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={importingMasters}
+                        onClick={() => handleImportBatch(previewModalBatchId, batchMap[previewModalBatchId] || [])}
+                        className="px-4 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-black transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                      >
+                        {importingMasters ? "Importing..." : `Import Batch #${previewModalBatchId}`}
+                      </button>
+                    </>
+                  ) : (
+                    <div className="w-full flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowImportMasterModal(false);
+                          setPreviewModalBatchId(null);
+                        }}
+                        className="px-4 py-1.5 text-xs font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-100 rounded-lg transition-all cursor-pointer shadow-2xs"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

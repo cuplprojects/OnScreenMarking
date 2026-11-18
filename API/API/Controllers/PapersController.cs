@@ -230,6 +230,11 @@ namespace API.Controllers
                         case "papername":
                             query = isDesc ? query.OrderByDescending(p => p.PaperName) : query.OrderBy(p => p.PaperName);
                             break;
+                        case "batchid":
+                            query = isDesc 
+                                ? query.OrderByDescending(p => p.BatchId ?? p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.BatchId).FirstOrDefault()) 
+                                : query.OrderBy(p => p.BatchId ?? p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.BatchId).FirstOrDefault());
+                            break;
                         case "catchno":
                             query = isDesc ? query.OrderByDescending(p => p.ProjectPapers.Select(pp => pp.CatchNo).FirstOrDefault()) : query.OrderBy(p => p.ProjectPapers.Select(pp => pp.CatchNo).FirstOrDefault());
                             break;
@@ -463,6 +468,7 @@ namespace API.Controllers
             [FromQuery] int? subjectId = null, 
             [FromQuery] int? projectId = null, 
             [FromQuery] int? universityId = null,
+            [FromQuery] int? excludeProjectId = null,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 10,
             [FromQuery] string sortField = "",
@@ -495,6 +501,9 @@ namespace API.Controllers
                 
                 if (projectId.HasValue)
                     query = query.Where(p => p.ProjectPapers.Any(pp => pp.ProjectId == projectId.Value));
+
+                if (excludeProjectId.HasValue && excludeProjectId.Value > 0)
+                    query = query.Where(p => !p.ProjectPapers.Any(pp => pp.ProjectId == excludeProjectId.Value));
 
                 // Filter by isMaster status vs university/project papers
                 if (isMaster)
@@ -532,6 +541,11 @@ namespace API.Controllers
                             break;
                         case "papername":
                             query = isDesc ? query.OrderByDescending(p => p.PaperName) : query.OrderBy(p => p.PaperName);
+                            break;
+                        case "batchid":
+                            query = isDesc 
+                                ? query.OrderByDescending(p => p.BatchId ?? p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.BatchId).FirstOrDefault()) 
+                                : query.OrderBy(p => p.BatchId ?? p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.BatchId).FirstOrDefault());
                             break;
                         default:
                             query = isDesc ? query.OrderByDescending(p => p.PaperNumber) : query.OrderBy(p => p.PaperNumber);
