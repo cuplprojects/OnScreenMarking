@@ -1165,15 +1165,25 @@ namespace API.Controllers
                 }
 
                 // Retrieve all matching examiners first, then calculate allocations/workload
-                var examinersList = await examinersQuery.ToListAsync();
+                var examinersList = await examinersQuery.AsNoTracking().ToListAsync();
                 var examinerIds = examinersList.Select(e => e.Id).ToList();
 
-                // Get all allocations for these examiners
-                var allAllocations = await _context.Allocations
-                    .Include(a => a.Script)
-                        .ThenInclude(s => s.ProjectPaper)
+                // Aggregate allocation counts directly in SQL (avoiding full-table memory load)
+                var totalAllocCounts = await _context.Allocations
+                    .AsNoTracking()
                     .Where(a => examinerIds.Contains(a.ExaminerId) && a.AssignmentStatus)
-                    .ToListAsync();
+                    .GroupBy(a => a.ExaminerId)
+                    .Select(g => new { ExaminerId = g.Key, Count = g.Count() })
+                    .ToDictionaryAsync(g => g.ExaminerId, g => g.Count);
+
+                var projAllocCounts = await _context.Allocations
+                    .AsNoTracking()
+                    .Where(a => examinerIds.Contains(a.ExaminerId) && a.AssignmentStatus &&
+                                a.Script != null && a.Script.ProjectPaper != null &&
+                                projectPaperIds.Contains(a.Script.ProjectPaper.PaperId))
+                    .GroupBy(a => a.ExaminerId)
+                    .Select(g => new { ExaminerId = g.Key, Count = g.Count() })
+                    .ToDictionaryAsync(g => g.ExaminerId, g => g.Count);
 
                 // Resolve subject names for examiners using SubjectId1, SubjectId2, SubjectId3
                 var allSubjectIds = examinersList
@@ -1192,9 +1202,8 @@ namespace API.Controllers
 
                 foreach (var ex in examinersList)
                 {
-                    var examinerAllocations = allAllocations.Where(a => a.ExaminerId == ex.Id).ToList();
-                    var projAllocationsCount = examinerAllocations.Count(a => a.Script != null && projectPaperIds.Contains(a.Script.ProjectPaper.PaperId));
-                    var totalAllocatedCount = examinerAllocations.Count;
+                    var totalAllocatedCount = totalAllocCounts.GetValueOrDefault(ex.Id, 0);
+                    var projAllocationsCount = projAllocCounts.GetValueOrDefault(ex.Id, 0);
 
                     string workload = "Free";
                     if (totalAllocatedCount > 20) workload = "Fully Allocated";
@@ -1236,6 +1245,9 @@ namespace API.Controllers
                         processedExaminers = processedExaminers.Where(e => e.Workload != "Free").ToList();
                     }
                 }
+
+                page = Math.Max(1, page);
+                pageSize = Math.Clamp(pageSize <= 0 ? 10 : pageSize, 1, 200);
 
                 var totalCount = processedExaminers.Count;
                 var paginatedItems = processedExaminers

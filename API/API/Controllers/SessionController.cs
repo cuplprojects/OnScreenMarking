@@ -72,20 +72,15 @@ namespace API.Controllers
                     createdAt = s.CreatedAt
                 });
 
-                object sessions;
-                if (pageSize > 0)
-                {
-                    sessions = await projection
-                        .Skip((page - 1) * pageSize)
-                        .Take(pageSize)
-                        .ToListAsync();
-                }
-                else
-                {
-                    sessions = await projection.ToListAsync();
-                }
+                page = Math.Max(1, page);
+                pageSize = Math.Clamp(pageSize <= 0 ? 50 : pageSize, 1, 200);
 
-                var totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 1;
+                var sessions = await projection
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
                 return Ok(new
                 {

@@ -636,6 +636,9 @@ namespace API.Controllers
                     query = query.Where(m => m.Status == parsedStatus);
 
                 var total = await query.CountAsync();
+                page = Math.Max(1, page);
+                limit = Math.Clamp(limit <= 0 ? 10 : limit, 1, 200);
+
                 var markings = await query
                     .Include(m => m.Script)
                     .Include(m => m.Examiner)

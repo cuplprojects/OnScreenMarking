@@ -213,15 +213,28 @@ export default function ScriptAllocation({ isTab = false }) {
       const sortOrderVal = params.sortOrder || '';
       const uniQuery = activeUniversityId ? `&universityId=${activeUniversityId}` : '';
 
-      // 1. Try papers/dashboard-stats (retrieves all project papers with allocated and pending counts)
+      const isReadyForAllocation = (p) => {
+        const hasQp = !!p.questionPaperPdfUrl && p.questionPaperPdfUrl.trim() !== '';
+        const hasSections = !!(p.isSectionConfigured || p.isSectionsConfigured || (p.batchId && p.batchId > 0));
+        const hasExaminers = (p.expertsCount || 0) > 0 || (p.assignedExaminers && p.assignedExaminers.length > 0) || !!p.isExaminerAssigned;
+        const hasCatchNo = !!p.catchNo && p.catchNo.trim() !== '';
+        return hasQp && hasSections && hasExaminers && hasCatchNo;
+      };
+
+      // 1. Try papers/dashboard-stats with forAllocation=true
       try {
-        const res = await apiCall(`/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}${uniQuery}`);
+        const res = await apiCall(`/papers/dashboard-stats?projectId=${projectId}&forAllocation=true&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}${uniQuery}`);
         if (res && res.items && res.items.length > 0) {
-          const firstUniId = res.items[0]?.universityId;
+          const filteredItems = res.items.filter(isReadyForAllocation);
+          const firstUniId = filteredItems[0]?.universityId || res.items[0]?.universityId;
           if (firstUniId && !configuredAssignmentSetting) {
             fetchAssignmentConfig(firstUniId);
           }
-          return res;
+          return {
+            ...res,
+            items: filteredItems,
+            totalCount: res.totalCount !== undefined ? res.totalCount : filteredItems.length
+          };
         }
       } catch (e) {
         console.warn('dashboard-stats query failed, checking pending endpoint:', e);
@@ -231,12 +244,13 @@ export default function ScriptAllocation({ isTab = false }) {
       try {
         const pendingRes = await apiCall(`/scripts/pending?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}${uniQuery}`);
         if (pendingRes && pendingRes.papers && pendingRes.papers.length > 0) {
+          const filteredPapers = pendingRes.papers.filter(isReadyForAllocation);
           if (pendingRes.universityId && !configuredAssignmentSetting) {
             fetchAssignmentConfig(pendingRes.universityId);
           }
           return {
-            items: pendingRes.papers,
-            totalCount: pendingRes.papers.length,
+            items: filteredPapers,
+            totalCount: filteredPapers.length,
             page: pageVal,
             pageSize: pageSizeVal,
             totalPages: 1
@@ -368,7 +382,7 @@ export default function ScriptAllocation({ isTab = false }) {
       // Fetch lightweight paper script counts instead of 1000 heavy script objects
       let countsData = null;
       try {
-        countsData = await apiCall(`/scripts/paper-counts?paperId=${paper.paperId}`);
+        countsData = await apiCall(`/scripts/paper-counts?paperId=${paper.paperId}${projectId ? `&projectId=${projectId}` : ''}`);
       } catch (err) {
         countsData = {
           pendingScripts: paper.pendingScripts || 0,
@@ -454,7 +468,7 @@ export default function ScriptAllocation({ isTab = false }) {
       for (const p of selectedPapersData) {
         let pCounts = null;
         try {
-          pCounts = await apiCall(`/scripts/paper-counts?paperId=${p.paperId}`);
+          pCounts = await apiCall(`/scripts/paper-counts?paperId=${p.paperId}${projectId ? `&projectId=${projectId}` : ''}`);
         } catch (e) {
           pCounts = {
             pendingScripts: p.pendingScripts || 0,

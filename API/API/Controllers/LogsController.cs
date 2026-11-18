@@ -68,6 +68,8 @@ namespace API.Controllers
                 }
 
                 var totalCount = await query.CountAsync();
+                page = Math.Max(1, page);
+                pageSize = Math.Clamp(pageSize <= 0 ? 10 : pageSize, 1, 200);
                 var items = await query.OrderByDescending(l => l.Timestamp)
                                        .Skip((page - 1) * pageSize)
                                        .Take(pageSize)
@@ -133,6 +135,8 @@ namespace API.Controllers
                 }
 
                 var totalCount = await query.CountAsync();
+                page = Math.Max(1, page);
+                pageSize = Math.Clamp(pageSize <= 0 ? 10 : pageSize, 1, 200);
                 var items = await query.OrderByDescending(l => l.Timestamp)
                                        .Skip((page - 1) * pageSize)
                                        .Take(pageSize)

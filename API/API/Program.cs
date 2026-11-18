@@ -67,6 +67,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
         builder.Configuration.GetConnectionString("DefaultConnection"),
         ServerVersion.AutoDetect(builder.Configuration.GetConnectionString("DefaultConnection"))
     )
+    .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking)
 );
 
 // Add Distributed Session Cache (Redis if running, otherwise in-memory distributed cache)
@@ -101,8 +102,8 @@ if (redisConnected)
 }
 else
 {
-    Console.WriteLine("[Cache] Redis server is not running on localhost:6379. Using in-memory distributed session cache.");
-    builder.Services.AddDistributedMemoryCache();
+    Console.WriteLine("[Cache] Redis server is not running on localhost:6379. Using persistent file-backed distributed session cache.");
+    builder.Services.AddSingleton<Microsoft.Extensions.Caching.Distributed.IDistributedCache, API.Services.PersistentFileDistributedCache>();
 }
 
 // Add Password Hasher Service (Salted PBKDF2 with HMAC-SHA256)
