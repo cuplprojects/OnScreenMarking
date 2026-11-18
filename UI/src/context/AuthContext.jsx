@@ -12,6 +12,7 @@ export function AuthProvider({ children }) {
 
   const clearStorage = () => {
     try {
+      localStorage.removeItem('token');
       sessionStorage.removeItem('token');
       sessionStorage.removeItem('user');
       sessionStorage.removeItem('permissions');
@@ -87,6 +88,10 @@ export function AuthProvider({ children }) {
       });
 
       const userObj = response.user;
+      if (response.token) {
+        localStorage.setItem('token', response.token);
+        sessionStorage.setItem('token', response.token);
+      }
       setUser(userObj);
 
       if (userObj?.permissions && Array.isArray(userObj.permissions)) {

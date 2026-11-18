@@ -335,6 +335,12 @@ namespace API.Data
                 .HasIndex(s => s.GeneratedBarcode)
                 .IsUnique();
             modelBuilder.Entity<Script>()
+                .HasIndex(s => s.Status);
+            modelBuilder.Entity<Script>()
+                .HasIndex(s => s.RollNumber);
+            modelBuilder.Entity<Script>()
+                .HasIndex(s => s.ProjectId);
+            modelBuilder.Entity<Script>()
                 .HasMany(s => s.Allocations)
                 .WithOne(a => a.Script)
                 .HasForeignKey(a => a.ScriptId)
@@ -361,6 +367,8 @@ namespace API.Data
             modelBuilder.Entity<Allocation>()
                 .Property(a => a.AssignmentStatus)
                 .HasDefaultValue(true);
+            modelBuilder.Entity<Allocation>()
+                .HasIndex(a => new { a.ExaminerId, a.AssignmentStatus });
             modelBuilder.Entity<Allocation>()
                 .HasOne(a => a.Script)
                 .WithMany(s => s.Allocations)
@@ -482,6 +490,9 @@ namespace API.Data
             // Invitation configuration
             modelBuilder.Entity<Invitation>()
                 .HasKey(i => i.Id);
+            modelBuilder.Entity<Invitation>()
+                .HasIndex(i => i.Token)
+                .IsUnique();
             modelBuilder.Entity<Invitation>()
                 .HasOne(i => i.University)
                 .WithMany()

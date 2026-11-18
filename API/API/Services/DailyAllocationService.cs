@@ -13,9 +13,41 @@ namespace API.Services
     {
         private static readonly SemaphoreSlim _distributionLock = new SemaphoreSlim(1, 1);
         private static readonly SemaphoreSlim _dailyAllocationLock = new SemaphoreSlim(1, 1);
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, byte> _pendingAllocationTriggers = new();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, Task> _runningAllocationTasks = new();
+        private static readonly object _coalesceLock = new();
+
         private readonly ApplicationDbContext _context;
         private readonly ILogger<DailyAllocationService> _logger;
         private readonly IServiceScopeFactory _scopeFactory;
+
+        private async Task<bool> AcquireDistributedLockAsync(string lockName, int timeoutSeconds = 15)
+        {
+            try
+            {
+                var result = await _context.Database
+                    .SqlQueryRaw<int>("SELECT GET_LOCK({0}, {1})", lockName, timeoutSeconds)
+                    .ToListAsync();
+                return result.FirstOrDefault() == 1;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to execute GET_LOCK for {LockName}. Proceeding with process semaphore.", lockName);
+                return true;
+            }
+        }
+
+        private async Task ReleaseDistributedLockAsync(string lockName)
+        {
+            try
+            {
+                await _context.Database.ExecuteSqlRawAsync("SELECT RELEASE_LOCK({0})", lockName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to execute RELEASE_LOCK for {LockName}", lockName);
+            }
+        }
 
         public DailyAllocationService(
             ApplicationDbContext context, 
@@ -95,9 +127,14 @@ namespace API.Services
 
         public async Task<(bool success, int allocatedCount, int reassignedCount, string message)> PerformDailyAllocationForUniversityAsync(int universityId)
         {
+            string lockKey = $"osm_daily_alloc_{universityId}";
             await _dailyAllocationLock.WaitAsync();
+            bool dbLockAcquired = false;
             try
             {
+                dbLockAcquired = await AcquireDistributedLockAsync(lockKey, 15);
+                using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead);
+
                 var assignType = await _context.AssignmentTypes
                     .Where(at => at.UniversityId == universityId)
                     .OrderByDescending(at => at.UpdatedAt)
@@ -159,28 +196,35 @@ namespace API.Services
                 var eligibleScripts = new List<Script>();
                 var unassignedProjectsInfo = new List<string>();
 
+                // Batch fetch all ProjectPapers and PaperExaminers across all pending projects (eliminating N+1 query)
+                var projectIds = scriptsByProject.Keys.ToList();
+                var allPapersForProjects = await _context.ProjectPapers
+                    .Include(pp => pp.Paper)
+                    .Where(pp => projectIds.Contains(pp.ProjectId) && pp.IsActive)
+                    .ToListAsync();
+
+                var allProjectPaperIds = allPapersForProjects.Select(pp => pp.Id).ToList();
+                var allAssignedPaperExaminers = await _context.PaperExaminers
+                    .Where(pe => allProjectPaperIds.Contains(pe.ProjectPaperId) && pe.IsActive && pe.Examiner != null && pe.Examiner.IsActive)
+                    .Select(pe => pe.ProjectPaperId)
+                    .Distinct()
+                    .ToListAsync();
+
+                var assignedPaperIdSet = new HashSet<int>(allAssignedPaperExaminers);
+                var papersByProjectMap = allPapersForProjects
+                    .GroupBy(pp => pp.ProjectId)
+                    .ToDictionary(g => g.Key, g => g.ToList());
+
                 foreach (var (projId, projScripts) in scriptsByProject)
                 {
-                    var allPapersInProject = await _context.ProjectPapers
-                        .Include(pp => pp.Paper)
-                        .Where(pp => pp.ProjectId == projId && pp.IsActive)
-                        .ToListAsync();
-
-                    if (!allPapersInProject.Any())
+                    if (!papersByProjectMap.TryGetValue(projId, out var allPapersInProject) || !allPapersInProject.Any())
                     {
                         continue;
                     }
 
-                    var projectPaperIds = allPapersInProject.Select(pp => pp.Id).ToList();
-                    var assignedPaperIds = await _context.PaperExaminers
-                        .Where(pe => projectPaperIds.Contains(pe.ProjectPaperId) && pe.IsActive && pe.Examiner != null && pe.Examiner.IsActive)
-                        .Select(pe => pe.ProjectPaperId)
-                        .Distinct()
-                        .ToListAsync();
-
                     // Crucial requirement: ONLY run when ALL papers of that project have an examiner assigned in PaperExaminers
                     var missingExaminerPapers = allPapersInProject
-                        .Where(pp => !pp.IsExaminerAssigned && !assignedPaperIds.Contains(pp.Id))
+                        .Where(pp => !pp.IsExaminerAssigned && !assignedPaperIdSet.Contains(pp.Id))
                         .ToList();
 
                     if (missingExaminerPapers.Any())
@@ -274,6 +318,8 @@ namespace API.Services
                     await _context.SaveChangesAsync();
                 }
 
+                await transaction.CommitAsync();
+
                 string msg = $"Successfully allocated {totalAllocated} script(s) to examiners from PaperExaminers with daily limit {dailyLimit} and reassigned {reassignedCount} expired allocations (after {reassignmentHours}h limit).";
                 if (unassignedProjectsInfo.Any())
                 {
@@ -289,15 +335,24 @@ namespace API.Services
             }
             finally
             {
+                if (dbLockAcquired)
+                {
+                    await ReleaseDistributedLockAsync(lockKey);
+                }
                 _dailyAllocationLock.Release();
             }
         }
 
         public async Task<(bool success, int allocatedCount, string message)> PerformEqualDistributionForUniversityAsync(int universityId)
         {
+            string lockKey = $"osm_equal_alloc_{universityId}";
             await _distributionLock.WaitAsync();
+            bool dbLockAcquired = false;
             try
             {
+                dbLockAcquired = await AcquireDistributedLockAsync(lockKey, 15);
+                using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead);
+
                 var assignType = await _context.AssignmentTypes
                     .Where(at => at.UniversityId == universityId)
                     .OrderByDescending(at => at.UpdatedAt)
@@ -504,6 +559,8 @@ namespace API.Services
                     await _context.SaveChangesAsync();
                 }
 
+                await transaction.CommitAsync();
+
                 if (totalAllocated == 0 && totalRebalanced == 0)
                 {
                     return (true, 0, $"Equal distribution is active until {deadline:yyyy-MM-dd}. All scripts for eligible project papers are already equally distributed among assigned examiners.");
@@ -528,6 +585,10 @@ namespace API.Services
             }
             finally
             {
+                if (dbLockAcquired)
+                {
+                    await ReleaseDistributedLockAsync(lockKey);
+                }
                 _distributionLock.Release();
             }
         }
@@ -919,6 +980,19 @@ namespace API.Services
 
             try
             {
+                // Early check: avoid executing multi-university checks if there are no pending scripts and no overdue allocations
+                bool hasPendingScripts = await _context.Scripts
+                    .AnyAsync(s => s.Status == ScriptStatus.pending || 
+                                  (s.Status != ScriptStatus.completed && !_context.Allocations.Any(a => a.ScriptId == s.Id && a.AssignmentStatus)));
+                bool hasOverdueAllocations = await _context.Allocations
+                    .AnyAsync(a => a.AssignmentStatus && a.Deadline.HasValue && a.Deadline.Value < DateTime.UtcNow);
+
+                if (!hasPendingScripts && !hasOverdueAllocations)
+                {
+                    _logger.LogDebug("Auto-allocation check: No pending scripts or overdue allocations. Skipping cycle.");
+                    return (0, 0);
+                }
+
                 var allConfigs = await _context.AssignmentTypes
                     .ToListAsync();
 
@@ -1036,19 +1110,37 @@ namespace API.Services
             if (!universityId.HasValue || universityId.Value <= 0) return;
             int uniId = universityId.Value;
 
-            _ = Task.Run(async () =>
+            // Mark trigger as pending for this university
+            _pendingAllocationTriggers[uniId] = 1;
+
+            lock (_coalesceLock)
             {
-                try
+                if (_runningAllocationTasks.TryGetValue(uniId, out var existingTask) && !existingTask.IsCompleted)
                 {
-                    using var scope = _scopeFactory.CreateScope();
-                    var allocService = scope.ServiceProvider.GetRequiredService<IDailyAllocationService>();
-                    await allocService.TriggerAutoAllocationForUniversityAsync(uniId);
+                    // Existing worker is running/debouncing; it will process the queued trigger on its next iteration
+                    return;
                 }
-                catch (Exception ex)
+
+                _runningAllocationTasks[uniId] = Task.Run(async () =>
                 {
-                    _logger.LogError(ex, "Background auto-allocation failed for university {UniversityId}", uniId);
-                }
-            });
+                    // Coalesce / debounce rapid sequential triggers (e.g. multi-file bulk uploads)
+                    await Task.Delay(500);
+
+                    while (_pendingAllocationTriggers.TryRemove(uniId, out _))
+                    {
+                        try
+                        {
+                            using var scope = _scopeFactory.CreateScope();
+                            var allocService = scope.ServiceProvider.GetRequiredService<IDailyAllocationService>();
+                            await allocService.TriggerAutoAllocationForUniversityAsync(uniId);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Background auto-allocation failed for university {UniversityId}", uniId);
+                        }
+                    }
+                });
+            }
         }
     }
 }

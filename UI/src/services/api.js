@@ -51,9 +51,14 @@ const handleResponse = async (response, options = {}) => {
 };
 
 const apiCall = async (endpoint, options = {}) => {
+  const token = typeof window !== 'undefined'
+    ? (localStorage.getItem('token') || sessionStorage.getItem('token'))
+    : null;
+
   const headers = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
+    ...(token ? { 'X-Session-Id': token, 'Authorization': `Bearer ${token}` } : {}),
     ...options.headers,
   };
 

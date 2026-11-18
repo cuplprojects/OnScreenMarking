@@ -80,6 +80,9 @@ namespace API.Controllers
                     query = query.Where(s => s.ProjectPaper.PaperId == paperId.Value);
 
                 var total = await query.CountAsync();
+                page = Math.Max(1, page);
+                limit = Math.Clamp(limit <= 0 ? 10 : limit, 1, 200);
+
                 var scripts = await query
                     .Include(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                         .ThenInclude(p => p.SubjectPapers)
@@ -290,29 +293,38 @@ namespace API.Controllers
         }
 
         [HttpGet("paper-counts")]
-        public async Task<IActionResult> GetPaperScriptCounts([FromQuery] int paperId)
+        public async Task<IActionResult> GetPaperScriptCounts([FromQuery] int paperId, [FromQuery] int? projectId = null)
         {
             try
             {
-                var totalScripts = await _context.Scripts
-                    .CountAsync(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId);
+                var scriptsQuery = _context.Scripts
+                    .Where(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId);
 
-                var allocatedScripts = await _context.Scripts
-                    .CountAsync(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId && s.Status == ScriptStatus.allocated);
+                if (projectId.HasValue && projectId.Value > 0)
+                {
+                    scriptsQuery = scriptsQuery.Where(s => s.ProjectId == projectId.Value || (s.ProjectPaper != null && s.ProjectPaper.ProjectId == projectId.Value));
+                }
 
-                var completedScripts = await _context.Scripts
-                    .CountAsync(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId && s.Status == ScriptStatus.completed);
+                var totalScripts = await scriptsQuery.CountAsync();
+                var allocatedScripts = await scriptsQuery.CountAsync(s => s.Status == ScriptStatus.allocated);
+                var completedScripts = await scriptsQuery.CountAsync(s => s.Status == ScriptStatus.completed);
+                var pendingScripts = await scriptsQuery.CountAsync(s => s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any(a => a.AssignmentStatus)));
 
-                var pendingScripts = await _context.Scripts
-                    .CountAsync(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == paperId && s.Status == ScriptStatus.pending);
+                var expertsQuery = _context.PaperExaminers
+                    .Where(pe => pe.IsActive && pe.ProjectPaper != null && pe.ProjectPaper.PaperId == paperId);
 
-                var expertsCount = await _context.PaperExaminers
-                    .CountAsync(pe => pe.ProjectPaper != null && pe.ProjectPaper.PaperId == paperId);
+                if (projectId.HasValue && projectId.Value > 0)
+                {
+                    expertsQuery = expertsQuery.Where(pe => pe.ProjectId == projectId.Value || (pe.ProjectPaper != null && pe.ProjectPaper.ProjectId == projectId.Value));
+                }
+
+                var expertsCount = await expertsQuery.CountAsync();
 
                 return Ok(new
                 {
                     success = true,
                     paperId,
+                    projectId,
                     totalScripts,
                     pendingScripts,
                     allocatedScripts,
@@ -873,19 +885,22 @@ namespace API.Controllers
                             : null
                     });
 
-                    var summaryItems = pageSize > 0 && pageSize < 500
-                        ? await summaryQuery.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync()
-                        : await summaryQuery.Take(pageSize > 0 ? pageSize : 1000).ToListAsync();
+                    page = Math.Max(1, page);
+                    int clampedPageSize = Math.Clamp(pageSize <= 0 ? 50 : pageSize, 1, 200);
+                    var summaryItems = await summaryQuery.Skip((page - 1) * clampedPageSize).Take(clampedPageSize).ToListAsync();
 
                     return Ok(new
                     {
                         items = summaryItems,
                         totalCount = totalCount,
                         page = page,
-                        pageSize = pageSize,
-                        totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 1
+                        pageSize = clampedPageSize,
+                        totalPages = (int)Math.Ceiling((double)totalCount / clampedPageSize)
                     });
                 }
+
+                page = Math.Max(1, page);
+                pageSize = Math.Clamp(pageSize <= 0 ? 50 : pageSize, 1, 200);
 
                 // Full DTO query with entity relations for detailed paginated list (e.g. Scripts table)
                 IQueryable<Script> detailedQuery = query
@@ -914,18 +929,10 @@ namespace API.Controllers
                     detailedQuery = detailedQuery.OrderByDescending(s => s.CreatedAt);
                 }
 
-                List<Script> scripts;
-                if (pageSize > 0)
-                {
-                    scripts = await detailedQuery
-                        .Skip((page - 1) * pageSize)
-                        .Take(pageSize)
-                        .ToListAsync();
-                }
-                else
-                {
-                    scripts = await detailedQuery.ToListAsync();
-                }
+                var scripts = await detailedQuery
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
 
                 var scriptDtos = scripts.Select(s => {
                     var alloc = allocations.FirstOrDefault(a => a.ScriptId == s.Id);
@@ -1187,7 +1194,12 @@ namespace API.Controllers
                 if (paperIds.Count > 0)
                 {
                     var papersQuery = _context.Papers
-                        .Where(p => paperIds.Contains(p.PaperId));
+                        .Where(p => paperIds.Contains(p.PaperId))
+                        .Where(p => p.ProjectPapers.Any(pp => (!projectId.HasValue || pp.ProjectId == projectId.Value) &&
+                                                              pp.QuestionPaperPdfUrl != null && pp.QuestionPaperPdfUrl != "" &&
+                                                              pp.CatchNo != null && pp.CatchNo != "" &&
+                                                              (pp.IsSectionConfigured || (pp.BatchId.HasValue && pp.BatchId.Value > 0)))
+                                 && _context.PaperExaminers.Any(pe => pe.ProjectPaper != null && pe.ProjectPaper.PaperId == p.PaperId && (!projectId.HasValue || pe.ProjectPaper.ProjectId == projectId.Value) && pe.IsActive));
 
                     if (!string.IsNullOrWhiteSpace(search))
                     {

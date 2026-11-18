@@ -63,33 +63,65 @@ namespace API.Controllers
                     .Where(d => d.IsActive)
                     .ToListAsync();
 
+                var deptIds = departments.Select(d => d.DepartmentId).ToList();
+
+                // Batch fetch all DepartmentSubjects and SubjectPapers in bulk (eliminating N+1 query loop)
+                var allDeptSubjects = await _context.DepartmentSubjects
+                    .AsNoTracking()
+                    .Where(ds => deptIds.Contains(ds.DepartmentId))
+                    .ToListAsync();
+
+                var allSubjectIds = allDeptSubjects.Select(ds => ds.SubjectId).Distinct().ToList();
+
+                var allSubjectPapers = await _context.SubjectPapers
+                    .AsNoTracking()
+                    .Where(sp => allSubjectIds.Contains(sp.SubjectId))
+                    .ToListAsync();
+
+                var allPaperIds = allSubjectPapers.Select(sp => sp.PaperId).Distinct().ToList();
+
+                // Aggregate scripts count by PaperId directly in SQL
+                var paperScriptCounts = await _context.Scripts
+                    .AsNoTracking()
+                    .Where(s => s.ProjectPaper != null && allPaperIds.Contains(s.ProjectPaper.PaperId))
+                    .GroupBy(s => s.ProjectPaper.PaperId)
+                    .Select(g => new { PaperId = g.Key, Count = g.Count() })
+                    .ToDictionaryAsync(g => g.PaperId, g => g.Count);
+
+                // Aggregate markings count and sum by PaperId directly in SQL
+                var paperMarkingStats = await _context.Markings
+                    .AsNoTracking()
+                    .Where(m => m.Status == MarkingStatus.submitted && m.Script != null && m.Script.ProjectPaper != null && allPaperIds.Contains(m.Script.ProjectPaper.PaperId))
+                    .GroupBy(m => m.Script.ProjectPaper.PaperId)
+                    .Select(g => new
+                    {
+                        PaperId = g.Key,
+                        Count = g.Count(),
+                        TotalMarks = g.Sum(m => m.TotalMarks)
+                    })
+                    .ToDictionaryAsync(g => g.PaperId, g => g);
+
+                var deptSubjectsMap = allDeptSubjects
+                    .GroupBy(ds => ds.DepartmentId)
+                    .ToDictionary(g => g.Key, g => g.Select(ds => ds.SubjectId).ToHashSet());
+
+                var subjectPapersMap = allSubjectPapers
+                    .GroupBy(sp => sp.SubjectId)
+                    .ToDictionary(g => g.Key, g => g.Select(sp => sp.PaperId).ToList());
+
                 var departmentStats = new List<object>();
 
                 foreach (var department in departments)
                 {
-                    // Get subject ids mapped to department
-                    var subjectIds = await _context.DepartmentSubjects
-                        .Where(ds => ds.DepartmentId == department.DepartmentId)
-                        .Select(ds => ds.SubjectId)
-                        .ToListAsync();
-
-                    // Get paper ids mapped to subjects
-                    var paperIds = await _context.SubjectPapers
-                        .Where(sp => subjectIds.Contains(sp.SubjectId))
-                        .Select(sp => sp.PaperId)
+                    var subIds = deptSubjectsMap.TryGetValue(department.DepartmentId, out var sIds) ? sIds : new HashSet<int>();
+                    var pIds = subIds
+                        .SelectMany(sId => subjectPapersMap.TryGetValue(sId, out var pList) ? pList : Enumerable.Empty<int>())
                         .Distinct()
-                        .ToListAsync();
+                        .ToList();
 
-                    // SQL aggregates instead of loading all scripts into memory (H14)
-                    var totalScriptsCount = await _context.Scripts
-                        .Where(s => paperIds.Contains(s.ProjectPaper.PaperId))
-                        .CountAsync();
-
-                    var markingsQuery = _context.Markings
-                        .Where(m => paperIds.Contains(m.Script.ProjectPaper.PaperId) && m.Status == MarkingStatus.submitted);
-
-                    var evaluatedCount = await markingsQuery.CountAsync();
-                    decimal totalMarks = evaluatedCount > 0 ? await markingsQuery.SumAsync(m => m.TotalMarks) : 0m;
+                    int totalScriptsCount = pIds.Sum(pId => paperScriptCounts.GetValueOrDefault(pId, 0));
+                    int evaluatedCount = pIds.Sum(pId => paperMarkingStats.TryGetValue(pId, out var st) ? st.Count : 0);
+                    decimal totalMarks = pIds.Sum(pId => paperMarkingStats.TryGetValue(pId, out var st) ? st.TotalMarks : 0m);
                     decimal avgScore = evaluatedCount > 0 ? totalMarks / evaluatedCount : 0m;
 
                     departmentStats.Add(new
@@ -128,43 +160,52 @@ namespace API.Controllers
             try
             {
                 var examiners = await _context.Users
+                    .AsNoTracking()
                     .Where(u => u.UserType == "examiner")
                     .ToListAsync();
 
-                var performanceData = new List<object>();
+                var examinerIds = examiners.Select(e => e.Id).ToList();
 
-                foreach (var examiner in examiners)
+                // Compute examiner aggregates directly in SQL (single query instead of N+1)
+                var markingStats = await _context.Markings
+                    .AsNoTracking()
+                    .Where(m => examinerIds.Contains(m.ExaminerId) && m.Status == MarkingStatus.submitted)
+                    .GroupBy(m => m.ExaminerId)
+                    .Select(g => new
+                    {
+                        ExaminerId = g.Key,
+                        Count = g.Count(),
+                        TotalMarks = g.Sum(m => m.TotalMarks),
+                        ContestedCount = g.Count(m => m.Script != null && m.Script.IsReEvaluationRequested == true)
+                    })
+                    .ToDictionaryAsync(g => g.ExaminerId, g => g);
+
+                var performanceData = examiners.Select(examiner =>
                 {
-                    var markings = await _context.Markings
-                        .Include(m => m.Script)
-                        .Where(m => m.ExaminerId == examiner.Id && m.Status == MarkingStatus.submitted)
-                        .ToListAsync();
-
-                    decimal totalMarks = markings.Sum(m => m.TotalMarks);
-                    decimal avgMarks = markings.Count > 0 ? totalMarks / markings.Count : 0;
-
-                    // Calculate real accuracy rate dynamically based on re-evaluation dispute ratios
-                    string accuracy;
-                    if (markings.Count == 0)
+                    if (!markingStats.TryGetValue(examiner.Id, out var st) || st.Count == 0)
                     {
-                        accuracy = "N/A";
-                    }
-                    else
-                    {
-                        int contestedCount = markings.Count(m => m.Script != null && m.Script.IsReEvaluationRequested == true);
-                        decimal accuracyPct = ((decimal)(markings.Count - contestedCount) / markings.Count) * 100m;
-                        accuracy = $"{Math.Round(accuracyPct, 1)}%";
+                        return new
+                        {
+                            examiner = examiner.Name,
+                            email = examiner.Email,
+                            scriptsEvaluated = 0,
+                            avgMarks = 0m,
+                            accuracy = "N/A"
+                        };
                     }
 
-                    performanceData.Add(new
+                    decimal avgMarks = st.TotalMarks / st.Count;
+                    decimal accuracyPct = ((decimal)(st.Count - st.ContestedCount) / st.Count) * 100m;
+
+                    return new
                     {
                         examiner = examiner.Name,
                         email = examiner.Email,
-                        scriptsEvaluated = markings.Count,
+                        scriptsEvaluated = st.Count,
                         avgMarks = Math.Round(avgMarks, 2),
-                        accuracy
-                    });
-                }
+                        accuracy = $"{Math.Round(accuracyPct, 1)}%"
+                    };
+                }).ToList();
 
                 return Ok(new { success = true, data = performanceData });
             }
@@ -176,61 +217,72 @@ namespace API.Controllers
 
        
         [HttpGet("examiner/{examinerId}")]
-        public async Task<IActionResult> GetExaminerReport(int examinerId)
+        public async Task<IActionResult> GetExaminerReport(int examinerId, [FromQuery] int limit = 100)
         {
             try
             {
-                var markings = await _context.Markings
-                    .Where(m => m.ExaminerId == examinerId &&
-                                m.Status == MarkingStatus.submitted)
+                limit = Math.Clamp(limit <= 0 ? 100 : limit, 1, 200);
+
+                var markingsQuery = _context.Markings
+                    .AsNoTracking()
+                    .Where(m => m.ExaminerId == examinerId && m.Status == MarkingStatus.submitted);
+
+                var totalCount = await markingsQuery.CountAsync();
+                decimal totalMarks = totalCount > 0 ? await markingsQuery.SumAsync(m => m.TotalMarks) : 0m;
+                decimal avgMarks = totalCount > 0 ? totalMarks / totalCount : 0m;
+
+                var markings = await markingsQuery
                     .Include(m => m.Script)
                         .ThenInclude(s => s.ProjectPaper).ThenInclude(pp => pp.Paper)
                             .ThenInclude(p => p.SubjectPapers)
                                 .ThenInclude(sp => sp.Subject)
                     .Include(m => m.Allocation)
+                    .OrderByDescending(m => m.SubmittedAt)
+                    .Take(limit)
                     .ToListAsync();
 
-                decimal totalMarks = markings.Sum(m => m.TotalMarks);
-
-                decimal avgMarks = markings.Count > 0
-                    ? totalMarks / markings.Count
-                    : 0;
-
                 var subjectBreakdown = markings
+                    .Where(m => m.Script?.ProjectPaper?.Paper?.SubjectPapers != null)
                     .SelectMany(m =>
                         m.Script.ProjectPaper.Paper.SubjectPapers.Select(sp => new
                         {
-                            SubjectName = sp.Subject.SubName,
+                            SubjectName = sp.Subject?.SubName ?? "General",
                             Marking = m
                         }))
                     .GroupBy(x => x.SubjectName)
                     .Select(g => new
                     {
                         subject = g.Key,
-
                         count = g.Count(),
-
                         totalMarks = g.Sum(x => x.Marking.TotalMarks)
                     })
                     .ToList();
 
+                var projectedMarkings = markings.Select(m => new
+                {
+                    id = m.Id,
+                    scriptId = m.ScriptId,
+                    totalMarks = m.TotalMarks,
+                    percentage = m.Percentage,
+                    remarks = m.Remarks,
+                    submittedAt = m.SubmittedAt,
+                    paperCode = m.Script?.ProjectPaper?.Paper?.PaperCode,
+                    paperName = m.Script?.ProjectPaper?.Paper?.PaperName
+                }).ToList();
+
                 return Ok(new
                 {
                     success = true,
-
                     data = new
                     {
-                        totalScriptsEvaluated = markings.Count,
-
+                        totalScriptsEvaluated = totalCount,
                         averageMarks = Math.Round(avgMarks, 2),
-
                         subjectBreakdown,
-
-                        markings
+                        markings = projectedMarkings
                     }
                 });
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return StatusCode(500, new
                 {

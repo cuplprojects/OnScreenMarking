@@ -1429,9 +1429,6 @@ export default function SectionConfig() {
                       <Layers size={14} className="text-teal-700" />
                       Select a Batch Template to Import
                     </span>
-                    <p className="text-[11px] text-gray-500 font-medium mt-0.5">
-                      Importing a batch links its predefined sections and questions to this paper. Editing imported sections later will automatically branch into your paper's dedicated batch.
-                    </p>
                   </div>
 
                   {availableBatches.length === 0 ? (

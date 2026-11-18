@@ -41,3 +41,4 @@ dist-ssr
 project.lock.json
 project.fragment.lock.json
 artifacts/
+.session_cache/

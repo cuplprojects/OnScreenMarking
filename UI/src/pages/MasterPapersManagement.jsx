@@ -54,7 +54,8 @@ function ManagePaperSectionsModal({ isOpen, onClose, paper, masterSections = [],
 
   if (!isOpen || !paper) return null;
 
-  const selectedSectionsList = masterSections.filter(m => selectedIds.includes(m.id));
+  const safeMasterSections = Array.isArray(masterSections) ? masterSections : (masterSections?.items || []);
+  const selectedSectionsList = safeMasterSections.filter(m => selectedIds.includes(m.id));
   const totalQuestions = selectedSectionsList.reduce((sum, s) => sum + (s.totalQuestions || 0), 0);
   const totalMarks = Math.round(selectedSectionsList.reduce((sum, s) => sum + (parseFloat(s.totalMarks) || 0), 0) * 100) / 100;
 
@@ -342,7 +343,8 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
     setIsDropdownOpen(false);
   }, [initialData, isOpen]);
 
-  const selectedSectionsList = masterSections.filter(m => formData.masterSectionIds.includes(m.id));
+  const safeMasterSections = Array.isArray(masterSections) ? masterSections : (masterSections?.items || []);
+  const selectedSectionsList = safeMasterSections.filter(m => formData.masterSectionIds.includes(m.id));
   const currentTotalQuestions = selectedSectionsList.reduce((sum, s) => sum + (s.totalQuestions || 0), 0);
   const currentTotalMarks = selectedSectionsList.reduce((sum, s) => sum + (s.totalMarks || 0), 0);
 
@@ -771,10 +773,12 @@ export default function MasterPapersManagement() {
   useEffect(() => {
     const fetchMasterSections = async () => {
       try {
-        const data = await sectionService.getSectionMasters();
-        setMasterSections(data || []);
+        const data = await sectionService.getSectionMasters({ all: true });
+        const list = Array.isArray(data) ? data : (data?.items || []);
+        setMasterSections(list);
       } catch (err) {
         console.error("Failed to fetch section masters", err);
+        setMasterSections([]);
       }
     };
     fetchMasterSections();

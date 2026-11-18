@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { 
   FileText, Plus, Edit2, UserPlus, X, Search, CheckCircle2, Trash2, 
-  ChevronRight, ChevronDown, Filter, Users, BookOpen, Layers, Folder, AlertCircle, Copy, Upload, Info, Settings, Loader, FileCheck, Eye, UserCheck, Check, Download, AlertTriangle, Flag, SlidersHorizontal, Hash
+  ChevronRight, ChevronDown, Filter, Users, User, BookOpen, Layers, Folder, AlertCircle, Copy, Upload, Info, Settings, Loader, FileCheck, Eye, UserCheck, Check, Download, AlertTriangle, Flag, SlidersHorizontal, Hash, Columns
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { useAuth } from "../context/AuthContext";
@@ -23,6 +23,24 @@ const getInitialsAvatar = (name) => {
   const initial = (name || 'U').trim().charAt(0).toUpperCase() || 'U';
   return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" fill="%230D9488"/><text x="50%" y="54%" font-size="28" font-family="sans-serif" font-weight="600" fill="%23ffffff" dominant-baseline="middle" text-anchor="middle">${encodeURIComponent(initial)}</text></svg>`;
 };
+
+const COLUMN_DEFINITIONS = [
+  { key: 'paperCode', label: 'Paper Code', default: true },
+  { key: 'paperName', label: 'Paper Name', default: true },
+  { key: 'catchNo', label: 'Catch No', default: true },
+  { key: 'paperNumber', label: 'Paper No', default: true },
+  { key: 'subjectName', label: 'Subject', default: true },
+  { key: 'totalQuestions', label: 'Total Qs', default: true },
+  { key: 'maxMarks', label: 'Max Marks', default: true },
+  { key: 'questionPaper', label: 'Question Paper', default: true },
+  { key: 'assignedExaminers', label: 'Allotted Examiners', default: true },
+  { key: 'statusFilter', label: 'Configuration Status', default: true }
+];
+
+const DEFAULT_VISIBLE_COLUMNS = COLUMN_DEFINITIONS.reduce((acc, col) => {
+  acc[col.key] = col.default;
+  return acc;
+}, {});
 
 const SubjectMultiSelect = ({ subjects, selectedSubjects, toggleSubject }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -153,6 +171,10 @@ export default function PapersManagement({ isTab = false }) {
              url += `&subjectName=${encodeURIComponent(subjectFilterVal.trim())}`;
            }
          }
+         const qpStatusVal = params.qpStatus || '';
+         if (qpStatusVal) url += `&qpStatus=${encodeURIComponent(qpStatusVal)}`;
+         const examinerFilterVal = params.examinerFilter || '';
+         if (examinerFilterVal) url += `&examinerFilter=${encodeURIComponent(examinerFilterVal)}`;
          return apiCall(url);
       }
     }
@@ -236,6 +258,53 @@ export default function PapersManagement({ isTab = false }) {
   const [previewSubjectFilter, setPreviewSubjectFilter] = useState('');
 
 
+  // Column visibility state
+  const [visibleColumns, setVisibleColumns] = useState(() => {
+    try {
+      const saved = localStorage.getItem('papers_sections_visible_columns_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return { ...DEFAULT_VISIBLE_COLUMNS, ...parsed };
+      }
+    } catch (e) {
+      // ignore
+    }
+    return DEFAULT_VISIBLE_COLUMNS;
+  });
+  const [showColumnDropdown, setShowColumnDropdown] = useState(false);
+  const columnDropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (columnDropdownRef.current && !columnDropdownRef.current.contains(event.target)) {
+        setShowColumnDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const toggleColumnVisibility = (key) => {
+    setVisibleColumns(prev => {
+      const currentActiveCount = Object.values(prev).filter(Boolean).length;
+      if (prev[key] && currentActiveCount <= 1) {
+        return prev;
+      }
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem('papers_sections_visible_columns_v1', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const resetColumnsToDefault = () => {
+    setVisibleColumns(DEFAULT_VISIBLE_COLUMNS);
+    try {
+      localStorage.setItem('papers_sections_visible_columns_v1', JSON.stringify(DEFAULT_VISIBLE_COLUMNS));
+    } catch (e) {}
+  };
+
   // Modals state
   const [showForm, setShowForm] = useState(false);
   const [showBulkConfigModal, setShowBulkConfigModal] = useState(false);
@@ -299,6 +368,9 @@ export default function PapersManagement({ isTab = false }) {
   const [sourcePaperId, setSourcePaperId] = useState("");
   const [importingSections, setImportingSections] = useState(false);
   const [sectionMasters, setSectionMasters] = useState([]);
+  const safeSectionMasters = useMemo(() => {
+    return Array.isArray(sectionMasters) ? sectionMasters : (sectionMasters?.items || []);
+  }, [sectionMasters]);
   const [importSectionMode, setImportSectionMode] = useState('master'); // 'master' | 'paper'
   const [selectedMasterSectionIds, setSelectedMasterSectionIds] = useState([]);
   const [overwriteExistingSections, setOverwriteExistingSections] = useState(true);
@@ -401,10 +473,12 @@ export default function PapersManagement({ isTab = false }) {
       }
 
       try {
-        const masters = await sectionService.getSectionMasters();
-        setSectionMasters(masters || []);
+        const masters = await sectionService.getSectionMasters({ all: true });
+        const masterList = Array.isArray(masters) ? masters : (masters?.items || []);
+        setSectionMasters(masterList);
       } catch (masterErr) {
         console.error("Failed to load section masters", masterErr);
+        setSectionMasters([]);
       }
 
       refreshTable();
@@ -602,7 +676,7 @@ export default function PapersManagement({ isTab = false }) {
 
     // Check that Total Questions matches the sum of selected Master Sections' questions
     if (selectedMasterSectionIds && selectedMasterSectionIds.length > 0) {
-      const selectedMasters = sectionMasters.filter(m => selectedMasterSectionIds.includes(m.id));
+      const selectedMasters = safeSectionMasters.filter(m => selectedMasterSectionIds.includes(m.id));
       const masterTotalQuestions = selectedMasters.reduce((sum, m) => sum + (parseInt(m.totalQuestions, 10) || 0), 0);
       if (totalQ !== masterTotalQuestions) {
         return message.error(
@@ -1849,6 +1923,54 @@ export default function PapersManagement({ isTab = false }) {
 
   const pendingAssignedCount = touchedPaperIds.size;
 
+  // Distinct allotted examiners for the project
+  const [allottedExaminersList, setAllottedExaminersList] = useState([]);
+
+  const loadAllottedExaminers = useCallback(async () => {
+    if (!projectId) {
+      setAllottedExaminersList([]);
+      return;
+    }
+    try {
+      const res = await apiCall(`/papers/allotted-examiners?projectId=${projectId}`);
+      if (Array.isArray(res)) {
+        setAllottedExaminersList(res);
+      }
+    } catch {
+      /* silent */
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    loadAllottedExaminers();
+  }, [loadAllottedExaminers]);
+
+  const examinerFilterOptions = useMemo(() => {
+    const options = [
+      { value: 'allotted', label: 'Examiners Allotted' },
+      { value: 'not_allotted', label: 'Not Allotted' }
+    ];
+    const seen = new Set();
+    // Only show distinct examiners that have actually been allotted to this project
+    (allottedExaminersList || []).forEach(ex => {
+      const id = ex.id || ex.examinerId;
+      const name = ex.name || ex.examinerName;
+      if (id && name && !seen.has(String(id))) {
+        seen.add(String(id));
+        options.push({ value: String(id), label: name });
+      }
+    });
+    // Also include any distinct allotted examiners present in currently loaded papers
+    (papers || []).forEach(p => {
+      (p.assignedExaminers || []).forEach(ex => {
+        if (ex.id && ex.name && !seen.has(String(ex.id))) {
+          seen.add(String(ex.id));
+          options.push({ value: String(ex.id), label: ex.name });
+        }
+      });
+    });
+    return options;
+  }, [allottedExaminersList, papers]);
 
   const SortHeader = ({ label, field, isCenter = false, hasFilter = false, customFilter, filterOptions }) => {
     const isSorted = sortField === field;
@@ -1997,6 +2119,54 @@ export default function PapersManagement({ isTab = false }) {
                     />
                   </div>
 
+                  {/* Column Visibility Selector */}
+                  <div className="relative" ref={columnDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setShowColumnDropdown(prev => !prev)}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-lg text-xs font-semibold shadow-2xs hover:border-gray-300 transition-all cursor-pointer whitespace-nowrap"
+                      title="Select which columns to display"
+                    >
+                      <Columns size={13} className="text-gray-500" />
+                      <span>Columns</span>
+                      <span className="text-[10px] bg-gray-100 text-gray-600 font-bold px-1.5 py-0.5 rounded-full">
+                        {Object.values(visibleColumns).filter(Boolean).length}/{COLUMN_DEFINITIONS.length}
+                      </span>
+                      <ChevronDown size={12} className={`text-gray-400 transition-transform ${showColumnDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showColumnDropdown && (
+                      <div className="absolute right-0 top-full mt-1.5 w-60 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-3 space-y-2 font-sans animate-in fade-in zoom-in-95 duration-100">
+                        <div className="flex items-center justify-between pb-1.5 border-b border-gray-100">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500">Visible Columns</span>
+                          <button
+                            type="button"
+                            onClick={resetColumnsToDefault}
+                            className="text-[10px] font-bold text-teal-700 hover:text-teal-800 hover:underline cursor-pointer"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                        <div className="max-h-60 overflow-y-auto space-y-1 pr-1">
+                          {COLUMN_DEFINITIONS.map(col => (
+                            <label
+                              key={col.key}
+                              className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer text-xs transition-colors"
+                            >
+                              <span className="text-gray-700 font-semibold">{col.label}</span>
+                              <input
+                                type="checkbox"
+                                checked={!!visibleColumns[col.key]}
+                                onChange={() => toggleColumnVisibility(col.key)}
+                                className="rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer w-4 h-4"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Add Paper */}
                   {!isProjectInactive && (
                     <button
@@ -2117,27 +2287,48 @@ export default function PapersManagement({ isTab = false }) {
                         className="rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer w-4 h-4"
                       />
                     </th>
-                    <SortHeader label="Paper Code" field="paperCode" hasFilter={true} />
-                    <SortHeader label="Paper Name" field="paperName" hasFilter={true} />
-                    <SortHeader label="Catch No" field="catchNo" hasFilter={true} isCenter={true} />
-                    <SortHeader label="Paper No" field="paperNumber" isCenter={true} />
-                    <SortHeader label="Subject" field="subjectName" hasFilter={true} />
-                    <SortHeader label="Batch #" field="batchId" isCenter={true} />
-                    <SortHeader label="Total Qs" field="totalQuestions" isCenter={true} />
-                    <SortHeader label="Max Marks" field="maxMarks" isCenter={true} />
-                    <th className="px-4 py-3.5 text-center border-b border-gray-100">Question Paper</th>
-                    <SortHeader 
-                      label="Configuration Status" 
-                      field="statusFilter" 
-                      hasFilter={true} 
-                      filterOptions={[
-                        { value: '', label: 'All Papers' },
-                        { value: 'sections_missing', label: 'Sections/Questions Not Defined' },
-                        { value: 'pdf_missing', label: 'PDF Not Uploaded' },
-                        { value: 'not_assigned', label: 'Not Assigned' },
-                        { value: 'ready_for_allocation', label: 'Ready for Script Allocation' }
-                      ]} 
-                    />
+                    {visibleColumns.paperCode && <SortHeader label="Paper Code" field="paperCode" hasFilter={true} />}
+                    {visibleColumns.paperName && <SortHeader label="Paper Name" field="paperName" hasFilter={true} />}
+                    {visibleColumns.catchNo && <SortHeader label="Catch No" field="catchNo" hasFilter={true} isCenter={true} />}
+                    {visibleColumns.paperNumber && <SortHeader label="Paper No" field="paperNumber" isCenter={true} />}
+                    {visibleColumns.subjectName && <SortHeader label="Subject" field="subjectName" hasFilter={true} />}
+                    {visibleColumns.totalQuestions && <SortHeader label="Total Qs" field="totalQuestions" isCenter={true} />}
+                    {visibleColumns.maxMarks && <SortHeader label="Max Marks" field="maxMarks" isCenter={true} />}
+                    {visibleColumns.questionPaper && (
+                      <SortHeader 
+                        label="Question Paper" 
+                        field="qpStatus" 
+                        isCenter={true} 
+                        hasFilter={true} 
+                        filterOptions={[
+                          { value: 'uploaded', label: 'PDF Uploaded' },
+                          { value: 'missing', label: 'PDF Not Uploaded' }
+                        ]} 
+                      />
+                    )}
+                    {visibleColumns.assignedExaminers && (
+                      <SortHeader 
+                        label="Allotted Examiners" 
+                        field="examinerFilter" 
+                        isCenter={true} 
+                        hasFilter={true} 
+                        filterOptions={examinerFilterOptions} 
+                      />
+                    )}
+                    {visibleColumns.statusFilter && (
+                      <SortHeader 
+                        label="Configuration Status" 
+                        field="statusFilter" 
+                        hasFilter={true} 
+                        filterOptions={[
+                          { value: '', label: 'All Papers' },
+                          { value: 'sections_missing', label: 'Sections/Questions Not Defined' },
+                          { value: 'pdf_missing', label: 'PDF Not Uploaded' },
+                          { value: 'not_assigned', label: 'Not Assigned' },
+                          { value: 'ready_for_allocation', label: 'Ready for Script Allocation' }
+                        ]} 
+                      />
+                    )}
                     <th className="px-4 py-3.5 text-right border-b border-gray-100 min-w-[120px]">Actions</th>
                   </tr>
                 </thead>
@@ -2156,163 +2347,190 @@ export default function PapersManagement({ isTab = false }) {
                           </td>
 
                           {/* Paper Code */}
-                          <td className="px-3 py-2">
-                            <input
-                              type="text"
-                              placeholder="Code *"
-                              required
-                              value={inlineFormData.paperCode}
-                              onChange={(e) => setInlineFormData(prev => ({ ...prev, paperCode: e.target.value }))}
-                              className={`w-28 px-2 py-1 text-xs font-mono font-bold bg-white border rounded-md focus:outline-none focus:ring-2 shadow-2xs ${
-                                !inlineFormData.paperCode?.trim() ? 'border-rose-400 focus:ring-rose-400' : 'border-gray-300 focus:ring-teal-500'
-                              }`}
-                              title="Paper Code (Required)"
-                            />
-                          </td>
-
-                          {/* Paper Name */}
-                          <td className="px-3 py-2">
-                            <input
-                              type="text"
-                              placeholder="Paper Name *"
-                              required
-                              value={inlineFormData.paperName}
-                              onChange={(e) => setInlineFormData(prev => ({ ...prev, paperName: e.target.value }))}
-                              className={`w-44 px-2 py-1 text-xs font-semibold bg-white border rounded-md focus:outline-none focus:ring-2 shadow-2xs ${
-                                !inlineFormData.paperName?.trim() ? 'border-rose-400 focus:ring-rose-400' : 'border-gray-300 focus:ring-teal-500'
-                              }`}
-                              title="Paper Name (Required)"
-                            />
-                          </td>
-
-                          {/* Catch No */}
-                          <td className="px-3 py-2 text-center">
-                            <div className="inline-flex flex-col items-center">
+                          {visibleColumns.paperCode && (
+                            <td className="px-3 py-2">
                               <input
                                 type="text"
-                                placeholder="Catch *"
+                                placeholder="Code *"
                                 required
-                                value={inlineFormData.catchNo}
-                                onChange={(e) => setInlineFormData(prev => ({ ...prev, catchNo: e.target.value }))}
-                                className={`w-24 px-1.5 py-1 text-xs font-mono font-bold text-center bg-white border rounded-md focus:outline-none focus:ring-2 shadow-2xs ${
-                                  !inlineFormData.catchNo?.trim() ? 'border-rose-400 bg-rose-50/50 text-rose-800 focus:ring-rose-400' : 'border-gray-300 focus:ring-teal-500'
+                                value={inlineFormData.paperCode}
+                                onChange={(e) => setInlineFormData(prev => ({ ...prev, paperCode: e.target.value }))}
+                                className={`w-28 px-2 py-1 text-xs font-mono font-bold bg-white border rounded-md focus:outline-none focus:ring-2 shadow-2xs ${
+                                  !inlineFormData.paperCode?.trim() ? 'border-rose-400 focus:ring-rose-400' : 'border-gray-300 focus:ring-teal-500'
                                 }`}
-                                title="Catch Number (Required)"
+                                title="Paper Code (Required)"
                               />
-                              {!inlineFormData.catchNo?.trim() && (
-                                <span className="text-[9px] text-rose-500 font-bold leading-tight mt-0.5">Required</span>
-                              )}
-                            </div>
-                          </td>
+                            </td>
+                          )}
+
+                          {/* Paper Name */}
+                          {visibleColumns.paperName && (
+                            <td className="px-3 py-2">
+                              <input
+                                type="text"
+                                placeholder="Paper Name *"
+                                required
+                                value={inlineFormData.paperName}
+                                onChange={(e) => setInlineFormData(prev => ({ ...prev, paperName: e.target.value }))}
+                                className={`w-44 px-2 py-1 text-xs font-semibold bg-white border rounded-md focus:outline-none focus:ring-2 shadow-2xs ${
+                                  !inlineFormData.paperName?.trim() ? 'border-rose-400 focus:ring-rose-400' : 'border-gray-300 focus:ring-teal-500'
+                                }`}
+                                title="Paper Name (Required)"
+                              />
+                            </td>
+                          )}
+
+                          {/* Catch No */}
+                          {visibleColumns.catchNo && (
+                            <td className="px-3 py-2 text-center">
+                              <div className="inline-flex flex-col items-center">
+                                <input
+                                  type="text"
+                                  placeholder="Catch *"
+                                  required
+                                  value={inlineFormData.catchNo}
+                                  onChange={(e) => setInlineFormData(prev => ({ ...prev, catchNo: e.target.value }))}
+                                  className={`w-24 px-1.5 py-1 text-xs font-mono font-bold text-center bg-white border rounded-md focus:outline-none focus:ring-2 shadow-2xs ${
+                                    !inlineFormData.catchNo?.trim() ? 'border-rose-400 bg-rose-50/50 text-rose-800 focus:ring-rose-400' : 'border-gray-300 focus:ring-teal-500'
+                                  }`}
+                                  title="Catch Number (Required)"
+                                />
+                                {!inlineFormData.catchNo?.trim() && (
+                                  <span className="text-[9px] text-rose-500 font-bold leading-tight mt-0.5">Required</span>
+                                )}
+                              </div>
+                            </td>
+                          )}
 
                           {/* Paper Number */}
-                          <td className="px-3 py-2 text-center">
-                            <input
-                              type="number"
-                              min="1"
-                              value={inlineFormData.paperNumber}
-                              onChange={(e) => setInlineFormData(prev => ({ ...prev, paperNumber: parseInt(e.target.value, 10) || 1 }))}
-                              className="w-14 px-1 py-1 text-xs font-bold text-center bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-2xs"
-                              title="Paper Number"
-                            />
-                          </td>
+                          {visibleColumns.paperNumber && (
+                            <td className="px-3 py-2 text-center">
+                              <input
+                                type="number"
+                                min="1"
+                                value={inlineFormData.paperNumber}
+                                onChange={(e) => setInlineFormData(prev => ({ ...prev, paperNumber: parseInt(e.target.value, 10) || 1 }))}
+                                className="w-14 px-1 py-1 text-xs font-bold text-center bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-2xs"
+                                title="Paper Number"
+                              />
+                            </td>
+                          )}
 
                           {/* Subject Dropdown */}
-                          <td className="px-3 py-2">
-                            <div className="relative inline-subject-dropdown">
-                              <button
-                                type="button"
-                                onClick={() => setInlineSubjectOpen(prev => !prev)}
-                                className="w-36 flex items-center justify-between gap-1 px-2 py-1 text-xs font-semibold bg-white border border-gray-300 rounded-md hover:border-teal-400 text-left truncate shadow-2xs cursor-pointer"
-                                title="Select Subjects"
-                              >
-                                <span className="truncate">
-                                  {inlineFormData.subjectIds?.length > 0
-                                    ? subjects
-                                        .filter(s => inlineFormData.subjectIds.includes(s.subjectId))
-                                        .map(s => s.subjectName)
-                                        .join(', ') || `${inlineFormData.subjectIds.length} selected`
-                                    : <span className="text-gray-400">Select...</span>}
-                                </span>
-                                <ChevronDown size={12} className="text-gray-400 shrink-0" />
-                              </button>
+                          {visibleColumns.subjectName && (
+                            <td className="px-3 py-2">
+                              <div className="relative inline-subject-dropdown">
+                                <button
+                                  type="button"
+                                  onClick={() => setInlineSubjectOpen(prev => !prev)}
+                                  className="w-36 flex items-center justify-between gap-1 px-2 py-1 text-xs font-semibold bg-white border border-gray-300 rounded-md hover:border-teal-400 text-left truncate shadow-2xs cursor-pointer"
+                                  title="Select Subjects"
+                                >
+                                  <span className="truncate">
+                                    {inlineFormData.subjectIds?.length > 0
+                                      ? subjects
+                                          .filter(s => inlineFormData.subjectIds.includes(s.subjectId))
+                                          .map(s => s.subjectName)
+                                          .join(', ') || `${inlineFormData.subjectIds.length} selected`
+                                      : <span className="text-gray-400">Select...</span>}
+                                  </span>
+                                  <ChevronDown size={12} className="text-gray-400 shrink-0" />
+                                </button>
 
-                              {inlineSubjectOpen && (
-                                <div className="absolute left-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2 max-h-48 overflow-y-auto space-y-1">
-                                  <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1 pb-1 border-b border-gray-100">
-                                    Select Subject(s) <span className="text-rose-500">*</span>
+                                {inlineSubjectOpen && (
+                                  <div className="absolute left-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2 max-h-48 overflow-y-auto space-y-1">
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1 pb-1 border-b border-gray-100">
+                                      Select Subject(s) <span className="text-rose-500">*</span>
+                                    </div>
+                                    {subjects.map(s => {
+                                      const isChecked = inlineFormData.subjectIds?.includes(s.subjectId);
+                                      return (
+                                        <label key={s.subjectId} className="flex items-center gap-2 px-1.5 py-1 hover:bg-gray-50 rounded cursor-pointer text-xs">
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={() => {
+                                              setInlineFormData(prev => {
+                                                const current = prev.subjectIds || [];
+                                                const next = current.includes(s.subjectId)
+                                                  ? current.filter(id => id !== s.subjectId)
+                                                  : [...current, s.subjectId];
+                                                return { ...prev, subjectIds: next };
+                                              });
+                                            }}
+                                            className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 w-3.5 h-3.5"
+                                          />
+                                          <span className="truncate font-medium text-gray-800">{s.subjectName}</span>
+                                        </label>
+                                      );
+                                    })}
                                   </div>
-                                  {subjects.map(s => {
-                                    const isChecked = inlineFormData.subjectIds?.includes(s.subjectId);
-                                    return (
-                                      <label key={s.subjectId} className="flex items-center gap-2 px-1.5 py-1 hover:bg-gray-50 rounded cursor-pointer text-xs">
-                                        <input
-                                          type="checkbox"
-                                          checked={isChecked}
-                                          onChange={() => {
-                                            setInlineFormData(prev => {
-                                              const current = prev.subjectIds || [];
-                                              const next = current.includes(s.subjectId)
-                                                ? current.filter(id => id !== s.subjectId)
-                                                : [...current, s.subjectId];
-                                              return { ...prev, subjectIds: next };
-                                            });
-                                          }}
-                                          className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 w-3.5 h-3.5"
-                                        />
-                                        <span className="truncate font-medium text-gray-800">{s.subjectName}</span>
-                                      </label>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          </td>
+                                )}
+                              </div>
+                            </td>
+                          )}
 
                           {/* Total Questions */}
-                          <td className="px-3 py-2 text-center">
-                            <input
-                              type="number"
-                              min="1"
-                              value={inlineFormData.totalQuestions}
-                              onChange={(e) => setInlineFormData(prev => ({ ...prev, totalQuestions: parseInt(e.target.value, 10) || 0 }))}
-                              className={`w-16 px-1.5 py-1 text-xs font-bold text-center bg-white border rounded-md focus:outline-none focus:ring-2 shadow-2xs ${
-                                !inlineFormData.totalQuestions || inlineFormData.totalQuestions <= 0 ? 'border-rose-400 focus:ring-rose-400' : 'border-gray-300 focus:ring-teal-500'
-                              }`}
-                              placeholder="Qs *"
-                              title="Total Questions (Required > 0)"
-                            />
-                          </td>
+                          {visibleColumns.totalQuestions && (
+                            <td className="px-3 py-2 text-center">
+                              <input
+                                type="number"
+                                min="1"
+                                value={inlineFormData.totalQuestions}
+                                onChange={(e) => setInlineFormData(prev => ({ ...prev, totalQuestions: parseInt(e.target.value, 10) || 0 }))}
+                                className={`w-16 px-1.5 py-1 text-xs font-bold text-center bg-white border rounded-md focus:outline-none focus:ring-2 shadow-2xs ${
+                                  !inlineFormData.totalQuestions || inlineFormData.totalQuestions <= 0 ? 'border-rose-400 focus:ring-rose-400' : 'border-gray-300 focus:ring-teal-500'
+                                }`}
+                                placeholder="Qs *"
+                                title="Total Questions (Required > 0)"
+                              />
+                            </td>
+                          )}
 
                           {/* Max Marks */}
-                          <td className="px-3 py-2 text-center">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="1"
-                              value={inlineFormData.maxMarks}
-                              onChange={(e) => setInlineFormData(prev => ({ ...prev, maxMarks: parseFloat(e.target.value) || 0 }))}
-                              className={`w-16 px-1.5 py-1 text-xs font-bold text-center bg-white border rounded-md focus:outline-none focus:ring-2 shadow-2xs ${
-                                !inlineFormData.maxMarks || inlineFormData.maxMarks <= 0 ? 'border-rose-400 focus:ring-rose-400' : 'border-gray-300 focus:ring-teal-500'
-                              }`}
-                              placeholder="Marks *"
-                              title="Max Marks (Required > 0)"
-                            />
-                          </td>
+                          {visibleColumns.maxMarks && (
+                            <td className="px-3 py-2 text-center">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="1"
+                                value={inlineFormData.maxMarks}
+                                onChange={(e) => setInlineFormData(prev => ({ ...prev, maxMarks: parseFloat(e.target.value) || 0 }))}
+                                className={`w-16 px-1.5 py-1 text-xs font-bold text-center bg-white border rounded-md focus:outline-none focus:ring-2 shadow-2xs ${
+                                  !inlineFormData.maxMarks || inlineFormData.maxMarks <= 0 ? 'border-rose-400 focus:ring-rose-400' : 'border-gray-300 focus:ring-teal-500'
+                                }`}
+                                placeholder="Marks *"
+                                title="Max Marks (Required > 0)"
+                              />
+                            </td>
+                          )}
 
                           {/* Question Paper */}
-                          <td className="px-4 py-2 text-center">
-                            <span className="text-[11px] text-gray-400 italic">
-                              {paper.questionPaperPdfUrl ? 'PDF Attached' : 'No PDF'}
-                            </span>
-                          </td>
+                          {visibleColumns.questionPaper && (
+                            <td className="px-4 py-2 text-center">
+                              <span className="text-[11px] text-gray-400 italic">
+                                {paper.questionPaperPdfUrl ? 'PDF Attached' : 'No PDF'}
+                              </span>
+                            </td>
+                          )}
+
+                          {/* Allotted Examiners */}
+                          {visibleColumns.assignedExaminers && (
+                            <td className="px-4 py-2 text-center">
+                              <span className="text-[11px] text-gray-400 font-semibold">
+                                {paper.assignedExaminers?.length ? `${paper.assignedExaminers.length} assigned` : 'None'}
+                              </span>
+                            </td>
+                          )}
 
                           {/* Configuration Status */}
-                          <td className="px-4 py-2 text-center">
-                            <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-full border border-amber-200">
-                              Editing
-                            </span>
-                          </td>
+                          {visibleColumns.statusFilter && (
+                            <td className="px-4 py-2 text-center">
+                              <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-full border border-amber-200">
+                                Editing
+                              </span>
+                            </td>
+                          )}
 
                           {/* Actions: Save & Cancel */}
                           <td className="px-4 py-2 text-right">
@@ -2357,146 +2575,184 @@ export default function PapersManagement({ isTab = false }) {
                             className="rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer w-4 h-4"
                           />
                         </td>
-                        <td className="px-4 py-2.5">
-                          <span className="font-mono bg-gray-100 text-gray-800 font-extrabold px-2 py-0.5 rounded text-xs uppercase tracking-wider">
-                            {paper.paperCode}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <span className="text-gray-900 font-bold text-xs block max-w-[200px] truncate" title={paper.paperName}>
-                            {paper.paperName}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5 text-center">
-                          {paper.catchNo ? (
-                            <span className="inline-block font-mono font-bold text-[11px] bg-blue-50 text-blue-700 border border-blue-200/60 px-2 py-0.5 rounded">
-                              {paper.catchNo}
+                        {visibleColumns.paperCode && (
+                          <td className="px-4 py-2.5">
+                            <span className="font-mono bg-gray-100 text-gray-800 font-extrabold px-2 py-0.5 rounded text-xs uppercase tracking-wider">
+                              {paper.paperCode}
                             </span>
-                          ) : (
-                            <span className="text-gray-400 italic text-[11px]">None</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5 text-center font-bold text-gray-700 text-xs">
-                          {paper.paperNumber ?? 1}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <span 
-                            className="text-gray-700 text-xs font-semibold block truncate max-w-[150px]"
-                            title={paper.subjectNames && paper.subjectNames.length > 0 ? paper.subjectNames.join(', ') : (paper.subjectName || '')}
-                          >
-                            {paper.subjectNames && paper.subjectNames.length > 0 
-                              ? paper.subjectNames.join(', ') 
-                              : (paper.subjectName || '-')}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5 text-center font-bold text-gray-700 text-xs">
-                          {paper.totalQuestions ?? 0}
-                        </td>
-                        <td className="px-4 py-2.5 text-center font-extrabold text-teal-800 text-xs">
-                          {paper.maxMarks}
-                        </td>
-                        <td className="px-4 py-2.5 text-center">
-                          {paper.questionPaperPdfUrl ? (
-                            <a
-                              href={`${import.meta.env.VITE_API_URL.replace('/api', '')}/${paper.questionPaperPdfUrl.replace(/^\//, '')}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200/90 hover:border-blue-300 transition-all shadow-2xs group cursor-pointer"
-                              title="View Question Paper PDF"
+                          </td>
+                        )}
+                        {visibleColumns.paperName && (
+                          <td className="px-4 py-2.5">
+                            <span className="text-gray-900 font-bold text-xs block max-w-[200px] truncate" title={paper.paperName}>
+                              {paper.paperName}
+                            </span>
+                          </td>
+                        )}
+                        {visibleColumns.catchNo && (
+                          <td className="px-4 py-2.5 text-center">
+                            {paper.catchNo ? (
+                              <span className="inline-block font-mono font-bold text-[11px] bg-blue-50 text-blue-700 border border-blue-200/60 px-2 py-0.5 rounded">
+                                {paper.catchNo}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 italic text-[11px]">None</span>
+                            )}
+                          </td>
+                        )}
+                        {visibleColumns.paperNumber && (
+                          <td className="px-4 py-2.5 text-center font-bold text-gray-700 text-xs">
+                            {paper.paperNumber ?? 1}
+                          </td>
+                        )}
+                        {visibleColumns.subjectName && (
+                          <td className="px-4 py-2.5">
+                            <span 
+                              className="text-gray-700 text-xs font-semibold block truncate max-w-[150px]"
+                              title={paper.subjectNames && paper.subjectNames.length > 0 ? paper.subjectNames.join(', ') : (paper.subjectName || '')}
                             >
-                              <Eye size={12} className="text-blue-600 group-hover:scale-110 transition-transform" />
-                              <span>View PDF</span>
-                            </a>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => triggerTableUpload(paper)}
-                              disabled={uploadingPaperId === paper.paperId}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider text-blue-700 hover:text-blue-800 bg-blue-50/70 hover:bg-blue-100 border border-dashed border-blue-300 hover:border-blue-400 transition-all shadow-2xs group cursor-pointer disabled:opacity-50"
-                              title="Upload Question Paper PDF"
-                            >
-                              {uploadingPaperId === paper.paperId ? (
-                                <span className="flex items-center gap-1 text-blue-600 animate-pulse">
-                                  <span className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin inline-block"></span>
-                                  <span>Uploading...</span>
-                                </span>
-                              ) : (
-                                <>
-                                  <Upload size={12} className="text-blue-600 group-hover:-translate-y-0.5 transition-transform" />
-                                  <span>Upload PDF</span>
-                                </>
-                              )}
-                            </button>
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5 text-center">
-                          {(() => {
-                            const missingReasons = [];
-                            const statusDetails = [];
-
-                            const hasSections = !!paper.isSectionsConfigured;
-                            const marksMatch = true; // Always true, no longer checking marks
-                            const hasEvaluators = (paper.expertsCount || 0) > 0;
-                            const hasQp = !!paper.questionPaperPdfUrl;
-
-                            if (!hasSections) {
-                              missingReasons.push("No sections configured for this paper");
-                              statusDetails.push({ label: "Sections", ok: false, text: "Sections not configured" });
-                            } else {
-                              statusDetails.push({ 
-                                label: "Sections", 
-                                ok: true, 
-                                text: "Sections configured" 
-                              });
-                            }
-
-                            if (!hasEvaluators) {
-                              missingReasons.push("No evaluators / examiners assigned");
-                              statusDetails.push({ label: "Evaluators", ok: false, text: "0 evaluators assigned" });
-                            } else {
-                              statusDetails.push({ label: "Evaluators", ok: true, text: `${paper.expertsCount} evaluator(s) assigned` });
-                            }
-
-                            if (!hasQp) {
-                              missingReasons.push("Question Paper PDF not uploaded");
-                              statusDetails.push({ label: "Question Paper", ok: false, text: "PDF not uploaded" });
-                            } else {
-                              statusDetails.push({ label: "Question Paper", ok: true, text: "PDF uploaded" });
-                            }
-
-                            const tooltipTitle = missingReasons.length > 0 
-                              ? `Configuration Status:\n• ` + missingReasons.join("\n• ")
-                              : "Configuration complete: Sections, Marks, Evaluators and Question Paper are fully configured.";
-
-                            return (
-                              <div className="flex items-center justify-center gap-2 text-[11px] font-medium text-gray-600" title={tooltipTitle}>
-                                <span 
-                                  className={`inline-flex items-center gap-1 ${hasSections ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`} 
-                                  title={hasSections ? 'Sections: Configured' : 'Sections: Not configured'}
-                                >
-                                  {hasSections ? <CheckCircle2 size={12} className="text-emerald-600 shrink-0" /> : <X size={12} className="text-rose-500 shrink-0" />}
-                                  Sections
-                                </span>
-                                <span className="text-gray-300">•</span>
-                                <span 
-                                  className={`inline-flex items-center gap-1 ${hasEvaluators ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`} 
-                                  title={hasEvaluators ? `Evaluators: ${paper.expertsCount} assigned` : 'Evaluators: None assigned'}
-                                >
-                                  {hasEvaluators ? <CheckCircle2 size={12} className="text-emerald-600 shrink-0" /> : <X size={12} className="text-rose-500 shrink-0" />}
-                                  Evaluator
-                                </span>
-                                <span className="text-gray-300">•</span>
-                                <span 
-                                  className={`inline-flex items-center gap-1 ${hasQp ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`} 
-                                  title={hasQp ? 'Question Paper: PDF uploaded' : 'Question Paper: PDF missing'}
-                                >
-                                  {hasQp ? <CheckCircle2 size={12} className="text-emerald-600 shrink-0" /> : <X size={12} className="text-rose-500 shrink-0" />}
-                                  QP PDF
-                                </span>
+                              {paper.subjectNames && paper.subjectNames.length > 0 
+                                ? paper.subjectNames.join(', ') 
+                                : (paper.subjectName || '-')}
+                            </span>
+                          </td>
+                        )}
+                        {visibleColumns.totalQuestions && (
+                          <td className="px-4 py-2.5 text-center font-bold text-gray-700 text-xs">
+                            {paper.totalQuestions ?? 0}
+                          </td>
+                        )}
+                        {visibleColumns.maxMarks && (
+                          <td className="px-4 py-2.5 text-center font-extrabold text-teal-800 text-xs">
+                            {paper.maxMarks}
+                          </td>
+                        )}
+                        {visibleColumns.questionPaper && (
+                          <td className="px-4 py-2.5 text-center">
+                            {paper.questionPaperPdfUrl ? (
+                              <a
+                                href={`${import.meta.env.VITE_API_URL.replace('/api', '')}/${paper.questionPaperPdfUrl.replace(/^\//, '')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200/90 hover:border-blue-300 transition-all shadow-2xs group cursor-pointer"
+                                title="View Question Paper PDF"
+                              >
+                                <Eye size={12} className="text-blue-600 group-hover:scale-110 transition-transform" />
+                                <span>View PDF</span>
+                              </a>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => triggerTableUpload(paper)}
+                                disabled={uploadingPaperId === paper.paperId}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider text-blue-700 hover:text-blue-800 bg-blue-50/70 hover:bg-blue-100 border border-dashed border-blue-300 hover:border-blue-400 transition-all shadow-2xs group cursor-pointer disabled:opacity-50"
+                                title="Upload Question Paper PDF"
+                              >
+                                {uploadingPaperId === paper.paperId ? (
+                                  <span className="flex items-center gap-1 text-blue-600 animate-pulse">
+                                    <span className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin inline-block"></span>
+                                    <span>Uploading...</span>
+                                  </span>
+                                ) : (
+                                  <>
+                                    <Upload size={12} className="text-blue-600 group-hover:-translate-y-0.5 transition-transform" />
+                                    <span>Upload PDF</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
+                          </td>
+                        )}
+                        {visibleColumns.assignedExaminers && (
+                          <td className="px-4 py-2.5 text-center">
+                            {paper.assignedExaminers && paper.assignedExaminers.length > 0 ? (
+                              <div className="flex flex-wrap items-center justify-center gap-1 max-w-[220px] mx-auto">
+                                {Array.from(new Map(paper.assignedExaminers.map(ex => [ex.id, ex])).values()).map(ex => (
+                                  <span 
+                                    key={ex.id}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-teal-50 text-teal-800 border border-teal-200/80 shadow-2xs"
+                                    title={ex.email ? `${ex.name} (${ex.email})` : ex.name}
+                                  >
+                                    <User size={10} className="text-teal-600 shrink-0" />
+                                    <span className="truncate max-w-[100px]">{ex.name}</span>
+                                  </span>
+                                ))}
                               </div>
-                            );
-                          })()}
-                        </td>
+                            ) : (
+                              <span className="text-gray-400 italic text-[11px]">Not Allotted</span>
+                            )}
+                          </td>
+                        )}
+                        {visibleColumns.statusFilter && (
+                          <td className="px-4 py-2.5 text-center">
+                            {(() => {
+                              const missingReasons = [];
+                              const statusDetails = [];
+
+                              const hasSections = !!paper.isSectionsConfigured;
+                              const marksMatch = true; // Always true, no longer checking marks
+                              const hasEvaluators = (paper.expertsCount || 0) > 0;
+                              const hasQp = !!paper.questionPaperPdfUrl;
+
+                              if (!hasSections) {
+                                missingReasons.push("No sections configured for this paper");
+                                statusDetails.push({ label: "Sections", ok: false, text: "Sections not configured" });
+                              } else {
+                                statusDetails.push({ 
+                                  label: "Sections", 
+                                  ok: true, 
+                                  text: "Sections configured" 
+                                });
+                              }
+
+                              if (!hasEvaluators) {
+                                missingReasons.push("No evaluators / examiners assigned");
+                                statusDetails.push({ label: "Evaluators", ok: false, text: "0 evaluators assigned" });
+                              } else {
+                                statusDetails.push({ label: "Evaluators", ok: true, text: `${paper.expertsCount} evaluator(s) assigned` });
+                              }
+
+                              if (!hasQp) {
+                                missingReasons.push("Question Paper PDF not uploaded");
+                                statusDetails.push({ label: "Question Paper", ok: false, text: "PDF not uploaded" });
+                              } else {
+                                statusDetails.push({ label: "Question Paper", ok: true, text: "PDF uploaded" });
+                              }
+
+                              const tooltipTitle = missingReasons.length > 0 
+                                ? `Configuration Status:\n• ` + missingReasons.join("\n• ")
+                                : "Configuration complete: Sections, Marks, Evaluators and Question Paper are fully configured.";
+
+                              return (
+                                <div className="flex items-center justify-center gap-2 text-[11px] font-medium text-gray-600" title={tooltipTitle}>
+                                  <span 
+                                    className={`inline-flex items-center gap-1 ${hasSections ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`} 
+                                    title={hasSections ? 'Sections: Configured' : 'Sections: Not configured'}
+                                  >
+                                    {hasSections ? <CheckCircle2 size={12} className="text-emerald-600 shrink-0" /> : <X size={12} className="text-rose-500 shrink-0" />}
+                                    Sections
+                                  </span>
+                                  <span className="text-gray-300">•</span>
+                                  <span 
+                                    className={`inline-flex items-center gap-1 ${hasEvaluators ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`} 
+                                    title={hasEvaluators ? `Evaluators: ${paper.expertsCount} assigned` : 'Evaluators: None assigned'}
+                                  >
+                                    {hasEvaluators ? <CheckCircle2 size={12} className="text-emerald-600 shrink-0" /> : <X size={12} className="text-rose-500 shrink-0" />}
+                                    Evaluator
+                                  </span>
+                                  <span className="text-gray-300">•</span>
+                                  <span 
+                                    className={`inline-flex items-center gap-1 ${hasQp ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`} 
+                                    title={hasQp ? 'Question Paper: PDF uploaded' : 'Question Paper: PDF missing'}
+                                  >
+                                    {hasQp ? <CheckCircle2 size={12} className="text-emerald-600 shrink-0" /> : <X size={12} className="text-rose-500 shrink-0" />}
+                                    QP PDF
+                                  </span>
+                                </div>
+                              );
+                            })()}
+                          </td>
+                        )}
                         <td className="px-4 py-2.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <div className="relative group/tooltip inline-block">
@@ -3943,13 +4199,13 @@ export default function PapersManagement({ isTab = false }) {
 
                     {/* Group sections by BatchId */}
                     <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                      {sectionMasters.length === 0 ? (
+                      {safeSectionMasters.length === 0 ? (
                         <p className="text-xs text-gray-400 text-center py-4">No master sections available.</p>
                       ) : (
                         (() => {
                           // Group masters by batchId
                           const batchGroups = {};
-                          sectionMasters.forEach(master => {
+                          safeSectionMasters.forEach(master => {
                             const bId = master.batchId || 'unbatched';
                             if (!batchGroups[bId]) {
                               batchGroups[bId] = [];
@@ -4130,7 +4386,7 @@ export default function PapersManagement({ isTab = false }) {
                     <div className="flex items-center justify-between pt-2">
                       <button
                         type="button"
-                        onClick={() => setSelectedMasterSectionIds(sectionMasters.map(m => m.id))}
+                        onClick={() => setSelectedMasterSectionIds(safeSectionMasters.map(m => m.id))}
                         className="text-[11px] text-teal-700 font-bold hover:underline"
                       >
                         Select All
@@ -4406,7 +4662,7 @@ export default function PapersManagement({ isTab = false }) {
           {showForm && (
             <div className="xl:col-span-5 min-w-0">
 {showForm && (() => {
-          const selectedMasterSections = sectionMasters.filter(m => selectedMasterSectionIds.includes(m.id));
+          const selectedMasterSections = safeSectionMasters.filter(m => selectedMasterSectionIds.includes(m.id));
           const masterTotalQuestions = selectedMasterSections.reduce((sum, m) => sum + (parseInt(m.totalQuestions, 10) || 0), 0);
           const masterTotalMarks = selectedMasterSections.reduce((sum, m) => sum + (parseFloat(m.totalMarks) || 0), 0);
           const parsedFormTotalQ = parseInt(formData.totalQuestions, 10);
@@ -4414,7 +4670,7 @@ export default function PapersManagement({ isTab = false }) {
 
           // Group sectionMasters by batchId
           const batchMap = {};
-          sectionMasters.forEach(sm => {
+          safeSectionMasters.forEach(sm => {
             const bId = sm.batchId || 1;
             if (!batchMap[bId]) batchMap[bId] = [];
             batchMap[bId].push(sm);

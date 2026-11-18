@@ -136,10 +136,10 @@ export const allocationService = {
   /**
    * Overwrite/Adjust examiner script allocation count for a paper
    */
-  overwriteExaminerCount: async (paperId, examinerId, targetCount) => {
+  overwriteExaminerCount: async (paperId, examinerId, targetCount, projectId = null, projectPaperId = null) => {
     return apiCall('/allocation/overwrite-examiner-count', {
       method: 'POST',
-      body: JSON.stringify({ paperId, examinerId, targetCount })
+      body: JSON.stringify({ paperId, examinerId, targetCount, projectId, projectPaperId })
     });
   },
 

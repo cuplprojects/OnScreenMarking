@@ -47,7 +47,10 @@ namespace API.Controllers
             [FromQuery] string? subjectName = null,
             [FromQuery] string? paperCode = null,
             [FromQuery] string? paperName = null,
-            [FromQuery] string? catchNo = null)
+            [FromQuery] string? catchNo = null,
+            [FromQuery] bool? forAllocation = null,
+            [FromQuery] string? qpStatus = null,
+            [FromQuery] string? examinerFilter = null)
         {
             try
             {
@@ -162,6 +165,59 @@ namespace API.Controllers
                     }
                 }
 
+                if (forAllocation == true)
+                {
+                    query = query.Where(p => 
+                        p.ProjectPapers.Any(pp => 
+                            (projectId <= 0 || pp.ProjectId == projectId) &&
+                            pp.QuestionPaperPdfUrl != null && pp.QuestionPaperPdfUrl != "" &&
+                            (pp.IsSectionConfigured || (pp.BatchId.HasValue && pp.BatchId.Value > 0)) &&
+                            pp.CatchNo != null && pp.CatchNo != ""
+                        ) &&
+                        _context.PaperExaminers.Any(pe => 
+                            pe.ProjectPaper != null && 
+                            pe.ProjectPaper.PaperId == p.PaperId && 
+                            (projectId <= 0 || pe.ProjectPaper.ProjectId == projectId) && 
+                            pe.IsActive
+                        )
+                    );
+                }
+
+                if (!string.IsNullOrWhiteSpace(qpStatus))
+                {
+                    var qp = qpStatus.Trim().ToLower();
+                    if (qp == "uploaded")
+                    {
+                        query = query.Where(p => p.ProjectPapers.Any(pp => (projectId <= 0 || pp.ProjectId == projectId) && pp.QuestionPaperPdfUrl != null && pp.QuestionPaperPdfUrl != ""));
+                    }
+                    else if (qp == "missing" || qp == "not_uploaded")
+                    {
+                        query = query.Where(p => !p.ProjectPapers.Any(pp => (projectId <= 0 || pp.ProjectId == projectId) && pp.QuestionPaperPdfUrl != null && pp.QuestionPaperPdfUrl != ""));
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(examinerFilter))
+                {
+                    var ef = examinerFilter.Trim();
+                    if (ef.Equals("allotted", StringComparison.OrdinalIgnoreCase) || ef.Equals("assigned", StringComparison.OrdinalIgnoreCase))
+                    {
+                        query = query.Where(p => _context.PaperExaminers.Any(pe => pe.ProjectPaper != null && pe.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || pe.ProjectPaper.ProjectId == projectId) && pe.IsActive));
+                    }
+                    else if (ef.Equals("not_allotted", StringComparison.OrdinalIgnoreCase) || ef.Equals("unassigned", StringComparison.OrdinalIgnoreCase))
+                    {
+                        query = query.Where(p => !_context.PaperExaminers.Any(pe => pe.ProjectPaper != null && pe.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || pe.ProjectPaper.ProjectId == projectId) && pe.IsActive));
+                    }
+                    else if (int.TryParse(ef, out int examinerId))
+                    {
+                        query = query.Where(p => _context.PaperExaminers.Any(pe => pe.ProjectPaper != null && pe.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || pe.ProjectPaper.ProjectId == projectId) && pe.IsActive && pe.ExaminerId == examinerId));
+                    }
+                    else
+                    {
+                        query = query.Where(p => _context.PaperExaminers.Any(pe => pe.ProjectPaper != null && pe.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || pe.ProjectPaper.ProjectId == projectId) && pe.IsActive && 
+                            (pe.Examiner.Name.Contains(ef) || (pe.Examiner.Email != null && pe.Examiner.Email.Contains(ef)))));
+                    }
+                }
+
                 // Sorting
                 if (!string.IsNullOrWhiteSpace(sortField))
                 {
@@ -211,6 +267,20 @@ namespace API.Controllers
                                 ? query.OrderByDescending(p => _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.Status == ScriptStatus.completed)) 
                                 : query.OrderBy(p => _context.Scripts.Count(s => s.ProjectPaper.PaperId == p.PaperId && s.Status == ScriptStatus.completed));
                             break;
+                        case "qpstatus":
+                        case "questionpaper":
+                            query = isDesc 
+                                ? query.OrderByDescending(p => p.ProjectPapers.Where(pp => projectId <= 0 || pp.ProjectId == projectId).Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() != null && p.ProjectPapers.Where(pp => projectId <= 0 || pp.ProjectId == projectId).Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() != "") 
+                                : query.OrderBy(p => p.ProjectPapers.Where(pp => projectId <= 0 || pp.ProjectId == projectId).Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() != null && p.ProjectPapers.Where(pp => projectId <= 0 || pp.ProjectId == projectId).Select(pp => pp.QuestionPaperPdfUrl).FirstOrDefault() != "");
+                            break;
+                        case "examinerfilter":
+                        case "assignedexaminers":
+                        case "examiner":
+                        case "examiners":
+                            query = isDesc 
+                                ? query.OrderByDescending(p => _context.PaperExaminers.Count(pe => pe.ProjectPaper != null && pe.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || pe.ProjectPaper.ProjectId == projectId) && pe.IsActive)) 
+                                : query.OrderBy(p => _context.PaperExaminers.Count(pe => pe.ProjectPaper != null && pe.ProjectPaper.PaperId == p.PaperId && (projectId <= 0 || pe.ProjectPaper.ProjectId == projectId) && pe.IsActive));
+                            break;
                         default:
                             query = isDesc ? query.OrderByDescending(p => p.PaperNumber) : query.OrderBy(p => p.PaperNumber);
                             break;
@@ -257,6 +327,28 @@ namespace API.Controllers
                     })
                     .ToListAsync();
 
+                var paperIdsOnPage = rawItems.Select(r => r.paperId).ToList();
+                var examinersList = await _context.PaperExaminers
+                    .Where(pe => pe.ProjectPaper != null && paperIdsOnPage.Contains(pe.ProjectPaper.PaperId) && (projectId <= 0 || pe.ProjectPaper.ProjectId == projectId) && pe.IsActive)
+                    .Select(pe => new
+                    {
+                        paperId = pe.ProjectPaper.PaperId,
+                        id = pe.ExaminerId,
+                        name = pe.Examiner != null ? pe.Examiner.Name : ("Examiner #" + pe.ExaminerId),
+                        email = pe.Examiner != null ? pe.Examiner.Email : ""
+                    })
+                    .ToListAsync();
+
+                var examinersGrouped = examinersList
+                    .GroupBy(e => e.paperId)
+                    .ToDictionary(
+                        g => g.Key, 
+                        g => g.GroupBy(e => e.id)
+                              .Select(eg => eg.First())
+                              .Select(e => (object)new { id = e.id, name = e.name, email = e.email })
+                              .ToList()
+                    );
+
                 var items = rawItems.Select(p =>
                 {
                     // Simplified: Only use IsSectionConfigured flag from ProjectPapers table
@@ -291,7 +383,8 @@ namespace API.Controllers
                         p.isExaminerAssigned,
                         sectionsCount = 0, // No longer calculating section count
                         configuredMarks = 0m, // No longer calculating marks
-                        p.expertsCount
+                        p.expertsCount,
+                        assignedExaminers = examinersGrouped.TryGetValue(p.paperId, out var exList) ? exList : new List<object>()
                     };
                 }).ToList();
 
@@ -331,6 +424,33 @@ namespace API.Controllers
                     .ToListAsync();
 
                 return Ok(options);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
+            }
+        }
+
+        [HttpGet("allotted-examiners")]
+        public async Task<IActionResult> GetAllottedExaminers([FromQuery] int projectId)
+        {
+            try
+            {
+                if (projectId <= 0) return BadRequest(new { success = false, message = "Valid Project ID is required" });
+
+                var examiners = await _context.PaperExaminers
+                    .Where(pe => pe.ProjectPaper != null && pe.ProjectPaper.ProjectId == projectId && pe.IsActive && pe.Examiner != null)
+                    .Select(pe => new
+                    {
+                        id = pe.ExaminerId,
+                        name = pe.Examiner.Name,
+                        email = pe.Examiner.Email ?? ""
+                    })
+                    .Distinct()
+                    .OrderBy(e => e.name)
+                    .ToListAsync();
+
+                return Ok(examiners);
             }
             catch (Exception ex)
             {

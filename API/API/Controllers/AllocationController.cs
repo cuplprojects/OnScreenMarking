@@ -1159,12 +1159,19 @@ namespace API.Controllers
             {
                 if (projectId <= 0) return BadRequest(new { success = false, message = "Valid Project ID is required" });
 
-                var projectPapers = await _context.ProjectPapers
-                    .Where(pp => pp.ProjectId == projectId)
-                    .Select(pp => pp.PaperId)
-                    .ToListAsync();
+                // 1. Fetch all ProjectPaper records for this project (including Paper details)
+                var projectPapersQuery = _context.ProjectPapers
+                    .Include(pp => pp.Paper)
+                    .Where(pp => pp.ProjectId == projectId);
 
-                if (!projectPapers.Any())
+                if (paperId.HasValue && paperId.Value > 0)
+                {
+                    projectPapersQuery = projectPapersQuery.Where(pp => pp.PaperId == paperId.Value);
+                }
+
+                var projectPapersList = await projectPapersQuery.ToListAsync();
+
+                if (!projectPapersList.Any())
                 {
                     return Ok(new
                     {
@@ -1174,56 +1181,210 @@ namespace API.Controllers
                     });
                 }
 
-                var targetPaperIds = paperId.HasValue && paperId.Value > 0 ? new List<int> { paperId.Value } : projectPapers;
+                var projectPaperIds = projectPapersList.Select(pp => pp.Id).ToList();
+                var ppMap = projectPapersList.ToDictionary(pp => pp.Id);
+                var paperIdToPpMap = projectPapersList
+                    .GroupBy(pp => pp.PaperId)
+                    .ToDictionary(g => g.Key, g => g.First());
 
-                var pendingScriptsCount = await _context.Scripts
-                    .CountAsync(s => targetPaperIds.Contains(s.ProjectPaper.PaperId) && (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any(a => a.AssignmentStatus))));
+                // 2. Compute project-wise script counts directly from Scripts where ProjectId == projectId
+                var projectScriptsBaseQuery = _context.Scripts
+                    .Where(s => s.ProjectId == projectId);
 
-                var allocatedScriptsCount = await _context.Allocations
-                    .CountAsync(a => targetPaperIds.Contains(a.Script.ProjectPaper.PaperId) && a.AssignmentStatus && !_context.Markings.Any(m => m.AllocationId == a.AllocationId && m.Status == MarkingStatus.submitted));
+                if (paperId.HasValue && paperId.Value > 0)
+                {
+                    projectScriptsBaseQuery = projectScriptsBaseQuery.Where(s => projectPaperIds.Contains(s.ProjectPaperId));
+                }
 
-                var completedScriptsCount = await _context.Allocations
-                    .CountAsync(a => targetPaperIds.Contains(a.Script.ProjectPaper.PaperId) && a.AssignmentStatus && (_context.Markings.Any(m => m.AllocationId == a.AllocationId && m.Status == MarkingStatus.submitted) || a.Script.Status == ScriptStatus.completed));
+                int totalScriptsCount = await projectScriptsBaseQuery.CountAsync();
 
+                int pendingScriptsCount = await projectScriptsBaseQuery
+                    .CountAsync(s => s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any(a => a.AssignmentStatus)));
+
+                // Paper-wise pending counts grouped by ProjectPaperId
+                var paperPendingGrouped = await projectScriptsBaseQuery
+                    .Where(s => s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any(a => a.AssignmentStatus)))
+                    .GroupBy(s => s.ProjectPaperId)
+                    .Select(g => new { ProjectPaperId = g.Key, Count = g.Count() })
+                    .ToListAsync();
+
+                var paperPendingMap = paperPendingGrouped.ToDictionary(x => x.ProjectPaperId, x => x.Count);
+
+                // 3. Fetch active allocations strictly for this project
+                var projectAllocations = await _context.Allocations
+                    .Include(a => a.Examiner)
+                    .Where(a => a.AssignmentStatus && (a.ProjectId == projectId || (a.Script != null && a.Script.ProjectId == projectId)))
+                    .Select(a => new
+                    {
+                        a.AllocationId,
+                        a.ExaminerId,
+                        ExaminerName = a.Examiner != null ? a.Examiner.Name : null,
+                        ExaminerEmail = a.Examiner != null ? a.Examiner.Email : null,
+                        ProjectPaperId = a.Script != null ? a.Script.ProjectPaperId : 0,
+                        PaperId = (a.Script != null && a.Script.ProjectPaper != null) ? a.Script.ProjectPaper.PaperId : 0,
+                        ScriptStatus = a.Script != null ? a.Script.Status : ScriptStatus.allocated
+                    })
+                    .ToListAsync();
+
+                var allocationIds = projectAllocations.Select(a => a.AllocationId).ToList();
+                var submittedSet = new HashSet<int>();
+                if (allocationIds.Any())
+                {
+                    var submittedMarkingAllocationIds = await _context.Markings
+                        .Where(m => allocationIds.Contains(m.AllocationId) && m.Status == MarkingStatus.submitted)
+                        .Select(m => m.AllocationId)
+                        .Distinct()
+                        .ToListAsync();
+                    submittedSet = new HashSet<int>(submittedMarkingAllocationIds);
+                }
+
+                int allocatedScriptsCount = projectAllocations.Count(a => 
+                    !submittedSet.Contains(a.AllocationId) && a.ScriptStatus != ScriptStatus.completed);
+
+                int completedScriptsCount = projectAllocations.Count(a => 
+                    submittedSet.Contains(a.AllocationId) || a.ScriptStatus == ScriptStatus.completed);
+
+                // 4. Gather examiners for this project directly by ProjectPaperId from PaperExaminers
                 var paperExaminersList = await _context.PaperExaminers
-                    .Where(pe => pe.ProjectPaper != null && targetPaperIds.Contains(pe.ProjectPaper.PaperId))
                     .Include(pe => pe.Examiner)
                     .Include(pe => pe.ProjectPaper)
                         .ThenInclude(pp => pp.Paper)
+                    .Where(pe => pe.IsActive && (projectPaperIds.Contains(pe.ProjectPaperId) || (pe.ProjectId == projectId)))
                     .ToListAsync();
 
-                var resultList = new List<object>();
+                var examinerPaperPairs = new HashSet<(int ExaminerId, int ProjectPaperId)>();
 
                 foreach (var pe in paperExaminersList)
                 {
-                    var exId = pe.ExaminerId;
-                    var pId = pe.ProjectPaper?.PaperId ?? pe.PaperId;
+                    int ppId = pe.ProjectPaperId;
+                    if (ppId <= 0 && pe.ProjectPaper != null) ppId = pe.ProjectPaper.Id;
 
-                    var activeAllocations = await _context.Allocations
-                        .Include(a => a.Script)
-                        .Where(a => a.ExaminerId == exId && a.Script.ProjectPaper.PaperId == pId && a.AssignmentStatus)
-                        .ToListAsync();
-
-                    int allocatedCount = activeAllocations.Count(a => !_context.Markings.Any(m => m.AllocationId == a.AllocationId && m.Status == MarkingStatus.submitted) && a.Script.Status != ScriptStatus.completed);
-                    int completedCount = activeAllocations.Count(a => _context.Markings.Any(m => m.AllocationId == a.AllocationId && m.Status == MarkingStatus.submitted) || a.Script.Status == ScriptStatus.completed);
-                    int paperPending = await _context.Scripts
-                        .CountAsync(s => s.ProjectPaper.PaperId == pId && (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any(a => a.AssignmentStatus))));
-
-                    resultList.Add(new
+                    if (ppId > 0 && ppMap.ContainsKey(ppId))
                     {
-                        examinerId = exId,
-                        examinerName = pe.Examiner?.Name ?? ("Examiner #" + exId),
-                        email = pe.Examiner?.Email ?? "",
-                        paperId = pId,
-                        projectPaperId = pe.ProjectPaperId,
-                        paperCode = pe.ProjectPaper?.Paper?.PaperCode ?? "",
-                        paperName = pe.ProjectPaper?.Paper?.PaperName ?? "",
-                        catchNo = pe.ProjectPaper?.CatchNo ?? "",
-                        pendingScripts = paperPending,
-                        allocatedCount = allocatedCount,
-                        completedCount = completedCount,
-                        totalAllocatedCount = allocatedCount + completedCount
-                    });
+                        examinerPaperPairs.Add((pe.ExaminerId, ppId));
+                    }
+                }
+
+                foreach (var a in projectAllocations)
+                {
+                    if (a.ExaminerId <= 0) continue;
+                    int ppId = a.ProjectPaperId;
+                    if (ppId <= 0 && a.PaperId > 0 && paperIdToPpMap.TryGetValue(a.PaperId, out var mappedPp))
+                    {
+                        ppId = mappedPp.Id;
+                    }
+
+                    if (ppId > 0 && ppMap.ContainsKey(ppId))
+                    {
+                        examinerPaperPairs.Add((a.ExaminerId, ppId));
+                    }
+                }
+
+                var allExaminerIds = examinerPaperPairs.Select(p => p.ExaminerId).Distinct().ToList();
+                var examinerUsers = new Dictionary<int, User>();
+                if (allExaminerIds.Any())
+                {
+                    examinerUsers = await _context.Users
+                        .Where(u => allExaminerIds.Contains(u.Id))
+                        .ToDictionaryAsync(u => u.Id);
+                }
+
+                // Total scripts assigned across the entire project for each examiner
+                var examinerProjectTotalAllocated = projectAllocations
+                    .GroupBy(a => a.ExaminerId)
+                    .ToDictionary(
+                        g => g.Key, 
+                        g => g.Count(a => !submittedSet.Contains(a.AllocationId) && a.ScriptStatus != ScriptStatus.completed)
+                    );
+
+                var examinerProjectTotalCompleted = projectAllocations
+                    .GroupBy(a => a.ExaminerId)
+                    .ToDictionary(
+                        g => g.Key, 
+                        g => g.Count(a => submittedSet.Contains(a.AllocationId) || a.ScriptStatus == ScriptStatus.completed)
+                    );
+
+                var examinerGroups = new List<object>();
+
+                foreach (var group in examinerPaperPairs
+                    .GroupBy(p => p.ExaminerId)
+                    .OrderBy(g => g.Key))
+                {
+                    int exId = group.Key;
+                    var examinerUser = examinerUsers.GetValueOrDefault(exId);
+                    var examinerName = examinerUser?.Name ?? ("Examiner #" + exId);
+                    var examinerEmail = examinerUser?.Email ?? "";
+
+                    var examinerPapers = new List<object>();
+                    int examinerTotalPending = 0;
+                    int examinerTotalAllocated = 0;
+                    int examinerTotalCompleted = 0;
+
+                    foreach (var pair in group)
+                    {
+                        int ppId = pair.ProjectPaperId;
+                        var pp = ppMap[ppId];
+                        var pId = pp.PaperId;
+
+                        int paperPending = paperPendingMap.GetValueOrDefault(ppId, 0);
+
+                        var exAllocationsForPaper = projectAllocations
+                            .Where(a => a.ExaminerId == exId && a.ProjectPaperId == ppId)
+                            .ToList();
+
+                        int allocatedCount = exAllocationsForPaper.Count(a => 
+                            !submittedSet.Contains(a.AllocationId) && a.ScriptStatus != ScriptStatus.completed);
+
+                        int completedCount = exAllocationsForPaper.Count(a => 
+                            submittedSet.Contains(a.AllocationId) || a.ScriptStatus == ScriptStatus.completed);
+
+                        int totalAllocatedCount = allocatedCount + completedCount;
+
+                        // Exclude papers where no scripts are allocated to this examiner
+                        if (totalAllocatedCount == 0) continue;
+
+                        examinerTotalPending += paperPending;
+                        examinerTotalAllocated += allocatedCount;
+                        examinerTotalCompleted += completedCount;
+
+                        var paperItem = new
+                        {
+                            examinerId = exId,
+                            examinerName = examinerName,
+                            email = examinerEmail,
+                            paperId = pId,
+                            projectPaperId = pp.Id,
+                            paperCode = pp.Paper?.PaperCode ?? "",
+                            paperName = pp.Paper?.PaperName ?? "",
+                            catchNo = pp.CatchNo ?? "",
+                            pendingScripts = paperPending,
+                            projectPendingScripts = pendingScriptsCount,
+                            allocatedCount = allocatedCount,
+                            completedCount = completedCount,
+                            totalAllocatedCount = totalAllocatedCount,
+                            examinerTotalInProject = examinerProjectTotalAllocated.GetValueOrDefault(exId, 0) + 
+                                                      examinerProjectTotalCompleted.GetValueOrDefault(exId, 0)
+                        };
+
+                        examinerPapers.Add(paperItem);
+                    }
+
+                    // Only include examiner if they have at least one paper with allocated scripts
+                    if (examinerPapers.Any())
+                    {
+                        examinerGroups.Add(new
+                        {
+                            examinerId = exId,
+                            examinerName = examinerName,
+                            email = examinerEmail,
+                            totalPending = examinerTotalPending,
+                            totalAllocated = examinerTotalAllocated,
+                            totalCompleted = examinerTotalCompleted,
+                            totalAssigned = examinerTotalAllocated + examinerTotalCompleted,
+                            papersCount = examinerPapers.Count,
+                            papers = examinerPapers
+                        });
+                    }
                 }
 
                 return Ok(new
@@ -1234,14 +1395,14 @@ namespace API.Controllers
                         pendingScripts = pendingScriptsCount,
                         allocatedScripts = allocatedScriptsCount,
                         completedScripts = completedScriptsCount,
-                        totalScripts = pendingScriptsCount + allocatedScriptsCount + completedScriptsCount
+                        totalScripts = totalScriptsCount
                     },
-                    examiners = resultList
+                    examiners = examinerGroups
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
+                return StatusCode(500, new { success = false, message = "An error occurred while fetching deallocation stats: " + ex.Message });
             }
         }
 
@@ -1256,15 +1417,34 @@ namespace API.Controllers
                     return BadRequest(new { success = false, message = "Invalid parameters provided." });
                 }
 
-                var currentAllocations = await _context.Allocations
+                var currentAllocationsQuery = _context.Allocations
                     .Include(a => a.Script)
+                        .ThenInclude(s => s.ProjectPaper)
                     .Where(a => a.ExaminerId == request.ExaminerId && 
-                                a.Script.ProjectPaper.PaperId == request.PaperId && 
                                 a.AssignmentStatus && 
                                 a.Script.Status != ScriptStatus.completed &&
-                                !_context.Markings.Any(m => m.AllocationId == a.AllocationId && m.Status == MarkingStatus.submitted))
-                    .ToListAsync();
+                                !_context.Markings.Any(m => m.AllocationId == a.AllocationId && m.Status == MarkingStatus.submitted));
 
+                if (request.ProjectId.HasValue && request.ProjectId.Value > 0)
+                {
+                    currentAllocationsQuery = currentAllocationsQuery.Where(a => 
+                        a.ProjectId == request.ProjectId.Value || 
+                        (a.Script != null && a.Script.ProjectId == request.ProjectId.Value) ||
+                        (a.Script != null && a.Script.ProjectPaper != null && a.Script.ProjectPaper.ProjectId == request.ProjectId.Value));
+                }
+
+                if (request.ProjectPaperId.HasValue && request.ProjectPaperId.Value > 0)
+                {
+                    currentAllocationsQuery = currentAllocationsQuery.Where(a => 
+                        a.Script != null && a.Script.ProjectPaperId == request.ProjectPaperId.Value);
+                }
+                else if (request.PaperId > 0)
+                {
+                    currentAllocationsQuery = currentAllocationsQuery.Where(a => 
+                        a.Script != null && a.Script.ProjectPaper != null && a.Script.ProjectPaper.PaperId == request.PaperId);
+                }
+
+                var currentAllocations = await currentAllocationsQuery.ToListAsync();
                 int currentCount = currentAllocations.Count;
 
                 if (request.TargetCount == currentCount)
@@ -1298,11 +1478,28 @@ namespace API.Controllers
                 {
                     int numToAdd = request.TargetCount - currentCount;
 
-                    var pendingScripts = await _context.Scripts
-                        .Where(s => s.ProjectPaper.PaperId == request.PaperId && 
-                                   (s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any(a => a.AssignmentStatus))))
-                        .Take(numToAdd)
-                        .ToListAsync();
+                    var pendingScriptsQuery = _context.Scripts
+                        .Include(s => s.ProjectPaper)
+                        .Include(s => s.Allocations)
+                        .Where(s => s.Status == ScriptStatus.pending || (s.Status != ScriptStatus.completed && !s.Allocations.Any(a => a.AssignmentStatus)));
+
+                    if (request.ProjectId.HasValue && request.ProjectId.Value > 0)
+                    {
+                        pendingScriptsQuery = pendingScriptsQuery.Where(s => 
+                            s.ProjectId == request.ProjectId.Value || 
+                            (s.ProjectPaper != null && s.ProjectPaper.ProjectId == request.ProjectId.Value));
+                    }
+
+                    if (request.ProjectPaperId.HasValue && request.ProjectPaperId.Value > 0)
+                    {
+                        pendingScriptsQuery = pendingScriptsQuery.Where(s => s.ProjectPaperId == request.ProjectPaperId.Value);
+                    }
+                    else if (request.PaperId > 0)
+                    {
+                        pendingScriptsQuery = pendingScriptsQuery.Where(s => s.ProjectPaper != null && s.ProjectPaper.PaperId == request.PaperId);
+                    }
+
+                    var pendingScripts = await pendingScriptsQuery.Take(numToAdd).ToListAsync();
 
                     if (pendingScripts.Count < numToAdd)
                     {
@@ -1318,7 +1515,7 @@ namespace API.Controllers
                         {
                             ScriptId = script.Id,
                             ExaminerId = request.ExaminerId,
-                            ProjectId = script.ProjectId ?? script.ProjectPaper?.ProjectId,
+                            ProjectId = request.ProjectId ?? script.ProjectId ?? script.ProjectPaper?.ProjectId,
                             AllocatedAt = DateTime.UtcNow,
                             Status = AllocationStatus.allocated,
                             AssignmentStatus = true
@@ -1477,5 +1674,7 @@ namespace API.Controllers
         public int PaperId { get; set; }
         public int ExaminerId { get; set; }
         public int TargetCount { get; set; }
+        public int? ProjectId { get; set; }
+        public int? ProjectPaperId { get; set; }
     }
 }
