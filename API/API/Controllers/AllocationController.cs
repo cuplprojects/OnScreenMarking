@@ -5,6 +5,7 @@ using API.Data;
 using API.Models;
 using API.Models.DTOs;
 using API.Services;
+using API.Attributes;
 
 namespace API.Controllers
 {
@@ -201,7 +202,7 @@ namespace API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_ALLOCATION")]
         public async Task<ActionResult<Allocation>> CreateAllocation([FromBody] AllocationDto allocationDto)
         {
             try
@@ -279,7 +280,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id}/start")]
-        [Authorize(Roles = "examiner")]
+        [RequirePermission("READ_MARKING", "CREATE_MARKING", "UPDATE_MARKING")]
         public async Task<IActionResult> StartMarking(int id)
         {
             try
@@ -312,7 +313,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id}/submit")]
-        [Authorize(Roles = "examiner")]
+        [RequirePermission("CREATE_MARKING", "UPDATE_MARKING")]
         public async Task<IActionResult> SubmitMarking(int id)
         {
             try
@@ -362,7 +363,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id}/cancel")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_ALLOCATION", "DELETE_ALLOCATION")]
         public async Task<IActionResult> CancelAllocation(int id)
         {
             try
@@ -498,7 +499,7 @@ namespace API.Controllers
         }
 
         [HttpGet("paper/{paperId}/pending-scripts")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("READ_ALLOCATION")]
         public async Task<ActionResult<dynamic>> GetPendingScriptsByPaper(int paperId)
         {
             try
@@ -588,7 +589,7 @@ namespace API.Controllers
         }
 
         [HttpPost("bulk-allocate")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_ALLOCATION", "UPDATE_ALLOCATION")]
         public async Task<ActionResult<dynamic>> BulkAllocateScripts([FromBody] BulkAllocationRequest request)
         {
             try
@@ -739,7 +740,7 @@ namespace API.Controllers
         }
         
         [HttpPost("paper/{paperId}/revoke-all")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("DELETE_ALLOCATION", "UPDATE_ALLOCATION")]
         public async Task<IActionResult> RevokeAllForPaper(int paperId)
         {
             try
@@ -775,7 +776,7 @@ namespace API.Controllers
         }
         
         [HttpPost("revoke")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("DELETE_ALLOCATION", "UPDATE_ALLOCATION")]
         public async Task<IActionResult> RevokeAllocations([FromBody] RevokeAllocationRequest request)
         {
             try
@@ -812,7 +813,7 @@ namespace API.Controllers
         }
 
         [HttpPost("reassign")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_ALLOCATION", "UPDATE_ALLOCATION")]
         public async Task<IActionResult> ReassignAllocations([FromBody] ReassignAllocationRequest request)
         {
             try
@@ -860,7 +861,7 @@ namespace API.Controllers
         }
         
         [HttpPost("project/{projectId}/auto-allocate")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_ALLOCATION", "UPDATE_ALLOCATION")]
         public async Task<IActionResult> ProjectAutoAllocate(int projectId)
         {
             try
@@ -997,7 +998,7 @@ namespace API.Controllers
             }
         }
         [HttpPost("cleanup-expired")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_ALLOCATION", "DELETE_ALLOCATION")]
         public async Task<IActionResult> CleanupExpiredAllocations()
         {
             try
@@ -1060,7 +1061,7 @@ namespace API.Controllers
         }
         
         [HttpPost("request-scripts")]
-        [Authorize(Roles = "examiner")]
+        [RequirePermission("READ_ALLOCATION", "READ_SCRIPT")]
         public async Task<IActionResult> RequestScripts([FromBody] DynamicPullRequest request)
         {
             try
@@ -1152,7 +1153,7 @@ namespace API.Controllers
         }
 
         [HttpGet("deallocation-stats")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("READ_ALLOCATION")]
         public async Task<IActionResult> GetDeallocationStats([FromQuery] int projectId, [FromQuery] int? paperId)
         {
             try
@@ -1246,7 +1247,7 @@ namespace API.Controllers
         }
 
         [HttpPost("overwrite-examiner-count")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_ALLOCATION", "UPDATE_ALLOCATION")]
         public async Task<IActionResult> OverwriteExaminerCount([FromBody] OverwriteExaminerCountRequest request)
         {
             try
@@ -1355,7 +1356,7 @@ namespace API.Controllers
         /// Daily allocation for a specific university if configured with 'Daily allocation'
         /// </summary>
         [HttpPost("university/{universityId}/daily-allocate")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_ALLOCATION", "UPDATE_ALLOCATION")]
         public async Task<IActionResult> DailyAllocateByUniversity(int universityId)
         {
             try
@@ -1379,7 +1380,7 @@ namespace API.Controllers
         /// Equal distribution allocation for a specific university
         /// </summary>
         [HttpPost("university/{universityId}/equal-distribute")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_ALLOCATION", "UPDATE_ALLOCATION")]
         public async Task<IActionResult> EqualDistributeByUniversity(int universityId)
         {
             try
@@ -1402,7 +1403,7 @@ namespace API.Controllers
         /// Daily allocation triggered for all universities configured with 'Daily allocation'
         /// </summary>
         [HttpPost("daily-allocate")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_ALLOCATION", "UPDATE_ALLOCATION")]
         public async Task<IActionResult> DailyAllocateAll()
         {
             try
@@ -1427,7 +1428,7 @@ namespace API.Controllers
         /// Sets allocation.Status = false (0) and resets scripts to pending.
         /// </summary>
         [HttpPost("university/{universityId}/reassign-expired")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_ALLOCATION", "UPDATE_ALLOCATION")]
         public async Task<IActionResult> ReassignExpiredByUniversity(int universityId)
         {
             try

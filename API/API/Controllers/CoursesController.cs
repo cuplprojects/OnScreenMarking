@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using API.Data;
 using API.Models;
 using API.Models.DTOs;
+using API.Attributes;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,6 +25,7 @@ namespace API.Controllers
         }
 
         [HttpGet]
+        [RequirePermission("READ_COURSE")]
         public async Task<IActionResult> GetCourses(
             [FromQuery] int? departmentId = null,
             [FromQuery] int? universityId = null,
@@ -155,7 +157,7 @@ namespace API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_COURSE")]
         public async Task<ActionResult<Courses>> CreateCourse([FromBody] CourseDto courseDto)
         {
             try
@@ -203,7 +205,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_COURSE")]
         public async Task<IActionResult> UpdateCourse(int id, [FromBody] CourseDto courseDto)
         {
             try
@@ -248,7 +250,7 @@ namespace API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("DELETE_COURSE")]
         public async Task<IActionResult> DeleteCourse(int id)
         {
             try
@@ -289,7 +291,7 @@ namespace API.Controllers
         }
 
         [HttpPost("{courseId}/subjects/{subjectId}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_COURSE")]
         public async Task<IActionResult> AddSubjectToCourse(int courseId, int subjectId)
         {
             try
@@ -325,7 +327,7 @@ namespace API.Controllers
         }
 
         [HttpDelete("{courseId}/subjects/{subjectId}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_COURSE")]
         public async Task<IActionResult> RemoveSubjectFromCourse(int courseId, int subjectId)
         {
             try

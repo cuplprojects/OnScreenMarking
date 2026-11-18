@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using API.Data;
 using API.Models;
 using API.Models.DTOs;
+using API.Attributes;
 
 namespace API.Controllers
 {
@@ -20,6 +21,7 @@ namespace API.Controllers
         }
 
         [HttpGet]
+        [RequirePermission("READ_SUBJECT")]
         public async Task<IActionResult> GetSubjects(
             [FromQuery] int? departmentId = null,
             [FromQuery] int page = 1,
@@ -367,7 +369,7 @@ namespace API.Controllers
             }
         }
         [HttpPost]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_SUBJECT")]
         public async Task<IActionResult> CreateSubject(
             [FromBody] SubjectDto subjectDto)
         {
@@ -486,7 +488,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_SUBJECT")]
         public async Task<IActionResult> UpdateSubject(int id, [FromBody] SubjectDto subjectDto)
         {
             try
@@ -622,7 +624,7 @@ namespace API.Controllers
         }
 
         [HttpPost("{subjectId}/departments/{departmentId}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_SUBJECT")]
         public async Task<IActionResult> AddDepartmentToSubject(int subjectId, int departmentId)
         {
             try
@@ -659,7 +661,7 @@ namespace API.Controllers
         }
 
         [HttpDelete("{subjectId}/departments/{departmentId}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_SUBJECT")]
         public async Task<IActionResult> RemoveDepartmentFromSubject(int subjectId, int departmentId)
         {
             try
@@ -682,7 +684,7 @@ namespace API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("DELETE_SUBJECT")]
         public async Task<IActionResult> DeleteSubject(int id)
         {
             try

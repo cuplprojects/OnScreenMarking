@@ -21,7 +21,7 @@ import message from '../services/messageService';
 
 export default function ProjectManagement() {
   const [searchParams] = useSearchParams();
-  const { userType, universityId: userUniversityId } = useAuth();
+  const { userType, universityId: userUniversityId, hasPermission } = useAuth();
   const universityIdFromUrl = searchParams.get('universityId');
   const activeUniversityId = userType === 'coordinator' ? userUniversityId : universityIdFromUrl;
 
@@ -104,21 +104,22 @@ export default function ProjectManagement() {
   // Register into the unified header bar
   const { setConfigHeader } = useConfigHeader();
   useEffect(() => {
+    const canCreate = hasPermission('CREATE_PROJECT');
     setConfigHeader({
       title: 'Projects Management',
       search,
       setSearch,
       searchPlaceholder: 'Search projects…',
-      actionLabel: 'Add Project',
-      onAction: () => {
+      actionLabel: canCreate ? 'Add Project' : undefined,
+      onAction: canCreate ? () => {
         setEditingId(null);
         setFormData({ projectName: '', sessionId: '', isActive: true });
         setShowForm(true);
-      },
+      } : undefined,
       count: totalCount,
     });
     return () => setConfigHeader(null);
-  }, [search, setSearch, setConfigHeader, totalCount]);
+  }, [search, setSearch, setConfigHeader, totalCount, hasPermission]);
 
   const handleEdit = (project) => {
     setFormData({
@@ -275,28 +276,34 @@ export default function ProjectManagement() {
                     </td>
                     <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleEdit(project)}
-                          className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl border border-gray-200 transition cursor-pointer"
-                          title="Edit Project"
-                        >
-                          <Edit2 size={13} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(project.projectId)}
-                          className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-100 transition cursor-pointer"
-                          title="Delete Project"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                        <Link
-                          to={userType === 'admin'
-                            ? `/admin/project-dashboard?projectId=${encryptId(project.projectId)}&tab=papers`
-                            : `/project-dashboard?projectId=${encryptId(project.projectId)}&tab=papers`}
-                          className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-xl font-bold text-[10px] uppercase tracking-wider border border-teal-100 transition cursor-pointer"
-                        >
-                          Configure Paper
-                        </Link>
+                        {hasPermission('UPDATE_PROJECT') && (
+                          <button
+                            onClick={() => handleEdit(project)}
+                            className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl border border-gray-200 transition cursor-pointer"
+                            title="Edit Project"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                        )}
+                        {hasPermission('DELETE_PROJECT') && (
+                          <button
+                            onClick={() => handleDelete(project.projectId)}
+                            className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-100 transition cursor-pointer"
+                            title="Delete Project"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                        {(hasPermission('CREATE_PAPER') || hasPermission('IMPORT_PAPERS') || hasPermission('UPDATE_PAPER') || hasPermission('MANAGE_SECTIONS')) && (
+                          <Link
+                            to={userType === 'admin'
+                              ? `/admin/project-dashboard?projectId=${encryptId(project.projectId)}&tab=papers`
+                              : `/project-dashboard?projectId=${encryptId(project.projectId)}&tab=papers`}
+                            className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-xl font-bold text-[10px] uppercase tracking-wider border border-teal-100 transition cursor-pointer"
+                          >
+                            Configure Paper
+                          </Link>
+                        )}
                       </div>
                     </td>
                   </tr>

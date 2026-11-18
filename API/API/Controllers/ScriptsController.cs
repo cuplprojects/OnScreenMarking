@@ -6,6 +6,7 @@ using API.Data;
 using API.Models;
 using API.Models.DTOs;
 using API.Services;
+using API.Attributes;
 using System.IO;
 
 namespace API.Controllers
@@ -327,7 +328,7 @@ namespace API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_SCRIPT")]
         public async Task<ActionResult<ScriptDto>> CreateScript([FromBody] ScriptDto scriptDto)
         {
             try
@@ -428,7 +429,7 @@ namespace API.Controllers
 
         [HttpPost("bulk")]
         [HttpPost("bulk-create")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_SCRIPT")]
         public async Task<IActionResult> BulkCreateScripts([FromBody] List<ScriptDto> scriptDtos)
         {
             try
@@ -518,7 +519,7 @@ namespace API.Controllers
 
         [HttpPost("upload")]
         [HttpPost("bulk-upload")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_SCRIPT")]
         public async Task<IActionResult> UploadScripts(
             [FromQuery] int? projectId,
             [FromQuery] int? paperId,
@@ -682,7 +683,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id:int}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_SCRIPT")]
         public async Task<IActionResult> UpdateScript(int id, [FromBody] ScriptStatusUpdateRequest request)
         {
             try
@@ -748,7 +749,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id:int}/assign")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_ALLOCATION", "UPDATE_ALLOCATION")]
         public async Task<IActionResult> AssignScript(int id, [FromBody] AssignScriptRequest request)
         {
             try
@@ -1039,7 +1040,7 @@ namespace API.Controllers
         /// </summary>
         [HttpGet("pending")]
         [HttpGet("unallocated")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("READ_SCRIPT", "READ_ALLOCATION")]
         public async Task<IActionResult> GetPendingScripts(
             [FromQuery] int? projectId = null,
             [FromQuery] int? paperId = null,

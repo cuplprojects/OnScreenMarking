@@ -9,6 +9,7 @@ using API.Data;
 using API.Models;
 using API.Models.DTOs;
 using API.Services;
+using API.Attributes;
 
 namespace API.Controllers
 {
@@ -229,7 +230,7 @@ namespace API.Controllers
         // If paper already has a shared/master batch, it forks to a new batch.
         // Links the paper to the batch via ProjectPapers.BatchId.
         [HttpPost]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_SECTIONS")]
         public async Task<ActionResult<object>> CreateProjectPaperSection([FromBody] CreateProjectPaperSectionDto dto)
         {
             try
@@ -506,7 +507,7 @@ namespace API.Controllers
         // If the edited section belongs to an imported master template or shared batch,
         // a NEW batch is created with all sections & questions, preserving the master template!
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_SECTIONS")]
         public async Task<IActionResult> UpdateProjectPaperSection(int id, [FromBody] UpdateProjectPaperSectionDto dto)
         {
             try
@@ -830,7 +831,7 @@ namespace API.Controllers
         // DELETE: api/projectpapersection/5
         // id = SectionMaster.Id
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_SECTIONS")]
         public async Task<IActionResult> DeleteProjectPaperSection(
             int id, 
             [FromQuery] int? projectPaperId = null, 
@@ -959,7 +960,7 @@ namespace API.Controllers
         // Assigns existing SectionMasters (by Id list) to a ProjectPaper via BatchId.
         // Does NOT create new SectionMaster rows — just links via ProjectPapers.BatchId.
         [HttpPost("import-masters")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_SECTIONS")]
         public async Task<IActionResult> ImportMasterSectionsToProjectPaper([FromBody] ImportMastersToProjectPaperRequest request)
         {
             try
@@ -1032,7 +1033,7 @@ namespace API.Controllers
         // Imports sections from the Sections table (master paper setup) into SectionMasters + QuestionMasters,
         // then links the ProjectPaper to the batch.
         [HttpPost("import-from-paper")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_SECTIONS")]
         public async Task<IActionResult> ImportFromMasterPaper([FromBody] ImportMasterToProjectPaperSectionsRequest request)
         {
             try

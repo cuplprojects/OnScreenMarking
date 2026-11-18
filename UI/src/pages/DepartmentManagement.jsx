@@ -21,7 +21,7 @@ import message from '../services/messageService';
 export default function DepartmentManagement() {
   const [searchParams] = useSearchParams();
   const universityId = searchParams.get('universityId');
-  const { userType, universityId: userUniversityId } = useAuth();
+  const { userType, universityId: userUniversityId, hasPermission } = useAuth();
 
   // For coordinators, use their university ID; for admins, use URL param
   const activeUniversityId = userType === 'coordinator' ? userUniversityId : universityId;
@@ -93,17 +93,18 @@ export default function DepartmentManagement() {
   // Register header extras into the unified UniversityConfigHeader bar
   const { setConfigHeader } = useConfigHeader();
   useEffect(() => {
+    const canCreate = hasPermission('CREATE_DEPARTMENT');
     setConfigHeader({
       title: 'Departments Management',
       search,
       setSearch,
       searchPlaceholder: 'Search departments…',
-      actionLabel: 'Add Department',
-      onAction: () => setShowForm(true),
+      actionLabel: canCreate ? 'Add Department' : undefined,
+      onAction: canCreate ? () => setShowForm(true) : undefined,
       count: totalCount,
     });
     return () => setConfigHeader(null);
-  }, [search, setSearch, setConfigHeader, totalCount]);
+  }, [search, setSearch, setConfigHeader, totalCount, hasPermission]);
 
 
   const handleEdit = (department) => {
@@ -257,20 +258,24 @@ export default function DepartmentManagement() {
                       </td>
                       <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
                         <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleEdit(department)}
-                            className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl border border-gray-200 transition cursor-pointer"
-                            title="Edit Department"
-                          >
-                            <Edit2 size={13} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(department.departmentId)}
-                            className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-100 transition cursor-pointer"
-                            title="Delete Department"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                          {hasPermission('UPDATE_DEPARTMENT') && (
+                            <button
+                              onClick={() => handleEdit(department)}
+                              className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl border border-gray-200 transition cursor-pointer"
+                              title="Edit Department"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                          )}
+                          {hasPermission('DELETE_DEPARTMENT') && (
+                            <button
+                              onClick={() => handleDelete(department.departmentId)}
+                              className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-100 transition cursor-pointer"
+                              title="Delete Department"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

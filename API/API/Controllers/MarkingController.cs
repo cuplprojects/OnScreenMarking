@@ -5,6 +5,7 @@ using API.Data;
 using API.Models;
 using API.Models.DTOs;
 using API.Services;
+using API.Attributes;
 using Microsoft.Extensions.Caching.Distributed;
 using System.Text.Json;
 
@@ -27,7 +28,7 @@ namespace API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "examiner")]
+        [RequirePermission("CREATE_MARKING", "UPDATE_MARKING")]
         public async Task<ActionResult<MarkingDto>> CreateMarking([FromBody] SubmitMarkingRequest request)
         {
             try
@@ -212,7 +213,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "examiner")]
+        [RequirePermission("CREATE_MARKING", "UPDATE_MARKING")]
         public async Task<IActionResult> UpdateMarking(int id, [FromBody] SubmitMarkingRequest request)
         {
             try
@@ -261,7 +262,7 @@ namespace API.Controllers
         }
 
         [HttpPost("{scriptId}/draft")]
-        [Authorize(Roles = "examiner")]
+        [RequirePermission("CREATE_MARKING", "UPDATE_MARKING")]
         public async Task<IActionResult> SaveDraftMarks(int scriptId, [FromBody] DraftMarksRequest request)
         {
             try
@@ -517,7 +518,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id}/submit")]
-        [Authorize(Roles = "examiner")]
+        [RequirePermission("CREATE_MARKING", "UPDATE_MARKING")]
         public async Task<IActionResult> SubmitMarking(int id)
         {
             try
@@ -885,7 +886,7 @@ namespace API.Controllers
         }
 
         [HttpPost("{markingId}/question-marks")]
-        [Authorize(Roles = "examiner")]
+        [RequirePermission("CREATE_MARKING", "UPDATE_MARKING")]
         public async Task<IActionResult> SaveQuestionMarks(int markingId, [FromBody] List<QuestionMarkDto> questionMarks)
         {
             try

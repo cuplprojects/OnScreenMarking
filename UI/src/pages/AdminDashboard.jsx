@@ -135,7 +135,8 @@ export default function AdminDashboard() {
       description: 'Manage universities',
       icon: <School size={16} />,
       path: '/admin/universities',
-      color: 'text-teal-700 bg-teal-50'
+      color: 'text-teal-700 bg-teal-50',
+      permission: hasPermission('CREATE_UNIVERSITY') || hasPermission('UPDATE_UNIVERSITY') || hasPermission('MANAGE_SETTINGS')
     },
     {
       id: 'colleges',
@@ -143,7 +144,8 @@ export default function AdminDashboard() {
       description: 'Manage colleges',
       icon: <Building2 size={16} />,
       path: '/admin/colleges',
-      color: 'text-purple-600 bg-purple-50'
+      color: 'text-purple-600 bg-purple-50',
+      permission: hasPermission('READ_COLLEGE') || hasPermission('CREATE_COLLEGE')
     },
     {
       id: 'question-types',
@@ -151,7 +153,8 @@ export default function AdminDashboard() {
       description: 'Manage question types',
       icon: <ClipboardList size={16} />,
       path: '/admin/question-types',
-      color: 'text-amber-600 bg-amber-50'
+      color: 'text-amber-600 bg-amber-50',
+      permission: hasPermission('MANAGE_QUESTIONS')
     },
     {
       id: 'attendance',
@@ -159,9 +162,10 @@ export default function AdminDashboard() {
       description: 'Review logs',
       icon: <Activity size={16} />,
       path: '/admin/attendance',
-      color: 'text-emerald-600 bg-emerald-50'
+      color: 'text-emerald-600 bg-emerald-50',
+      permission: hasPermission('READ_ATTENDANCE') || hasPermission('CREATE_ATTENDANCE')
     }
-  ];
+  ].filter(m => m.permission);
 
   const accessModules = [
     {
@@ -170,20 +174,23 @@ export default function AdminDashboard() {
       description: 'Manage system users',
       icon: <Users size={16} />,
       path: '/admin/users',
-      color: 'text-blue-600 bg-blue-50'
+      color: 'text-blue-600 bg-blue-50',
+      permission: hasPermission('READ_USER') || hasPermission('CREATE_USER')
     }
   ];
 
-  if (hasPermission && hasPermission("READ_ROLE")) {
+  if (hasPermission && (hasPermission("READ_ROLE") || hasPermission("CREATE_ROLE"))) {
     accessModules.push({
       id: 'roles',
       title: 'Roles & Permissions',
       description: 'Manage roles and access',
       icon: <ShieldCheck size={16} />,
       path: '/admin/role-management',
-      color: 'text-rose-600 bg-rose-50'
+      color: 'text-rose-600 bg-rose-50',
+      permission: true
     });
   }
+  const filteredAccessModules = accessModules.filter(m => m.permission);
 
   if (loading) {
     return (
@@ -461,7 +468,7 @@ export default function AdminDashboard() {
           <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
             <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">System Users & Roles</h3>
             <div className="flex flex-col gap-1.5">
-              {accessModules.map((module) => (
+              {filteredAccessModules.map((module) => (
                 <Link
                   key={module.id}
                   to={module.path}

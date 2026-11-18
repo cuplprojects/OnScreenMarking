@@ -7,7 +7,7 @@ using API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-
+using API.Attributes;
 using API.Services;
 
 namespace API.Controllers
@@ -84,7 +84,7 @@ namespace API.Controllers
         /// Creates a new assignment type
         /// </summary>
         [HttpPost]
-        [Authorize(Roles = "admin,Admin,coordinator,Coordinator")]
+        [RequirePermission("MANAGE_SETTINGS", "CREATE_ALLOCATION")]
         public async Task<IActionResult> Create([FromBody] AssignmentTypeDto dto)
         {
             try
@@ -143,7 +143,7 @@ namespace API.Controllers
         /// Updates an assignment type
         /// </summary>
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin,Admin,coordinator,Coordinator")]
+        [RequirePermission("MANAGE_SETTINGS", "UPDATE_ALLOCATION")]
         public async Task<IActionResult> Update(int id, [FromBody] AssignmentTypeDto dto)
         {
             try
@@ -196,7 +196,7 @@ namespace API.Controllers
         /// DELETE /api/AssignmentTypes/{id}
         /// </summary>
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin,Admin,coordinator,Coordinator")]
+        [RequirePermission("MANAGE_SETTINGS", "DELETE_ALLOCATION")]
         public async Task<IActionResult> Delete(int id)
         {
             try

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using API.Data;
 using API.Models;
 using API.Models.DTOs;
+using API.Attributes;
 
 namespace API.Controllers
 {
@@ -69,7 +70,7 @@ namespace API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_QUESTIONS")]
         public async Task<ActionResult<QuestionMaster>> CreateQuestion([FromBody] QuestionDto questionDto)
         {
             try
@@ -121,7 +122,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_QUESTIONS")]
         public async Task<IActionResult> UpdateQuestion(int id, [FromBody] QuestionDto questionDto)
         {
             try
@@ -150,7 +151,7 @@ namespace API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin")]
+        [RequirePermission("MANAGE_QUESTIONS")]
         public async Task<IActionResult> DeleteQuestion(int id)
         {
             try

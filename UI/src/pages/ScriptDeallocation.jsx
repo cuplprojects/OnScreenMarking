@@ -24,7 +24,7 @@ export default function ScriptDeallocation() {
   const encryptedProjectId = searchParams.get('projectId');
   const projectId = encryptedProjectId ? decryptId(encryptedProjectId) : null;
 
-  const { userType } = useAuth();
+  const { userType, hasPermission } = useAuth();
   const { setBreadcrumb } = useBreadcrumb();
 
   const [papers, setPapers] = useState([]);
@@ -559,49 +559,51 @@ export default function ScriptDeallocation() {
 
                         {/* Action */}
                         <td className="px-4 py-3 text-right pr-6">
-                          {editingRowKey === key ? (
-                            <div className="flex items-center justify-end gap-2">
+                          {(hasPermission('UPDATE_ALLOCATION') || hasPermission('DELETE_ALLOCATION')) && (
+                            editingRowKey === key ? (
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingRowKey(null);
+                                    setEditedCounts(prev => {
+                                      const next = { ...prev };
+                                      delete next[key];
+                                      return next;
+                                    });
+                                  }}
+                                  disabled={isSaving}
+                                  className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-colors inline-flex items-center gap-1 shadow-sm cursor-pointer"
+                                >
+                                  <X size={13} />
+                                  <span>Cancel</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveCount(item)}
+                                  disabled={isSaving}
+                                  className="px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1 shadow-sm cursor-pointer"
+                                >
+                                  <Check size={13} />
+                                  <span>{isSaving ? 'Saving...' : 'Save'}</span>
+                                </button>
+                              </div>
+                            ) : (
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setEditingRowKey(null);
-                                  setEditedCounts(prev => {
-                                    const next = { ...prev };
-                                    delete next[key];
-                                    return next;
-                                  });
+                                  setEditingRowKey(key);
+                                  setEditedCounts(prev => ({
+                                    ...prev,
+                                    [key]: item.allocatedCount
+                                  }));
                                 }}
-                                disabled={isSaving}
-                                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-colors inline-flex items-center gap-1 shadow-sm"
+                                className="px-4 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-xs font-bold transition-colors border border-teal-200 inline-flex items-center gap-1.5 shadow-sm cursor-pointer"
+                                title="Edit Target Allocation Count"
                               >
-                                <X size={13} />
-                                <span>Cancel</span>
+                                <Edit2 size={13} />
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => handleSaveCount(item)}
-                                disabled={isSaving}
-                                className="px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1 shadow-sm"
-                              >
-                                <Check size={13} />
-                                <span>{isSaving ? 'Saving...' : 'Save'}</span>
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingRowKey(key);
-                                setEditedCounts(prev => ({
-                                  ...prev,
-                                  [key]: item.allocatedCount
-                                }));
-                              }}
-                              className="px-4 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-xs font-bold transition-colors border border-teal-200 inline-flex items-center gap-1.5 shadow-sm"
-                              title="Edit Target Allocation Count"
-                            >
-                              <Edit2 size={13} />
-                            </button>
+                            )
                           )}
                         </td>
                       </tr>

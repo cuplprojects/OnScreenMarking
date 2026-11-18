@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using API.Data;
 using API.Models;
 using API.Models.DTOs;
+using API.Attributes;
 
 namespace API.Controllers
 {
@@ -20,6 +21,7 @@ namespace API.Controllers
         }
 
         [HttpGet]
+        [RequirePermission("READ_SESSION")]
         public async Task<ActionResult<object>> GetSessions(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 10,
@@ -121,7 +123,7 @@ namespace API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_SESSION")]
         public async Task<ActionResult<Session>> CreateSession([FromBody] SessionDto sessionDto)
         {
             try
@@ -155,7 +157,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_SESSION")]
         public async Task<IActionResult> UpdateSession(int id, [FromBody] SessionDto sessionDto)
         {
             try

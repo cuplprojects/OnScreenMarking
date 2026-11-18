@@ -36,7 +36,7 @@ export default function ImportQuestionPapers() {
   const [loadingProjects, setLoadingProjects] = useState(false);
 
   const universityId = searchParams.get('universityId');
-  const { userType, user } = useAuth();
+  const { userType, user, hasPermission } = useAuth();
   const userUniversityId = user?.universityId;
   const activeUniversityId = userType === "coordinator" ? userUniversityId : universityId;
   const { setBreadcrumb } = useBreadcrumb();
@@ -340,23 +340,25 @@ export default function ImportQuestionPapers() {
                   >
                     Clear Queue
                   </button>
-                  <button
-                    onClick={handleBulkUpload}
-                    disabled={isUploading}
-                    className="bg-teal-700 hover:bg-teal-800 active:scale-[0.98] disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider py-2 px-5 rounded-lg transition-all shadow-sm flex items-center gap-2 cursor-pointer"
-                  >
-                    {isUploading ? (
-                      <>
-                        <Loader size={14} className="animate-spin" />
-                        <span>Uploading {selectedFiles.length} PDFs...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload size={14} />
-                        <span>Upload & Auto-Allocate ({selectedFiles.length})</span>
-                      </>
-                    )}
-                  </button>
+                  {hasPermission('IMPORT_PAPERS') && (
+                    <button
+                      onClick={handleBulkUpload}
+                      disabled={isUploading}
+                      className="bg-teal-700 hover:bg-teal-800 active:scale-[0.98] disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider py-2 px-5 rounded-lg transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+                    >
+                      {isUploading ? (
+                        <>
+                          <Loader size={14} className="animate-spin" />
+                          <span>Uploading {selectedFiles.length} PDFs...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={14} />
+                          <span>Upload & Auto-Allocate ({selectedFiles.length})</span>
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
 

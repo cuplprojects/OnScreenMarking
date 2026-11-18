@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Layers, Plus, Edit2, Edit, Trash2, X, Award, Hash, CheckCircle2, Check, RefreshCw, Save, ListTodo, Eye } from 'lucide-react';
+import { Layers, Plus, Edit2, Edit, Trash2, X, Award, Hash, CheckCircle2, Check, RefreshCw, Save, ListTodo, Eye, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBreadcrumb } from '../context/BreadcrumbContext';
 import { useConfigHeader } from '../context/ConfigHeaderContext';
@@ -10,7 +10,7 @@ import TablePagination from '../components/TablePagination';
 import ColumnFilter from '../components/ColumnFilter';
 
 export default function SectionMasterManagement() {
-  const { userType } = useAuth();
+  const { userType, hasPermission } = useAuth();
   const { setBreadcrumb } = useBreadcrumb();
   const { setConfigHeader } = useConfigHeader();
 
@@ -25,6 +25,10 @@ export default function SectionMasterManagement() {
   const [activeSectionIdx, setActiveSectionIdx] = useState(0);
   const [newBatchSaving, setNewBatchSaving] = useState(false);
   const [questionTypesList, setQuestionTypesList] = useState([]);
+
+  // Duplicate batch tracking & map of all batches across all pages
+  const [allBatchesMap, setAllBatchesMap] = useState({});
+  const [duplicateBatchWarning, setDuplicateBatchWarning] = useState(null);
 
   const [deletingId, setDeletingId] = useState(null);
   const [batchIdOptions, setBatchIdOptions] = useState([]);
@@ -117,6 +121,189 @@ export default function SectionMasterManagement() {
       .then(data => { if (data?.length > 0) setQuestionTypesList(data); })
       .catch(console.error);
   }, []);
+
+  // Fetch all batches across all pages for comprehensive duplicate detection & previewing
+  const loadAllBatches = useCallback(async () => {
+    try {
+      const res = await sectionService.getSectionMasters({ all: true, pageSize: 100 });
+      const items = res?.items || (Array.isArray(res) ? res : []);
+      const map = {};
+      items.forEach(sec => {
+        const bId = sec.batchId || 1;
+        if (!map[bId]) map[bId] = [];
+        map[bId].push(sec);
+      });
+      setAllBatchesMap(map);
+    } catch (err) {
+      console.error("Failed to load all batch masters", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAllBatches();
+  }, [loadAllBatches]);
+
+  // Deep comparison logic to detect identical batch configurations
+  const checkBatchesIdentical = useCallback((candidateSections, existingSections) => {
+    if (!candidateSections || !existingSections) return false;
+    if (candidateSections.length !== existingSections.length) return false;
+
+    // Sort both by startQuestion, then by name
+    const sortedCandidate = [...candidateSections].sort((a, b) => {
+      const diff = (parseInt(a.startQuestion, 10) || 0) - (parseInt(b.startQuestion, 10) || 0);
+      return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+    });
+
+    const sortedExisting = [...existingSections].sort((a, b) => {
+      const diff = (parseInt(a.startQuestion, 10) || 0) - (parseInt(b.startQuestion, 10) || 0);
+      return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+    });
+
+    for (let i = 0; i < sortedCandidate.length; i++) {
+      const cSec = sortedCandidate[i];
+      const eSec = sortedExisting[i];
+
+      // 1. Name
+      if (cSec.name?.trim().toLowerCase() !== eSec.name?.trim().toLowerCase()) {
+        return false;
+      }
+
+      // 2. Start & End questions
+      const cStart = parseInt(cSec.startQuestion, 10) || 0;
+      const cEnd = parseInt(cSec.endQuestion, 10) || 0;
+      const eStart = parseInt(eSec.startQuestion, 10) || 0;
+      const eEnd = parseInt(eSec.endQuestion, 10) || 0;
+      if (cStart !== eStart || cEnd !== eEnd) {
+        return false;
+      }
+
+      // 3. Total marks
+      const cMarks = parseFloat(cSec.totalMarks) || 0;
+      const eMarks = parseFloat(eSec.totalMarks) || 0;
+      if (Math.abs(cMarks - eMarks) > 0.01) {
+        return false;
+      }
+
+      // 4. Max questions to attempt & total questions count
+      const cTotalQ = cSec.questions?.length || (cEnd >= cStart ? cEnd - cStart + 1 : 1);
+      const eTotalQ = eSec.questions?.length || (eEnd >= eStart ? eEnd - eStart + 1 : 1);
+      if (cTotalQ !== eTotalQ) {
+        return false;
+      }
+
+      const cMaxAttempt = parseInt(cSec.maxQuestionsToAttempt, 10) || cTotalQ;
+      const eMaxAttempt = parseInt(eSec.maxQuestionsToAttempt, 10) || eTotalQ;
+      if (cMaxAttempt !== eMaxAttempt) {
+        return false;
+      }
+
+      // 5. Questions breakdown
+      const cQuestions = cSec.questions || [];
+      const eQuestions = (eSec.questions && eSec.questions.length > 0)
+        ? eSec.questions
+        : Array.from({ length: eTotalQ }, (_, idx) => ({
+            questionNo: String(eStart + idx),
+            marks: eTotalQ > 0 ? eMarks / eTotalQ : 0,
+            type: 'MCQ',
+            isOptional: false,
+            optionalGroupCode: null
+          }));
+
+      if (cQuestions.length !== eQuestions.length) {
+        return false;
+      }
+
+      const parseQNo = (no) => {
+        const clean = String(no || '').replace(/^Q/i, '').trim();
+        const num = parseInt(clean, 10);
+        return isNaN(num) ? clean : num;
+      };
+
+      const sortedCQ = [...cQuestions].sort((a, b) => {
+        const na = parseQNo(a.questionNo);
+        const nb = parseQNo(b.questionNo);
+        if (typeof na === 'number' && typeof nb === 'number') return na - nb;
+        return String(na).localeCompare(String(nb));
+      });
+
+      const sortedEQ = [...eQuestions].sort((a, b) => {
+        const na = parseQNo(a.questionNo);
+        const nb = parseQNo(b.questionNo);
+        if (typeof na === 'number' && typeof nb === 'number') return na - nb;
+        return String(na).localeCompare(String(nb));
+      });
+
+      for (let qIdx = 0; qIdx < sortedCQ.length; qIdx++) {
+        const cq = sortedCQ[qIdx];
+        const eq = sortedEQ[qIdx];
+
+        // Question No
+        if (String(parseQNo(cq.questionNo)).toLowerCase() !== String(parseQNo(eq.questionNo)).toLowerCase()) {
+          return false;
+        }
+
+        // Marks
+        const cqM = parseFloat(cq.marks) || 0;
+        const eqM = parseFloat(eq.marks) || 0;
+        if (Math.abs(cqM - eqM) > 0.01) {
+          return false;
+        }
+
+        // Question Type
+        const getTypeName = (q) => {
+          if (q.type && typeof q.type === 'string' && q.type.trim()) return q.type.trim().toLowerCase();
+          const tid = q.questionTypeId || q.typeId;
+          if (tid && questionTypesList.length > 0) {
+            const found = questionTypesList.find(t => String(t.questionTypeId || t.id) === String(tid));
+            if (found) return (found.questionTypeName || '').trim().toLowerCase();
+          }
+          return 'mcq';
+        };
+
+        if (getTypeName(cq) !== getTypeName(eq)) {
+          return false;
+        }
+
+        // Optional status & optional group code
+        const cqIsOpt = Boolean(cq.isOptional || cq.optionalGroupCode);
+        const eqIsOpt = Boolean(eq.isOptional || eq.optionalGroupCode);
+        if (cqIsOpt !== eqIsOpt) {
+          return false;
+        }
+
+        const cleanGroup = (g, secName) => {
+          const str = (g || '').trim().toLowerCase();
+          if (!str || str === `${secName.toLowerCase()}-optional`) return '';
+          return str;
+        };
+
+        if (cleanGroup(cq.optionalGroupCode, cSec.name) !== cleanGroup(eq.optionalGroupCode, eSec.name)) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }, [questionTypesList]);
+
+  // Find if an identical batch already exists across all loaded batches
+  const findMatchingBatch = useCallback((candidateSections) => {
+    if (!candidateSections || candidateSections.length === 0) return null;
+    const batchIds = Object.keys(allBatchesMap).map(Number).sort((a, b) => a - b);
+    for (const bId of batchIds) {
+      const existing = allBatchesMap[bId];
+      if (checkBatchesIdentical(candidateSections, existing)) {
+        return bId;
+      }
+    }
+    return null;
+  }, [allBatchesMap, checkBatchesIdentical]);
+
+  // Real-time matched existing batch ID for the modal
+  const matchedExistingBatchId = useMemo(() => {
+    if (!showCreateBatchModal || !newBatchSections || newBatchSections.length === 0) return null;
+    return findMatchingBatch(newBatchSections);
+  }, [showCreateBatchModal, newBatchSections, findMatchingBatch]);
 
   // Update a field in the active section
   const updateSection = (idx, field, value) => {
@@ -222,6 +409,78 @@ export default function SectionMasterManagement() {
           questionTypeId: qTypeId,
           type: qTypeName,
         }))
+      };
+    }));
+  };
+
+  // Compute the next question number after the given one.
+  // "16"  → "17"  |  "16A" → "16B"  |  "16Z" → "16AA"
+  const nextQuestionNo = (qNo) => {
+    const str = String(qNo || '').trim();
+    // Check if ends with letter(s) → alpha suffix
+    const match = str.match(/^(\d+)([A-Za-z]*)$/);
+    if (match) {
+      const numPart = match[1];
+      const alphaPart = match[2];
+      if (alphaPart === '') {
+        // pure numeric: 16 → 17
+        return String(parseInt(numPart, 10) + 1);
+      }
+      // increment last letter: A→B, Z→AA
+      const upper = alphaPart.toUpperCase();
+      const incr = (s) => {
+        const arr = s.split('');
+        let i = arr.length - 1;
+        while (i >= 0) {
+          if (arr[i] < 'Z') { arr[i] = String.fromCharCode(arr[i].charCodeAt(0) + 1); return arr.join(''); }
+          arr[i] = 'A'; i--;
+        }
+        return 'A' + arr.join('');
+      };
+      return numPart + incr(upper);
+    }
+    // fallback: append suffix
+    return str + '_1';
+  };
+
+  // Add a question row after qIdx, copying all details from qIdx, with next question number
+  const handleAddQuestion = (sIdx, qIdx) => {
+    setNewBatchSections(prev => prev.map((sec, i) => {
+      if (i !== sIdx) return sec;
+      const qs = [...sec.questions];
+      const source = qs[qIdx];
+      const newQ = {
+        ...source,
+        id: null,
+        questionNo: nextQuestionNo(source.questionNo),
+      };
+      qs.splice(qIdx + 1, 0, newQ);
+      const startQ = parseInt(sec.startQuestion, 10) || 1;
+      return { 
+        ...sec, 
+        questions: qs,
+        endQuestion: startQ + qs.length - 1,
+        maxQuestionsToAttempt: Math.min(sec.maxQuestionsToAttempt || qs.length, qs.length)
+      };
+    }));
+  };
+
+  // Remove a question row at qIdx (only if more than 1 question)
+  const handleRemoveQuestion = (sIdx, qIdx) => {
+    setNewBatchSections(prev => prev.map((sec, i) => {
+      if (i !== sIdx) return sec;
+      if (sec.questions.length <= 1) {
+        message.error('A section must have at least 1 question.');
+        return sec;
+      }
+      const qs = [...sec.questions];
+      qs.splice(qIdx, 1);
+      const startQ = parseInt(sec.startQuestion, 10) || 1;
+      return { 
+        ...sec, 
+        questions: qs,
+        endQuestion: Math.max(startQ, startQ + qs.length - 1),
+        maxQuestionsToAttempt: Math.min(sec.maxQuestionsToAttempt || qs.length, qs.length)
       };
     }));
   };
@@ -558,6 +817,18 @@ export default function SectionMasterManagement() {
       }
     }
 
+    // Check if an identical batch already exists
+    const matchedBatchId = findMatchingBatch(newBatchSections);
+    if (matchedBatchId) {
+      const msg = `Same section configuration batch already exists (Batch #${matchedBatchId})`;
+      message.warning(msg, 6000);
+      setDuplicateBatchWarning({
+        batchId: matchedBatchId,
+        message: msg
+      });
+      return;
+    }
+
     // All validations passed! Save to backend
     setNewBatchSaving(true);
     try {
@@ -603,6 +874,15 @@ export default function SectionMasterManagement() {
         const res = await sectionService.createSectionMastersBatch(batchPayload);
         newBatchId = res?.batchId;
       } catch (batchErr) {
+        if (batchErr.response?.status === 409 || batchErr.response?.data?.existingBatchId) {
+          const dupBatchId = batchErr.response?.data?.existingBatchId || modalBatchId;
+          const msg = batchErr.response?.data?.message || `Same section configuration batch already exists (Batch #${dupBatchId})`;
+          message.warning(msg, 6000);
+          setDuplicateBatchWarning({ batchId: dupBatchId, message: msg });
+          setNewBatchSaving(false);
+          return;
+        }
+
         console.warn('Batch create endpoint failed, falling back to sequential create:', batchErr);
         // Fallback: sequential create with shared batchId
         let assignedBatchId = 0;
@@ -638,6 +918,7 @@ export default function SectionMasterManagement() {
       setDeletedSectionIds([]);
       setModalBatchId(0);
       refreshTable();
+      loadAllBatches();
     } catch (err) {
       message.error(err?.response?.data?.message || err?.message || 'Failed to save batch');
     } finally {
@@ -647,18 +928,19 @@ export default function SectionMasterManagement() {
 
   // Connect to ConfigHeader unified bar
   useEffect(() => {
+    const canManage = hasPermission('MANAGE_SECTIONS');
     setConfigHeader({
       title: 'Section Masters Management',
       search,
       setSearch,
       searchPlaceholder: 'Search section name, description, batch ID…',
-      actionLabel: 'Create Batch Sections',
-      onAction: openCreateBatchModal,
+      actionLabel: canManage ? 'Create Batch Sections' : undefined,
+      onAction: canManage ? openCreateBatchModal : undefined,
       count: totalCount,
     });
     return () => setConfigHeader(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, setSearch, setConfigHeader, totalCount]);
+  }, [search, setSearch, setConfigHeader, totalCount, hasPermission]);
 
   // Delete single section master
   const handleDelete = async (id, name) => {
@@ -896,22 +1178,26 @@ export default function SectionMasterManagement() {
                                 <Eye size={14} />
                               </button>
                               {/* Edit Button - opens batch sections modal */}
-                              <button
-                                onClick={() => openEditBatchModal(batchId)}
-                                className="p-1.5 text-gray-400 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-all duration-200 cursor-pointer"
-                                title="Edit Batch"
-                              >
-                                <Edit2 size={14} />
-                              </button>
+                              {hasPermission('MANAGE_SECTIONS') && (
+                                <button
+                                  onClick={() => openEditBatchModal(batchId)}
+                                  className="p-1.5 text-gray-400 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-all duration-200 cursor-pointer"
+                                  title="Edit Batch"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                              )}
                               {/* Delete Button */}
-                              <button
-                                onClick={() => handleDeleteBatch(batchId)}
-                                disabled={isDeleting}
-                                className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all duration-200 disabled:opacity-50 cursor-pointer"
-                                title="Delete Batch"
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                              {hasPermission('MANAGE_SECTIONS') && (
+                                <button
+                                  onClick={() => handleDeleteBatch(batchId)}
+                                  disabled={isDeleting}
+                                  className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all duration-200 disabled:opacity-50 cursor-pointer"
+                                  title="Delete Batch"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1135,6 +1421,7 @@ export default function SectionMasterManagement() {
                                 <th className="py-2.5 px-3 font-black text-gray-500 uppercase tracking-wider text-[10px]">Type</th>
                                 <th className="py-2.5 px-3 text-center font-black text-gray-500 uppercase tracking-wider text-[10px] w-24">Marks</th>
                                 <th className="py-2.5 px-3 font-black text-gray-500 uppercase tracking-wider text-[10px]">Group Code</th>
+                                <th className="py-2.5 px-3 text-center font-black text-gray-500 uppercase tracking-wider text-[10px] w-20">Actions</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 bg-white">
@@ -1200,6 +1487,27 @@ export default function SectionMasterManagement() {
                                       className="w-full px-2.5 py-1 border border-gray-300 rounded text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-teal-500 bg-white"
                                     />
                                   </td>
+                                  {/* Row Actions */}
+                                  <td className="py-1.5 px-3 text-center">
+                                    <div className="flex items-center justify-center gap-1">
+                                      <button
+                                        type="button"
+                                        title="Add question after this row"
+                                        onClick={() => handleAddQuestion(activeSectionIdx, qIdx)}
+                                        className="w-6 h-6 flex items-center justify-center rounded bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 transition-all cursor-pointer"
+                                      >
+                                        <Plus size={11} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        title="Remove this question"
+                                        onClick={() => handleRemoveQuestion(activeSectionIdx, qIdx)}
+                                        className="w-6 h-6 flex items-center justify-center rounded bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all cursor-pointer"
+                                      >
+                                        <X size={11} />
+                                      </button>
+                                    </div>
+                                  </td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1230,6 +1538,32 @@ export default function SectionMasterManagement() {
                 )}
               </div>
             </div>
+
+            {/* Real-time Matching Batch Warning Banner */}
+            {matchedExistingBatchId && (
+              <div className="px-6 py-2.5 bg-amber-50 border-t border-amber-200 flex items-center justify-between gap-3 text-amber-900 animate-in fade-in duration-200 shrink-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <AlertCircle size={16} className="text-amber-600 shrink-0" />
+                  <span className="text-xs font-bold truncate">
+                    Same section configuration batch already exists (<strong className="text-amber-950 font-black">Batch #{matchedExistingBatchId}</strong>).
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetId = matchedExistingBatchId;
+                    setShowCreateBatchModal(false);
+                    setNewBatchSections([]);
+                    setModalBatchId(0);
+                    setPreviewBatchId(targetId);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-black shrink-0 transition-colors cursor-pointer shadow-2xs"
+                >
+                  <Eye size={13} />
+                  <span>Preview Batch #{matchedExistingBatchId}</span>
+                </button>
+              </div>
+            )}
 
             {/* Modal Footer */}
             <div className="px-6 py-4 border-t border-gray-150 flex items-center justify-between shrink-0 bg-white">
@@ -1269,14 +1603,14 @@ export default function SectionMasterManagement() {
       )}
 
       {/* Side Preview Panel */}
-      {previewBatchId && groupedByBatch[previewBatchId] && (
+      {previewBatchId && (allBatchesMap[previewBatchId] || groupedByBatch[previewBatchId]) && (
         <div className="w-full max-w-2xl bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col animate-in slide-in-from-right-10 duration-300 max-h-[calc(100vh-140px)] sticky top-4">
           {/* Panel Header - Fixed */}
           <div className="bg-gradient-to-r from-teal-50 to-teal-100/50 border-b border-teal-200 px-6 py-4 flex items-center justify-between shrink-0">
             <div>
               <h3 className="font-black text-gray-900 text-lg">Batch #{previewBatchId}</h3>
               <p className="text-xs text-gray-600 font-bold uppercase tracking-wider mt-1">
-                {groupedByBatch[previewBatchId].length} Sections
+                {(allBatchesMap[previewBatchId] || groupedByBatch[previewBatchId] || []).length} Sections
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1293,7 +1627,7 @@ export default function SectionMasterManagement() {
           {/* Panel Body - Strictly Read-Only */}
           <div className="flex-1 overflow-y-auto">
             <div className="divide-y divide-gray-100">
-              {groupedByBatch[previewBatchId].map((section) => {
+              {(allBatchesMap[previewBatchId] || groupedByBatch[previewBatchId] || []).map((section) => {
                 const totalQ = section.totalQuestions || (section.endQuestion - section.startQuestion + 1);
                 const marksPerQ = totalQ > 0 ? (section.totalMarks / totalQ).toFixed(1) : '-';
 
@@ -1396,6 +1730,46 @@ export default function SectionMasterManagement() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Duplicate Batch Warning Modal ── */}
+      {duplicateBatchWarning && (
+        <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-amber-200 animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-4 shadow-2xs">
+              <AlertCircle size={26} />
+            </div>
+            <h3 className="text-base font-black text-gray-950 text-center mb-1.5">
+              Same Section Configuration Batch Already Exists
+            </h3>
+            <p className="text-xs text-gray-600 text-center mb-6 leading-relaxed">
+              An identical section batch with the exact same sections, questions, marks, and optional rules already exists as <strong className="text-teal-800 font-black">Batch #{duplicateBatchWarning.batchId}</strong>. A new duplicate batch cannot be created.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const targetBatchId = duplicateBatchWarning.batchId;
+                  setDuplicateBatchWarning(null);
+                  setShowCreateBatchModal(false);
+                  setNewBatchSections([]);
+                  setModalBatchId(0);
+                  setPreviewBatchId(targetId => targetBatchId);
+                }}
+                className="flex-1 py-2.5 px-4 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-black shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Eye size={15} />
+                <span>See Preview of Batch #{duplicateBatchWarning.batchId}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDuplicateBatchWarning(null)}
+                className="py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                Modify Sections
+              </button>
             </div>
           </div>
         </div>

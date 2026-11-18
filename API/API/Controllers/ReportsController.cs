@@ -3,12 +3,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using API.Data;
 using API.Models;
+using API.Attributes;
 
 namespace API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "admin,Admin,coordinator,Coordinator")]
+    [Authorize]
+    [RequirePermission("VIEW_REPORTS")]
     public class ReportsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -122,7 +124,6 @@ namespace API.Controllers
         }
 
         [HttpGet("examiner-performance")]
-        [Authorize(Roles = "coordinator,admin")]
         public async Task<IActionResult> GetExaminerPerformance()
         {
             try

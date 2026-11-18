@@ -735,7 +735,7 @@ function MasterPaperModal({ isOpen, onClose, onSubmit, initialData = null, subje
 
 export default function MasterPapersManagement() {
   const [searchParams] = useSearchParams();
-  const { userType, universityId: userUniversityId } = useAuth();
+  const { userType, universityId: userUniversityId, hasPermission } = useAuth();
   const universityIdFromUrl = searchParams.get('universityId');
   const activeUniversityId = userType === 'coordinator' ? userUniversityId : universityIdFromUrl;
   const { setBreadcrumb } = useBreadcrumb();
@@ -833,17 +833,18 @@ export default function MasterPapersManagement() {
 
   // Register header extras into the unified UniversityConfigHeader bar
   useEffect(() => {
+    const canCreate = hasPermission('CREATE_PAPER');
     setConfigHeader({
       title: 'Academic Papers Management',
       search,
       setSearch,
       searchPlaceholder: 'Search papers by code or name…',
-      actionLabel: 'Add Academic Paper',
-      onAction: () => setShowForm(true),
+      actionLabel: canCreate ? 'Add Academic Paper' : undefined,
+      onAction: canCreate ? () => setShowForm(true) : undefined,
       count: totalCount,
     });
     return () => setConfigHeader(null);
-  }, [search, setSearch, setConfigHeader, totalCount]);
+  }, [search, setSearch, setConfigHeader, totalCount, hasPermission]);
 
   const handleEdit = (paper) => {
     setEditingData({
@@ -999,27 +1000,35 @@ export default function MasterPapersManagement() {
                         ) : '-'}
                       </td>
                       <td className="py-2.5 md:px-6 px-4">
-                        <button
-                          onClick={() => setSectionsPaperModal(paper)}
-                          className="bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200/80 px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center gap-1.5 transition-colors cursor-pointer"
-                          title="Configure Master Sections"
-                        >
-                          <Layers size={12} className="text-teal-600 shrink-0" />
-                          {paper.masterSectionNames.length > 0 && (
-                            <span className="truncate max-w-[140px]">{paper.masterSectionNames.join(', ')}</span>
-                          )}
-                        </button>
+                        {hasPermission('MANAGE_SECTIONS') ? (
+                          <button
+                            onClick={() => setSectionsPaperModal(paper)}
+                            className="bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200/80 px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center gap-1.5 transition-colors cursor-pointer"
+                            title="Configure Master Sections"
+                          >
+                            <Layers size={12} className="text-teal-600 shrink-0" />
+                            {paper.masterSectionNames.length > 0 && (
+                              <span className="truncate max-w-[140px]">{paper.masterSectionNames.join(', ')}</span>
+                            )}
+                          </button>
+                        ) : (
+                          <div className="text-[10px] text-gray-500 font-semibold truncate max-w-[140px]">
+                            {paper.masterSectionNames.length > 0 ? paper.masterSectionNames.join(', ') : '-'}
+                          </div>
+                        )}
                       </td>
                      
                       <td className="py-2.5 text-right md:px-6 px-4">
                         <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => handleEdit(paper)}
-                            className="p-2 bg-gray-50 hover:bg-teal-50 hover:text-teal-700 text-gray-600 rounded-xl border border-gray-200 hover:border-teal-200 transition-all cursor-pointer shadow-sm group"
-                            title="Edit Paper"
-                          >
-                            <Edit2 size={14} className="group-hover:scale-110 transition-transform" />
-                          </button>
+                          {hasPermission('UPDATE_PAPER') && (
+                            <button
+                              onClick={() => handleEdit(paper)}
+                              className="p-2 bg-gray-50 hover:bg-teal-50 hover:text-teal-700 text-gray-600 rounded-xl border border-gray-200 hover:border-teal-200 transition-all cursor-pointer shadow-sm group"
+                              title="Edit Paper"
+                            >
+                              <Edit2 size={14} className="group-hover:scale-110 transition-transform" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

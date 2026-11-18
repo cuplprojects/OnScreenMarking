@@ -6,6 +6,7 @@ using API.Data;
 using API.Models;
 using API.Models.DTOs;
 using API.Services;
+using API.Attributes;
 
 namespace API.Controllers
 {
@@ -198,7 +199,7 @@ namespace API.Controllers
         /// Body: { paperId, subjectId?, examinerId?, universityId?, requested }
         /// </summary>
         [HttpPost("request-paper")]
-        [Authorize(Roles = "examiner,Examiner")]
+        [RequirePermission("READ_ALLOCATION", "READ_SCRIPT")]
         public async Task<IActionResult> RequestPaper([FromBody] SubjectPaperRequestDto dto)
         {
             try
@@ -280,7 +281,7 @@ namespace API.Controllers
         /// GET /api/PaperExaminers/subject-paper-requests
         /// </summary>
         [HttpGet("subject-paper-requests")]
-        [Authorize(Roles = "coordinator,Coordinator,admin,Admin")]
+        [RequirePermission("READ_ALLOCATION")]
         public async Task<IActionResult> GetSubjectPaperRequests([FromQuery] int? universityId = null)
         {
             try
@@ -366,7 +367,7 @@ namespace API.Controllers
         /// PATCH /api/PaperExaminers/subject-paper-requests/{id}/toggle-status
         /// </summary>
         [HttpPatch("subject-paper-requests/{id}/toggle-status")]
-        [Authorize(Roles = "coordinator,Coordinator,admin,Admin")]
+        [RequirePermission("UPDATE_ALLOCATION")]
         public async Task<IActionResult> ToggleSubjectPaperRequestStatus(int id)
         {
             try
@@ -392,7 +393,7 @@ namespace API.Controllers
         /// POST /api/PaperExaminers/subject-paper-requests/{id}/allocate-and-fulfill
         /// </summary>
         [HttpPost("subject-paper-requests/{id}/allocate-and-fulfill")]
-        [Authorize(Roles = "coordinator,Coordinator,admin,Admin")]
+        [RequirePermission("CREATE_ALLOCATION", "UPDATE_ALLOCATION")]
         public async Task<IActionResult> AllocateAndFulfill(int id, [FromBody] AllocateAndFulfillDto dto)
         {
             try
@@ -475,7 +476,7 @@ namespace API.Controllers
         /// DELETE /api/PaperExaminers/subject-paper-requests/{id}
         /// </summary>
         [HttpDelete("subject-paper-requests/{id}")]
-        [Authorize(Roles = "coordinator,Coordinator,admin,Admin")]
+        [RequirePermission("DELETE_ALLOCATION")]
         public async Task<IActionResult> DeleteSubjectPaperRequest(int id)
         {
             try
@@ -691,7 +692,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_ALLOCATION")]
         public async Task<IActionResult> UpdateAssignment(int id, [FromBody] PaperExaminerUpdateDto dto)
         {
             try
@@ -759,7 +760,7 @@ namespace API.Controllers
 
         [HttpPut("update")]
         [HttpPost("update")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_ALLOCATION")]
         public async Task<IActionResult> UpdateExaminerAssignment([FromBody] PaperExaminerUpdateDto dto)
         {
             try
@@ -845,7 +846,7 @@ namespace API.Controllers
         }
 
         [HttpPost("assign")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_ALLOCATION")]
         public async Task<IActionResult> AssignExaminer([FromBody] PaperExaminerAssignDto assignDto)
         {
             try
@@ -978,7 +979,7 @@ namespace API.Controllers
         }
 
         [HttpDelete("remove/{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("DELETE_ALLOCATION")]
         public async Task<IActionResult> RemoveAssignment(int id)
         {
             try
@@ -1074,7 +1075,7 @@ namespace API.Controllers
         }
 
         [HttpPost("bulk-assign")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_ALLOCATION")]
         public async Task<IActionResult> BulkAssign([FromBody] BulkAssignRequest request)
         {
             try

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using API.Data;
 using API.Models;
 using API.Models.DTOs;
+using API.Attributes;
 
 namespace API.Controllers
 {
@@ -74,7 +75,7 @@ namespace API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_USER", "CREATE_ALLOCATION")]
         public async Task<ActionResult<ExaminerExpertiseDto>> AddExpertise([FromBody] ExaminerExpertiseDto expertiseDto)
         {
             try
@@ -96,14 +97,14 @@ namespace API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_USER", "CREATE_ALLOCATION")]
         public async Task<IActionResult> UpdateExpertise(int id, [FromBody] ExaminerExpertiseDto expertiseDto)
         {
             return Ok(new { success = true, message = "Expertise updated successfully" });
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_USER", "CREATE_ALLOCATION")]
         public async Task<IActionResult> RemoveExpertise(int id)
         {
             return Ok(new { success = true, message = "Expertise removed successfully" });

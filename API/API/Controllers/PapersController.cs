@@ -7,6 +7,7 @@ using API.Data;
 using API.Models;
 using API.Models.DTOs;
 using API.Services;
+using API.Attributes;
 
 namespace API.Controllers
 {
@@ -581,7 +582,7 @@ namespace API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_PAPER")]
         public async Task<ActionResult<PaperDto>> CreatePaper(
             [FromBody] PaperDto paperDto)
         {
@@ -781,7 +782,7 @@ namespace API.Controllers
         }
 
         [HttpPost("import")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("IMPORT_PAPERS", "CREATE_PAPER")]
         public async Task<IActionResult> ImportPapers([FromBody] ImportPapersRequest request)
         {
             try
@@ -973,7 +974,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_PAPER")]
         public async Task<IActionResult> UpdatePaper(int id, [FromBody] PaperDto paperDto)
         {
             try
@@ -1105,7 +1106,7 @@ namespace API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin")]
+        [RequirePermission("DELETE_PAPER")]
         public async Task<IActionResult> DeletePaper(int id)
         {
             try
@@ -1153,7 +1154,7 @@ namespace API.Controllers
         }
 
         [HttpPost("{id}/question-paper")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_PAPER", "CREATE_PAPER")]
         public async Task<IActionResult> UploadQuestionPaper(int id, [FromQuery] int? projectId, IFormFile file)
         {
             try
@@ -1253,7 +1254,7 @@ namespace API.Controllers
         }
 
         [HttpDelete("{id}/question-paper")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_PAPER", "DELETE_PAPER")]
         public async Task<IActionResult> RemoveQuestionPaper(int id, [FromQuery] int? projectId)
         {
             try
@@ -1301,7 +1302,7 @@ namespace API.Controllers
         }
 
         [HttpPost("bulk-upload-question-papers")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("IMPORT_PAPERS", "CREATE_PAPER", "UPDATE_PAPER")]
         public async Task<IActionResult> BulkUploadQuestionPapers([FromQuery] int? projectId, List<IFormFile> files)
         {
             try

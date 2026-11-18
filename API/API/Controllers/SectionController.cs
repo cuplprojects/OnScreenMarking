@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using API.Data;
 using API.Models;
 using API.Models.DTOs;
+using API.Attributes;
 
 namespace API.Controllers
 {
@@ -324,7 +325,7 @@ namespace API.Controllers
         }
 
         [HttpPost("Masters")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_SECTIONS")]
         public async Task<ActionResult> CreateSectionMaster([FromBody] SectionMasterDto dto)
         {
             try
@@ -405,7 +406,7 @@ namespace API.Controllers
         }
 
         [HttpPost("Masters/Batch")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_SECTIONS")]
         public async Task<ActionResult> CreateSectionMastersBatch([FromBody] BatchSectionMasterDto dto)
         {
             try
@@ -426,6 +427,105 @@ namespace API.Controllers
                 if (duplicateInList != null)
                 {
                     return BadRequest(new { success = false, message = $"Duplicate section name '{duplicateInList.Key}' found in the submitted batch" });
+                }
+
+                // Check if an identical section batch with identical question masters already exists
+                var allExistingMasters = await _context.SectionMasters.AsNoTracking().ToListAsync();
+                var candidateBatchIds = allExistingMasters
+                    .GroupBy(m => m.BatchId)
+                    .Where(g => g.Count() == dto.Sections.Count)
+                    .Select(g => g.Key)
+                    .ToList();
+
+                if (candidateBatchIds.Any())
+                {
+                    var candidateQMs = await _context.QuestionMasters
+                        .AsNoTracking()
+                        .Where(qm => candidateBatchIds.Contains(qm.BatchId))
+                        .ToListAsync();
+
+                    var allQTypes = await _context.QuestionTypes.AsNoTracking().ToListAsync();
+
+                    foreach (var candidateId in candidateBatchIds)
+                    {
+                        var bMasters = allExistingMasters.Where(m => m.BatchId == candidateId).OrderBy(m => m.StartQuestion).ToList();
+                        var dtoSections = dto.Sections.OrderBy(s => s.StartQuestion).ToList();
+
+                        bool isMatch = true;
+                        for (int i = 0; i < bMasters.Count; i++)
+                        {
+                            var bm = bMasters[i];
+                            var ds = dtoSections[i];
+
+                            if (!string.Equals(bm.Name.Trim(), ds.Name.Trim(), StringComparison.OrdinalIgnoreCase))
+                            { isMatch = false; break; }
+                            if (bm.StartQuestion != ds.StartQuestion || bm.EndQuestion != ds.EndQuestion)
+                            { isMatch = false; break; }
+                            if (Math.Abs(bm.TotalMarks - ds.TotalMarks) > 0.01m)
+                            { isMatch = false; break; }
+
+                            int dsTotalQ = ds.TotalQuestions > 0 ? ds.TotalQuestions : (ds.EndQuestion >= ds.StartQuestion ? ds.EndQuestion - ds.StartQuestion + 1 : 1);
+                            if (bm.TotalQuestions != dsTotalQ)
+                            { isMatch = false; break; }
+
+                            int dsMaxAttempt = ds.MaxQuestionsToAttempt > 0 ? ds.MaxQuestionsToAttempt : dsTotalQ;
+                            if (bm.MaxQuestionsToAttempt != dsMaxAttempt)
+                            { isMatch = false; break; }
+
+                            // Compare questions for this section
+                            var bmQuestions = candidateQMs
+                                .Where(q => q.BatchId == candidateId && q.Section.Trim().Equals(bm.Name.Trim(), StringComparison.OrdinalIgnoreCase))
+                                .OrderBy(q => q.Id)
+                                .ToList();
+                            var dsQuestions = ds.Questions ?? new List<QuestionMasterDto>();
+
+                            if (bmQuestions.Count != dsQuestions.Count)
+                            { isMatch = false; break; }
+
+                            for (int qIdx = 0; qIdx < bmQuestions.Count; qIdx++)
+                            {
+                                var bq = bmQuestions[qIdx];
+                                var dq = dsQuestions[qIdx];
+
+                                string bqNo = (bq.Question ?? "").Trim().TrimStart('Q', 'q');
+                                string dqNo = (dq.QuestionNo ?? "").Trim().TrimStart('Q', 'q');
+                                if (!string.Equals(bqNo, dqNo, StringComparison.OrdinalIgnoreCase))
+                                { isMatch = false; break; }
+
+                                if (Math.Abs(bq.Marks - (decimal)dq.Marks) > 0.01m)
+                                { isMatch = false; break; }
+
+                                string bqType = bq.Type ?? allQTypes.FirstOrDefault(t => t.QuestionTypeId == bq.QuestionTypeId)?.QuestionTypeName ?? "MCQ";
+                                string dqType = dq.Type ?? allQTypes.FirstOrDefault(t => t.QuestionTypeId == (dq.TypeId ?? dq.QuestionTypeId))?.QuestionTypeName ?? "MCQ";
+                                if (!string.Equals(bqType.Trim(), dqType.Trim(), StringComparison.OrdinalIgnoreCase))
+                                { isMatch = false; break; }
+
+                                bool bqOpt = !string.IsNullOrEmpty(bq.Group);
+                                bool dqOpt = dq.IsOptional || !string.IsNullOrEmpty(dq.OptionalGroupCode);
+                                if (bqOpt != dqOpt)
+                                { isMatch = false; break; }
+
+                                string bqGrp = (bq.Group ?? "").Trim();
+                                string dqGrp = (dq.OptionalGroupCode ?? "").Trim();
+                                if (string.Equals(bqGrp, $"{bm.Name}-Optional", StringComparison.OrdinalIgnoreCase)) bqGrp = "";
+                                if (string.Equals(dqGrp, $"{ds.Name}-Optional", StringComparison.OrdinalIgnoreCase)) dqGrp = "";
+                                if (!string.Equals(bqGrp, dqGrp, StringComparison.OrdinalIgnoreCase))
+                                { isMatch = false; break; }
+                            }
+
+                            if (!isMatch) break;
+                        }
+
+                        if (isMatch)
+                        {
+                            return Conflict(new
+                            {
+                                success = false,
+                                message = $"Same section configuration batch already exists (Batch #{candidateId})",
+                                existingBatchId = candidateId
+                            });
+                        }
+                    }
                 }
 
                 var newMasters = new List<SectionMaster>();
@@ -520,7 +620,7 @@ namespace API.Controllers
         }
 
         [HttpPut("Masters/{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_SECTIONS")]
         public async Task<IActionResult> UpdateSectionMaster(int id, [FromBody] SectionMasterDto dto)
         {
             try
@@ -634,7 +734,7 @@ namespace API.Controllers
 
         [HttpPut("Masters/Batch/{batchId}")]
         [HttpPut("Masters/Batch")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_SECTIONS")]
         public async Task<IActionResult> UpdateSectionMastersBatch([FromRoute] int? batchId, [FromBody] BatchSectionMasterDto dto)
         {
             try
@@ -851,7 +951,7 @@ namespace API.Controllers
         }
 
         [HttpDelete("Masters/{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_SECTIONS")]
         public async Task<IActionResult> DeleteSectionMaster(int id)
         {
             try
@@ -925,7 +1025,7 @@ namespace API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_SECTIONS")]
         public async Task<ActionResult<Section>> CreateSection([FromBody] SectionDto sectionDto)
         {
             try
@@ -1126,7 +1226,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_SECTIONS")]
         public async Task<IActionResult> UpdateSection(int id, [FromBody] SectionDto sectionDto)
         {
             try
@@ -1241,7 +1341,7 @@ namespace API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_SECTIONS")]
         public async Task<IActionResult> DeleteSection(int id)
         {
             try
@@ -1275,7 +1375,7 @@ namespace API.Controllers
         }
 
         [HttpPost("bulk-create")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_SECTIONS")]
         public async Task<IActionResult> BulkCreateSections([FromBody] BulkSectionDto request)
         {
             try
@@ -1401,7 +1501,7 @@ namespace API.Controllers
         }
 
         [HttpPost("import")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_SECTIONS")]
         public async Task<IActionResult> ImportSections([FromBody] ImportSectionDto request)
         {
             try
@@ -1571,7 +1671,7 @@ namespace API.Controllers
 
         [HttpPut("question/{questionId}")]
         [HttpPut("questions/{questionId}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_QUESTIONS", "MANAGE_SECTIONS")]
         public async Task<IActionResult> UpdateQuestion(int questionId, [FromBody] QuestionDto questionDto)
         {
             try
@@ -1600,7 +1700,7 @@ namespace API.Controllers
         }
 
         [HttpPost("import-masters")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_SECTIONS")]
         public async Task<IActionResult> ImportMasterSections([FromBody] ImportMasterSectionsRequest request)
         {
             try
@@ -1773,7 +1873,7 @@ namespace API.Controllers
         }
 
         [HttpPost("paper-masters")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_SECTIONS")]
         public async Task<IActionResult> SavePaperMasterSections([FromBody] SavePaperMasterSectionsRequest request)
         {
             try

@@ -17,6 +17,7 @@ import {
 import message from '../services/messageService';
 
 export default function SessionProjectManagement() {
+  const { hasPermission } = useAuth();
   const fetchFn = useCallback((params) => {
     return sessionService.getAllSessions(params);
   }, []);
@@ -109,17 +110,18 @@ export default function SessionProjectManagement() {
   // Register into the unified header bar
   const { setConfigHeader } = useConfigHeader();
   useEffect(() => {
+    const canCreate = hasPermission('CREATE_SESSION');
     setConfigHeader({
       title: 'Sessions Management',
       search,
       setSearch,
       searchPlaceholder: 'Search sessions…',
-      actionLabel: 'Add Session',
-      onAction: () => setShowForm(true),
+      actionLabel: canCreate ? 'Add Session' : undefined,
+      onAction: canCreate ? () => setShowForm(true) : undefined,
       count: totalCount,
     });
     return () => setConfigHeader(null);
-  }, [search, setSearch, setConfigHeader, totalCount]);
+  }, [search, setSearch, setConfigHeader, totalCount, hasPermission]);
 
   return (
     <div className="w-full space-y-3">
@@ -210,13 +212,15 @@ export default function SessionProjectManagement() {
                     </td>
                     <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleEdit(session)}
-                          className="p-2 bg-gray-50 hover:bg-teal-50 hover:text-teal-700 text-gray-600 rounded-xl border border-gray-200 hover:border-teal-200 transition-all cursor-pointer shadow-sm group"
-                          title="Edit Session"
-                        >
-                          <Edit2 size={14} className="group-hover:scale-110 transition-transform" />
-                        </button>
+                        {hasPermission('UPDATE_SESSION') && (
+                          <button
+                            onClick={() => handleEdit(session)}
+                            className="p-2 bg-gray-50 hover:bg-teal-50 hover:text-teal-700 text-gray-600 rounded-xl border border-gray-200 hover:border-teal-200 transition-all cursor-pointer shadow-sm group"
+                            title="Edit Session"
+                          >
+                            <Edit2 size={14} className="group-hover:scale-110 transition-transform" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

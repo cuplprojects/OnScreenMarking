@@ -1,5 +1,6 @@
 using API.Data;
 using API.Models;
+using API.Attributes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +12,7 @@ namespace API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "admin,Admin,coordinator,Coordinator")]
+    [Authorize]
     public class StatsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -156,7 +157,7 @@ namespace API.Controllers
             }
         }
         [HttpGet("admin-counts")]
-        [Authorize(Roles = "admin,Admin")]
+        [RequirePermission("VIEW_REPORTS", "READ_USER")]
         public async Task<IActionResult> GetAdminCounts()
         {
             try

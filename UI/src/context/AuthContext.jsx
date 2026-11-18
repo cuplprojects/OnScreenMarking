@@ -126,30 +126,12 @@ export function AuthProvider({ children }) {
     if (!user) return false;
 
     // Admin has full permissions
-    if (user.userType === 'admin') return true;
+    if (user.userType?.toLowerCase() === 'admin') return true;
 
-    // Coordinator standard permissions
-    if (user.userType === 'coordinator') {
-      const coordinatorPerms = [
-        "READ_SCRIPT", "READ_MARKING", "CREATE_MARKING", "UPDATE_MARKING", 
-        "VIEW_REPORTS", "READ_ALLOCATION", "CREATE_ALLOCATION", "UPDATE_ALLOCATION", 
-        "DELETE_ALLOCATION", "READ_USER", "READ_ROLE", "VIEW_LOGS"
-      ];
-      if (coordinatorPerms.includes(permissionName)) {
-        return true;
-      }
-    }
-
-    // Examiner standard permissions
-    if (user.userType === 'examiner') {
-      const examinerPerms = ["READ_SCRIPT", "READ_MARKING", "CREATE_MARKING", "UPDATE_MARKING", "VIEW_REPORTS", "READ_ALLOCATION"];
-      if (examinerPerms.includes(permissionName)) {
-        return true;
-      }
-    }
-
+    
+    // Check permissions loaded from the database Roles table for this user's role
     if (permissions && permissions.length > 0) {
-      return permissions.includes(permissionName);
+      return permissions.some(p => p.toLowerCase() === permissionName?.toLowerCase());
     }
     return false;
   };

@@ -101,7 +101,7 @@ export default function PapersManagement({ isTab = false }) {
   const paperIdFromUrl = rawPaperId ? decryptId(rawPaperId) : null;
   const universityId = searchParams.get("universityId");
   const statusFilterFromUrl = searchParams.get("statusFilter");
-  const { userType, universityId: userUniversityId } = useAuth();
+  const { userType, universityId: userUniversityId, hasPermission } = useAuth();
   const { setBreadcrumb } = useBreadcrumb();
   const activeUniversityId = userType === "coordinator" ? userUniversityId : universityId;
   const navigate = useNavigate();
@@ -2011,7 +2011,7 @@ export default function PapersManagement({ isTab = false }) {
                   </div>
 
                   {/* Add Paper */}
-                  {!isProjectInactive && (
+                  {!isProjectInactive && hasPermission("CREATE_PAPER") && (
                     <button
                       onClick={() => {
                         setFormData({
@@ -2548,31 +2548,35 @@ export default function PapersManagement({ isTab = false }) {
                               </div>
                             </div>
                             
-                            <div className="relative group/tooltip inline-block">
-                              <button
-                                onClick={() => openAllocationModal(paper)}
-                                className="p-1.5 text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200/80 rounded-lg transition-all block shadow-2xs cursor-pointer"
-                              >
-                                <Users size={14} />
-                              </button>
-                              <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-bold rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50">
-                                Assign Evaluators
-                                <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-900"></div>
+                            {hasPermission("CREATE_ALLOCATION") && (
+                              <div className="relative group/tooltip inline-block">
+                                <button
+                                  onClick={() => openAllocationModal(paper)}
+                                  className="p-1.5 text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200/80 rounded-lg transition-all block shadow-2xs cursor-pointer"
+                                >
+                                  <Users size={14} />
+                                </button>
+                                <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-bold rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50">
+                                  Assign Evaluators
+                                  <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-900"></div>
+                                </div>
                               </div>
-                            </div>
+                            )}
 
-                            <div className="relative group/tooltip inline-block">
-                              <button
-                                onClick={() => handleEdit(paper)}
-                                className="p-1.5 text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200/80 rounded-lg transition-all block shadow-2xs cursor-pointer"
-                              >
-                                <Edit2 size={14} />
-                              </button>
-                              <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-bold rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50">
-                                Edit Paper Configuration
-                                <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-900"></div>
+                            {hasPermission("UPDATE_PAPER") && (
+                              <div className="relative group/tooltip inline-block">
+                                <button
+                                  onClick={() => handleEdit(paper)}
+                                  className="p-1.5 text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200/80 rounded-lg transition-all block shadow-2xs cursor-pointer"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                                <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-bold rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50">
+                                  Edit Paper Configuration
+                                  <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-900"></div>
+                                </div>
                               </div>
-                            </div>
+                            )}
                           </div>
                         </td>
                       </tr>

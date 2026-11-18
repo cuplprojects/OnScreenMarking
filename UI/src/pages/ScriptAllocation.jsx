@@ -63,7 +63,7 @@ export default function ScriptAllocation({ isTab = false }) {
   const rawPaperId = searchParams.get('paperId');
   const paperIdFromUrl = rawPaperId ? decryptId(rawPaperId) : null;
   const universityIdFromUrl = searchParams.get('universityId');
-  const { userType, universityId: userUniversityId } = useAuth();
+  const { userType, universityId: userUniversityId, hasPermission } = useAuth();
   const activeUniversityId = userType === 'coordinator' ? userUniversityId : universityIdFromUrl;
 
   // Global Page View State
@@ -856,7 +856,7 @@ export default function ScriptAllocation({ isTab = false }) {
                       </div>
 
                       {/* Action buttons */}
-                      {selectedPaperIds.length > 0 && !isProjectInactive && (
+                      {selectedPaperIds.length > 0 && !isProjectInactive && hasPermission('CREATE_ALLOCATION') && (
                         <button
                           onClick={openMultiPaperPane}
                           className="flex items-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md font-bold text-[10px] uppercase tracking-wider transition-all shadow-sm hover:shadow shrink-0 cursor-pointer"
@@ -865,7 +865,7 @@ export default function ScriptAllocation({ isTab = false }) {
                           Allocate Selected ({selectedPaperIds.length})
                         </button>
                       )}
-                      {projectId && !isProjectInactive && (
+                      {projectId && !isProjectInactive && hasPermission('CREATE_ALLOCATION') && (
                         <div
                           title={!papers.some(p => p.pendingScripts > 0) && papers.length > 0 ? "All scripts are already allocated" : ""}
                           className="inline-block"
@@ -949,22 +949,24 @@ export default function ScriptAllocation({ isTab = false }) {
                                 </span>
                               </td>
                               <td className="px-4 py-2.5 text-center">
-                                <div
-                                  title={(paper.totalScripts === 0 && (paper.allocatedScripts || 0) === 0) ? "No Scripts Uploaded" : paper.pendingScripts === 0 ? "Already Fully Allocated" : "Allocate Scripts"}
-                                  className="inline-block"
-                                >
-                                  <button
-                                    onClick={() => openAllocationPane(paper)}
-                                    disabled={paper.pendingScripts === 0}
-                                    className={`p-1.5 rounded-lg transition-all block border ${
-                                      paper.pendingScripts === 0
-                                        ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed opacity-60'
-                                        : 'bg-teal-50 text-teal-700 border-teal-100 hover:bg-teal-700 hover:text-white hover:border-teal-700'
-                                    }`}
+                                {hasPermission('CREATE_ALLOCATION') && (
+                                  <div
+                                    title={(paper.totalScripts === 0 && (paper.allocatedScripts || 0) === 0) ? "No Scripts Uploaded" : paper.pendingScripts === 0 ? "Already Fully Allocated" : "Allocate Scripts"}
+                                    className="inline-block"
                                   >
-                                    <Zap size={14} />
-                                  </button>
-                                </div>
+                                    <button
+                                      onClick={() => openAllocationPane(paper)}
+                                      disabled={paper.pendingScripts === 0}
+                                      className={`p-1.5 rounded-lg transition-all block border ${
+                                        paper.pendingScripts === 0
+                                          ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed opacity-60'
+                                          : 'bg-teal-50 text-teal-700 border-teal-100 hover:bg-teal-700 hover:text-white hover:border-teal-700'
+                                      }`}
+                                    >
+                                      <Zap size={14} />
+                                    </button>
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           );

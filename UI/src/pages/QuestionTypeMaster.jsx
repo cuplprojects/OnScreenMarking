@@ -6,7 +6,7 @@ import { useBreadcrumb } from '../context/BreadcrumbContext';
 import message from '../services/messageService';
 
 export default function QuestionTypeMaster() {
-  const { userType } = useAuth();
+  const { userType, hasPermission } = useAuth();
   const { setBreadcrumb } = useBreadcrumb();
   
   const [questionTypes, setQuestionTypes] = useState([]);
@@ -95,17 +95,19 @@ export default function QuestionTypeMaster() {
               </h1>
               <p className="text-xs text-gray-500 mt-1">Define question type tags for section setup (e.g. MCQ, SA, LA)</p>
             </div>
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-md font-bold text-[10px] uppercase tracking-wider transition-all shadow-sm hover:shadow shrink-0 cursor-pointer ${
-                showForm 
-                  ? 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200' 
-                  : 'bg-teal-700 hover:bg-teal-800 text-white'
-              }`}
-            >
-              <Plus size={13} className={showForm ? 'rotate-45 transition-transform' : 'transition-transform'} />
-              <span>{showForm ? 'Cancel' : 'Add Type'}</span>
-            </button>
+            {hasPermission('MANAGE_QUESTIONS') && (
+              <button
+                onClick={() => setShowForm(!showForm)}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-md font-bold text-[10px] uppercase tracking-wider transition-all shadow-sm hover:shadow shrink-0 cursor-pointer ${
+                  showForm 
+                    ? 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200' 
+                    : 'bg-teal-700 hover:bg-teal-800 text-white'
+                }`}
+              >
+                <Plus size={13} className={showForm ? 'rotate-45 transition-transform' : 'transition-transform'} />
+                <span>{showForm ? 'Cancel' : 'Add Type'}</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -143,13 +145,15 @@ export default function QuestionTypeMaster() {
                       </span>
                       <span className="font-extrabold text-gray-900">{qt.questionTypeName}</span>
                     </div>
-                    <button
-                      onClick={() => handleDelete(qt.questionTypeId, qt.questionTypeName)}
-                      className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    {hasPermission('MANAGE_QUESTIONS') && (
+                      <button
+                        onClick={() => handleDelete(qt.questionTypeId, qt.questionTypeName)}
+                        className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors cursor-pointer"
+                        title="Delete"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
