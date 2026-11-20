@@ -7,7 +7,7 @@ import message from '../services/messageService';
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNextQuestion, maxMarks, sections = [], pdfUrl, scriptId, readOnly, showAnnotationTools = true, onToggleQp, isQpOpen, onTotalPagesChange, canAttemptQuestion, getQuestionBlockedReason, questionMarks = {} }, ref) => {
+const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestion, currentQuestionId, onNextQuestion, onSelectQuestion, maxMarks, sections = [], pdfUrl, scriptId, readOnly, showAnnotationTools = true, onToggleQp, isQpOpen, onTotalPagesChange, canAttemptQuestion, getQuestionBlockedReason, questionMarks = {} }, ref) => {
   const canvasRef = useRef(null);
   const canvasContainerRef = useRef(null);
   const panStateRef = useRef({ isPanning: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
@@ -101,6 +101,27 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
     return { x, y }; // Return last attempt if all fail
   };
 
+  const resolveQuestion = (target) => {
+    if (target && typeof target === 'object' && target.questionNo !== undefined) {
+      return target;
+    }
+    if (!target) return currentQuestion || null;
+    const str = String(target).trim().toLowerCase();
+    for (const sec of sections) {
+      for (const q of (sec.questions || [])) {
+        if (String(q.questionId).toLowerCase() === str) return q;
+        const full = q.part ? `${q.questionNo}${q.part}`.toLowerCase() : String(q.questionNo).toLowerCase();
+        if (full === str) return q;
+      }
+    }
+    for (const sec of sections) {
+      for (const q of (sec.questions || [])) {
+        if (String(q.questionNo).toLowerCase() === str) return q;
+      }
+    }
+    return currentQuestion || null;
+  };
+
   useImperativeHandle(ref, () => ({
     generateEvaluatedPdf: async (mId) => {
       try {
@@ -172,24 +193,35 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       }
     },
     getTotalPages: () => pdfPages.length,
-    navigateToQuestionPage: (qNo) => {
+    navigateToQuestionPage: (target) => {
       setShowMarkPopup(false);
       setPendingAnno(null);
+      const qObj = resolveQuestion(target);
+      const qMasterId = qObj?.questionId;
+      const qLabel = qObj?.part ? `${qObj.questionNo}${qObj.part}` : String(qObj?.questionNo || target);
       const existing = annotations.find(a => 
-        String(a.questionId) === String(qNo) && (a.marks !== undefined || a.isSkipped)
+        ((qMasterId && a.questionMasterId === qMasterId) || String(a.questionId).toLowerCase() === qLabel.toLowerCase() || String(a.questionId) === String(target)) && 
+        (a.marks !== undefined || a.isSkipped)
       );
       if (existing && existing.page !== undefined && existing.page !== currentPage) {
         setCurrentPage(existing.page);
       }
     },
-    openMarkModalForQuestion: (qNo) => {
+    openMarkModalForQuestion: (target) => {
+      const qObj = resolveQuestion(target);
+      const qMasterId = qObj ? qObj.questionId : null;
+      const qNo = qObj ? qObj.questionNo : target;
+      const part = qObj?.part || '';
+      const qLabel = part ? `${qNo}${part}` : String(qNo);
+
       const activeSectionName = sections.find(sec => 
-        sec.questions?.some(q => q.questionNo === qNo)
+        sec.questions?.some(q => (qMasterId && q.questionId === qMasterId) || q.questionNo === qNo)
       )?.name || (sections[0]?.name || '');
 
       // Check if an annotation for this question already exists
       const existing = annotations.find(a => 
-        String(a.questionId) === String(qNo) && (a.marks !== undefined || a.isSkipped)
+        ((qMasterId && a.questionMasterId === qMasterId) || String(a.questionId).toLowerCase() === qLabel.toLowerCase() || String(a.questionId) === String(target)) && 
+        (a.marks !== undefined || a.isSkipped)
       );
 
       if (existing) {
@@ -216,7 +248,11 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
         y,
         color: '#00AA00',
         lineWidth: 2,
-        questionId: qNo,
+        questionId: qLabel,
+        questionMasterId: qMasterId,
+        questionNo: qNo,
+        part: part,
+        maxMarks: qObj?.marks,
         stepName: activeSectionName,
         page: currentPage,
         id: Date.now()
@@ -226,11 +262,19 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       setShowMarkPopup(true);
       setMarkInput('');
       setStepName(activeSectionName);
-      const cannotAttempt = canAttemptQuestion && !canAttemptQuestion(qNo);
+      const cannotAttempt = canAttemptQuestion && !canAttemptQuestion(qObj || qLabel);
       setIsSkipped(cannotAttempt);
     },
-    clearQuestionMarks: (qNo) => {
-      const updated = annotations.filter(a => !(String(a.questionId) === String(qNo) && (a.marks !== undefined || a.isSkipped)));
+    clearQuestionMarks: (target) => {
+      const qObj = resolveQuestion(target);
+      const qMasterId = qObj?.questionId;
+      const qLabel = qObj?.part ? `${qObj.questionNo}${qObj.part}` : String(qObj?.questionNo || target);
+      const updated = annotations.filter(a => {
+        const matches = (qMasterId && a.questionMasterId === qMasterId) ||
+                        String(a.questionId).toLowerCase() === qLabel.toLowerCase() ||
+                        String(a.questionId) === String(target);
+        return !(matches && (a.marks !== undefined || a.isSkipped));
+      });
       setAnnotations(updated);
       saveAnnotationsToStorage(updated);
       onAnnotationsChange?.(updated);
@@ -281,8 +325,8 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
         delete item.stepName;
         result.push(item);
       } else if (item.questionId !== undefined) {
-        // ANY annotation with a questionId should be deduplicated (whether it has marks or not)
-        const qKey = String(item.questionId);
+        // ANY annotation with a questionId should be deduplicated per unique question part
+        const qKey = item.questionMasterId ? `m_${item.questionMasterId}` : String(item.questionId).toLowerCase();
         if (!seenQuestionIds.has(qKey)) {
           seenQuestionIds.add(qKey);
           result.push(item);
@@ -684,13 +728,19 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       const isSkipped = anno.isSkipped;
       const themeColor = isSkipped ? '#FF8C00' : (isCorrect ? '#008000' : '#CC0000');
 
-      // Compact label: (5)|S:A|Q:13
+      // Compact label: (5)|S:A|Q:13 or (2)|S:A|Q:01a
       const markPart = anno.marks !== undefined ? (isSkipped ? 'Skip' : String(anno.marks)) : '';
-      const qNo = !isNaN(anno.questionId) && Number(anno.questionId) < 10 ? '0' + anno.questionId : anno.questionId;
+      let displayQ = anno.questionId;
+      if (anno.questionNo !== undefined && anno.part !== undefined) {
+        const padded = !isNaN(anno.questionNo) && Number(anno.questionNo) < 10 ? '0' + anno.questionNo : anno.questionNo;
+        displayQ = anno.part ? `${padded}${anno.part}` : padded;
+      } else if (!isNaN(anno.questionId) && Number(anno.questionId) < 10) {
+        displayQ = '0' + anno.questionId;
+      }
       const secAbbr = anno.stepName
         ? (anno.stepName.match(/section\s*(\w+)/i)?.[1] || anno.stepName.substring(0, 2)).toUpperCase()
         : '';
-      const label = secAbbr ? `(${markPart})|S:${secAbbr}|Q:${qNo}` : `(${markPart})|Q:${qNo}`;
+      const label = secAbbr ? `(${markPart})|S:${secAbbr}|Q:${displayQ}` : `(${markPart})|Q:${displayQ}`;
 
       // Annotation screen position
       const px = anno.x ? anno.x * drawZoom : (anno.points?.[0]?.x * drawZoom);
@@ -956,21 +1006,17 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
     e.stopPropagation();
     if (!canvasRef.current || readOnly) return;
     
-    // Find active question number (currentQuestionId or first question in any section)
-    let activeQId = currentQuestionId;
-    if (!activeQId) {
-      for (const sec of sections) {
-        if (sec.questions && sec.questions.length > 0) {
-          activeQId = sec.questions[0].questionNo;
-          break;
-        }
-      }
-    }
-
-    if (!activeQId) {
+    // Find active question (currentQuestion, currentQuestionId or first question in any section)
+    let activeQ = currentQuestion || resolveQuestion(currentQuestionId) || sections.flatMap(s => s.questions || [])[0] || null;
+    if (!activeQ && !currentQuestionId) {
       message.warning("Please select a question from the right panel before you begin marking or annotating!");
       return;
     }
+
+    let qMasterId = activeQ?.questionId || null;
+    let qNo = activeQ?.questionNo || currentQuestionId;
+    let part = activeQ?.part || '';
+    let qLabel = part ? `${qNo}${part}` : String(qNo);
 
     const rect = canvasRef.current.getBoundingClientRect();
     const rawY = (e.clientY - rect.top) / zoom;
@@ -978,14 +1024,62 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
     const x = (canvasSize.width || 800) - 50;
     const y = Math.max(10, Math.min((canvasSize.height || 600) - 20, rawY));
 
-    const activeSectionName = sections.find(sec => 
-      sec.questions?.some(q => q.questionNo === activeQId)
-    )?.name || (sections[0]?.name || '');
-
-    // Check if an annotation already exists for this question
-    const existing = annotations.find(a => 
-      String(a.questionId) === String(activeQId) && (a.marks !== undefined || a.isSkipped)
+    // Check if an annotation already exists for this question part
+    let existing = annotations.find(a => 
+      ((qMasterId && a.questionMasterId === qMasterId) || String(a.questionId).toLowerCase() === qLabel.toLowerCase() || String(a.questionId) === String(qNo)) && 
+      (a.marks !== undefined || a.isSkipped)
     );
+
+    // If active question cannot be attempted (e.g. optional group or section attempt limit is exhausted) and has no existing marks,
+    // automatically find the next eligible question that can be attempted
+    if (!existing && activeQ && canAttemptQuestion && !canAttemptQuestion(activeQ)) {
+      const allQuestions = sections.flatMap(s => s.questions || []);
+      const curIdx = allQuestions.findIndex(q => q.questionId === activeQ.questionId);
+      let nextEligible = null;
+      if (curIdx !== -1) {
+        for (let i = curIdx + 1; i < allQuestions.length; i++) {
+          const cand = allQuestions[i];
+          const m = questionMarks[cand.questionId];
+          const isAtt = (m?.isAttempted || Number(m?.marksAwarded) > 0 || m?.isSkipped);
+          if (!isAtt && canAttemptQuestion(cand)) {
+            nextEligible = cand;
+            break;
+          }
+        }
+        if (!nextEligible) {
+          for (let i = 0; i < curIdx; i++) {
+            const cand = allQuestions[i];
+            const m = questionMarks[cand.questionId];
+            const isAtt = (m?.isAttempted || Number(m?.marksAwarded) > 0 || m?.isSkipped);
+            if (!isAtt && canAttemptQuestion(cand)) {
+              nextEligible = cand;
+              break;
+            }
+          }
+        }
+      }
+
+      if (nextEligible) {
+        activeQ = nextEligible;
+        qMasterId = activeQ.questionId;
+        qNo = activeQ.questionNo;
+        part = activeQ.part || '';
+        qLabel = part ? `${qNo}${part}` : String(qNo);
+        existing = annotations.find(a => 
+          ((qMasterId && a.questionMasterId === qMasterId) || String(a.questionId).toLowerCase() === qLabel.toLowerCase() || String(a.questionId) === String(qNo)) && 
+          (a.marks !== undefined || a.isSkipped)
+        );
+        onSelectQuestion?.(nextEligible);
+      } else {
+        const reason = getQuestionBlockedReason ? getQuestionBlockedReason(activeQ) : "Cannot attempt this question.";
+        message.warning(reason);
+        return;
+      }
+    }
+
+    const activeSectionName = sections.find(sec => 
+      sec.questions?.some(q => (qMasterId && q.questionId === qMasterId) || q.questionNo === qNo)
+    )?.name || (sections[0]?.name || '');
 
     // If already exists, update its position to right-click location and open to edit
     const targetAnno = existing ? {
@@ -998,7 +1092,11 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       x, y,
       color: '#00AA00',
       lineWidth: 2,
-      questionId: activeQId,
+      questionId: qLabel,
+      questionMasterId: qMasterId,
+      questionNo: qNo,
+      part: part,
+      maxMarks: activeQ?.marks,
       stepName: activeSectionName,
       page: currentPage,
       id: Date.now()
@@ -1041,7 +1139,8 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
     // Check if an annotation for this question already exists
     const existingIdx = annotations.findIndex(a => 
       a.id === finalAnno.id || 
-      (a.questionId !== undefined && String(a.questionId) === String(finalAnno.questionId) && (a.marks !== undefined || a.isSkipped))
+      (finalAnno.questionMasterId && a.questionMasterId === finalAnno.questionMasterId && (a.marks !== undefined || a.isSkipped)) ||
+      (a.questionId !== undefined && String(a.questionId).toLowerCase() === String(finalAnno.questionId).toLowerCase() && (a.marks !== undefined || a.isSkipped))
     );
 
     let updated;
@@ -1063,16 +1162,16 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
 
     // Auto advance to next question if successful
     if (onNextQuestion) {
-      onNextQuestion();
+      onNextQuestion(finalAnno);
     }
   };
 
   const getMarkOptions = () => {
     // Find the current question to get its maximum marks
-    const currentQuestion = sections.flatMap(s => s.questions || [])
-      .find(q => q.questionNo === currentQuestionId || q.questionId === currentQuestionId);
+    const target = pendingAnno?.questionMasterId || pendingAnno?.questionId || currentQuestion?.questionId || currentQuestionId;
+    const qObj = resolveQuestion(target) || currentQuestion;
     
-    const max = currentQuestion?.marks || maxMarks || 10;
+    const max = qObj?.marks || maxMarks || 10;
     const options = [0];
     
     // Generate marks with 0.5 increment up to the question's maximum marks
@@ -1086,8 +1185,10 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
   const submitMark = () => {
     if (pendingAnno) {
       const finalMark = parseFloat(markInput) || 0;
-      if (finalMark > 0 && !isSkipped && canAttemptQuestion && !canAttemptQuestion(pendingAnno.questionId)) {
-        const reason = getQuestionBlockedReason ? getQuestionBlockedReason(pendingAnno.questionId) : "Cannot attempt this question.";
+      const target = pendingAnno.questionMasterId || pendingAnno.questionId;
+      const qObj = resolveQuestion(target);
+      if (finalMark > 0 && !isSkipped && canAttemptQuestion && !canAttemptQuestion(qObj || pendingAnno.questionId)) {
+        const reason = getQuestionBlockedReason ? getQuestionBlockedReason(qObj || pendingAnno.questionId) : "Cannot attempt this question.";
         message.warning(reason);
         return;
       }
@@ -1104,9 +1205,14 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
   };
 
   const handleClearMark = () => {
-    if (pendingAnno?.questionId) {
+    if (pendingAnno) {
+      const qMasterId = pendingAnno.questionMasterId;
       const qId = pendingAnno.questionId;
-      const updated = annotations.filter(a => !(String(a.questionId) === String(qId) && (a.marks !== undefined || a.isSkipped)));
+      const updated = annotations.filter(a => {
+        const matches = (qMasterId && a.questionMasterId === qMasterId) ||
+                        (qId && String(a.questionId).toLowerCase() === String(qId).toLowerCase());
+        return !(matches && (a.marks !== undefined || a.isSkipped));
+      });
       setAnnotations(updated);
       saveAnnotationsToStorage(updated);
       onAnnotationsChange?.(updated);
@@ -1115,6 +1221,164 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       setMarkInput('');
       setIsSkipped(false);
       message.success(`Cleared marks for Question ${qId}`);
+    }
+  };
+
+  const handleNextInModal = () => {
+    if (!pendingAnno) return;
+
+    // 1. Determine if there is a mark or skip to commit for the current question
+    let finalAnnoToCommit = null;
+    const target = pendingAnno.questionMasterId || pendingAnno.questionId || currentQuestion?.questionId || currentQuestionId;
+    const currentQ = resolveQuestion(target) || currentQuestion;
+
+    if (isSkipped) {
+      finalAnnoToCommit = {
+        ...pendingAnno,
+        marks: 0,
+        stepName: stepName,
+        isSkipped: true,
+        type: 'cross',
+        color: '#FF6B6B'
+      };
+    } else if (markInput !== '' && !isNaN(parseFloat(markInput))) {
+      const finalMark = parseFloat(markInput);
+      if (finalMark > 0 && canAttemptQuestion && !canAttemptQuestion(currentQ || pendingAnno.questionId)) {
+        const reason = getQuestionBlockedReason ? getQuestionBlockedReason(currentQ || pendingAnno.questionId) : "Cannot attempt this question.";
+        message.warning(reason);
+        return;
+      }
+      finalAnnoToCommit = {
+        ...pendingAnno,
+        marks: finalMark,
+        stepName: stepName,
+        isSkipped: false,
+        type: finalMark > 0 ? 'tick' : 'cross',
+        color: finalMark > 0 ? '#00AA00' : '#FF0000'
+      };
+    }
+
+    // 2. If we have a mark to commit, save it into annotations & storage
+    let latestAnnos = annotations;
+    if (finalAnnoToCommit) {
+      const existingIdx = annotations.findIndex(a => 
+        a.id === finalAnnoToCommit.id || 
+        (finalAnnoToCommit.questionMasterId && a.questionMasterId === finalAnnoToCommit.questionMasterId && (a.marks !== undefined || a.isSkipped)) ||
+        (a.questionId !== undefined && String(a.questionId).toLowerCase() === String(finalAnnoToCommit.questionId).toLowerCase() && (a.marks !== undefined || a.isSkipped))
+      );
+
+      let updated;
+      if (existingIdx !== -1) {
+        updated = [...annotations];
+        updated[existingIdx] = finalAnnoToCommit;
+      } else {
+        updated = [...annotations, finalAnnoToCommit];
+      }
+
+      latestAnnos = cleanAndDeduplicateAnnotations(updated);
+      setAnnotations(latestAnnos);
+      saveAnnotationsToStorage(latestAnnos);
+      onAnnotationsChange?.(latestAnnos);
+    }
+
+    // 3. Build projected marks map so conflict checks see this newly awarded mark immediately
+    const projectedMarks = { ...questionMarks };
+    if (currentQ && finalAnnoToCommit) {
+      projectedMarks[currentQ.questionId] = {
+        ...(projectedMarks[currentQ.questionId] || {}),
+        marksAwarded: finalAnnoToCommit.marks,
+        isAttempted: !finalAnnoToCommit.isSkipped && finalAnnoToCommit.marks !== undefined && finalAnnoToCommit.marks !== null,
+        isSkipped: Boolean(finalAnnoToCommit.isSkipped)
+      };
+    }
+
+    // 4. Find the NEXT eligible question (skipping locked/conflicting group questions like 16B)
+    const allQuestions = sections.flatMap(s => s.questions || []);
+    const curIndex = allQuestions.findIndex(q => q.questionId === currentQ?.questionId);
+
+    let nextQ = null;
+    if (curIndex !== -1) {
+      // Search forward from curIndex + 1
+      for (let i = curIndex + 1; i < allQuestions.length; i++) {
+        const cand = allQuestions[i];
+        const m = projectedMarks[cand.questionId];
+        const isAtt = (m?.isAttempted || Number(m?.marksAwarded) > 0 || m?.isSkipped);
+        if (!isAtt && canAttemptQuestion && canAttemptQuestion(cand, projectedMarks)) {
+          nextQ = cand;
+          break;
+        }
+      }
+      // Wrap around if needed
+      if (!nextQ) {
+        for (let i = 0; i < curIndex; i++) {
+          const cand = allQuestions[i];
+          const m = projectedMarks[cand.questionId];
+          const isAtt = (m?.isAttempted || Number(m?.marksAwarded) > 0 || m?.isSkipped);
+          if (!isAtt && canAttemptQuestion && canAttemptQuestion(cand, projectedMarks)) {
+            nextQ = cand;
+            break;
+          }
+        }
+      }
+    }
+
+    // 5. If next eligible question found, advance to it in the modal
+    if (nextQ) {
+      onSelectQuestion?.(nextQ);
+
+      const nextQMasterId = nextQ.questionId;
+      const nextQNo = nextQ.questionNo;
+      const nextPart = nextQ.part || '';
+      const nextQLabel = nextPart ? `${nextQNo}${nextPart}` : String(nextQNo);
+
+      const nextSecName = sections.find(sec => 
+        sec.questions?.some(q => (nextQMasterId && q.questionId === nextQMasterId) || q.questionNo === nextQNo)
+      )?.name || (sections[0]?.name || '');
+
+      const nextExisting = latestAnnos.find(a => 
+        ((nextQMasterId && a.questionMasterId === nextQMasterId) || String(a.questionId).toLowerCase() === nextQLabel.toLowerCase() || String(a.questionId) === String(nextQNo)) && 
+        (a.marks !== undefined || a.isSkipped)
+      );
+
+      if (nextExisting) {
+        if (nextExisting.page !== undefined && nextExisting.page !== currentPage) {
+          setCurrentPage(nextExisting.page);
+        }
+        setPendingAnno(nextExisting);
+        setMarkInput(nextExisting.marks !== undefined ? String(nextExisting.marks) : '');
+        setStepName(nextExisting.stepName || nextSecName);
+        setIsSkipped(!!nextExisting.isSkipped);
+        setShowMarkPopup(true);
+      } else {
+        const x = (canvasSize.width || 800) - 50;
+        const y = Math.max(10, Math.min((canvasSize.height || 600) - 20, (pendingAnno?.y || 120) + 30));
+        const newAnno = {
+          type: 'tick',
+          x, y,
+          color: '#00AA00',
+          lineWidth: 2,
+          questionId: nextQLabel,
+          questionMasterId: nextQMasterId,
+          questionNo: nextQNo,
+          part: nextPart,
+          maxMarks: nextQ.marks,
+          stepName: nextSecName,
+          page: currentPage,
+          id: Date.now()
+        };
+        setPendingAnno(newAnno);
+        setMarkInput('');
+        setStepName(nextSecName);
+        setIsSkipped(false);
+        setShowMarkPopup(true);
+      }
+    } else {
+      // All questions evaluated or none remaining
+      setShowMarkPopup(false);
+      setPendingAnno(null);
+      setMarkInput('');
+      setIsSkipped(false);
+      message.info("All questions in this paper have been evaluated!");
     }
   };
 
@@ -1204,7 +1468,14 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
           <div className="h-4 w-px bg-gray-200" />
           <span className="font-semibold text-gray-500 uppercase tracking-wider text-[11px]">Evaluating:</span>
           <span className="font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-100 text-xs">
-            Q{currentQuestionId || "—"}
+            {(() => {
+              const activeQ = currentQuestion || resolveQuestion(currentQuestionId);
+              if (activeQ) {
+                const p = activeQ.part ? (activeQ.part.startsWith('(') ? activeQ.part : ` (${activeQ.part})`) : '';
+                return `Q${activeQ.questionNo}${p}`;
+              }
+              return currentQuestionId ? (String(currentQuestionId).startsWith('Q') ? currentQuestionId : `Q${currentQuestionId}`) : "—";
+            })()}
           </span>
         </div>
 
@@ -1515,16 +1786,37 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
       {/* Mark Entry Popup */}
       {showMarkPopup && (
         <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-[70]">
-          <div className="bg-white rounded-lg border border-gray-300 shadow-xl w-80 animate-in zoom-in duration-150">
+          <div className="bg-white rounded-lg border border-gray-300 shadow-xl w-84 min-w-[340px] animate-in zoom-in duration-150">
             <div className="bg-gray-50 px-3.5 py-2.5 border-b border-gray-200 rounded-t-lg flex justify-between items-center">
               <span className="text-[14px] font-bold text-gray-800">
-                {sections.find(sec => sec.questions?.some(q => String(q.questionNo) === String(pendingAnno?.questionId || currentQuestionId)))?.name || stepName || 'Section A'}
+                {(() => {
+                  const target = pendingAnno?.questionMasterId || pendingAnno?.questionId || currentQuestion?.questionId || currentQuestionId;
+                  const qObj = resolveQuestion(target) || currentQuestion;
+                  const sec = sections.find(s => s.questions?.some(q => q.questionId === qObj?.questionId || q.questionNo === qObj?.questionNo));
+                  return sec?.name || stepName || 'Section A';
+                })()}
               </span>
-              {(pendingAnno?.questionId || currentQuestionId) && (
-                <span className="text-[13px] font-bold text-teal-800 bg-teal-50 px-2.5 py-1 rounded-md border border-teal-200 shadow-xs">
-                  Question {pendingAnno?.questionId || currentQuestionId}
-                </span>
-              )}
+              {(() => {
+                const target = pendingAnno?.questionMasterId || pendingAnno?.questionId || currentQuestion?.questionId || currentQuestionId;
+                const qObj = resolveQuestion(target) || currentQuestion;
+                const partLabel = qObj?.part ? (qObj.part.startsWith('(') ? qObj.part : ` (${qObj.part})`) : '';
+                const qDisplay = qObj 
+                  ? `${qObj.questionNo}${partLabel}`
+                  : (pendingAnno?.questionId || currentQuestionId);
+                const qMarks = qObj?.marks;
+                return (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[13px] font-bold text-teal-800 bg-teal-50 px-2.5 py-1 rounded-md border border-teal-200 shadow-xs">
+                      Question {qDisplay}
+                    </span>
+                    {qMarks !== undefined && (
+                      <span className="text-[11px] font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-md border border-gray-200">
+                        Max: {qMarks}m
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             
             {/* Skip Question Checkbox */}
@@ -1544,22 +1836,32 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
             {/* Marks Grid */}
             {!isSkipped && (
               <div className="p-3 max-h-48 overflow-y-auto">
-                {canAttemptQuestion && !canAttemptQuestion(pendingAnno?.questionId) && (
+                {canAttemptQuestion && !canAttemptQuestion(pendingAnno?.questionMasterId ? resolveQuestion(pendingAnno?.questionMasterId) : pendingAnno?.questionId) && (
                   <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded text-[11px] text-amber-800 font-medium flex items-start gap-1.5">
                     <AlertTriangle size={13} className="text-amber-600 shrink-0 mt-0.5" />
-                    <span>{getQuestionBlockedReason ? getQuestionBlockedReason(pendingAnno?.questionId) : "Maximum attempt limit reached for this section. You can mark this question as skipped."}</span>
+                    <span>{getQuestionBlockedReason ? getQuestionBlockedReason(pendingAnno?.questionMasterId ? resolveQuestion(pendingAnno?.questionMasterId) : pendingAnno?.questionId) : "Maximum attempt limit reached for this section. You can mark this question as skipped."}</span>
                   </div>
                 )}
                 <div className="grid grid-cols-4 gap-1">
                   {getMarkOptions().map((m) => {
-                    const isBlocked = m > 0 && canAttemptQuestion && !canAttemptQuestion(pendingAnno?.questionId);
-                    const blockedReason = isBlocked && getQuestionBlockedReason ? getQuestionBlockedReason(pendingAnno?.questionId) : "Question cannot be awarded marks.";
+                    const qObjForBlock = pendingAnno?.questionMasterId ? resolveQuestion(pendingAnno?.questionMasterId) : pendingAnno?.questionId;
+                    const isBlocked = m > 0 && canAttemptQuestion && !canAttemptQuestion(qObjForBlock);
+                    const blockedReason = isBlocked && getQuestionBlockedReason ? getQuestionBlockedReason(qObjForBlock) : "Question cannot be awarded marks.";
+                    const isSelected = !isSkipped && markInput !== '' && parseFloat(markInput) === m;
                     return (
                       <button
                         key={m}
                         disabled={isBlocked}
                         title={isBlocked ? blockedReason : ""}
                         onClick={() => {
+                          if (isBlocked) {
+                            message.warning(blockedReason);
+                            return;
+                          }
+                          setMarkInput(m.toString());
+                          setIsSkipped(false);
+                        }}
+                        onDoubleClick={() => {
                           if (isBlocked) {
                             message.warning(blockedReason);
                             return;
@@ -1578,7 +1880,9 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
                         className={`text-center py-2 text-sm font-semibold border rounded transition-colors ${
                           isBlocked
                             ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-50'
-                            : 'hover:bg-teal-700 hover:text-white border-gray-200 cursor-pointer'
+                            : isSelected
+                            ? 'bg-teal-700 text-white border-teal-800 font-bold ring-2 ring-teal-400 shadow-sm cursor-pointer'
+                            : 'hover:bg-teal-700 hover:text-white border-gray-200 cursor-pointer bg-white text-gray-800'
                         }`}
                       >
                         {m}
@@ -1589,7 +1893,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
               </div>
             )}
             
-            <div className="p-3 flex gap-2 border-t border-gray-200 items-center">
+            <div className="p-3 flex gap-2 border-t border-gray-200 items-center justify-end">
               {/* If existing annotation has marks or is skipped, show Clear Mark button */}
               {pendingAnno && (pendingAnno.marks !== undefined || pendingAnno.isSkipped) && (
                 <button
@@ -1614,7 +1918,7 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
                     };
                     commitQuestionAnnotation(finalAnno);
                   }}
-                  className="flex-1 text-sm bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-lg font-semibold transition-colors"
+                  className="flex-1 text-sm bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-lg font-semibold transition-colors cursor-pointer"
                 >
                   Confirm Skip
                 </button>
@@ -1633,10 +1937,9 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
                       // Parse and validate against question marks
                       const numValue = parseFloat(value);
                       if (!isNaN(numValue)) {
-                        // Find question marks from sections
-                        const currentQuestion = sections.flatMap(s => s.questions || [])
-                          .find(q => q.questionNo === (pendingAnno?.questionId || currentQuestionId) || q.questionId === (pendingAnno?.questionId || currentQuestionId));
-                        const maxQuestionMarks = currentQuestion?.marks || maxMarks || 10;
+                        const target = pendingAnno?.questionMasterId || pendingAnno?.questionId || currentQuestion?.questionId || currentQuestionId;
+                        const qObj = resolveQuestion(target) || currentQuestion;
+                        const maxQuestionMarks = qObj?.marks || maxMarks || 10;
                         
                         // Cap at question's max marks
                         const cappedValue = Math.min(numValue, maxQuestionMarks);
@@ -1646,21 +1949,38 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestionId, onNex
                     placeholder="Custom"
                     min="0"
                     max={(() => {
-                      const currentQuestion = sections.flatMap(s => s.questions || [])
-                        .find(q => q.questionNo === (pendingAnno?.questionId || currentQuestionId) || q.questionId === (pendingAnno?.questionId || currentQuestionId));
-                      return currentQuestion?.marks || maxMarks || 10;
+                      const target = pendingAnno?.questionMasterId || pendingAnno?.questionId || currentQuestion?.questionId || currentQuestionId;
+                      const qObj = resolveQuestion(target) || currentQuestion;
+                      return qObj?.marks || maxMarks || 10;
                     })()}
                     step="0.5"
-                    className="w-20 min-w-0 flex-1 text-sm p-2 border border-gray-300 rounded-lg outline-none focus:border-teal-500"
+                    className="w-16 min-w-0 flex-1 text-sm p-2 border border-gray-300 rounded-lg outline-none focus:border-teal-500"
                     autoFocus
                     onKeyDown={(e) => e.key === 'Enter' && submitMark()}
                   />
-                  <button onClick={submitMark} className="text-sm bg-teal-700 hover:bg-teal-800 text-white px-3 py-2 rounded-md font-semibold transition-colors">
+                  <button 
+                    onClick={submitMark} 
+                    className="text-sm bg-teal-700 hover:bg-teal-800 text-white px-3 py-2 rounded-lg font-semibold transition-colors cursor-pointer shrink-0"
+                  >
                     Submit
                   </button>
                 </>
               )}
-              <button onClick={() => {setShowMarkPopup(false); setPendingAnno(null); setIsSkipped(false);}} className="text-sm bg-gray-200 hover:bg-gray-300 px-3 py-2 rounded-lg font-semibold transition-colors">Close</button>
+              <button 
+                type="button"
+                onClick={handleNextInModal}
+                className="text-sm bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg font-semibold transition-colors cursor-pointer shrink-0 flex items-center gap-1 shadow-xs"
+                title="Save and advance to next question"
+              >
+                Next <ChevronRight size={14} />
+              </button>
+              <button 
+                type="button"
+                onClick={() => {setShowMarkPopup(false); setPendingAnno(null); setIsSkipped(false);}} 
+                className="text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded-lg font-semibold transition-colors cursor-pointer shrink-0"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

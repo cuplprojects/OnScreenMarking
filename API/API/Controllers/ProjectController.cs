@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using API.Data;
 using API.Models;
 using API.Models.DTOs;
+using API.Attributes;
 
 namespace API.Controllers
 {
@@ -20,6 +21,7 @@ namespace API.Controllers
         }
 
         [HttpGet]
+        [RequirePermission("READ_PROJECT")]
         public async Task<ActionResult<object>> GetProjects(
             [FromQuery] int? sessionId = null, 
             [FromQuery] int? universityId = null,
@@ -130,7 +132,7 @@ namespace API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_PROJECT")]
         public async Task<ActionResult<Project>> CreateProject([FromBody] ProjectDto projectDto)
         {
             try
@@ -175,7 +177,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_PROJECT")]
         public async Task<IActionResult> UpdateProject(int id, [FromBody] ProjectDto projectDto)
         {
             try
@@ -242,7 +244,7 @@ namespace API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("DELETE_PROJECT")]
         public async Task<IActionResult> DeleteProject(int id)
         {
             try

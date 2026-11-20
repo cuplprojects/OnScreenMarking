@@ -50,6 +50,7 @@ namespace API.Models.DTOs
         }
         public int? ScriptId { get; set; }
         public string QuestionNo { get; set; } = string.Empty;
+        public string? Part { get; set; }
         public decimal MarksAwarded { get; set; }
         public bool IsSkipped { get; set; }
         public string Remarks { get; set; } = string.Empty;

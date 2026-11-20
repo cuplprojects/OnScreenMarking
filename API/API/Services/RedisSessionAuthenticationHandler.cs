@@ -127,6 +127,14 @@ namespace API.Services
                 claims.Add(new Claim("subjectId1", session.SubjectId1.Value.ToString()));
             }
 
+            if (session.Permissions != null && session.Permissions.Count > 0)
+            {
+                foreach (var perm in session.Permissions)
+                {
+                    claims.Add(new Claim("permission", perm));
+                }
+            }
+
             var identity = new ClaimsIdentity(claims, SchemeName);
             var principal = new ClaimsPrincipal(identity);
             var ticket = new AuthenticationTicket(principal, SchemeName);

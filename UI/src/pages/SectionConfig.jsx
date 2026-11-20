@@ -23,10 +23,12 @@ import {
   Save,
   Check,
   Eye,
-  Sparkles
+  Sparkles,
+  RefreshCw,
+  Edit2
 } from 'lucide-react';
 import { subjectService, sectionService, paperService, questionTypeService } from '../services';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import apiCall from '../services/api';
@@ -42,7 +44,7 @@ export default function SectionConfig() {
   const urlPaperId = searchParams.get('paperId') ? parseInt(decryptId(searchParams.get('paperId')), 10) : null;
   const editBatchId = searchParams.get('editBatch') ? parseInt(searchParams.get('editBatch'), 10) : null;
   const isProjectMode = Boolean(projectId && urlPaperId);
-  const { userType } = useAuth();
+  const { userType, hasPermission } = useAuth();
   const { setBreadcrumb } = useBreadcrumb();
   const navigate = useNavigate();
 
@@ -61,11 +63,20 @@ export default function SectionConfig() {
   const [expandedSections, setExpandedSections] = useState({});
   const [sectionToDelete, setSectionToDelete] = useState(null);
   const [sectionMasters, setSectionMasters] = useState([]);
+  const [allBatchesMap, setAllBatchesMap] = useState({});
   const [showImportMasterModal, setShowImportMasterModal] = useState(false);
   const [selectedMasterSectionIds, setSelectedMasterSectionIds] = useState([]);
   const [importingMasters, setImportingMasters] = useState(false);
   const [overwriteExistingMasters, setOverwriteExistingMasters] = useState(false);
   const [previewModalBatchId, setPreviewModalBatchId] = useState(null);
+
+  // Batch-wise creation & duplicate batch comparison state
+  const [showCreateBatchModal, setShowCreateBatchModal] = useState(false);
+  const [newBatchSections, setNewBatchSections] = useState([]);
+  const [activeSectionIdx, setActiveSectionIdx] = useState(0);
+  const [newBatchSaving, setNewBatchSaving] = useState(false);
+  const [duplicateBatchWarning, setDuplicateBatchWarning] = useState(null);
+  const [previewOpenedFromBatchCreate, setPreviewOpenedFromBatchCreate] = useState(false);
 
   const [sectionForm, setSectionForm] = useState({
     name: '',
@@ -130,9 +141,19 @@ export default function SectionConfig() {
 
   const fetchSectionMasters = async () => {
     try {
-      const data = await sectionService.getSectionMasters();
+      const data = await sectionService.getSectionMasters({ all: true, pageSize: 100 });
       // Backend returns paginated response: { items, totalCount, page, pageSize, totalPages }
-      setSectionMasters(data?.items || data || []);
+      const items = data?.items || (Array.isArray(data) ? data : []);
+      setSectionMasters(items);
+      const map = {};
+      items.forEach(sec => {
+        const bId = sec.batchId || 1;
+        if (!map[bId]) map[bId] = [];
+        if (!map[bId].some(s => (s.id && s.id === sec.id) || (s.name === sec.name && s.startQuestion === sec.startQuestion))) {
+          map[bId].push(sec);
+        }
+      });
+      setAllBatchesMap(map);
     } catch (err) {
       console.error("Failed to load section masters", err);
     }
@@ -142,6 +163,7 @@ export default function SectionConfig() {
     if (urlPaperId) {
       fetchPaperDetails();
       fetchSections();
+      fetchSectionMasters();
     }
   }, [urlPaperId]);
 
@@ -207,23 +229,6 @@ export default function SectionConfig() {
 
   const handleSectionFormChange = (e) => {
     const { name, value } = e.target;
-    
-    // Auto-fill from master if name matches and it's being typed
-    if (name === 'name') {
-      const matchedMaster = sectionMasters.find(m => m.name.toLowerCase() === value.trim().toLowerCase());
-      if (matchedMaster && !editingSectionId) {
-        setSectionForm(prev => ({
-          ...prev,
-          name: value,
-          description: matchedMaster.description || prev.description,
-          startQuestion: matchedMaster.startQuestion || prev.startQuestion,
-          endQuestion: matchedMaster.endQuestion || prev.endQuestion,
-          totalMarks: matchedMaster.totalMarks || prev.totalMarks,
-          maxQuestionsToAttempt: matchedMaster.maxQuestionsToAttempt || prev.maxQuestionsToAttempt,
-        }));
-        return;
-      }
-    }
     
     setSectionForm(prev => ({
       ...prev,
@@ -297,6 +302,7 @@ export default function SectionConfig() {
         type: matchedQt?.questionTypeName || existingQ?.type || '',
         isOptional: existingQ?.isOptional !== undefined ? existingQ.isOptional : false,
         optionalGroupCode: existingQ?.optionalGroupCode || '',
+        part: existingQ?.part || '',
       });
     }
     setQuestions(generatedQuestions);
@@ -333,6 +339,7 @@ export default function SectionConfig() {
         type: prevType(prev),
         isOptional: false,
         optionalGroupCode: '',
+        part: '',
       }
     ]);
     setShowQuestionPreview(true);
@@ -473,13 +480,16 @@ export default function SectionConfig() {
         questionTypeId: resolvedTypeId,
         type: resolvedTypeName,
         isOptional: Boolean(q.isOptional),
-        optionalGroupCode: q.optionalGroupCode || ''
+        optionalGroupCode: q.optionalGroupCode || '',
+        part: q.part || ''
       };
     }));
     setEditingSectionId(section.id);
     setShowSectionForm(true);
     setShowQuestionPreview(true);
   };
+
+
 
   const handleSaveSection = async () => {
     if (questions.some(q => !q.type && !q.typeId && !q.questionTypeId)) {
@@ -527,41 +537,32 @@ export default function SectionConfig() {
       }
     }
 
-    // Validate if the sum of individual question marks matches the section's total marks
-    const maxAttempts = parseInt(sectionForm.maxQuestionsToAttempt) || questions.length;
-
-    const compulsoryMarks = questions.filter(q => !q.isOptional).map(q => parseFloat(q.marks) || 0);
-    const independentOptionalMarks = questions.filter(q => q.isOptional && !q.optionalGroupCode).map(q => parseFloat(q.marks) || 0);
-
-    const groupCodeToMarks = {};
-    questions.forEach(q => {
-      if (q.isOptional && q.optionalGroupCode) {
-        const code = q.optionalGroupCode.trim();
-        if (code) {
-          const marks = parseFloat(q.marks) || 0;
-          if (!groupCodeToMarks[code] || marks > groupCodeToMarks[code]) {
-            groupCodeToMarks[code] = marks;
-          }
-        } else {
-          independentOptionalMarks.push(parseFloat(q.marks) || 0);
+    // Validate that questions sharing the same Optional Group have identical marks
+    const groupQuestionsMap = {};
+    (questions || []).forEach(q => {
+      const code = q.optionalGroupCode ? q.optionalGroupCode.trim().toUpperCase() : '';
+      if (code) {
+        if (!groupQuestionsMap[code]) {
+          groupQuestionsMap[code] = [];
         }
+        groupQuestionsMap[code].push(q);
       }
     });
 
-    const groupOptionalMarks = Object.values(groupCodeToMarks);
-    const selectablePool = [...compulsoryMarks, ...independentOptionalMarks, ...groupOptionalMarks];
-    selectablePool.sort((a, b) => b - a);
-
-    const maxAchievableSum = selectablePool.slice(0, maxAttempts).reduce((sum, m) => sum + m, 0);
-
-    if (Math.abs(maxAchievableSum - expectedTotalMarks) > 0.01) {
-      if (maxAttempts < questions.length) {
-        message.warning(`Mismatched Marks! Under 'Structure' in the left panel, the section's Total Marks is configured as ${sectionForm.totalMarks}. However, based on attempting a maximum of ${maxAttempts} question(s) and optional group rules, the maximum achievable marks is ${maxAchievableSum}. Please update the section's Total Marks to ${maxAchievableSum} or adjust the Attempt count to ${selectablePool.length} before saving.`);
-      } else {
-        message.warning(`Mismatched Marks! Under 'Structure' in the left panel, the section's Total Marks is configured as ${sectionForm.totalMarks}. However, based on optional group rules, the maximum achievable marks from compulsory and optional choices is ${maxAchievableSum}. Please update the section's Total Marks to ${maxAchievableSum} before saving.`);
+    for (const [code, qList] of Object.entries(groupQuestionsMap)) {
+      if (qList.length > 1) {
+        const firstMarks = parseFloat(qList[0].marks) || 0;
+        const mismatchedQ = qList.find(q => Math.abs((parseFloat(q.marks) || 0) - firstMarks) > 0.001);
+        if (mismatchedQ) {
+          const q1Label = qList[0].part ? `Q${qList[0].questionNo} (${qList[0].part})` : `Q${qList[0].questionNo}`;
+          const q2Label = mismatchedQ.part ? `Q${mismatchedQ.questionNo} (${mismatchedQ.part})` : `Q${mismatchedQ.questionNo}`;
+          message.error(`Questions in Optional Group '${code}' must have identical marks. ${q1Label} has ${firstMarks}m, but ${q2Label} has ${mismatchedQ.marks}m.`);
+          return;
+        }
       }
-      return;
     }
+
+
 
     try {
       setLoading(true);
@@ -585,7 +586,7 @@ export default function SectionConfig() {
           endQuestion: parseInt(sectionForm.endQuestion, 10) || 1,
           totalMarks: parseFloat(sectionForm.totalMarks) || 0,
           maxQuestionsToAttempt: parseInt(sectionForm.maxQuestionsToAttempt, 10) || 1,
-          totalQuestions: questions.length,
+          totalQuestions: distinctQCount,
           questions: questions.map(q => {
             const matchedQt = questionTypesList.find(qt => 
               (q.questionTypeId && qt.questionTypeId === q.questionTypeId) ||
@@ -602,7 +603,8 @@ export default function SectionConfig() {
               type: resolvedTypeName,
               marks: parseFloat(q.marks),
               isOptional: q.isOptional || false,
-              optionalGroupCode: q.optionalGroupCode || null
+              optionalGroupCode: q.optionalGroupCode || null,
+              part: q.part ? String(q.part).trim() : null
             };
           })
         };
@@ -634,7 +636,7 @@ export default function SectionConfig() {
           endQuestion: parseInt(sectionForm.endQuestion, 10) || 1,
           totalMarks: parseFloat(sectionForm.totalMarks) || 0,
           maxQuestionsToAttempt: parseInt(sectionForm.maxQuestionsToAttempt, 10) || 1,
-          totalQuestions: questions.length,
+          totalQuestions: distinctQCount,
           questions: questions.map(q => {
             const matchedQt = questionTypesList.find(qt => 
               (q.questionTypeId && qt.questionTypeId === q.questionTypeId) ||
@@ -651,7 +653,8 @@ export default function SectionConfig() {
               type: resolvedTypeName,
               marks: parseFloat(q.marks),
               isOptional: q.isOptional || false,
-              optionalGroupCode: q.optionalGroupCode || null
+              optionalGroupCode: q.optionalGroupCode || null,
+              part: q.part ? String(q.part).trim() : null
             };
           })
         };
@@ -754,6 +757,972 @@ export default function SectionConfig() {
     }
 
     return false;
+  };
+
+  // Deep comparison logic to detect identical batch configurations
+  const checkBatchesIdentical = useCallback((candidateSections, existingSections) => {
+    if (!candidateSections || !existingSections) return false;
+    if (candidateSections.length !== existingSections.length) return false;
+
+    // Sort both by startQuestion, then by name
+    const sortedCandidate = [...candidateSections].sort((a, b) => {
+      const diff = (parseInt(a.startQuestion, 10) || 0) - (parseInt(b.startQuestion, 10) || 0);
+      return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+    });
+
+    const sortedExisting = [...existingSections].sort((a, b) => {
+      const diff = (parseInt(a.startQuestion, 10) || 0) - (parseInt(b.startQuestion, 10) || 0);
+      return diff !== 0 ? diff : (a.name || '').localeCompare(b.name || '');
+    });
+
+    for (let i = 0; i < sortedCandidate.length; i++) {
+      const cSec = sortedCandidate[i];
+      const eSec = sortedExisting[i];
+
+      // 1. Name
+      if (cSec.name?.trim().toLowerCase() !== eSec.name?.trim().toLowerCase()) {
+        return false;
+      }
+
+      // 2. Start & End questions
+      const cStart = parseInt(cSec.startQuestion, 10) || 0;
+      const cEnd = parseInt(cSec.endQuestion, 10) || 0;
+      const eStart = parseInt(eSec.startQuestion, 10) || 0;
+      const eEnd = parseInt(eSec.endQuestion, 10) || 0;
+      if (cStart !== eStart || cEnd !== eEnd) {
+        return false;
+      }
+
+      // 3. Total marks
+      const cMarks = parseFloat(cSec.totalMarks) || 0;
+      const eMarks = parseFloat(eSec.totalMarks) || 0;
+      if (Math.abs(cMarks - eMarks) > 0.01) {
+        return false;
+      }
+
+      // 4. Max questions to attempt & total questions count
+      const cTotalQ = cSec.questions?.length || (cEnd >= cStart ? cEnd - cStart + 1 : 1);
+      const eTotalQ = eSec.questions?.length || (eEnd >= eStart ? eEnd - eStart + 1 : 1);
+      if (cTotalQ !== eTotalQ) {
+        return false;
+      }
+
+      const cMaxAttempt = parseInt(cSec.maxQuestionsToAttempt, 10) || cTotalQ;
+      const eMaxAttempt = parseInt(eSec.maxQuestionsToAttempt, 10) || eTotalQ;
+      if (cMaxAttempt !== eMaxAttempt) {
+        return false;
+      }
+
+      // 5. Questions breakdown
+      const cQuestions = cSec.questions || [];
+      const eQuestions = (eSec.questions && eSec.questions.length > 0)
+        ? eSec.questions
+        : Array.from({ length: eTotalQ }, (_, idx) => ({
+            questionNo: String(eStart + idx),
+            marks: eTotalQ > 0 ? eMarks / eTotalQ : 0,
+            type: 'MCQ',
+            isOptional: false,
+            optionalGroupCode: null
+          }));
+
+      if (cQuestions.length !== eQuestions.length) {
+        return false;
+      }
+
+      const parseQNo = (no) => {
+        const clean = String(no || '').replace(/^Q/i, '').trim();
+        const num = parseInt(clean, 10);
+        return isNaN(num) ? clean : num;
+      };
+
+      const sortedCQ = [...cQuestions].sort((a, b) => {
+        const na = parseQNo(a.questionNo);
+        const nb = parseQNo(b.questionNo);
+        if (typeof na === 'number' && typeof nb === 'number') return na - nb;
+        return String(na).localeCompare(String(nb));
+      });
+
+      const sortedEQ = [...eQuestions].sort((a, b) => {
+        const na = parseQNo(a.questionNo);
+        const nb = parseQNo(b.questionNo);
+        if (typeof na === 'number' && typeof nb === 'number') return na - nb;
+        return String(na).localeCompare(String(nb));
+      });
+
+      for (let qIdx = 0; qIdx < sortedCQ.length; qIdx++) {
+        const cq = sortedCQ[qIdx];
+        const eq = sortedEQ[qIdx];
+
+        // Question No
+        if (String(parseQNo(cq.questionNo)).toLowerCase() !== String(parseQNo(eq.questionNo)).toLowerCase()) {
+          return false;
+        }
+
+        // Part
+        const cqPart = (cq.part || '').trim().toLowerCase();
+        const eqPart = (eq.part || '').trim().toLowerCase();
+        if (cqPart !== eqPart) {
+          return false;
+        }
+
+        // Marks
+        const cqM = parseFloat(cq.marks) || 0;
+        const eqM = parseFloat(eq.marks) || 0;
+        if (Math.abs(cqM - eqM) > 0.01) {
+          return false;
+        }
+
+        // Question Type
+        const getTypeName = (q) => {
+          if (q.type && typeof q.type === 'string' && q.type.trim()) return q.type.trim().toLowerCase();
+          const tid = q.questionTypeId || q.typeId;
+          if (tid && questionTypesList.length > 0) {
+            const found = questionTypesList.find(t => String(t.questionTypeId || t.id) === String(tid));
+            if (found) return (found.questionTypeName || '').trim().toLowerCase();
+          }
+          return 'mcq';
+        };
+
+        if (getTypeName(cq) !== getTypeName(eq)) {
+          return false;
+        }
+
+        // Optional status & optional group code
+        const cqIsOpt = Boolean(cq.isOptional || cq.optionalGroupCode);
+        const eqIsOpt = Boolean(eq.isOptional || eq.optionalGroupCode);
+        if (cqIsOpt !== eqIsOpt) {
+          return false;
+        }
+
+        const cleanGroup = (g, secName) => {
+          const str = (g || '').trim().toLowerCase();
+          if (!str || str === `${(secName || '').toLowerCase()}-optional`) return '';
+          return str;
+        };
+
+        if (cleanGroup(cq.optionalGroupCode, cSec.name) !== cleanGroup(eq.optionalGroupCode, eSec.name)) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }, [questionTypesList]);
+
+  // Find if an identical batch already exists across all loaded batches
+  const findMatchingBatch = useCallback((candidateSections, excludeBatchId = null) => {
+    if (!candidateSections || candidateSections.length === 0) return null;
+    const batchIds = Object.keys(allBatchesMap).map(Number).sort((a, b) => a - b);
+    for (const bId of batchIds) {
+      if (excludeBatchId && bId === excludeBatchId) continue;
+      const existing = allBatchesMap[bId];
+      if (checkBatchesIdentical(candidateSections, existing)) {
+        return bId;
+      }
+    }
+    return null;
+  }, [allBatchesMap, checkBatchesIdentical]);
+
+  // Real-time matched existing batch ID for the modal
+  const matchedExistingBatchId = useMemo(() => {
+    if (!showCreateBatchModal || !newBatchSections || newBatchSections.length === 0) return null;
+    if (editBatchId && editBatchId > 0) return null;
+    return findMatchingBatch(newBatchSections, editBatchId && editBatchId > 0 ? editBatchId : null);
+  }, [showCreateBatchModal, newBatchSections, findMatchingBatch, editBatchId]);
+
+  // Update a field in active batch section
+  const updateBatchSection = (idx, field, value) => {
+    setNewBatchSections(prev => prev.map((sec, i) => {
+      if (i !== idx) return sec;
+      const updated = { ...sec, [field]: value };
+
+      if (field === 'totalMarks' && updated.questions && updated.questions.length > 0) {
+        const newTotal = parseFloat(value) || 0;
+        const qCount = updated.questions.length;
+        const newMarksPerQ = qCount > 0 ? parseFloat((newTotal / qCount).toFixed(2)) : 0;
+        
+        updated.questions = updated.questions.map((q, qIndex) => {
+          let mark = newMarksPerQ;
+          if (qIndex === qCount - 1 && qCount > 1) {
+            const prevTotal = newMarksPerQ * (qCount - 1);
+            const diff = parseFloat((newTotal - prevTotal).toFixed(2));
+            if (Math.abs(diff - newMarksPerQ) <= 0.05) {
+              mark = diff;
+            }
+          }
+          return {
+            ...q,
+            marks: mark,
+          };
+        });
+      }
+
+      return updated;
+    }));
+  };
+
+  // Generate questions from range for a batch section
+  const generateBatchSectionQuestions = (sIdx) => {
+    const sec = newBatchSections[sIdx];
+    const start = parseInt(sec.startQuestion, 10) || 1;
+    const end = parseInt(sec.endQuestion, 10) || 1;
+    const totalMarks = parseFloat(sec.totalMarks) || 0;
+    const count = end - start + 1;
+
+    if (count <= 0) {
+      message.error('End question must be greater than or equal to start question');
+      return;
+    }
+
+    // Validate against paper's total question limit
+    const paperTargetQ = parseInt(selectedPaper?.totalQuestions, 10) || 0;
+    if (paperTargetQ > 0 && end > paperTargetQ) {
+      message.error(`This paper has only ${paperTargetQ} questions. End Q# cannot exceed ${paperTargetQ}.`);
+      return;
+    }
+    if (paperTargetQ > 0) {
+      // Count distinct questions in ALL other sections (excluding this one)
+      const otherSectionsQ = new Set(
+        newBatchSections.filter((_, i) => i !== sIdx)
+          .flatMap(sec => (sec.questions || []).map(q => String(q.questionNo || '').trim()))
+          .filter(Boolean)
+      ).size;
+      if (otherSectionsQ + count > paperTargetQ) {
+        const available = paperTargetQ - otherSectionsQ;
+        message.error(`This paper has only ${paperTargetQ} questions. Other sections already use ${otherSectionsQ}, so this section can have at most ${available} question(s).`);
+        return;
+      }
+    }
+
+    const marksPerQ = count > 0 ? parseFloat((totalMarks / count).toFixed(2)) : 0;
+    const defaultQt = questionTypesList.length > 0 ? questionTypesList[0] : null;
+    const defaultTypeId = defaultQt?.questionTypeId || defaultQt?.id || null;
+    const defaultTypeName = defaultQt?.questionTypeName || 'MCQ';
+
+    const generated = [];
+    for (let i = start; i <= end; i++) {
+      const qNoStr = i.toString();
+      const existing = (sec.questions || []).find(q => String(q.questionNo) === qNoStr);
+      const matchedQt = questionTypesList.find(qt => 
+        (existing?.questionTypeId && String(qt.questionTypeId || qt.id) === String(existing.questionTypeId)) ||
+        (existing?.typeId && String(qt.questionTypeId || qt.id) === String(existing.typeId)) || 
+        (existing?.type && qt.questionTypeName?.toLowerCase() === existing.type?.toLowerCase())
+      ) || defaultQt;
+
+      let qMark = marksPerQ;
+      if (i === end && count > 1) {
+        const prevTotal = marksPerQ * (count - 1);
+        const diff = parseFloat((totalMarks - prevTotal).toFixed(2));
+        if (Math.abs(diff - marksPerQ) <= 0.05) {
+          qMark = diff;
+        }
+      }
+
+      generated.push({
+        id: existing?.id || existing?.questionId || null,
+        questionNo: qNoStr,
+        marks: qMark,
+        typeId: matchedQt?.questionTypeId || matchedQt?.id || defaultTypeId,
+        questionTypeId: matchedQt?.questionTypeId || matchedQt?.id || defaultTypeId,
+        type: matchedQt?.questionTypeName || existing?.type || defaultTypeName,
+        isOptional: existing?.isOptional !== undefined ? existing.isOptional : false,
+        optionalGroupCode: existing?.optionalGroupCode || '',
+        part: existing?.part || '',
+      });
+    }
+
+    setNewBatchSections(prev => prev.map((s, i) => i === sIdx ? { ...s, questions: generated } : s));
+    message.success(`Questions regenerated (${count} questions, ${totalMarks} total marks)`);
+  };
+
+  // Universal question type selector for batch section
+  const applyUniversalTypeToBatchSection = (sIdx, typeVal) => {
+    if (!typeVal) return;
+    const matched = questionTypesList.find(qt => String(qt.questionTypeId || qt.id) === String(typeVal));
+    if (!matched) return;
+    const qTypeId = matched.questionTypeId || matched.id;
+    const qTypeName = matched.questionTypeName;
+
+    setNewBatchSections(prev => prev.map((sec, i) => {
+      if (i !== sIdx) return sec;
+      return {
+        ...sec,
+        questions: sec.questions.map(q => ({
+          ...q,
+          typeId: qTypeId,
+          questionTypeId: qTypeId,
+          type: qTypeName,
+        }))
+      };
+    }));
+  };
+
+  // Compute next part label (e.g. "a" -> "b", "b" -> "c", "z" -> "aa", "i" -> "ii", "1" -> "2")
+  const getNextPart = (partStr) => {
+    const str = String(partStr || '').trim();
+    if (!str) return 'b';
+
+    // Lowercase Roman numerals
+    const lowerRomans = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'];
+    const lrIdx = lowerRomans.indexOf(str.toLowerCase());
+    if (lrIdx !== -1 && lrIdx < lowerRomans.length - 1 && str === str.toLowerCase()) {
+      return lowerRomans[lrIdx + 1];
+    }
+    // Uppercase Roman numerals
+    const upperRomans = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+    const urIdx = upperRomans.indexOf(str);
+    if (urIdx !== -1 && urIdx < upperRomans.length - 1) {
+      return upperRomans[urIdx + 1];
+    }
+
+    // Pure numeric: '1' -> '2'
+    if (/^\d+$/.test(str)) {
+      return String(parseInt(str, 10) + 1);
+    }
+
+    // Alphabetic: 'a' -> 'b', 'z' -> 'aa', 'A' -> 'B'
+    const isLower = str === str.toLowerCase();
+    const upper = str.toUpperCase();
+    const arr = upper.split('');
+    let i = arr.length - 1;
+    while (i >= 0) {
+      if (arr[i] < 'Z') {
+        arr[i] = String.fromCharCode(arr[i].charCodeAt(0) + 1);
+        break;
+      }
+      arr[i] = 'A';
+      i--;
+    }
+    if (i < 0) arr.unshift('A');
+    const res = arr.join('');
+    return isLower ? res.toLowerCase() : res;
+  };
+
+  // Compute the next question number after the given one.
+  // "16" -> "17" | "16A" -> "16B" | "16Z" -> "16AA"
+  const getNextQuestionNo = (qNo) => {
+    const str = String(qNo || '').trim();
+    const match = str.match(/^(\d+)([A-Za-z]*)$/);
+    if (match) {
+      const numPart = match[1];
+      const alphaPart = match[2];
+      if (alphaPart === '') {
+        return String(parseInt(numPart, 10) + 1);
+      }
+      const upper = alphaPart.toUpperCase();
+      const arr = upper.split('');
+      let i = arr.length - 1;
+      while (i >= 0) {
+        if (arr[i] < 'Z') {
+          arr[i] = String.fromCharCode(arr[i].charCodeAt(0) + 1);
+          return numPart + arr.join('');
+        }
+        arr[i] = 'A';
+        i--;
+      }
+      return numPart + 'A' + arr.join('');
+    }
+    const numOnly = parseInt(str.replace(/\D/g, ''), 10);
+    if (!isNaN(numOnly)) {
+      return String(numOnly + 1);
+    }
+    return str + '_1';
+  };
+
+  // Add question row after qIdx in batch modal:
+  // If the source question has a part (e.g. Q1 part a), it adds the next part (Q1 part b) of the same question.
+  // Otherwise, it adds the next question number (Q2).
+  const handleAddBatchQuestion = (sIdx, qIdx) => {
+    setNewBatchSections(prev => prev.map((sec, i) => {
+      if (i !== sIdx) return sec;
+      const qs = [...(sec.questions || [])];
+      const source = qs[qIdx];
+      const hasPart = Boolean(source?.part && String(source.part).trim() !== '');
+
+      const paperTargetQ = parseInt(selectedPaper?.totalQuestions, 10) || 0;
+      if (!hasPart && paperTargetQ > 0) {
+        const distinctQCount = new Set(
+          newBatchSections.flatMap(s => (s.questions || []).map(q => String(q.questionNo || '').trim()))
+        ).size;
+        if (distinctQCount >= paperTargetQ) {
+          message.error(`This paper has only ${paperTargetQ} questions. Cannot add more questions.`);
+          return sec;
+        }
+      }
+
+      let newQuestionNo;
+      let newPart;
+      if (hasPart) {
+        newQuestionNo = source.questionNo;
+        newPart = getNextPart(source.part);
+      } else {
+        newQuestionNo = getNextQuestionNo(source?.questionNo);
+        newPart = '';
+      }
+
+      const newQ = {
+        ...source,
+        id: null,
+        questionNo: newQuestionNo,
+        part: newPart,
+      };
+      qs.splice(qIdx + 1, 0, newQ);
+
+      const startQ = parseInt(sec.startQuestion, 10) || 1;
+      const maxQ = Math.max(...qs.map(q => {
+        const m = String(q.questionNo || '').match(/^(\d+)/);
+        return m ? parseInt(m[1], 10) : 0;
+      }));
+      const newEndQ = maxQ >= startQ ? maxQ : Math.max(startQ, startQ + qs.length - 1);
+
+      return {
+        ...sec,
+        questions: qs,
+        endQuestion: newEndQ,
+        maxQuestionsToAttempt: Math.min(sec.maxQuestionsToAttempt || qs.length, qs.length)
+      };
+    }));
+  };
+
+  // Remove question row from batch modal
+  const handleRemoveBatchQuestion = (sIdx, qIdx) => {
+    setNewBatchSections(prev => prev.map((sec, i) => {
+      if (i !== sIdx) return sec;
+      if (sec.questions.length <= 1) {
+        message.error('A section must have at least 1 question.');
+        return sec;
+      }
+      const qs = [...sec.questions];
+      qs.splice(qIdx, 1);
+      const startQ = parseInt(sec.startQuestion, 10) || 1;
+      const maxQ = Math.max(...qs.map(q => {
+        const m = String(q.questionNo || '').match(/^(\d+)/);
+        return m ? parseInt(m[1], 10) : 0;
+      }));
+      const newEndQ = maxQ >= startQ ? maxQ : Math.max(startQ, startQ + qs.length - 1);
+      return {
+        ...sec,
+        questions: qs,
+        endQuestion: newEndQ,
+        maxQuestionsToAttempt: Math.min(sec.maxQuestionsToAttempt || qs.length, qs.length)
+      };
+    }));
+  };
+
+  // Add question below in single section form
+  const handleAddQuestionBelow = (index) => {
+    const source = questions[index];
+    const hasPart = Boolean(source?.part && String(source.part).trim() !== '');
+
+    const paperTargetQ = parseInt(selectedPaper?.totalQuestions, 10) || 0;
+    if (!hasPart && paperTargetQ > 0) {
+      const distinctQCount = new Set(questions.map(q => String(q.questionNo || '').trim())).size;
+      if (distinctQCount >= paperTargetQ) {
+        message.error(`This paper has only ${paperTargetQ} questions. Cannot add more questions.`);
+        return;
+      }
+    }
+
+    let newQuestionNo;
+    let newPart;
+    if (hasPart) {
+      newQuestionNo = source.questionNo;
+      newPart = getNextPart(source.part);
+    } else {
+      newQuestionNo = getNextQuestionNo(source?.questionNo);
+      newPart = '';
+    }
+
+    const newQ = {
+      ...source,
+      id: null,
+      questionNo: newQuestionNo,
+      part: newPart
+    };
+    const updated = [...questions];
+    updated.splice(index + 1, 0, newQ);
+    setQuestions(updated);
+
+    const startQ = parseInt(sectionForm.startQuestion, 10) || 1;
+    const maxQ = Math.max(...updated.map(q => {
+      const m = String(q.questionNo || '').match(/^(\d+)/);
+      return m ? parseInt(m[1], 10) : 0;
+    }));
+    const newEndQ = maxQ >= startQ ? maxQ : Math.max(startQ, startQ + updated.length - 1);
+
+    setSectionForm(prev => ({
+      ...prev,
+      endQuestion: newEndQ
+    }));
+  };
+
+  // Update a single question field in a batch section
+  const updateBatchSectionQuestion = (sIdx, qIdx, field, value) => {
+    setNewBatchSections(prev => prev.map((sec, i) => {
+      if (i !== sIdx) return sec;
+      const updatedQuestions = [...sec.questions];
+      if (field === 'marks') {
+        updatedQuestions[qIdx] = {
+          ...updatedQuestions[qIdx],
+          marks: value === '' ? '' : (parseFloat(value) || 0),
+        };
+      } else if (field === 'typeSelect') {
+        const matched = questionTypesList.find(qt => String(qt.questionTypeId || qt.id) === String(value));
+        if (matched) {
+          const qTypeId = matched.questionTypeId || matched.id;
+          updatedQuestions[qIdx] = {
+            ...updatedQuestions[qIdx],
+            typeId: qTypeId,
+            questionTypeId: qTypeId,
+            type: matched.questionTypeName,
+          };
+        } else {
+          updatedQuestions[qIdx] = {
+            ...updatedQuestions[qIdx],
+            typeId: null,
+            questionTypeId: null,
+            type: '',
+          };
+        }
+      } else {
+        updatedQuestions[qIdx] = {
+          ...updatedQuestions[qIdx],
+          [field]: value,
+        };
+      }
+      return { ...sec, questions: updatedQuestions };
+    }));
+  };
+
+  // Add section to batch
+  const handleAddSectionToBatch = () => {
+    const paperTargetQ = parseInt(selectedPaper?.totalQuestions, 10) || 0;
+    const usedQ = new Set(
+      newBatchSections.flatMap(sec => (sec.questions || []).map(q => String(q.questionNo || '').trim())).filter(Boolean)
+    ).size;
+    if (paperTargetQ > 0 && usedQ >= paperTargetQ) {
+      message.error(`This paper has only ${paperTargetQ} questions. All ${paperTargetQ} questions are already allocated across existing sections.`);
+      return;
+    }
+
+    let nextStart = 1;
+    if (newBatchSections.length > 0) {
+      const maxEnd = Math.max(...newBatchSections.map(s => parseInt(s.endQuestion, 10) || 0));
+      nextStart = maxEnd + 1;
+    }
+    if (paperTargetQ > 0 && nextStart > paperTargetQ) {
+      message.error(`This paper has only ${paperTargetQ} questions. All questions are already covered by existing sections.`);
+      return;
+    }
+    let nextEnd = nextStart + 9;
+    if (paperTargetQ > 0 && nextEnd > paperTargetQ) {
+      nextEnd = Math.max(nextStart, paperTargetQ);
+    }
+    const count = Math.max(1, nextEnd - nextStart + 1);
+    
+    // Remaining paper marks
+    const allocated = newBatchSections.reduce((sum, s) => sum + (parseFloat(s.totalMarks) || 0), 0);
+    const paperMaxM = parseFloat(selectedPaper?.maxMarks) || 10;
+    const remaining = Math.max(0, paperMaxM - allocated);
+    const totalMarks = remaining > 0 ? remaining : 10;
+    const marksPerQ = count > 0 ? parseFloat((totalMarks / count).toFixed(2)) : 0;
+    const defaultQt = questionTypesList.length > 0 ? questionTypesList[0] : null;
+    const defaultTypeId = defaultQt?.questionTypeId || defaultQt?.id || null;
+    const defaultTypeName = defaultQt?.questionTypeName || 'MCQ';
+
+    const autoQuestions = [];
+    for (let i = nextStart; i <= nextEnd; i++) {
+      let qMark = marksPerQ;
+      if (i === nextEnd && count > 1) {
+        const prevTotal = marksPerQ * (count - 1);
+        const diff = parseFloat((totalMarks - prevTotal).toFixed(2));
+        if (Math.abs(diff - marksPerQ) <= 0.05) {
+          qMark = diff;
+        }
+      }
+      autoQuestions.push({
+        id: null,
+        questionNo: String(i),
+        marks: qMark,
+        typeId: defaultTypeId,
+        questionTypeId: defaultTypeId,
+        type: defaultTypeName,
+        isOptional: false,
+        optionalGroupCode: '',
+      });
+    }
+
+    const nextLetter = String.fromCharCode(65 + newBatchSections.length);
+    const secName = `Section ${nextLetter}`;
+
+    const newSec = {
+      name: secName,
+      description: '',
+      startQuestion: nextStart,
+      endQuestion: nextEnd,
+      totalMarks: totalMarks,
+      maxQuestionsToAttempt: count,
+      questions: autoQuestions,
+    };
+    setNewBatchSections(prev => [...prev, newSec]);
+    setActiveSectionIdx(newBatchSections.length);
+  };
+
+  // Remove a section from the batch
+  const handleRemoveBatchSection = (idx) => {
+    setNewBatchSections(prev => prev.filter((_, i) => i !== idx));
+    setActiveSectionIdx(prev => Math.max(0, idx - 1));
+  };
+
+  // Open Create/Configure Batch Modal
+  const openCreateBatchModal = () => {
+    fetchSectionMasters();
+    if (sections && sections.length > 0) {
+      const defaultQt = questionTypesList[0] || null;
+      const mapped = sections.map(sec => {
+        const totalQ = sec.totalQuestions || (sec.endQuestion - sec.startQuestion + 1);
+        const marksPerQ = totalQ > 0 ? parseFloat(((sec.totalMarks || 0) / totalQ).toFixed(2)) : 0;
+        let qList = [];
+        if (sec.questions && sec.questions.length > 0) {
+          qList = sec.questions.map(q => {
+            const matchedQt = questionTypesList.find(qt =>
+              (q.questionTypeId && String(qt.questionTypeId || qt.id) === String(q.questionTypeId)) ||
+              (q.typeId && String(qt.questionTypeId || qt.id) === String(q.typeId)) ||
+              (q.type && qt.questionTypeName?.toLowerCase() === q.type?.toLowerCase())
+            );
+            const resolvedTypeId = matchedQt?.questionTypeId || matchedQt?.id || q.questionTypeId || q.typeId || defaultQt?.questionTypeId || null;
+            const resolvedTypeName = matchedQt?.questionTypeName || q.type || defaultQt?.questionTypeName || 'MCQ';
+            return {
+              id: q.id || q.questionId || null,
+              questionNo: String(q.questionNo ?? ''),
+              marks: q.marks !== undefined ? parseFloat(q.marks) : marksPerQ,
+              type: resolvedTypeName,
+              typeId: resolvedTypeId,
+              questionTypeId: resolvedTypeId,
+              isOptional: Boolean(q.isOptional),
+              optionalGroupCode: q.optionalGroupCode || '',
+              part: q.part || ''
+            };
+          });
+        } else {
+          const start = sec.startQuestion || 1;
+          const end = sec.endQuestion || (start + totalQ - 1);
+          for (let i = start; i <= end; i++) {
+            qList.push({
+              id: null,
+              questionNo: String(i),
+              marks: marksPerQ,
+              type: defaultQt?.questionTypeName || 'MCQ',
+              typeId: defaultQt?.questionTypeId || null,
+              questionTypeId: defaultQt?.questionTypeId || null,
+              isOptional: false,
+              optionalGroupCode: '',
+              part: ''
+            });
+          }
+        }
+        return {
+          id: sec.id,
+          name: sec.name || '',
+          description: sec.description || '',
+          startQuestion: sec.startQuestion,
+          endQuestion: sec.endQuestion,
+          totalMarks: sec.totalMarks,
+          maxQuestionsToAttempt: sec.maxQuestionsToAttempt || totalQ,
+          questions: qList
+        };
+      });
+      setNewBatchSections(mapped);
+      setActiveSectionIdx(0);
+    } else {
+      const paperTotalQ = parseInt(selectedPaper?.totalQuestions, 10) || 10;
+      const paperMaxM = parseFloat(selectedPaper?.maxMarks) || 10;
+      const initEnd = Math.min(10, paperTotalQ);
+      const count = Math.max(1, initEnd - 1 + 1);
+      const initMarks = Math.min(10, paperMaxM);
+      const marksPerQ = count > 0 ? parseFloat((initMarks / count).toFixed(2)) : 0;
+      const defaultQt = questionTypesList[0] || null;
+
+      const initQuestions = [];
+      for (let i = 1; i <= initEnd; i++) {
+        let qMark = marksPerQ;
+        if (i === initEnd && count > 1) {
+          const prevTotal = marksPerQ * (count - 1);
+          const diff = parseFloat((initMarks - prevTotal).toFixed(2));
+          if (Math.abs(diff - marksPerQ) <= 0.05) {
+            qMark = diff;
+          }
+        }
+        initQuestions.push({
+          id: null,
+          questionNo: String(i),
+          marks: qMark,
+          type: defaultQt?.questionTypeName || 'MCQ',
+          typeId: defaultQt?.questionTypeId || null,
+          questionTypeId: defaultQt?.questionTypeId || null,
+          isOptional: false,
+          optionalGroupCode: '',
+          part: ''
+        });
+      }
+
+      setNewBatchSections([{
+        name: 'Section A',
+        description: '',
+        startQuestion: 1,
+        endQuestion: initEnd,
+        totalMarks: initMarks,
+        maxQuestionsToAttempt: count,
+        questions: initQuestions
+      }]);
+      setActiveSectionIdx(0);
+    }
+    setDuplicateBatchWarning(null);
+    setShowCreateBatchModal(true);
+  };
+
+  // Close Create Batch Modal
+  const handleCloseBatchModal = () => {
+    setShowCreateBatchModal(false);
+    setNewBatchSections([]);
+    setDuplicateBatchWarning(null);
+  };
+
+  // Save Batch for current paper with duplicate check and conflict prevention
+  const handleSaveBatchForPaper = async () => {
+    if (!newBatchSections || newBatchSections.length === 0) {
+      message.warning('Please add at least one section');
+      return;
+    }
+
+    // Validate each section with exact SectionConfig logic
+    for (let idx = 0; idx < newBatchSections.length; idx++) {
+      const sec = newBatchSections[idx];
+      const secName = sec.name?.trim();
+
+      if (!secName) {
+        message.error(`Section ${idx + 1} requires a name`);
+        setActiveSectionIdx(idx);
+        return;
+      }
+
+      const startQ = parseInt(sec.startQuestion, 10);
+      const endQ = parseInt(sec.endQuestion, 10);
+      if (isNaN(startQ) || isNaN(endQ) || endQ < startQ) {
+        message.error(`Section '${secName}': End question must be greater than or equal to start question`);
+        setActiveSectionIdx(idx);
+        return;
+      }
+
+      if (!sec.questions || sec.questions.length === 0) {
+        message.warning(`Please generate questions for '${secName}'`);
+        setActiveSectionIdx(idx);
+        return;
+      }
+
+      const missingTypeIdx = sec.questions.findIndex(q => !q.type && !q.typeId && !q.questionTypeId);
+      if (missingTypeIdx !== -1) {
+        message.warning(`Please select a question type for all questions in '${secName}'`, 8000);
+        setActiveSectionIdx(idx);
+        return;
+      }
+
+      if (sec.questions.some(q => !String(q.questionNo || '').trim())) {
+        message.error(`All questions in '${secName}' must have a question number`);
+        setActiveSectionIdx(idx);
+        return;
+      }
+
+      const qKeys = sec.questions.map(q => {
+        const no = String(q.questionNo || '').trim().toLowerCase();
+        const p = String(q.part || '').trim().toLowerCase();
+        return p ? `${no}_part_${p}` : no;
+      });
+      const dupIdx = qKeys.findIndex((k, i) => qKeys.indexOf(k) !== i);
+      if (dupIdx !== -1) {
+        const dupQ = sec.questions[dupIdx];
+        const label = dupQ.part ? `Q${dupQ.questionNo} (Part ${dupQ.part})` : `Q${dupQ.questionNo}`;
+        message.error(`Duplicate question '${label}' in section '${secName}'`);
+        setActiveSectionIdx(idx);
+        return;
+      }
+
+      const hasDupName = newBatchSections.some((other, oIdx) => oIdx !== idx && other.name.trim().toLowerCase() === secName.toLowerCase());
+      if (hasDupName) {
+        message.error(`Duplicate section name '${secName}' in batch`);
+        setActiveSectionIdx(idx);
+        return;
+      }
+
+      for (let j = 0; j < newBatchSections.length; j++) {
+        if (j !== idx) {
+          const other = newBatchSections[j];
+          const oStart = parseInt(other.startQuestion, 10);
+          const oEnd = parseInt(other.endQuestion, 10);
+          if (startQ <= oEnd && endQ >= oStart) {
+            message.error(`Question range Q${startQ}-Q${endQ} in '${secName}' overlaps with '${other.name}' (Q${oStart}-Q${oEnd})`);
+            setActiveSectionIdx(idx);
+            return;
+          }
+        }
+      }
+
+      // Validate that questions sharing the same Optional Group have identical marks
+      const groupQuestionsMap = {};
+      (sec.questions || []).forEach(q => {
+        const code = q.optionalGroupCode ? q.optionalGroupCode.trim().toUpperCase() : '';
+        if (code) {
+          if (!groupQuestionsMap[code]) {
+            groupQuestionsMap[code] = [];
+          }
+          groupQuestionsMap[code].push(q);
+        }
+      });
+
+      for (const [code, qList] of Object.entries(groupQuestionsMap)) {
+        if (qList.length > 1) {
+          const firstMarks = parseFloat(qList[0].marks) || 0;
+          const mismatchedQ = qList.find(q => Math.abs((parseFloat(q.marks) || 0) - firstMarks) > 0.001);
+          if (mismatchedQ) {
+            const q1Label = qList[0].part ? `Q${qList[0].questionNo} (${qList[0].part})` : `Q${qList[0].questionNo}`;
+            const q2Label = mismatchedQ.part ? `Q${mismatchedQ.questionNo} (${mismatchedQ.part})` : `Q${mismatchedQ.questionNo}`;
+            message.error(`Questions in Optional Group '${code}' in '${secName}' must have identical marks. ${q1Label} has ${firstMarks}m, but ${q2Label} has ${mismatchedQ.marks}m.`);
+            setActiveSectionIdx(idx);
+            return;
+          }
+        }
+      }
+
+
+    }
+
+    const batchTotalMarks = newBatchSections.reduce((sum, s) => sum + (parseFloat(s.totalMarks) || 0), 0);
+    if (selectedPaper?.maxMarks && batchTotalMarks > selectedPaper.maxMarks) {
+      message.error(`Total allocated marks (${batchTotalMarks}) exceeds paper's maximum marks (${selectedPaper.maxMarks})`);
+      return;
+    }
+
+    const maxEndQ = Math.max(...newBatchSections.map(s => parseInt(s.endQuestion, 10) || 0));
+    if (selectedPaper?.totalQuestions > 0 && maxEndQ > selectedPaper.totalQuestions) {
+      message.error(`End question (Q${maxEndQ}) exceeds paper's total questions (${selectedPaper.totalQuestions})`);
+      return;
+    }
+
+    // Duplicate batch check (excluding current batch being edited)
+    const matchedBatchId = findMatchingBatch(newBatchSections, editBatchId && editBatchId > 0 ? editBatchId : null);
+    if (matchedBatchId) {
+      const msg = `Same section configuration batch already exists (Batch #${matchedBatchId})`;
+      message.warning(msg, 6000);
+      setDuplicateBatchWarning({
+        batchId: matchedBatchId,
+        message: msg
+      });
+      return;
+    }
+
+    setNewBatchSaving(true);
+    try {
+      const defaultQt = questionTypesList[0] || null;
+
+      const batchPayload = {
+        batchId: 0,
+        sections: newBatchSections.map(sec => ({
+          batchId: 0,
+          name: sec.name.trim(),
+          description: sec.description || '',
+          startQuestion: parseInt(sec.startQuestion, 10) || 1,
+          endQuestion: parseInt(sec.endQuestion, 10) || 1,
+          totalMarks: parseFloat(sec.totalMarks) || 0,
+          maxQuestionsToAttempt: parseInt(sec.maxQuestionsToAttempt, 10) || 1,
+          totalQuestions: new Set((sec.questions || []).map(q => String(q.questionNo || '').trim()).filter(Boolean)).size || (parseInt(sec.endQuestion, 10) - parseInt(sec.startQuestion, 10) + 1) || 1,
+          questions: sec.questions.map(q => {
+            const matchedQt = questionTypesList.find(qt => 
+              (q.questionTypeId && String(qt.questionTypeId || qt.id) === String(q.questionTypeId)) ||
+              (q.typeId && String(qt.questionTypeId || qt.id) === String(q.typeId)) || 
+              (q.type && qt.questionTypeName?.toLowerCase() === q.type?.toLowerCase())
+            );
+            const resolvedTypeId = matchedQt?.questionTypeId || matchedQt?.id || q.questionTypeId || q.typeId || defaultQt?.questionTypeId || defaultQt?.id || null;
+            const resolvedTypeName = matchedQt?.questionTypeName || q.type || defaultQt?.questionTypeName || 'MCQ';
+            return {
+              questionNo: String(q.questionNo || ''),
+              type: resolvedTypeName,
+              typeId: resolvedTypeId,
+              questionTypeId: resolvedTypeId,
+              marks: parseFloat(q.marks) || 0,
+              isOptional: Boolean(q.isOptional),
+              optionalGroupCode: q.optionalGroupCode || null,
+              part: q.part ? String(q.part).trim() : null,
+            };
+          }),
+        }))
+      };
+
+      let newBatchId = null;
+      try {
+        const res = await sectionService.createSectionMastersBatch(batchPayload);
+        newBatchId = res?.batchId;
+      } catch (batchErr) {
+        if (batchErr.response?.status === 409 || batchErr.response?.data?.existingBatchId) {
+          const dupBatchId = batchErr.response?.data?.existingBatchId;
+          const msg = batchErr.response?.data?.message || `Same section configuration batch already exists (Batch #${dupBatchId})`;
+          message.warning(msg, 6000);
+          setDuplicateBatchWarning({ batchId: dupBatchId, message: msg });
+          setNewBatchSaving(false);
+          return;
+        }
+
+        console.warn('Batch create endpoint failed, falling back to sequential create:', batchErr);
+        let assignedBatchId = 0;
+        for (let i = 0; i < batchPayload.sections.length; i++) {
+          const sec = batchPayload.sections[i];
+          const res = await sectionService.createSectionMaster({
+            ...sec,
+            batchId: assignedBatchId,
+          });
+          if (i === 0 && (res?.batchId || res?.master?.batchId)) {
+            assignedBatchId = res.batchId || res.master.batchId;
+            newBatchId = assignedBatchId;
+          }
+        }
+      }
+
+      if (newBatchId) {
+        const mastersRes = await sectionService.getSectionMasters({ batchId: newBatchId, all: true });
+        const newMasterSections = mastersRes?.items || (Array.isArray(mastersRes) ? mastersRes : []);
+        const masterSectionIds = newMasterSections.map(s => s.id);
+
+        if (masterSectionIds.length > 0) {
+          if (isProjectMode) {
+            await sectionService.importMastersToProjectPaper({
+              projectId: parseInt(projectId, 10),
+              paperId: urlPaperId,
+              masterSectionIds: masterSectionIds,
+              overwriteExisting: true
+            });
+          } else {
+            await sectionService.importMasterSections({
+              paperId: urlPaperId,
+              masterSectionIds: masterSectionIds,
+              overwriteExisting: true
+            });
+          }
+        }
+
+        message.success(`Batch #${newBatchId} created and linked to paper successfully!`);
+        setShowCreateBatchModal(false);
+        setNewBatchSections([]);
+        await fetchSections();
+        await fetchPaperDetails();
+        await fetchSectionMasters();
+      } else {
+        message.error('Failed to create batch sections');
+      }
+    } catch (err) {
+      console.error(err);
+      message.error(err.response?.data?.message || err.message || 'Failed to save batch');
+    } finally {
+      setNewBatchSaving(false);
+    }
   };
 
   return (
@@ -905,18 +1874,12 @@ export default function SectionConfig() {
                     <input
                       type="text"
                       name="name"
-                      list="sectionMastersList"
                       value={sectionForm.name}
                       onChange={handleSectionFormChange}
                       className="w-full bg-white text-gray-900 px-3 py-2 rounded-lg border border-gray-200 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none text-xs font-semibold"
                       placeholder="e.g. Section A"
                       autoComplete="off"
                     />
-                    <datalist id="sectionMastersList">
-                      {sectionMasters.map(m => (
-                        <option key={m.id} value={m.name} />
-                      ))}
-                    </datalist>
                   </div>
                   <div>
                     <label className="block text-[11px] font-bold text-gray-700 mb-1">Description (Optional)</label>
@@ -1100,7 +2063,12 @@ export default function SectionConfig() {
                           Question Breakdown
                         </h4>
                         <span className="text-[10px] font-bold text-gray-500 bg-gray-200/80 px-2 py-0.5 rounded-full">
-                          {questions.length} Questions
+                          {(() => {
+                            const distinctQ = new Set(questions.map(q => String(q.questionNo || '').trim()).filter(Boolean)).size;
+                            return questions.length > distinctQ
+                              ? `${distinctQ} Questions (${questions.length} parts)`
+                              : `${distinctQ} Questions`;
+                          })()}
                         </span>
                       </div>
                       <button
@@ -1117,6 +2085,7 @@ export default function SectionConfig() {
                         <thead className="sticky top-0 bg-gray-50 z-10 border-b border-gray-100">
                           <tr className="text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
                             <th className="px-4 py-2.5">Q No</th>
+                            <th className="px-4 py-2.5">Part</th>
                             <th className="px-4 py-2.5">Marks</th>
                             <th className="px-4 py-2.5">Type</th>
                             <th className="px-4 py-2.5 text-center">Optional</th>
@@ -1138,6 +2107,15 @@ export default function SectionConfig() {
                                     placeholder="No."
                                   />
                                 </div>
+                              </td>
+                              <td className="px-4 py-2">
+                                <input
+                                  type="text"
+                                  value={q.part || ''}
+                                  onChange={(e) => handleQuestionChange(idx, 'part', e.target.value)}
+                                  className="w-14 bg-gray-50 px-2 py-1 rounded-md border border-gray-200 text-xs font-bold text-gray-900 focus:bg-white focus:ring-1 focus:ring-teal-500 outline-none text-center"
+                                  placeholder="Part"
+                                />
                               </td>
                               <td className="px-4 py-2">
                                 <input
@@ -1205,14 +2183,24 @@ export default function SectionConfig() {
                                 />
                               </td>
                               <td className="px-4 py-2 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteQuestionRow(idx)}
-                                  className="p-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 rounded-md transition-all cursor-pointer"
-                                  title="Delete Question"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddQuestionBelow(idx)}
+                                    className="p-1 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded-md transition-all cursor-pointer"
+                                    title="Add Question Below"
+                                  >
+                                    <Plus size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteQuestionRow(idx)}
+                                    className="p-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 rounded-md transition-all cursor-pointer"
+                                    title="Delete Question"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -1251,19 +2239,13 @@ export default function SectionConfig() {
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => {
-                    setEditingSectionId(null);
-                    setShowSectionForm(true);
-                  }}
-                  disabled={isAddSectionDisabled()}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md font-bold text-[10px] uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
-                    isAddSectionDisabled()
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
-                      : 'bg-teal-700 hover:bg-teal-800 text-white shadow-sm hover:shadow'
-                  }`}
+                  type="button"
+                  onClick={openCreateBatchModal}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-md font-bold text-[10px] uppercase tracking-wider transition-all shrink-0 cursor-pointer shadow-sm hover:shadow"
+                  title="Configure sections as a full batch for this paper"
                 >
-                  <Plus size={13} />
-                  <span>Add Section</span>
+                  <Sparkles size={13} />
+                  <span>Configure Batch Sections</span>
                 </button>
               </div>
             </div>
@@ -1308,7 +2290,15 @@ export default function SectionConfig() {
                       <td className="py-3 md:px-6 px-4">
                         <div className="flex flex-col">
                           <span className="font-bold text-gray-900 text-xs">Q{section.startQuestion} - Q{section.endQuestion}</span>
-                          <span className="text-[11px] text-gray-400">{section.questions?.length || 0} questions</span>
+                          {(() => {
+                            const distinctQ = new Set((section.questions || []).map(q => String(q.questionNo || '').trim()).filter(Boolean)).size || (section.totalQuestions || section.questions?.length || 0);
+                            const partsCount = section.questions?.length || 0;
+                            return (
+                              <span className="text-[11px] text-gray-400">
+                                {partsCount > distinctQ ? `${distinctQ} questions (${partsCount} parts)` : `${distinctQ} questions`}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </td>
                       <td className="py-3 md:px-6 px-4 font-bold text-gray-900 text-xs">{section.totalMarks}</td>
@@ -1318,20 +2308,24 @@ export default function SectionConfig() {
                       </td>
                       <td className="py-3 md:px-6 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => handleEditSection(section)}
-                            className="p-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-100 rounded-lg transition-colors cursor-pointer"
-                            title="Edit Section"
-                          >
-                            <Edit size={14} />
-                          </button>
-                          <button
-                            onClick={() => confirmDeleteSection(section.id)}
-                            className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 rounded-lg transition-colors cursor-pointer"
-                            title="Delete Section"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          {hasPermission("MANAGE_SECTIONS") && (
+                            <button
+                              onClick={() => handleEditSection(section)}
+                              className="p-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-100 rounded-lg transition-colors cursor-pointer"
+                              title="Edit Section"
+                            >
+                              <Edit size={14} />
+                            </button>
+                          )}
+                          {hasPermission("MANAGE_SECTIONS") && (
+                            <button
+                              onClick={() => confirmDeleteSection(section.id)}
+                              className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 rounded-lg transition-colors cursor-pointer"
+                              title="Delete Section"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1352,8 +2346,8 @@ export default function SectionConfig() {
                 Start by creating your first examination section or import predefined master sections.
               </p>
             </div>
-            <div className="flex items-center justify-center gap-2 pt-2">
-              {sectionMasters.length > 0 && (
+            <div className="flex items-center justify-center gap-3 pt-2">
+              {sectionMasters.length > 0 && hasPermission("MANAGE_SECTIONS") && (
                 <button
                   onClick={() => {
                     setSelectedMasterSectionIds(sectionMasters.map(m => m.id));
@@ -1365,13 +2359,16 @@ export default function SectionConfig() {
                   <span>Import Masters</span>
                 </button>
               )}
-              <button
-                onClick={() => setShowSectionForm(true)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md font-bold text-[10px] uppercase tracking-wider transition-all shadow-sm cursor-pointer"
-              >
-                <Plus size={13} />
-                <span>Create Section</span>
-              </button>
+              {hasPermission("MANAGE_SECTIONS") && (
+                <button
+                  type="button"
+                  onClick={openCreateBatchModal}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md font-bold text-[10px] uppercase tracking-wider transition-all shadow-sm cursor-pointer"
+                >
+                  <Sparkles size={13} />
+                  <span>Create Batch Sections</span>
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -1409,23 +2406,621 @@ export default function SectionConfig() {
           </div>
         )}
 
+        {/* ── Create / Configure Batch Modal ── */}
+        {showCreateBatchModal && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 md:p-6 animate-in fade-in duration-200" onClick={(e) => { if (e.target === e.currentTarget) handleCloseBatchModal(); }}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden border border-gray-150 animate-in zoom-in-95 duration-200">
+
+              {/* Modal Header */}
+              <div className="px-6 py-4 border-b border-teal-200 flex items-center justify-between bg-gradient-to-r from-teal-50 to-teal-100/50 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-teal-700 text-white flex items-center justify-center font-bold shadow-xs">
+                    <Sparkles size={18} />
+                  </div>
+                  <div>
+                    <h2 className="font-black text-gray-900 text-base sm:text-lg">
+                      Configure Batch Sections
+                    </h2>
+                    <p className="text-xs text-gray-600 font-medium mt-0.5">
+                      For <span className="font-extrabold text-teal-800">{selectedPaper?.paperCode}: {selectedPaper?.paperName}</span>
+                      {selectedPaper?.totalQuestions ? ` • Target: ${selectedPaper.totalQuestions} Questions • ${selectedPaper.maxMarks || 0} Marks` : ''}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {/* Targets live validation pills */}
+                  {selectedPaper && (
+                    <div className="hidden sm:flex items-center gap-2">
+                      {/* Questions Target (counts distinct questions so subparts 11a, 11b are 1 question) */}
+                      {(() => {
+                        const totalQ = new Set(
+                          newBatchSections.flatMap(sec => (sec.questions || []).map(q => String(q.questionNo || '').trim())).filter(Boolean)
+                        ).size;
+                        const targetQ = parseInt(selectedPaper.totalQuestions, 10) || 0;
+                        const qMatch = targetQ > 0 && totalQ === targetQ;
+                        return (
+                          <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${
+                            qMatch
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : 'bg-amber-50 text-amber-800 border-amber-200'
+                          }`}>
+                            Q: {totalQ} / {targetQ || '–'}
+                          </span>
+                        );
+                      })()}
+
+                      {/* Marks Target */}
+                      {(() => {
+                        const totalM = newBatchSections.reduce((s, sec) => s + (parseFloat(sec.totalMarks) || 0), 0);
+                        const maxM = parseFloat(selectedPaper.maxMarks) || 0;
+                        const mMatch = maxM > 0 && totalM === maxM;
+                        return (
+                          <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${
+                            mMatch
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : 'bg-amber-50 text-amber-800 border-amber-200'
+                          }`}>
+                            Marks: {totalM} / {maxM || '–'}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleCloseBatchModal}
+                    className="p-1.5 hover:bg-teal-200/50 rounded-full text-gray-500 hover:text-gray-700 transition-all cursor-pointer"
+                    title="Close"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Body */}
+              <div className="flex flex-1 overflow-hidden">
+
+                {/* Left: Section List */}
+                <div className="w-56 border-r border-gray-100 overflow-y-auto p-3 space-y-1.5 shrink-0 bg-gray-50/50">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 px-2 pb-1">Sections</p>
+                  {newBatchSections.map((sec, idx) => {
+                    const distinctQCount = new Set((sec.questions || []).map(q => String(q.questionNo || '').trim()).filter(Boolean)).size;
+                    const partsCount = sec.questions?.length || 0;
+                    const countLabel = partsCount > distinctQCount ? `${distinctQCount} questions (${partsCount} parts)` : `${distinctQCount} questions`;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setActiveSectionIdx(idx)}
+                        className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          activeSectionIdx === idx
+                            ? 'bg-teal-100 text-teal-800 shadow-xs border border-teal-200'
+                            : 'hover:bg-white text-gray-600 hover:text-gray-900 border border-transparent'
+                        }`}
+                      >
+                        <span className="block truncate">{sec.name || `Section ${idx + 1}`}</span>
+                        <span className="text-[10px] font-semibold text-gray-400 block mt-0.5">
+                          {sec.questions?.length > 0 ? `${countLabel} • ${sec.totalMarks}m` : 'No questions'}
+                        </span>
+                      </button>
+                    );
+                  })}
+
+                  {(() => {
+                    const paperTargetQ = parseInt(selectedPaper?.totalQuestions, 10) || 0;
+                    const usedQ = new Set(
+                      newBatchSections.flatMap(sec => (sec.questions || []).map(q => String(q.questionNo || '').trim())).filter(Boolean)
+                    ).size;
+                    const atCapacity = paperTargetQ > 0 && usedQ >= paperTargetQ;
+                    return (
+                      <div className="relative group/addtooltip mt-2">
+                        <button
+                          type="button"
+                          onClick={handleAddSectionToBatch}
+                          disabled={atCapacity}
+                          className={`w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border border-dashed transition-all ${
+                            atCapacity
+                              ? 'text-gray-400 border-gray-200 cursor-not-allowed bg-gray-50'
+                              : 'text-teal-700 hover:bg-teal-50 border-teal-300 cursor-pointer'
+                          }`}
+                        >
+                          <Plus size={13} /> Add Section
+                        </button>
+                        {atCapacity && (
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 bg-gray-900 text-white text-[10px] font-semibold rounded-lg px-2.5 py-1.5 opacity-0 group-hover/addtooltip:opacity-100 transition-opacity pointer-events-none z-10 text-center shadow-lg">
+                            This paper has only {paperTargetQ} questions. All questions are already allocated.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Right: Active Section Form */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                  {newBatchSections.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                      No sections yet. Click "Add Section".
+                    </div>
+                  ) : (
+                    <>
+                      {/* Section Meta Fields */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-black text-gray-700 mb-1.5 uppercase tracking-wide">
+                            Section Name <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={newBatchSections[activeSectionIdx]?.name || ''}
+                            onChange={e => updateBatchSection(activeSectionIdx, 'name', e.target.value)}
+                            placeholder="e.g. Section A"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-black text-gray-700 mb-1.5 uppercase tracking-wide">
+                            Description (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            value={newBatchSections[activeSectionIdx]?.description || ''}
+                            onChange={e => updateBatchSection(activeSectionIdx, 'description', e.target.value)}
+                            placeholder="Optional description"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-3">
+                        <div>
+                          <label className="block text-xs font-black text-gray-700 mb-1.5 uppercase tracking-wide">Start Q#</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={newBatchSections[activeSectionIdx]?.startQuestion ?? ''}
+                            onChange={e => updateBatchSection(activeSectionIdx, 'startQuestion', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-black text-gray-700 mb-1.5 uppercase tracking-wide">End Q#</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={newBatchSections[activeSectionIdx]?.endQuestion ?? ''}
+                            onChange={e => updateBatchSection(activeSectionIdx, 'endQuestion', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-black text-gray-700 mb-1.5 uppercase tracking-wide">Total Marks</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            value={newBatchSections[activeSectionIdx]?.totalMarks ?? ''}
+                            onChange={e => updateBatchSection(activeSectionIdx, 'totalMarks', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-black text-gray-700 mb-1.5 uppercase tracking-wide">Max Attempt</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={newBatchSections[activeSectionIdx]?.maxQuestionsToAttempt ?? ''}
+                            onChange={e => updateBatchSection(activeSectionIdx, 'maxQuestionsToAttempt', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Questions */}
+                      <div>
+                        {/* Questions Header Row */}
+                        <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                          <div className="flex items-center gap-3">
+                            <label className="text-xs font-black text-gray-700 uppercase tracking-wide shrink-0">
+                              {(() => {
+                                const qs = newBatchSections[activeSectionIdx]?.questions || [];
+                                const distinctCount = new Set(qs.map(q => String(q.questionNo || '').trim()).filter(Boolean)).size;
+                                const partsCount = qs.length;
+                                return partsCount > distinctCount 
+                                  ? `Questions (${distinctCount} • ${partsCount} parts)` 
+                                  : `Questions (${distinctCount})`;
+                              })()}
+                            </label>
+
+                            {/* Universal Question Type Selector */}
+                            {newBatchSections[activeSectionIdx]?.questions?.length > 0 && questionTypesList.length > 0 && (
+                              <div className="flex items-center gap-1.5 bg-teal-50/60 border border-teal-200 px-2 py-1 rounded-lg">
+                                <span className="text-[10px] font-bold text-teal-800 shrink-0">
+                                  Universal Type:
+                                </span>
+                                <select
+                                  value={(() => {
+                                    const qs = newBatchSections[activeSectionIdx].questions;
+                                    if (!qs || qs.length === 0) return '';
+                                    const firstId = qs[0].questionTypeId || qs[0].typeId;
+                                    const allSame = qs.every(q => {
+                                      const curId = q.questionTypeId || q.typeId;
+                                      return curId && String(curId) === String(firstId);
+                                    });
+                                    return allSame ? (firstId || '') : '';
+                                  })()}
+                                  onChange={e => applyUniversalTypeToBatchSection(activeSectionIdx, e.target.value)}
+                                  className="px-2 py-0.5 border border-teal-300 bg-white rounded text-xs font-bold text-teal-800 focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
+                                >
+                                  <option value="">— Select for All —</option>
+                                  {questionTypesList.map(qt => (
+                                    <option key={qt.questionTypeId || qt.id} value={qt.questionTypeId || qt.id}>
+                                      {qt.questionTypeName}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                          </div>
+
+                        {/* Question limit warning banner */}
+                        {(() => {
+                          const paperTargetQ = parseInt(selectedPaper?.totalQuestions, 10) || 0;
+                          if (!paperTargetQ) return null;
+                          const allDistinctQ = new Set(
+                            newBatchSections.flatMap(sec => (sec.questions || []).map(q => String(q.questionNo || '').trim())).filter(Boolean)
+                          ).size;
+                          const thisSecDistinctQ = new Set(
+                            (newBatchSections[activeSectionIdx]?.questions || []).map(q => String(q.questionNo || '').trim()).filter(Boolean)
+                          ).size;
+                          const otherDistinctQ = allDistinctQ - thisSecDistinctQ;
+                          const endQ = parseInt(newBatchSections[activeSectionIdx]?.endQuestion, 10) || 0;
+                          const startQ = parseInt(newBatchSections[activeSectionIdx]?.startQuestion, 10) || 1;
+                          const rangeCount = endQ >= startQ ? endQ - startQ + 1 : 0;
+                          const wouldExceed = endQ > paperTargetQ || (otherDistinctQ + rangeCount > paperTargetQ);
+                          if (!wouldExceed && allDistinctQ <= paperTargetQ) return null;
+                          return (
+                            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-amber-800 font-semibold">
+                              <AlertTriangle size={14} className="text-amber-500 mt-0.5 shrink-0" />
+                              <span>
+                                This paper has only <strong>{paperTargetQ}</strong> questions.
+                                {endQ > paperTargetQ ? ` End Q# (${endQ}) exceeds the paper limit.` : ` Total questions across all sections (${allDistinctQ}) exceeds the limit.`}
+                                {' '}Adjust the question range before generating.
+                              </span>
+                            </div>
+                          );
+                        })()}
+
+                        <button
+                          type="button"
+                          onClick={() => generateBatchSectionQuestions(activeSectionIdx)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-all cursor-pointer whitespace-nowrap"
+                        >
+                          <RefreshCw size={11} /> Generate from Range
+                        </button>
+                      </div>
+
+                        {newBatchSections[activeSectionIdx]?.questions?.length > 0 ? (
+                          <div className="border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+                            <table className="w-full text-left border-collapse text-xs">
+                              <thead>
+                                <tr className="bg-gray-50 border-b border-gray-200">
+                                  <th className="py-2.5 px-3 font-black text-gray-500 uppercase tracking-wider text-[10px] w-24">Q#</th>
+                                  <th className="py-2.5 px-3 font-black text-gray-500 uppercase tracking-wider text-[10px] w-20">Part</th>
+                                  <th className="py-2.5 px-3 font-black text-gray-500 uppercase tracking-wider text-[10px]">Type</th>
+                                  <th className="py-2.5 px-3 text-center font-black text-gray-500 uppercase tracking-wider text-[10px] w-24">Marks</th>
+                                  <th className="py-2.5 px-3 text-center font-black text-gray-500 uppercase tracking-wider text-[10px] w-20">Optional</th>
+                                  <th className="py-2.5 px-3 font-black text-gray-500 uppercase tracking-wider text-[10px]">Group Code</th>
+                                  <th className="py-2.5 px-3 text-center font-black text-gray-500 uppercase tracking-wider text-[10px] w-20">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100 bg-white">
+                                {newBatchSections[activeSectionIdx].questions.map((q, qIdx) => (
+                                  <tr key={qIdx} className="hover:bg-teal-50/30 transition-colors">
+                                    {/* Editable Question Number */}
+                                    <td className="py-1.5 px-3">
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-gray-400 font-bold text-xs">Q</span>
+                                        <input
+                                          type="text"
+                                          value={q.questionNo}
+                                          onChange={e => updateBatchSectionQuestion(activeSectionIdx, qIdx, 'questionNo', e.target.value)}
+                                          className="w-14 px-1.5 py-1 border border-gray-300 rounded text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-teal-500 text-center bg-white"
+                                          placeholder="No."
+                                        />
+                                      </div>
+                                    </td>
+
+                                    {/* Part Input */}
+                                    <td className="py-1.5 px-3">
+                                      <input
+                                        type="text"
+                                        value={q.part || ''}
+                                        onChange={e => updateBatchSectionQuestion(activeSectionIdx, qIdx, 'part', e.target.value)}
+                                        className="w-14 px-1.5 py-1 border border-gray-300 rounded text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-teal-500 text-center bg-white"
+                                        placeholder="Part"
+                                      />
+                                    </td>
+
+                                    {/* Question Type dropdown */}
+                                    <td className="py-1.5 px-3">
+                                      <select
+                                        id={`batch-modal-qtype-${activeSectionIdx}-${qIdx}`}
+                                        value={
+                                          q.questionTypeId || q.typeId || (
+                                            questionTypesList.find(qt => qt.questionTypeName?.toLowerCase() === q.type?.toLowerCase())?.questionTypeId
+                                          ) || ""
+                                        }
+                                        onChange={e => updateBatchSectionQuestion(activeSectionIdx, qIdx, 'typeSelect', e.target.value)}
+                                        className={`w-full px-2 py-1 border rounded text-xs font-semibold outline-none bg-white ${
+                                          !q.type && !q.typeId && !q.questionTypeId
+                                            ? 'border-red-300 bg-red-50/30 text-red-700'
+                                            : 'border-gray-300 focus:ring-1 focus:ring-teal-500 text-gray-800'
+                                        }`}
+                                      >
+                                        <option value="">Choose Type...</option>
+                                        {questionTypesList.map(qt => (
+                                          <option key={qt.questionTypeId || qt.id} value={qt.questionTypeId || qt.id}>
+                                            {qt.questionTypeName}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </td>
+
+                                    {/* Marks Input */}
+                                    <td className="py-1.5 px-3 text-center">
+                                      <input
+                                        type="number"
+                                        step="0.5"
+                                        value={q.marks ?? ''}
+                                        onChange={e => updateBatchSectionQuestion(activeSectionIdx, qIdx, 'marks', e.target.value)}
+                                        className="w-16 px-2 py-1 border border-gray-300 rounded text-xs text-center font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-teal-500 bg-white"
+                                      />
+                                    </td>
+
+                                    {/* Optional Checkbox */}
+                                    <td className="py-1.5 px-3 text-center">
+                                      <input
+                                        type="checkbox"
+                                        checked={Boolean(q.isOptional || q.optionalGroupCode)}
+                                        onChange={e => updateBatchSectionQuestion(activeSectionIdx, qIdx, 'isOptional', e.target.checked)}
+                                        className="w-3.5 h-3.5 rounded text-teal-700 focus:ring-teal-500 cursor-pointer"
+                                      />
+                                    </td>
+
+                                    {/* Optional Group Code */}
+                                    <td className="py-1.5 px-3">
+                                      {(() => {
+                                        const code = q.optionalGroupCode?.trim()?.toUpperCase();
+                                        const otherInGroup = code ? newBatchSections[activeSectionIdx]?.questions?.find(
+                                          (other, oIdx) => oIdx !== qIdx && other.optionalGroupCode?.trim()?.toUpperCase() === code && Math.abs((parseFloat(other.marks) || 0) - (parseFloat(q.marks) || 0)) > 0.001
+                                        ) : null;
+                                        const hasMismatch = Boolean(otherInGroup);
+                                        const oLabel = otherInGroup ? (otherInGroup.part ? `Q${otherInGroup.questionNo} (${otherInGroup.part})` : `Q${otherInGroup.questionNo}`) : '';
+
+                                        return (
+                                          <div>
+                                            <input
+                                              type="text"
+                                              value={q.optionalGroupCode || ''}
+                                              onChange={e => updateBatchSectionQuestion(activeSectionIdx, qIdx, 'optionalGroupCode', e.target.value)}
+                                              placeholder="Group code (optional)"
+                                              title={hasMismatch ? `Group '${q.optionalGroupCode}' marks mismatch! ${oLabel} has ${otherInGroup.marks}m. Questions in same group must have identical marks.` : ''}
+                                              className={`w-full px-2.5 py-1 border rounded text-xs font-semibold focus:outline-none focus:ring-1 bg-white ${
+                                                hasMismatch
+                                                  ? 'border-amber-400 bg-amber-50/50 text-amber-900 focus:ring-amber-500 ring-1 ring-amber-300'
+                                                  : 'border-gray-300 text-gray-700 focus:ring-teal-500'
+                                              }`}
+                                            />
+                                            {hasMismatch && (
+                                              <div className="text-[9px] text-amber-700 font-bold mt-0.5 leading-tight flex items-center gap-1">
+                                                <span>⚠ Must match {oLabel} ({otherInGroup.marks}m)</span>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
+                                    </td>
+                                    {/* Row Actions */}
+                                    <td className="py-1.5 px-3 text-center">
+                                      <div className="flex items-center justify-center gap-1">
+                                        <button
+                                          type="button"
+                                          title="Add question after this row"
+                                          onClick={() => handleAddBatchQuestion(activeSectionIdx, qIdx)}
+                                          className="w-6 h-6 flex items-center justify-center rounded bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 transition-all cursor-pointer"
+                                        >
+                                          <Plus size={11} />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          title="Remove this question"
+                                          onClick={() => handleRemoveBatchQuestion(activeSectionIdx, qIdx)}
+                                          className="w-6 h-6 flex items-center justify-center rounded bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-all cursor-pointer"
+                                        >
+                                          <X size={11} />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center text-gray-400">
+                            <Layers size={28} className="mx-auto mb-2 opacity-40 text-teal-600" />
+                            <p className="text-xs font-bold text-gray-700">No questions generated yet.</p>
+                            <p className="text-[10px] mt-0.5 text-gray-500">Set start/end Q and total marks, then click <span className="font-black text-teal-600">Generate from Range</span>.</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Remove section button */}
+                      {newBatchSections.length > 1 && (
+                        <div className="flex justify-end pt-2">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveBatchSection(activeSectionIdx)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg transition-all cursor-pointer"
+                          >
+                            <Trash2 size={11} /> Remove This Section
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+
+
+
+              {/* Modal Footer */}
+              <div className="px-6 py-4 border-t border-gray-150 flex items-center justify-between shrink-0 bg-white">
+                <p className="text-xs text-gray-600 font-semibold">
+                  <span className="font-bold text-gray-900">{newBatchSections.length}</span> section{newBatchSections.length !== 1 ? 's' : ''} •{' '}
+                  <span className="font-bold text-teal-800">
+                    {(() => {
+                      const distinctTotal = new Set(
+                        newBatchSections.flatMap(sec => (sec.questions || []).map(q => String(q.questionNo || '').trim())).filter(Boolean)
+                      ).size;
+                      const totalParts = newBatchSections.reduce((s, sec) => s + (sec.questions?.length || 0), 0);
+                      return totalParts > distinctTotal
+                        ? `${distinctTotal} total questions (${totalParts} parts)`
+                        : `${distinctTotal} total questions`;
+                    })()}
+                  </span> •{' '}
+                  <span className="font-bold text-teal-800">
+                    {newBatchSections.reduce((s, sec) => s + (parseFloat(sec.totalMarks) || 0), 0)}
+                  </span> total marks
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCloseBatchModal}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveBatchForPaper}
+                    disabled={newBatchSaving || newBatchSections.length === 0}
+                    className="flex items-center gap-2 px-5 py-2 bg-teal-700 text-white rounded-lg text-sm font-bold hover:bg-teal-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer shadow-xs"
+                  >
+                    {newBatchSaving ? (
+                      <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Saving Batch...</>
+                    ) : (
+                      <><Save size={14} /> Save & Link Batch to Paper</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Duplicate Batch Warning Modal ── */}
+        {duplicateBatchWarning && (
+          <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-amber-200 animate-in zoom-in-95 duration-200">
+              <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-4 shadow-2xs">
+                <AlertCircle size={26} />
+              </div>
+              <h3 className="text-base font-black text-gray-950 text-center mb-1.5">
+                Same Section Configuration Batch Already Exists
+              </h3>
+              <p className="text-xs text-gray-600 text-center mb-6 leading-relaxed">
+                An identical section batch with the exact same sections, questions, marks, and optional rules already exists as <strong className="text-teal-800 font-black">Batch #{duplicateBatchWarning.batchId}</strong>. A new duplicate batch cannot be created.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetBatchId = duplicateBatchWarning.batchId;
+                    setDuplicateBatchWarning(null);
+                    setShowCreateBatchModal(false);
+                    setPreviewOpenedFromBatchCreate(true);
+                    setPreviewModalBatchId(targetBatchId);
+                    setShowImportMasterModal(true);
+                  }}
+                  className="flex-1 py-2.5 px-4 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-black shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Eye size={15} />
+                  <span>See Preview of Batch #{duplicateBatchWarning.batchId}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDuplicateBatchWarning(null)}
+                  className="py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Modify Sections
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Import Master Sections Modal */}
-        {showImportMasterModal && (() => {
-          // Group section masters by batchId
+        {(showImportMasterModal || previewModalBatchId) && (() => {
+          // Helper to get actual questions count in a section (distinct questions, subparts 11a, 11b count as 1 question)
+          const getSecQuestionsCount = (s) => {
+            if (s.questions && s.questions.length > 0) {
+              const distinctQ = new Set(s.questions.map(q => String(q.questionNo || '').trim()).filter(Boolean)).size;
+              return distinctQ > 0 ? distinctQ : s.questions.length;
+            }
+            if (s.totalQuestions && parseInt(s.totalQuestions, 10) > 0) return parseInt(s.totalQuestions, 10);
+            if (s.endQuestion && s.startQuestion && s.endQuestion >= s.startQuestion) return s.endQuestion - s.startQuestion + 1;
+            return 0;
+          };
+
+          const getSecTotalMarks = (s) => {
+            const tm = parseFloat(s?.totalMarks);
+            if (!isNaN(tm) && tm > 0) return tm;
+            if (Array.isArray(s?.questions) && s.questions.length > 0) {
+              const sumMarks = s.questions.reduce((sum, q) => sum + (parseFloat(q.marks) || 0), 0);
+              if (sumMarks > 0) return sumMarks;
+            }
+            return 0;
+          };
+
+          // Clean non-mutating grouping of sections by batchId
           const batchMap = {};
-          sectionMasters.forEach(sec => {
+          (sectionMasters || []).forEach(sec => {
             const bId = sec.batchId || 1;
             if (!batchMap[bId]) batchMap[bId] = [];
-            batchMap[bId].push(sec);
+            const isDup = batchMap[bId].some(existing =>
+              (existing.id && sec.id && existing.id === sec.id) ||
+              (existing.name?.trim().toLowerCase() === sec.name?.trim().toLowerCase() && existing.startQuestion === sec.startQuestion)
+            );
+            if (!isDup) {
+              batchMap[bId].push(sec);
+            }
           });
+
+          // Ensure all batches from allBatchesMap are present without duplicate sections
+          if (allBatchesMap && typeof allBatchesMap === 'object') {
+            Object.keys(allBatchesMap).forEach(bId => {
+              if (!batchMap[bId] && Array.isArray(allBatchesMap[bId])) {
+                batchMap[bId] = [...allBatchesMap[bId]];
+              }
+            });
+          }
+
           const targetTotalQ = parseInt(selectedPaper?.totalQuestions, 10) || 0;
+          const targetMaxMarks = parseFloat(selectedPaper?.maxMarks) || 0;
           const availableBatches = Object.keys(batchMap)
             .map(Number)
             .filter(bId => {
-              if (targetTotalQ <= 0) return true;
               const bSections = batchMap[bId] || [];
-              const bTotalQ = bSections.reduce((sum, s) => sum + (parseInt(s.totalQuestions, 10) || 0), 0);
-              return bTotalQ === targetTotalQ;
+              const bTotalQ = bSections.reduce((sum, s) => sum + getSecQuestionsCount(s), 0);
+              const bTotalM = bSections.reduce((sum, s) => sum + getSecTotalMarks(s), 0);
+
+              // BOTH conditions must strictly satisfy:
+              if (targetTotalQ > 0 && bTotalQ !== targetTotalQ) return false;
+              if (targetMaxMarks > 0 && Math.abs(bTotalM - targetMaxMarks) > 0.01) return false;
+              return true;
             })
             .sort((a, b) => a - b);
           const currentPaperBatchId = sections.length > 0 ? (sections[0]?.batchId || null) : null;
@@ -1464,7 +3059,7 @@ export default function SectionConfig() {
                 <div className="p-4 sm:p-5 overflow-y-auto space-y-3.5 custom-scrollbar flex-1">
                   {previewModalBatchId ? (() => {
                     const pSections = batchMap[previewModalBatchId] || [];
-                    const pTotalQ = pSections.reduce((sum, s) => sum + (parseInt(s.totalQuestions, 10) || 0), 0);
+                    const pTotalQ = pSections.reduce((sum, s) => sum + getSecQuestionsCount(s), 0);
                     const pTotalM = pSections.reduce((sum, s) => sum + (parseFloat(s.totalMarks) || 0), 0);
                     const isCurrentBatch = currentPaperBatchId === previewModalBatchId;
 
@@ -1472,7 +3067,23 @@ export default function SectionConfig() {
                       <div className="space-y-3.5 animate-in fade-in duration-150">
                         {/* Top Navigation & Actions Bar */}
                         <div className="flex items-center justify-between gap-2.5 p-3 bg-teal-50/80 border border-teal-200/90 rounded-xl flex-wrap">
-                          <div className="flex items-center gap-2.5">
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            {previewOpenedFromBatchCreate && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowImportMasterModal(false);
+                                  setPreviewModalBatchId(null);
+                                  setPreviewOpenedFromBatchCreate(false);
+                                  setShowCreateBatchModal(true);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-teal-800 bg-white hover:bg-teal-50 border border-teal-200 transition-all cursor-pointer shadow-2xs"
+                                title="Back to editing your batch sections"
+                              >
+                                <ArrowLeft size={14} />
+                                <span>Back to Batch Editor</span>
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => setPreviewModalBatchId(null)}
@@ -1583,6 +3194,7 @@ export default function SectionConfig() {
                                       <thead>
                                         <tr className="bg-gray-50 text-[11px] font-bold uppercase tracking-wider text-gray-600 border-b border-gray-200 sticky top-0 z-10">
                                           <th className="py-2 px-3">Q#</th>
+                                          <th className="py-2 px-3">Part</th>
                                           <th className="py-2 px-3">Type</th>
                                           <th className="py-2 px-3">Marks</th>
                                           <th className="py-2 px-3">Choice / Group</th>
@@ -1593,7 +3205,10 @@ export default function SectionConfig() {
                                           <tr key={q.id || q.questionId || qIdx} className="hover:bg-teal-50/20">
                                             {/* Emphasized Question Number */}
                                             <td className="py-2 px-3 font-black text-gray-900 text-sm">
-                                              {q.questionNo ? (String(q.questionNo).startsWith('Q') ? q.questionNo : `Q${q.questionNo}`) : `Q${(sec.startQuestion || 1) + qIdx}`}
+                                              {q.questionNo ? (String(q.questionNo).startsWith('Q') ? q.questionNo : `Q${q.questionNo}`) : `Q${(sec.startQuestion || 1) + qIdx}`}{q.part ? (q.part.startsWith('(') ? q.part : ` (${q.part})`) : ''}
+                                            </td>
+                                            <td className="py-2 px-3 text-xs font-semibold text-gray-700">
+                                              {q.part ? <span className="px-2 py-0.5 rounded bg-teal-50 text-teal-800 font-bold border border-teal-200/60">{q.part}</span> : '–'}
                                             </td>
                                             <td className="py-2 px-3">
                                               <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs font-semibold">
@@ -1637,9 +3252,9 @@ export default function SectionConfig() {
                             Importing a batch links its predefined sections and questions to this paper. Editing imported sections later will automatically branch into your paper's dedicated batch.
                           </p>
                         </div>
-                        {targetTotalQ > 0 && (
+                        {(targetTotalQ > 0 || targetMaxMarks > 0) && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-teal-50 border border-teal-200 text-teal-800">
-                            Matching {targetTotalQ} Questions
+                            Matching {targetTotalQ > 0 ? `${targetTotalQ} Questions` : ''}{targetTotalQ > 0 && targetMaxMarks > 0 ? ' • ' : ''}{targetMaxMarks > 0 ? `${targetMaxMarks} Marks` : ''}
                           </span>
                         )}
                       </div>
@@ -1648,9 +3263,9 @@ export default function SectionConfig() {
                         <div className="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200">
                           <Layers className="mx-auto text-gray-300 mb-2" size={32} />
                           <p className="text-xs font-bold text-gray-800">No Matching Batch Templates Found</p>
-                          {targetTotalQ > 0 ? (
+                          {targetTotalQ > 0 || targetMaxMarks > 0 ? (
                             <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
-                              No batch templates have exactly <span className="font-bold text-gray-800">{targetTotalQ} questions</span> matching this paper's question count.
+                              No batch templates match both {targetTotalQ > 0 ? <><span className="font-bold text-gray-800">{targetTotalQ} questions</span></> : ''}{targetTotalQ > 0 && targetMaxMarks > 0 ? ' and ' : ''}{targetMaxMarks > 0 ? <><span className="font-bold text-gray-800">{targetMaxMarks} marks</span></> : ''} for this paper.
                             </p>
                           ) : (
                             <p className="text-xs text-gray-500 mt-1">
@@ -1662,7 +3277,7 @@ export default function SectionConfig() {
                         <div className="space-y-2.5">
                           {availableBatches.map(bId => {
                             const bSections = batchMap[bId] || [];
-                            const bTotalQ = bSections.reduce((sum, s) => sum + (parseInt(s.totalQuestions, 10) || 0), 0);
+                            const bTotalQ = bSections.reduce((sum, s) => sum + getSecQuestionsCount(s), 0);
                             const bTotalM = bSections.reduce((sum, s) => sum + (parseFloat(s.totalMarks) || 0), 0);
                             const isCurrentBatch = currentPaperBatchId === bId;
 
@@ -1730,17 +3345,34 @@ export default function SectionConfig() {
                 </div>
 
                 {/* Modal Footer */}
-                <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/80 flex items-center justify-between shrink-0">
+                <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/80 flex items-center justify-between shrink-0 flex-wrap gap-2">
                   {previewModalBatchId ? (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => setPreviewModalBatchId(null)}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-100 rounded-lg transition-all cursor-pointer shadow-2xs"
-                      >
-                        <ArrowLeft size={14} />
-                        <span>Back to Batches</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {previewOpenedFromBatchCreate && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowImportMasterModal(false);
+                              setPreviewModalBatchId(null);
+                              setPreviewOpenedFromBatchCreate(false);
+                              setShowCreateBatchModal(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-teal-800 bg-white border border-teal-200 hover:bg-teal-50 rounded-lg transition-all cursor-pointer shadow-2xs"
+                          >
+                            <ArrowLeft size={14} />
+                            <span>Back to Batch Editor</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setPreviewModalBatchId(null)}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-100 rounded-lg transition-all cursor-pointer shadow-2xs"
+                        >
+                          <ArrowLeft size={14} />
+                          <span>Back to Batches</span>
+                        </button>
+                      </div>
                       <button
                         type="button"
                         disabled={importingMasters}
@@ -1757,6 +3389,7 @@ export default function SectionConfig() {
                         onClick={() => {
                           setShowImportMasterModal(false);
                           setPreviewModalBatchId(null);
+                          setPreviewOpenedFromBatchCreate(false);
                         }}
                         className="px-4 py-1.5 text-xs font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-100 rounded-lg transition-all cursor-pointer shadow-2xs"
                       >

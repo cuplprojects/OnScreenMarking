@@ -70,6 +70,7 @@ namespace API.Models.DTOs
         public string Type { get; set; } = "MCQ";
         public bool IsOptional { get; set; }
         public string? OptionalGroupCode { get; set; }
+        public string? Part { get; set; }
     }
 
     public class QuestionMarksDto

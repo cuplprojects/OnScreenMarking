@@ -49,8 +49,9 @@ const paperService = {
   },
 
   // Get paper by ID
-  getPaperById: async (paperId) => {
-    return apiCall(`/papers/${paperId}`);
+  getPaperById: async (paperId, projectId = null) => {
+    const url = projectId ? `/papers/${paperId}?projectId=${projectId}` : `/papers/${paperId}`;
+    return apiCall(url);
   },
 
   // Get all subjects for a paper

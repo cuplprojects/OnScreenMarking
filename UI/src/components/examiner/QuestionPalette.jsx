@@ -9,6 +9,7 @@ export const QuestionItem = ({
   selectedQuestion,
   isEffectiveReadOnly,
   attemptedCount,
+  attemptedQuestionsSet,
   getConflictingGroupQuestion,
   onSelectQuestion,
   onGroupSwitch
@@ -19,8 +20,15 @@ export const QuestionItem = ({
   const thisQuestionHasMarks = ((Number(m.marksAwarded) > 0) || m.isAttempted) && !isSkipped;
   const hasMarks = Number(m.marksAwarded) > 0 || isSkipped;
   const displayMark = m.marksAwarded !== undefined ? m.marksAwarded : 0;
-  const isSectionMaxMet = sec.maxQuestionsToAttempt > 0 && attemptedCount >= sec.maxQuestionsToAttempt && !hasMarks;
+  
+  // Sub-parts of an already attempted question are NOT blocked even if max attempt reached
+  const isQuestionAlreadyAttempted = attemptedQuestionsSet?.has?.(String(q.questionNo));
+  const isSectionMaxMet = sec.maxQuestionsToAttempt > 0 && attemptedCount >= sec.maxQuestionsToAttempt && !hasMarks && !isQuestionAlreadyAttempted;
   const isCompleted = hasMarks || m.isAttempted || isSkipped;
+
+  // Format question display label (e.g. 1a, 1b, 2)
+  const partLabel = q.part ? (q.part.startsWith('(') ? q.part : `${q.part}`) : '';
+  const displayQNo = `${q.questionNo}${partLabel}`;
 
   // Optional group checks
   const conflictingGroupQ = getConflictingGroupQuestion(q);
@@ -35,7 +43,7 @@ export const QuestionItem = ({
   const handleClick = () => {
     if (isGroupDisabled) {
       if (isEffectiveReadOnly) {
-        message.warning(`Question ${q.questionNo} is optional and Question ${conflictingGroupQ.questionNo} in Group '${groupCode}' was attempted.`);
+        message.warning(`Question ${displayQNo} is optional and Question ${conflictingGroupQ.questionNo} in Group '${groupCode}' was attempted.`);
         return;
       }
       onGroupSwitch({
@@ -68,10 +76,10 @@ export const QuestionItem = ({
       }`}
       title={
         isGroupConflict
-          ? `Q${q.questionNo} (Group ${groupCode}): CONFLICT - Both Q${q.questionNo} and Q${conflictingGroupQ.questionNo} have marks. Click to edit or clear marks.`
+          ? `Q${displayQNo} (Group ${groupCode}): CONFLICT - Both Q${displayQNo} and Q${conflictingGroupQ.questionNo} have marks. Click to edit or clear marks.`
           : isGroupDisabled
-          ? `Q${q.questionNo} (Group ${groupCode}): Locked - Q${conflictingGroupQ.questionNo} has marks. Click to switch to Q${q.questionNo}.`
-          : `Q${q.questionNo}${groupCode ? ` (Group ${groupCode})` : ''}: ${
+          ? `Q${displayQNo} (Group ${groupCode}): Locked - Q${conflictingGroupQ.questionNo} has marks. Click to switch to Q${displayQNo}.`
+          : `Q${displayQNo}${q.marks !== undefined ? ` [Max ${q.marks}m]` : ''}${groupCode ? ` (Group ${groupCode})` : ''}: ${
               isSkipped
                 ? 'Marked as Skipped'
                 : hasMarks
@@ -98,7 +106,7 @@ export const QuestionItem = ({
           {groupCode}
         </span>
       )}
-      <span className="font-bold text-[11px] leading-tight">{q.questionNo}</span>
+      <span className="font-bold text-[11px] leading-tight">{displayQNo}</span>
       <span className={`text-[8.5px] font-bold leading-tight mt-0.5 ${
         isGroupConflict
           ? 'text-amber-950 font-extrabold'
@@ -131,10 +139,17 @@ export const SectionAccordion = ({
   onSelectQuestion,
   onGroupSwitch
 }) => {
-  const attemptedCount = sec.questions?.filter(q => {
+  // Count distinct question numbers attempted (so sub-parts 1a, 1b, 1c count as 1 attempt)
+  const attemptedQuestionsSet = new Set();
+  (sec.questions || []).forEach(q => {
     const marks = questionMarks[q.questionId];
-    return (marks?.isAttempted || (marks?.marksAwarded && marks.marksAwarded > 0)) && !marks?.isSkipped;
-  }).length || 0;
+    const isAtt = (marks?.isAttempted || (Number(marks?.marksAwarded) > 0)) && !marks?.isSkipped;
+    if (isAtt) {
+      attemptedQuestionsSet.add(String(q.questionNo));
+    }
+  });
+  const attemptedCount = attemptedQuestionsSet.size;
+  const totalDistinctQuestions = new Set((sec.questions || []).map(q => String(q.questionNo))).size;
 
   const hasGroupConflict = sec.questions?.some(sq => {
     const sm = questionMarks[sq.questionId] || {};
@@ -159,7 +174,7 @@ export const SectionAccordion = ({
             </p>
           ) : (
             <p className="text-[9px] text-gray-500 leading-none mt-0.5">
-              Attempted: {attemptedCount}/{sec.questions?.length || 0}
+              Attempted: {attemptedCount}/{totalDistinctQuestions}
             </p>
           )}
         </div>
@@ -190,6 +205,7 @@ export const SectionAccordion = ({
                 selectedQuestion={selectedQuestion}
                 isEffectiveReadOnly={isEffectiveReadOnly}
                 attemptedCount={attemptedCount}
+                attemptedQuestionsSet={attemptedQuestionsSet}
                 getConflictingGroupQuestion={getConflictingGroupQuestion}
                 onSelectQuestion={onSelectQuestion}
                 onGroupSwitch={onGroupSwitch}

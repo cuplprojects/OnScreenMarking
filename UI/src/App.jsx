@@ -115,121 +115,121 @@ function AppRoutes() {
           {/* Dynamic Permission Guided Routes */}
           <Route 
             path="/admin/universities" 
-            element={userType === 'admin' ? <UniversityManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            element={hasPermission("READ_UNIVERSITY") ? <UniversityManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/admin/colleges" 
-            element={userType === 'admin' ? <CollegeManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            element={hasPermission("READ_COLLEGE") ? <CollegeManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
 
           {/* Config Layout Wrapper */}
           <Route element={<ConfigLayout />}>
             <Route 
               path="/admin/departments" 
-              element={userType === 'admin' ? <DepartmentManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+              element={hasPermission("READ_DEPARTMENT") ? <DepartmentManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
               path="/departments" 
-              element={userType === 'coordinator' ? <DepartmentManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+              element={hasPermission("READ_DEPARTMENT") ? <DepartmentManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
               path="/admin/courses" 
-              element={userType === 'admin' ? <CourseManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+              element={hasPermission("READ_COURSE") ? <CourseManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
               path="/courses" 
-              element={userType === 'coordinator' ? <CourseManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+              element={hasPermission("READ_COURSE") ? <CourseManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
               path="/admin/subjects" 
-              element={userType === 'admin' ? <SubjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+              element={hasPermission("READ_SUBJECT") ? <SubjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
               path="/subjects" 
-              element={userType === 'coordinator' ? <SubjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+              element={hasPermission("READ_SUBJECT") ? <SubjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
               path="/admin/master-papers" 
-              element={userType === 'admin' ? <MasterPapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+              element={hasPermission("READ_PAPER") ? <MasterPapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
               path="/master-papers" 
-              element={userType === 'coordinator' ? <MasterPapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+              element={hasPermission("READ_PAPER") ? <MasterPapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
               path="/admin/sessions" 
-              element={userType === 'admin' ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+              element={hasPermission("READ_SESSION") || hasPermission("READ_PROJECT") ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
               path="/sessions" 
-              element={userType === 'coordinator' ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+              element={hasPermission("READ_SESSION") || hasPermission("READ_PROJECT") ? <SessionProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
               path="/admin/section-masters" 
-              element={userType === 'admin' ? <SectionMasterManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+              element={hasPermission("MANAGE_SECTIONS") ? <SectionMasterManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
               path="/section-masters" 
-              element={userType === 'coordinator' ? <SectionMasterManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+              element={hasPermission("MANAGE_SECTIONS") ? <SectionMasterManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
               path="/admin/projects" 
-              element={userType === 'admin' ? <ProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+              element={hasPermission("READ_PROJECT") ? <ProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
             <Route 
               path="/projects" 
-              element={userType === 'coordinator' ? <ProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+              element={hasPermission("READ_PROJECT") ? <ProjectManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
             />
           </Route>
           <Route 
             path="/admin/question-types" 
-            element={userType === 'admin' ? <QuestionTypeMaster /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            element={hasPermission("MANAGE_QUESTIONS") ? <QuestionTypeMaster /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/question-types" 
-            element={userType === 'coordinator' ? <QuestionTypeMaster /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            element={hasPermission("MANAGE_QUESTIONS") ? <QuestionTypeMaster /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
 
           {/* Papers Management (Project Context) */}
           <Route 
             path="/admin/papers" 
-            element={userType === 'admin' ? <PapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            element={hasPermission("READ_PAPER") ? <PapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/papers" 
-            element={userType === 'coordinator' ? <PapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            element={hasPermission("READ_PAPER") ? <PapersManagement /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/admin/import-papers-from-project" 
-            element={userType === 'admin' ? <ImportPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            element={hasPermission("IMPORT_PAPERS") || hasPermission("CREATE_PAPER") ? <ImportPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/import-papers-from-project" 
-            element={userType === 'coordinator' ? <ImportPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            element={hasPermission("IMPORT_PAPERS") || hasPermission("CREATE_PAPER") ? <ImportPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/admin/import-papers" 
-            element={userType === 'admin' ? <ImportPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            element={hasPermission("IMPORT_PAPERS") || hasPermission("CREATE_PAPER") ? <ImportPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/import-papers" 
-            element={userType === 'coordinator' ? <ImportPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            element={hasPermission("IMPORT_PAPERS") || hasPermission("CREATE_PAPER") ? <ImportPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/admin/import-question-papers" 
-            element={userType === 'admin' ? <ImportQuestionPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            element={hasPermission("IMPORT_PAPERS") || hasPermission("UPDATE_PAPER") || hasPermission("CREATE_PAPER") ? <ImportQuestionPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/import-question-papers" 
-            element={userType === 'coordinator' ? <ImportQuestionPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            element={hasPermission("IMPORT_PAPERS") || hasPermission("UPDATE_PAPER") || hasPermission("CREATE_PAPER") ? <ImportQuestionPapers /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/admin/section-config" 
-            element={userType === 'admin' ? <SectionConfig /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            element={hasPermission("MANAGE_SECTIONS") || hasPermission("READ_PAPER") ? <SectionConfig /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/section-config" 
-            element={userType === 'examiner' || userType === 'coordinator' ? <SectionConfig /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            element={hasPermission("MANAGE_SECTIONS") || hasPermission("READ_PAPER") ? <SectionConfig /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
 
           {/* Dynamic Permissions Controlled Routes */}

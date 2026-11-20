@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using API.Data;
 using API.Models;
+using API.Attributes;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -37,7 +38,7 @@ namespace API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("MANAGE_QUESTIONS")]
         public async Task<ActionResult<QuestionType>> CreateQuestionType([FromBody] QuestionTypeDto dto)
         {
             try
@@ -75,7 +76,7 @@ namespace API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin")]
+        [RequirePermission("MANAGE_QUESTIONS")]
         public async Task<IActionResult> DeleteQuestionType(int id)
         {
             try

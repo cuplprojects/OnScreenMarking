@@ -235,4 +235,33 @@ app.MapGet("/", context => {
     return Task.CompletedTask;
 });
 
+// Ensure schema updates on startup
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var conn = db.Database.GetDbConnection();
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT COUNT(*) 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'QuestionMasters' 
+              AND COLUMN_NAME = 'Part';";
+        var count = Convert.ToInt32(cmd.ExecuteScalar());
+        if (count == 0)
+        {
+            cmd.CommandText = "ALTER TABLE `QuestionMasters` ADD COLUMN `Part` varchar(50) NULL;";
+            cmd.ExecuteNonQuery();
+        }
+    }
+    catch (Exception ex)
+    {
+        var logger = scope.ServiceProvider.GetService<ILogger<Program>>();
+        logger?.LogWarning(ex, "Failed to ensure Part column on QuestionMasters table");
+    }
+}
+
 app.Run();

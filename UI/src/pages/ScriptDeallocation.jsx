@@ -33,7 +33,7 @@ export default function ScriptDeallocation() {
   const encryptedProjectId = searchParams.get('projectId');
   const projectId = encryptedProjectId ? decryptId(encryptedProjectId) : null;
 
-  const { userType } = useAuth();
+  const { userType, hasPermission } = useAuth();
   const { setBreadcrumb } = useBreadcrumb();
 
   const [papers, setPapers] = useState([]);

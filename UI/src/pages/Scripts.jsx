@@ -22,7 +22,7 @@ import { encryptId } from '../utils/encryption';
 
 const Scripts = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
 
   const fetchFn = useCallback(async (params) => {
     if (!user?.id) {
@@ -237,22 +237,24 @@ const Scripts = () => {
                       {new Date(script.submittedAt || script.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      {script.status === ScriptStatus.COMPLETED ? (
-                        <button
-                          onClick={() => handleStartMarking(script)}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold text-xs transition-all cursor-pointer shadow-sm border border-gray-200"
-                        >
-                          <Eye size={14} />
-                          Review
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleStartMarking(script)}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg font-bold text-xs transition-all shadow-sm cursor-pointer"
-                        >
-                          <Eye size={14} className="fill-white" />
-                          Mark
-                        </button>
+                      {(hasPermission('CREATE_MARKING') || hasPermission('UPDATE_MARKING') || hasPermission('READ_MARKING')) && (
+                        script.status === ScriptStatus.COMPLETED ? (
+                          <button
+                            onClick={() => handleStartMarking(script)}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold text-xs transition-all cursor-pointer shadow-sm border border-gray-200"
+                          >
+                            <Eye size={14} />
+                            Review
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleStartMarking(script)}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg font-bold text-xs transition-all shadow-sm cursor-pointer"
+                          >
+                            <Eye size={14} className="fill-white" />
+                            Mark
+                          </button>
+                        )
                       )}
                     </td>
                   </tr>

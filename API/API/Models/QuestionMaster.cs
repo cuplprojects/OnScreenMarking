@@ -61,6 +61,12 @@ namespace API.Models
         public string? Group { get; set; }
 
         /// <summary>
+        /// Part label for multi-part questions (e.g. "a", "b", "i", "ii"). Null if the question has no sub-parts.
+        /// </summary>
+        [MaxLength(50)]
+        public string? Part { get; set; }
+
+        /// <summary>
         /// Status of the question (true = Active, false = Inactive)
         /// </summary>
         public bool Status { get; set; } = true;

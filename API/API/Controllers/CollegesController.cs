@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using API.Data;
 using API.Models;
+using API.Attributes;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -26,6 +27,7 @@ namespace API.Controllers
         }
 
         [HttpGet]
+        [RequirePermission("READ_COLLEGE")]
         public async Task<ActionResult<IEnumerable<College>>> GetColleges()
         {
             try
@@ -40,6 +42,7 @@ namespace API.Controllers
         }
 
         [HttpGet("{id}")]
+        [RequirePermission("READ_COLLEGE")]
         public async Task<ActionResult<College>> GetCollege(int id)
         {
             try
@@ -57,7 +60,7 @@ namespace API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "admin")]
+        [RequirePermission("CREATE_COLLEGE")]
         public async Task<ActionResult<College>> CreateCollege([FromBody] College college)
         {
             try
@@ -87,7 +90,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin")]
+        [RequirePermission("UPDATE_COLLEGE")]
         public async Task<IActionResult> UpdateCollege(int id, [FromBody] College collegeData)
         {
             try
@@ -115,7 +118,7 @@ namespace API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin")]
+        [RequirePermission("DELETE_COLLEGE")]
         public async Task<IActionResult> DeleteCollege(int id)
         {
             try
@@ -149,7 +152,7 @@ namespace API.Controllers
         }
 
         [HttpPost("import")]
-        [Authorize(Roles = "admin")]
+        [RequirePermission("CREATE_COLLEGE")]
         public async Task<IActionResult> ImportColleges(IFormFile file)
         {
             try

@@ -21,8 +21,10 @@ import attendanceService from '../services/attendanceService';
 import userService from '../services/userService';
 import message from '../services/messageService';
 import ProjectConfigHeader from '../components/ProjectConfigHeader';
+import { useAuth } from '../context/AuthContext';
 
 export default function Attendance({ isTab = false }) {
+  const { hasPermission } = useAuth();
   const [attendanceLogs, setAttendanceLogs] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -417,7 +419,7 @@ export default function Attendance({ isTab = false }) {
         </div>
 
         {/* Upload Zone */}
-        {!showPreview && (
+        {!showPreview && hasPermission('CREATE_ATTENDANCE') && (
           <div 
             onDragOver={handleDragOver}
             onDrop={handleDrop}
@@ -715,13 +717,15 @@ export default function Attendance({ isTab = false }) {
                         {log.remarks || '-'}
                       </td>
                       <td className="py-2.5 text-right md:px-6 px-4">
-                        <button
-                          onClick={() => handleDelete(log.attendanceId)}
-                          className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
-                          title="Delete record"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        {hasPermission('DELETE_ATTENDANCE') && (
+                          <button
+                            onClick={() => handleDelete(log.attendanceId)}
+                            className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition cursor-pointer"
+                            title="Delete record"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
