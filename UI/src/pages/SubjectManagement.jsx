@@ -26,7 +26,7 @@ export default function SubjectManagement() {
   const [searchParams] = useSearchParams();
   const departmentId = searchParams.get('departmentId');
   const universityId = searchParams.get('universityId');
-  const { userType, universityId: userUniversityId } = useAuth();
+  const { userType, universityId: userUniversityId, hasPermission } = useAuth();
   const activeUniversityId = userType === 'coordinator' ? userUniversityId : universityId;
 
   const [departments, setDepartments] = useState([]);
@@ -206,17 +206,18 @@ export default function SubjectManagement() {
   // Register into the unified header bar
   const { setConfigHeader } = useConfigHeader();
   useEffect(() => {
+    const canCreate = hasPermission('CREATE_SUBJECT');
     setConfigHeader({
       title: 'Subjects Management',
       search,
       setSearch,
       searchPlaceholder: 'Search subjects…',
-      actionLabel: 'Add Subject',
-      onAction: () => setShowForm(true),
+      actionLabel: canCreate ? 'Add Subject' : undefined,
+      onAction: canCreate ? () => setShowForm(true) : undefined,
       count: totalCount,
     });
     return () => setConfigHeader(null);
-  }, [search, setSearch, setConfigHeader, totalCount]);
+  }, [search, setSearch, setConfigHeader, totalCount, hasPermission]);
 
   return (
     <div className="w-full space-y-3">
@@ -255,14 +256,14 @@ export default function SubjectManagement() {
                 >
                   Clear Filters
                 </button>
-              ) : (
+              ) : hasPermission('CREATE_SUBJECT') ? (
                 <button
                   onClick={() => setShowForm(true)}
                   className="px-4 py-2 text-[10px] font-black uppercase tracking-wider text-teal-700 bg-teal-50 hover:bg-teal-100 rounded-xl transition cursor-pointer"
                 >
                   Create First Subject
                 </button>
-              )}
+              ) : null}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -381,20 +382,24 @@ export default function SubjectManagement() {
                       </td>
                       <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
                         <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleEdit(subject)}
-                            className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl border border-gray-200 transition cursor-pointer"
-                            title="Edit Subject"
-                          >
-                            <Edit2 size={13} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(subject.subjectId)}
-                            className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-100 transition cursor-pointer"
-                            title="Delete Subject"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                          {hasPermission('UPDATE_SUBJECT') && (
+                            <button
+                              onClick={() => handleEdit(subject)}
+                              className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl border border-gray-200 transition cursor-pointer"
+                              title="Edit Subject"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                          )}
+                          {hasPermission('DELETE_SUBJECT') && (
+                            <button
+                              onClick={() => handleDelete(subject.subjectId)}
+                              className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-100 transition cursor-pointer"
+                              title="Delete Subject"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

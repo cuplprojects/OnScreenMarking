@@ -27,7 +27,7 @@ import message from '../services/messageService';
 export default function CourseManagement() {
   const [searchParams] = useSearchParams();
   const universityId = searchParams.get('universityId');
-  const { userType, universityId: userUniversityId } = useAuth();
+  const { userType, universityId: userUniversityId, hasPermission } = useAuth();
   const activeUniversityId = userType === 'coordinator' ? userUniversityId : universityId;
 
   const [departments, setDepartments] = useState([]);
@@ -158,17 +158,18 @@ export default function CourseManagement() {
   // Register into the unified header bar
   const { setConfigHeader } = useConfigHeader();
   useEffect(() => {
+    const canCreate = hasPermission('CREATE_COURSE');
     setConfigHeader({
       title: 'Courses Management',
       search,
       setSearch,
       searchPlaceholder: 'Search courses…',
-      actionLabel: 'Add New Course',
-      onAction: handleOpenAddModal,
+      actionLabel: canCreate ? 'Add New Course' : undefined,
+      onAction: canCreate ? handleOpenAddModal : undefined,
       count: totalCount,
     });
     return () => setConfigHeader(null);
-  }, [search, setSearch, setConfigHeader, totalCount]);
+  }, [search, setSearch, setConfigHeader, totalCount, hasPermission]);
 
   return (
     <div className="w-full space-y-3">
@@ -197,14 +198,14 @@ export default function CourseManagement() {
                 >
                   Clear Search
                 </button>
-              ) : (
+              ) : hasPermission('CREATE_COURSE') ? (
                 <button
                   onClick={handleOpenAddModal}
                   className="px-4 py-2 text-[10px] font-black uppercase tracking-wider text-teal-700 bg-teal-50 hover:bg-teal-100 rounded-md transition cursor-pointer"
                 >
                   Create Your First Course
                 </button>
-              )}
+              ) : null}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -330,20 +331,24 @@ export default function CourseManagement() {
                       </td>
                       <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
                         <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleEdit(course)}
-                            className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl border border-gray-200 transition cursor-pointer"
-                            title="Edit Course"
-                          >
-                            <Edit2 size={13} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(course.id)}
-                            className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-100 transition cursor-pointer"
-                            title="Delete Course"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                          {hasPermission('UPDATE_COURSE') && (
+                            <button
+                              onClick={() => handleEdit(course)}
+                              className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl border border-gray-200 transition cursor-pointer"
+                              title="Edit Course"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                          )}
+                          {hasPermission('DELETE_COURSE') && (
+                            <button
+                              onClick={() => handleDelete(course.id)}
+                              className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-100 transition cursor-pointer"
+                              title="Delete Course"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

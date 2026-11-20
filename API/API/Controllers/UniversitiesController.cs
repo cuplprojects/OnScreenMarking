@@ -1,6 +1,8 @@
 using API.Data;
 using API.Models;
 using API.Models.DTOs;
+using API.Attributes;
+using API.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -161,18 +163,13 @@ namespace API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "admin")]
+        [RequirePermission("CREATE_UNIVERSITY")]
         public async Task<ActionResult<University>> CreateUniversity([FromBody] University university)
         {
             try
             {
                 if (string.IsNullOrEmpty(university.UniversityName))
                     return BadRequest(new { success = false, message = "University name is required" });
-
-                // Only admins can create universities
-                var userType = User.FindFirst("userType")?.Value;
-                if (userType != "admin")
-                    return Forbid();
 
                 university.UniversityId = 0; // Prevent mass assignment ID injection (M8)
                 university.CreatedAt = DateTime.UtcNow;
@@ -190,7 +187,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin")]
+        [RequirePermission("UPDATE_UNIVERSITY")]
         public async Task<IActionResult> UpdateUniversity(int id, [FromBody] University university)
         {
             try
@@ -342,13 +339,13 @@ namespace API.Controllers
             var userType = User.FindFirst("userType")?.Value;
             if (string.IsNullOrEmpty(userType)) return false;
 
-            var role = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName.ToLower() == userType.ToLower());
-            if (role == null)
+            var permService = HttpContext.RequestServices.GetService<IPermissionService>();
+            if (permService != null)
             {
-                return userType.Equals("admin", StringComparison.OrdinalIgnoreCase);
+                return await permService.HasPermissionAsync(userType, permission);
             }
 
-            return role.PermissionsList.Contains(permission);
+            return userType.Equals("admin", StringComparison.OrdinalIgnoreCase);
         }
 
         // Helper to resolve the active universityId for coordinator or admin

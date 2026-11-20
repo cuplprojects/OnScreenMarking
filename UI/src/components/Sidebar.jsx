@@ -15,88 +15,68 @@ const Sidebar = () => {
   const getMenuItems = () => {
     const items = [];
 
-    const papersPath = userType === 'admin' 
+    const isAdmin = userType === 'admin';
+    const isCoordinator = userType === 'coordinator';
+
+    const dashboardPath = isAdmin ? '/admin/dashboard' : (isCoordinator ? '/coordinator/dashboard' : '/');
+    items.push({ icon: <Home size={20} />, label: 'Dashboard', path: dashboardPath });
+
+    const papersPath = isAdmin 
       ? (encryptedProjId ? `/admin/papers?projectId=${encryptedProjId}` : '/admin/papers')
       : (encryptedProjId ? `/papers?projectId=${encryptedProjId}` : '/papers');
 
-    const allocationPath = userType === 'admin'
+    const allocationPath = isAdmin
       ? (encryptedProjId ? `/admin/project-dashboard?projectId=${encryptedProjId}&tab=allocations` : '/admin/project-dashboard?tab=allocations')
       : (encryptedProjId ? `/project-dashboard?projectId=${encryptedProjId}&tab=allocations` : '/project-dashboard?tab=allocations');
 
-    if (userType === 'admin') {
-      items.push({ icon: <Home size={20} />, label: 'Dashboard', path: '/admin/dashboard' });
+    if (hasPermission("READ_UNIVERSITY")) {
       items.push({ icon: <School size={20} />, label: 'Universities', path: '/admin/universities' });
+    }
+    if (hasPermission("READ_COLLEGE")) {
       items.push({ icon: <Building2 size={20} />, label: 'Colleges', path: '/admin/colleges' });
-      items.push({ icon: <Building2 size={20} />, label: 'Departments', path: '/admin/departments' });
-      items.push({ icon: <GraduationCap size={20} />, label: 'Courses', path: '/admin/courses' });
-      items.push({ icon: <BookOpen size={20} />, label: 'Subjects', path: '/admin/subjects' });
-      items.push({ icon: <Calendar size={20} />, label: 'Sessions & Projects', path: '/admin/sessions' });
+    }
+    if (hasPermission("READ_DEPARTMENT")) {
+      items.push({ icon: <Building2 size={20} />, label: 'Departments', path: isAdmin ? '/admin/departments' : '/departments' });
+    }
+    if (hasPermission("READ_COURSE")) {
+      items.push({ icon: <GraduationCap size={20} />, label: 'Courses', path: isAdmin ? '/admin/courses' : '/courses' });
+    }
+    if (hasPermission("READ_SUBJECT")) {
+      items.push({ icon: <BookOpen size={20} />, label: 'Subjects', path: isAdmin ? '/admin/subjects' : '/subjects' });
+    }
+    if (hasPermission("READ_SESSION") || hasPermission("READ_PROJECT")) {
+      items.push({ icon: <Calendar size={20} />, label: 'Sessions & Projects', path: isAdmin ? '/admin/sessions' : '/sessions' });
+    }
+    if (hasPermission("READ_PAPER")) {
       items.push({ icon: <FileText size={20} />, label: 'Papers', path: papersPath });
-      items.push({ icon: <Layers size={20} />, label: 'Section Masters', path: '/admin/section-masters' });
-      items.push({ icon: <Layers size={20} />, label: 'Question Types', path: '/admin/question-types' });
-      
-      if (hasPermission("READ_ALLOCATION")) {
-        items.push({ icon: <Zap size={20} />, label: 'Script Allocation', path: allocationPath });
-        items.push({ icon: <FileCheck size={20} />, label: 'Paper Requests', path: '/admin/paper-requests' });
-      }
-      if (hasPermission("READ_USER")) {
-        items.push({ icon: <Users size={20} />, label: 'Users', path: '/admin/users' });
-      }
-      if (hasPermission("READ_ROLE")) {
-        items.push({ icon: <Shield size={20} />, label: 'Roles & Permissions', path: '/admin/role-management' });
-      }
-      if (hasPermission("VIEW_LOGS")) {
-        items.push({ icon: <UserCheck size={20} />, label: 'Attendance Audit', path: '/admin/audit' });
-      }
-      if (hasPermission("MANAGE_SETTINGS")) {
-        items.push({ icon: <Settings size={20} />, label: 'Settings', path: '/settings' });
-      }
-    } else if (userType === 'coordinator') {
-      items.push({ icon: <Home size={20} />, label: 'Dashboard', path: '/coordinator/dashboard' });
-      items.push({ icon: <Building2 size={20} />, label: 'Departments', path: '/departments' });
-      items.push({ icon: <GraduationCap size={20} />, label: 'Courses', path: '/courses' });
-      items.push({ icon: <BookOpen size={20} />, label: 'Subjects', path: '/subjects' });
-      items.push({ icon: <Calendar size={20} />, label: 'Sessions & Projects', path: '/sessions' });
-      items.push({ icon: <FileText size={20} />, label: 'Papers', path: papersPath });
-      items.push({ icon: <Layers size={20} />, label: 'Section Masters', path: '/section-masters' });
-      items.push({ icon: <Layers size={20} />, label: 'Question Types', path: '/question-types' });
-
-      if (hasPermission("READ_ALLOCATION")) {
-        items.push({ icon: <Zap size={20} />, label: 'Script Allocation', path: allocationPath });
-        items.push({ icon: <FileCheck size={20} />, label: 'Paper Requests', path: '/paper-requests' });
-      }
-      if (hasPermission("READ_USER")) {
-        items.push({ icon: <Users size={20} />, label: 'Users', path: '/admin/users' });
-      }
-      if (hasPermission("READ_ROLE")) {
-        items.push({ icon: <Shield size={20} />, label: 'Roles & Permissions', path: '/admin/role-management' });
-      }
-      if (hasPermission("VIEW_LOGS")) {
-        items.push({ icon: <UserCheck size={20} />, label: 'Attendance Audit', path: '/admin/audit' });
-      }
-      if (hasPermission("MANAGE_SETTINGS")) {
-        items.push({ icon: <Settings size={20} />, label: 'Settings', path: '/settings' });
-      }
-    } else if (userType === 'examiner') {
-      items.push({ icon: <Home size={20} />, label: 'Dashboard', path: '/' });
-      
-      if (hasPermission("READ_SCRIPT")) {
-        items.push({ icon: <FileText size={20} />, label: 'Scripts', path: '/scripts' });
-      }
-      if (hasPermission("READ_MARKING")) {
-
-      }
-      
-      if (hasPermission("VIEW_REPORTS")) {
-        items.push({ icon: <BarChart3 size={20} />, label: 'Reports', path: '/reports' });
-      }
-      if (hasPermission("READ_USER")) {
-        items.push({ icon: <Users size={20} />, label: 'Examiners', path: '/examiners' });
-      }
-      items.push({ icon: <BookOpen size={20} />, label: 'Subjects', path: '/subjects' });
-      if (hasPermission("MANAGE_SETTINGS")) {
-        items.push({ icon: <Settings size={20} />, label: 'Settings', path: '/settings' });
-      }
+    }
+    if (hasPermission("MANAGE_SECTIONS")) {
+      items.push({ icon: <Layers size={20} />, label: 'Section Masters', path: isAdmin ? '/admin/section-masters' : '/section-masters' });
+    }
+    if (hasPermission("MANAGE_QUESTIONS")) {
+      items.push({ icon: <Layers size={20} />, label: 'Question Types', path: isAdmin ? '/admin/question-types' : '/question-types' });
+    }
+    if (hasPermission("READ_ALLOCATION")) {
+      items.push({ icon: <Zap size={20} />, label: 'Script Allocation', path: allocationPath });
+      items.push({ icon: <FileCheck size={20} />, label: 'Paper Requests', path: isAdmin ? '/admin/paper-requests' : '/paper-requests' });
+    }
+    if (hasPermission("READ_SCRIPT")) {
+      items.push({ icon: <FileText size={20} />, label: 'Scripts', path: '/scripts' });
+    }
+    if (hasPermission("VIEW_REPORTS")) {
+      items.push({ icon: <BarChart3 size={20} />, label: 'Reports', path: '/reports' });
+    }
+    if (hasPermission("READ_USER")) {
+      items.push({ icon: <Users size={20} />, label: 'Users', path: '/admin/users' });
+    }
+    if (hasPermission("READ_ROLE")) {
+      items.push({ icon: <Shield size={20} />, label: 'Roles & Permissions', path: '/admin/role-management' });
+    }
+    if (hasPermission("VIEW_LOGS") || hasPermission("READ_ATTENDANCE")) {
+      items.push({ icon: <UserCheck size={20} />, label: 'Attendance Audit', path: '/admin/attendance' });
+    }
+    if (hasPermission("MANAGE_SETTINGS")) {
+      items.push({ icon: <Settings size={20} />, label: 'Settings', path: '/settings' });
     }
 
     return items;

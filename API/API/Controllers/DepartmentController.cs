@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using API.Data;
 using API.Models;
 using API.Models.DTOs;
+using API.Attributes;
 
 namespace API.Controllers
 {
@@ -19,6 +20,7 @@ namespace API.Controllers
             _context = context;
         }
         [HttpGet]
+        [RequirePermission("READ_DEPARTMENT")]
         public async Task<IActionResult> GetDepartments(
             [FromQuery] int? universityId = null,
             [FromQuery] int page = 1,
@@ -133,7 +135,7 @@ namespace API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("CREATE_DEPARTMENT")]
         public async Task<ActionResult<Department>> CreateDepartment([FromBody] Department department)
         {
             try
@@ -179,7 +181,7 @@ namespace API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_DEPARTMENT")]
         public async Task<IActionResult> UpdateDepartment(int id, [FromBody] Department department)
         {
             try
@@ -230,7 +232,7 @@ namespace API.Controllers
         }
 
         [HttpPost("{departmentId}/courses/{courseId}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_DEPARTMENT")]
         public async Task<IActionResult> AddCourseToDepartment(int departmentId, int courseId)
         {
             try
@@ -257,7 +259,7 @@ namespace API.Controllers
         }
 
         [HttpDelete("{departmentId}/courses/{courseId}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("UPDATE_DEPARTMENT")]
         public async Task<IActionResult> RemoveCourseFromDepartment(int departmentId, int courseId)
         {
             try
@@ -280,7 +282,7 @@ namespace API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin,coordinator")]
+        [RequirePermission("DELETE_DEPARTMENT")]
         public async Task<IActionResult> DeleteDepartment(int id)
         {
             try

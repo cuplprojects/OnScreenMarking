@@ -64,6 +64,7 @@ namespace API.Models
         public string Type { get; set; } = "MCQ"; // MCQ, SA, LA, CS, NP, EXP, RC, WS, LIT, GV
         public bool IsOptional { get; set; }
         public string? OptionalGroupCode { get; set; }
+        public string? Part { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         
         // Navigation properties

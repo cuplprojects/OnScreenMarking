@@ -8,6 +8,7 @@ import TablePagination from '../components/TablePagination';
 import ColumnFilter from '../components/ColumnFilter';
 
 export default function CollegeManagement() {
+  const { hasPermission } = useAuth();
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
@@ -189,21 +190,25 @@ export default function CollegeManagement() {
                 )}
               </div>
 
-              <button
-                onClick={() => setShowImportModal(true)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 rounded-md font-bold text-[10px] uppercase tracking-wider transition-all shadow-sm hover:shadow shrink-0 cursor-pointer"
-              >
-                <Upload size={13} />
-                <span>Upload CSV</span>
-              </button>
+              {hasPermission('CREATE_COLLEGE') && (
+                <button
+                  onClick={() => setShowImportModal(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 rounded-md font-bold text-[10px] uppercase tracking-wider transition-all shadow-sm hover:shadow shrink-0 cursor-pointer"
+                >
+                  <Upload size={13} />
+                  <span>Upload CSV</span>
+                </button>
+              )}
 
-              <button
-                onClick={() => setShowFormModal(true)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md font-bold text-[10px] uppercase tracking-wider transition-all shadow-sm hover:shadow shrink-0 cursor-pointer"
-              >
-                <Plus size={13} />
-                <span>Add College</span>
-              </button>
+              {hasPermission('CREATE_COLLEGE') && (
+                <button
+                  onClick={() => setShowFormModal(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md font-bold text-[10px] uppercase tracking-wider transition-all shadow-sm hover:shadow shrink-0 cursor-pointer"
+                >
+                  <Plus size={13} />
+                  <span>Add College</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -287,20 +292,24 @@ export default function CollegeManagement() {
                       </td>
                       <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
                         <div className="flex items-center justify-end gap-2 transition-opacity">
-                          <button
-                            onClick={() => handleEdit(college)}
-                            className="p-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(college)}
-                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors"
-                            title="Mark Inactive"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          {hasPermission('UPDATE_COLLEGE') && (
+                            <button
+                              onClick={() => handleEdit(college)}
+                              className="p-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg transition-colors cursor-pointer"
+                              title="Edit"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                          )}
+                          {hasPermission('DELETE_COLLEGE') && (
+                            <button
+                              onClick={() => handleDelete(college)}
+                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors cursor-pointer"
+                              title="Mark Inactive"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

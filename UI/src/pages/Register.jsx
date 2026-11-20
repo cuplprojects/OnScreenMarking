@@ -17,7 +17,7 @@ import {
   ShieldCheck,
   GraduationCap,
   CreditCard,
-  Check,
+  Check
 } from "lucide-react";
 import authService from "../services/authService";
 import universityService from "../services/universityService";
@@ -88,6 +88,7 @@ const Register = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);  
   const [registered, setRegistered] = useState(false);
+  const [error, setError] = useState("");
 
   const [universities, setUniversities] = useState([]);
 
@@ -734,6 +735,7 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
     
 
     if (
@@ -816,6 +818,9 @@ const Register = () => {
       setRegistered(true);
     } catch (err) {
       console.error("Registration error:", err);
+      const errMsg = err.response?.data?.message || err.message || "Registration failed. Please check your details and try again.";
+      setError(errMsg);
+      message.error(errMsg);
     } finally {
       setLoading(false);
     }

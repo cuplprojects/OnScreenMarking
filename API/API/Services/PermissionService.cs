@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -48,7 +49,7 @@ namespace API.Services
                 Console.WriteLine($"[Redis Cache] Error reading permissions for role {roleName}: {ex.Message}");
             }
 
-            // 2. Query Database on cache miss
+            // 2. Query Database: 100% database-driven from the Roles table
             var role = await _context.Roles.FirstOrDefaultAsync(r => r.RoleName.ToLower() == normalizedRole);
             var permissions = role?.PermissionsList ?? new List<string>();
 
@@ -77,7 +78,7 @@ namespace API.Services
                 return true;
 
             var perms = await GetRolePermissionsAsync(userType);
-            return perms.Contains(permission);
+            return perms.Contains(permission, StringComparer.OrdinalIgnoreCase);
         }
 
         public async Task InvalidateRolePermissionsAsync(string roleName)

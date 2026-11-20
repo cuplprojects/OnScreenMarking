@@ -42,121 +42,91 @@ function useNavGroups(userType, hasPermission) {
       ? encryptedProjId ? `/admin/import-papers-from-project?projectId=${encryptedProjId}${univParam}` : '/admin/import-papers-from-project'
       : encryptedProjId ? `/import-papers-from-project?projectId=${encryptedProjId}${univParam}` : '/import-papers-from-project';
 
-  if (userType === 'admin') {
-    const groups = [
-      {
-        label: 'Overview',
-        items: [
-          { label: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard, exact: true },
-        ],
-      },
-      {
-        label: 'Academic Setup',
-        items: [
-          { label: 'Universities',      path: '/admin/universities',                  icon: School },
-          { label: 'University Config',  path: '/admin/departments',                  icon: Settings2 },
-          { label: 'Project Config',    path: '/admin/project-dashboard',             icon: Briefcase },
-          { label: 'Colleges',          path: '/admin/colleges',                      icon: Building2 },
-          ...(hasPermission('VIEW_LOGS') ? [{ label: 'Attendance Audit', path: '/admin/attendance', icon: Activity }] : []),
-        ],
-      },
-      {
-        label: 'Examination',
-        items: [
-          { label: 'Import Papers from Project', path: importPapersPath, icon: Folder },
-          { label: 'Bulk Import Q.P.',    path: importQpPath,             icon: Upload },
-          { label: 'Section Masters',     path: '/admin/section-masters', icon: Layers },
-          { label: 'Question Types',      path: '/admin/question-types',  icon: Layers },
-        ],
-      },
-    ];
+  const isAdmin = userType === 'admin';
+  const isCoordinator = userType === 'coordinator';
 
-    const ops = { label: 'Operations', items: [] };
-    if (hasPermission('READ_ALLOCATION')) {
-      ops.items.push({ label: 'Script Allocation', path: allocationPath, icon: Zap });
-      ops.items.push({ label: 'Paper Requests', path: '/admin/paper-requests', icon: FileCheck });
-    }
-    if (hasPermission('READ_USER')) {
-      ops.items.push({ label: 'Users', path: '/admin/users', icon: Users });
-    }
-    if (hasPermission('READ_ROLE')) {
-      ops.items.push({ label: 'Roles & Permissions', path: '/admin/role-management', icon: Shield });
-    }
-    if (hasPermission('MANAGE_SETTINGS')) {
-      ops.items.push({ label: 'Settings', path: '/settings', icon: Settings });
-    }
-    if (ops.items.length > 0) groups.push(ops);
+  const groups = [];
 
-    return groups;
+  // 1. Overview
+  const dashboardPath = isAdmin ? '/admin/dashboard' : (isCoordinator ? '/coordinator/dashboard' : '/');
+  groups.push({
+    label: 'Overview',
+    items: [
+      { label: 'Dashboard', path: dashboardPath, icon: LayoutDashboard, exact: true }
+    ]
+  });
+
+  // 2. Academic Setup
+  const academicItems = [];
+  if (hasPermission('READ_UNIVERSITY')) {
+    academicItems.push({ label: 'Universities', path: '/admin/universities', icon: School });
+  }
+  if (hasPermission('READ_DEPARTMENT')) {
+    academicItems.push({ label: 'University Config', path: isAdmin ? '/admin/departments' : '/departments', icon: Settings2 });
+  }
+  if (hasPermission('READ_PROJECT')) {
+    academicItems.push({ label: 'Project Config', path: isAdmin ? '/admin/project-dashboard' : '/project-dashboard', icon: Briefcase });
+  }
+  if (hasPermission('READ_COLLEGE')) {
+    academicItems.push({ label: 'Colleges', path: '/admin/colleges', icon: Building2 });
+  }
+  if (hasPermission('VIEW_LOGS') || hasPermission('READ_ATTENDANCE')) {
+    academicItems.push({ label: 'Attendance Audit', path: '/admin/attendance', icon: Activity });
+  }
+  if (academicItems.length > 0) {
+    groups.push({ label: 'Academic Setup', items: academicItems });
   }
 
-  if (userType === 'coordinator') {
-    const groups = [
-      {
-        label: 'Overview',
-        items: [{ label: 'Dashboard', path: '/coordinator/dashboard', icon: LayoutDashboard, exact: true }],
-      },
-      {
-        label: 'Academic Setup',
-        items: [
-          { label: 'University Config', path: '/departments', icon: Settings2 },
-          { label: 'Project Config',    path: '/project-dashboard', icon: Briefcase },
-        ],
-      },
-      {
-        label: 'Examination',
-        items: [
-          { label: 'Projects',            path: '/projects',              icon: BookMarked },
-          { label: 'Import Papers from Project', path: importPapersPath, icon: Folder },
-          { label: 'Bulk Import Q.P.',    path: importQpPath,             icon: Upload },
-          { label: 'Section Masters',     path: '/section-masters',       icon: Layers },
-          { label: 'Question Types',      path: '/question-types',        icon: Layers },
-        ],
-      },
-    ];
-    const ops = { label: 'Operations', items: [] };
-    if (hasPermission('READ_ALLOCATION')) {
-      ops.items.push({ label: 'Script Allocation', path: allocationPath, icon: Zap });
-      ops.items.push({ label: 'Paper Requests', path: '/paper-requests', icon: FileCheck });
-    }
-    if (hasPermission('READ_USER')) {
-      ops.items.push({ label: 'Users', path: '/admin/users', icon: Users });
-    }
-    if (hasPermission('READ_ROLE')) {
-      ops.items.push({ label: 'Roles & Permissions', path: '/admin/role-management', icon: Shield });
-    }
-    if (hasPermission('MANAGE_SETTINGS')) {
-      ops.items.push({ label: 'Settings', path: '/settings', icon: Settings });
-    }
-    if (ops.items.length > 0) groups.push(ops);
-    return groups;
+  // 3. Examination
+  const examItems = [];
+  if (hasPermission('READ_PROJECT') && !isAdmin) {
+    examItems.push({ label: 'Projects', path: '/projects', icon: BookMarked });
+  }
+  if (hasPermission('READ_PAPER')) {
+    examItems.push({ label: 'Papers', path: papersPath, icon: FileText });
+  }
+  if (hasPermission('IMPORT_PAPERS') || hasPermission('CREATE_PAPER')) {
+    examItems.push({ label: 'Import Papers from Project', path: importPapersPath, icon: Folder });
+  }
+  if (hasPermission('IMPORT_PAPERS') || hasPermission('CREATE_PAPER') || hasPermission('UPDATE_PAPER')) {
+    examItems.push({ label: 'Bulk Import Q.P.', path: importQpPath, icon: Upload });
+  }
+  if (hasPermission('MANAGE_SECTIONS')) {
+    examItems.push({ label: 'Section Masters', path: isAdmin ? '/admin/section-masters' : '/section-masters', icon: Layers });
+  }
+  if (hasPermission('MANAGE_QUESTIONS')) {
+    examItems.push({ label: 'Question Types', path: isAdmin ? '/admin/question-types' : '/question-types', icon: Layers });
+  }
+  if (hasPermission('READ_SCRIPT')) {
+    examItems.push({ label: 'Scripts', path: '/scripts', icon: FileText });
+  }
+  if (hasPermission('VIEW_REPORTS')) {
+    examItems.push({ label: 'Reports', path: '/reports', icon: BarChart3 });
+  }
+  if (examItems.length > 0) {
+    groups.push({ label: 'Examination', items: examItems });
   }
 
-  if (userType === 'examiner') {
-    const groups = [
-      {
-        label: 'Overview',
-        items: [{ label: 'Dashboard', path: '/', icon: LayoutDashboard, exact: true }],
-      },
-    ];
-    const work = { label: 'My Work', items: [] };
-    if (hasPermission('READ_SCRIPT')) {
-      work.items.push({ label: 'Scripts', path: '/scripts', icon: FileText });
-    }
-    if (hasPermission('READ_MARKING')) {
-
-    }
-    if (hasPermission('VIEW_REPORTS')) {
-      work.items.push({ label: 'Reports', path: '/reports', icon: BarChart3 });
-    }
-    if (hasPermission('MANAGE_SETTINGS')) {
-      work.items.push({ label: 'Settings', path: '/settings', icon: Settings });
-    }
-    if (work.items.length > 0) groups.push(work);
-    return groups;
+  // 4. Operations
+  const opsItems = [];
+  if (hasPermission('READ_ALLOCATION')) {
+    opsItems.push({ label: 'Script Allocation', path: allocationPath, icon: Zap });
+    opsItems.push({ label: 'Paper Requests', path: isAdmin ? '/admin/paper-requests' : '/paper-requests', icon: FileCheck });
+  }
+  if (hasPermission('READ_USER')) {
+    opsItems.push({ label: 'Users', path: '/admin/users', icon: Users });
+  }
+  if (hasPermission('READ_ROLE')) {
+    opsItems.push({ label: 'Roles & Permissions', path: '/admin/role-management', icon: Shield });
+  }
+  if (hasPermission('MANAGE_SETTINGS')) {
+    opsItems.push({ label: 'Settings', path: '/settings', icon: Settings });
+  }
+  if (opsItems.length > 0) {
+    groups.push({ label: 'Operations', items: opsItems });
   }
 
-  return [];
+  return groups;
 }
 
 export default function NavDrawer({ isOpen, onClose }) {

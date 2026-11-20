@@ -32,7 +32,7 @@ export default function ProjectDashboard() {
   const encryptedProjectId = searchParams.get('projectId');
   const projectId = encryptedProjectId ? decryptId(encryptedProjectId) : null;
   
-  const { userType, universityId: userUniversityId } = useAuth();
+  const { userType, universityId: userUniversityId, hasPermission } = useAuth();
   const { setBreadcrumb } = useBreadcrumb();
   const activeUniversityId = userUniversityId;
 
@@ -341,7 +341,7 @@ export default function ProjectDashboard() {
             <div className="p-1.5 bg-teal-50 rounded-xl text-teal-700"><FileText size={14} /></div>
           </div>
           
-          {(stats.papersCount === 0 || stats.unconfiguredPapersCount > 0) && (
+          {(stats.papersCount === 0 || stats.unconfiguredPapersCount > 0) && (hasPermission('CREATE_PAPER') || hasPermission('MANAGE_SECTIONS')) && (
             <Link 
               to={userType === 'admin' 
                 ? `/admin/project-dashboard?projectId=${encryptedProjectId}&tab=papers` 
@@ -384,7 +384,7 @@ export default function ProjectDashboard() {
             <div className="p-1.5 bg-amber-50 rounded-xl text-amber-600"><AlertCircle size={14} /></div>
           </div>
           
-          {stats.pendingScripts > 0 && (
+          {stats.pendingScripts > 0 && hasPermission('CREATE_ALLOCATION') && (
             <Link 
               to={userType === 'admin' 
                 ? `/admin/allocate-scripts?projectId=${encryptedProjectId}` 
@@ -670,65 +670,69 @@ export default function ProjectDashboard() {
                                 </div>
 
                                 {/* Configure Sections Button */}
-                                <div className="relative group/tooltip inline-block">
-                                  <Link 
-                                    to={userType === 'admin'
-                                      ? `/admin/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`
-                                      : `/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`}
-                                    title={!isConfigured ? 'Configure Sections: Create question sections & set marks' : 'Edit Sections: View/modify section configuration'}
-                                    className="p-1.5 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 rounded-lg transition-all block shadow-2xs"
-                                  >
-                                    <Layers size={14} />
-                                  </Link>
-                                  <div className="absolute bottom-full right-0 mb-2 px-2.5 py-1.5 bg-gray-900 text-white text-[10px] rounded-lg shadow-lg opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50 pointer-events-none text-left">
-                                    <div className="font-bold text-gray-100 flex items-center gap-1">
-                                      <Layers size={10} className="text-indigo-400" /> {!isConfigured ? "Configure Sections" : "Edit Sections"}
+                                {hasPermission('MANAGE_SECTIONS') && (
+                                  <div className="relative group/tooltip inline-block">
+                                    <Link 
+                                      to={userType === 'admin'
+                                        ? `/admin/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`
+                                        : `/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`}
+                                      title={!isConfigured ? 'Configure Sections: Create question sections & set marks' : 'Edit Sections: View/modify section configuration'}
+                                      className="p-1.5 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 rounded-lg transition-all block shadow-2xs"
+                                    >
+                                      <Layers size={14} />
+                                    </Link>
+                                    <div className="absolute bottom-full right-0 mb-2 px-2.5 py-1.5 bg-gray-900 text-white text-[10px] rounded-lg shadow-lg opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50 pointer-events-none text-left">
+                                      <div className="font-bold text-gray-100 flex items-center gap-1">
+                                        <Layers size={10} className="text-indigo-400" /> {!isConfigured ? "Configure Sections" : "Edit Sections"}
+                                      </div>
+                                      <div className="text-[9px] text-gray-300 font-normal mt-0.5">
+                                        {!isConfigured
+                                          ? (!paper.isSectionsConfigured ? "Create sections & set max marks" : `Balance marks: ${paper.configuredMarks}/${paper.maxMarks}`)
+                                          : `Sections configured (${paper.configuredMarks} marks)`}
+                                      </div>
+                                      <div className="absolute top-full right-3 border-4 border-transparent border-t-gray-900"></div>
                                     </div>
-                                    <div className="text-[9px] text-gray-300 font-normal mt-0.5">
-                                      {!isConfigured
-                                        ? (!paper.isSectionsConfigured ? "Create sections & set max marks" : `Balance marks: ${paper.configuredMarks}/${paper.maxMarks}`)
-                                        : `Sections configured (${paper.configuredMarks} marks)`}
-                                    </div>
-                                    <div className="absolute top-full right-3 border-4 border-transparent border-t-gray-900"></div>
                                   </div>
-                                </div>
+                                )}
                                 
                                 {/* Assign Examiners Button */}
-                                <div className="relative group/tooltip inline-block">
-                                  {!isAssignDisabled ? (
-                                    <button
-                                      onClick={(e) => {
-                                        e.preventDefault();
-                                        window.location.href = userType === 'admin' 
-                                          ? `/admin/papers?projectId=${encryptedProjectId}&action=assign&paperId=${encryptId(paper.paperId)}`
-                                          : `/papers?projectId=${encryptedProjectId}&action=assign&paperId=${encryptId(paper.paperId)}`;
-                                      }}
-                                      title="Assign Examiners: Assign examiners to evaluate scripts"
-                                      className="p-1.5 text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200/80 rounded-lg transition-all block shadow-2xs cursor-pointer"
-                                    >
-                                      <Users size={14} />
-                                    </button>
-                                  ) : (
-                                    <button
-                                      disabled
-                                      className="p-1.5 text-gray-300 bg-gray-50 border border-gray-200/60 rounded-lg cursor-not-allowed block shadow-2xs"
-                                      title="Assign Examiners: Configure sections first"
-                                    >
-                                      <Users size={14} />
-                                    </button>
-                                  )}
-                                  <div className="absolute bottom-full right-0 mb-2 px-2.5 py-1.5 bg-gray-900 text-white text-[10px] rounded-lg shadow-lg opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50 pointer-events-none text-left">
-                                    <div className="font-bold text-gray-100 flex items-center gap-1">
-                                      <Users size={10} className="text-orange-400" /> Assign Examiners
+                                {hasPermission('CREATE_ALLOCATION') && (
+                                  <div className="relative group/tooltip inline-block">
+                                    {!isAssignDisabled ? (
+                                      <button
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          window.location.href = userType === 'admin' 
+                                            ? `/admin/papers?projectId=${encryptedProjectId}&action=assign&paperId=${encryptId(paper.paperId)}`
+                                            : `/papers?projectId=${encryptedProjectId}&action=assign&paperId=${encryptId(paper.paperId)}`;
+                                        }}
+                                        title="Assign Examiners: Assign examiners to evaluate scripts"
+                                        className="p-1.5 text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200/80 rounded-lg transition-all block shadow-2xs cursor-pointer"
+                                      >
+                                        <Users size={14} />
+                                      </button>
+                                    ) : (
+                                      <button
+                                        disabled
+                                        className="p-1.5 text-gray-300 bg-gray-50 border border-gray-200/60 rounded-lg cursor-not-allowed block shadow-2xs"
+                                        title="Assign Examiners: Configure sections first"
+                                      >
+                                        <Users size={14} />
+                                      </button>
+                                    )}
+                                    <div className="absolute bottom-full right-0 mb-2 px-2.5 py-1.5 bg-gray-900 text-white text-[10px] rounded-lg shadow-lg opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50 pointer-events-none text-left">
+                                      <div className="font-bold text-gray-100 flex items-center gap-1">
+                                        <Users size={10} className="text-orange-400" /> Assign Examiners
+                                      </div>
+                                      <div className="text-[9px] text-gray-300 font-normal mt-0.5">
+                                        {!isAssignDisabled
+                                          ? ((paper.expertsCount || 0) > 0 ? `${paper.expertsCount} examiner${paper.expertsCount > 1 ? 's' : ''} assigned` : "Assign examiners to paper")
+                                          : "Configure sections first"}
+                                      </div>
+                                      <div className="absolute top-full right-3 border-4 border-transparent border-t-gray-900"></div>
                                     </div>
-                                    <div className="text-[9px] text-gray-300 font-normal mt-0.5">
-                                      {!isAssignDisabled
-                                        ? ((paper.expertsCount || 0) > 0 ? `${paper.expertsCount} examiner${paper.expertsCount > 1 ? 's' : ''} assigned` : "Assign examiners to paper")
-                                        : "Configure sections first"}
-                                    </div>
-                                    <div className="absolute top-full right-3 border-4 border-transparent border-t-gray-900"></div>
                                   </div>
-                                </div>
+                                )}
                               </div>
                             </td>
                           </tr>

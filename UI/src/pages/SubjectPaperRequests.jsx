@@ -26,7 +26,7 @@ import { encryptId } from '../utils/encryption';
 export default function SubjectPaperRequests() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { userType, universityId: userUniversityId, user } = useAuth();
+  const { userType, universityId: userUniversityId, user, hasPermission } = useAuth();
 
   const universityIdFromUrl = searchParams.get('universityId');
   const activeUniversityId = userType === 'coordinator' ? userUniversityId : universityIdFromUrl;
@@ -505,41 +505,45 @@ export default function SubjectPaperRequests() {
                     <td className="py-3 px-4 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-2">
                         {/* Allocate scripts icon button with tooltip */}
-                        <div className="relative group flex items-center justify-center">
-                          <button
-                            onClick={() => handleOpenAllocateModal(r)}
-                            className="p-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded-lg transition-all shadow-2xs hover:shadow-xs cursor-pointer flex items-center justify-center"
-                            title="Allocate scripts & fulfill request"
-                          >
-                            <Zap size={15} />
-                          </button>
-                          {/* Hover Tooltip */}
-                          <div className="absolute bottom-full mb-1.5 hidden group-hover:flex flex-col items-center pointer-events-none z-30">
-                            <span className="whitespace-nowrap px-2 py-1 text-[10px] font-bold text-white bg-gray-900 rounded-md shadow-md">
-                              Allocate scripts & fulfill request
-                            </span>
-                            <div className="w-1.5 h-1.5 bg-gray-900 rotate-45 -mt-0.5"></div>
+                        {hasPermission('CREATE_ALLOCATION') && (
+                          <div className="relative group flex items-center justify-center">
+                            <button
+                              onClick={() => handleOpenAllocateModal(r)}
+                              className="p-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded-lg transition-all shadow-2xs hover:shadow-xs cursor-pointer flex items-center justify-center"
+                              title="Allocate scripts & fulfill request"
+                            >
+                              <Zap size={15} />
+                            </button>
+                            {/* Hover Tooltip */}
+                            <div className="absolute bottom-full mb-1.5 hidden group-hover:flex flex-col items-center pointer-events-none z-30">
+                              <span className="whitespace-nowrap px-2 py-1 text-[10px] font-bold text-white bg-gray-900 rounded-md shadow-md">
+                                Allocate scripts & fulfill request
+                              </span>
+                              <div className="w-1.5 h-1.5 bg-gray-900 rotate-45 -mt-0.5"></div>
+                            </div>
                           </div>
-                        </div>
+                        )}
 
                         {/* Delete Request icon button with tooltip */}
-                        <div className="relative group flex items-center justify-center">
-                          <button
-                            onClick={() => handleDeleteRequest(r)}
-                            disabled={actionLoadingId === r.id}
-                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer disabled:opacity-50 flex items-center justify-center"
-                            title="Delete request"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                          {/* Hover Tooltip */}
-                          <div className="absolute bottom-full mb-1.5 hidden group-hover:flex flex-col items-center pointer-events-none z-30">
-                            <span className="whitespace-nowrap px-2 py-1 text-[10px] font-bold text-white bg-gray-900 rounded-md shadow-md">
-                              Delete request
-                            </span>
-                            <div className="w-1.5 h-1.5 bg-gray-900 rotate-45 -mt-0.5"></div>
+                        {(hasPermission('DELETE_ALLOCATION') || hasPermission('UPDATE_ALLOCATION')) && (
+                          <div className="relative group flex items-center justify-center">
+                            <button
+                              onClick={() => handleDeleteRequest(r)}
+                              disabled={actionLoadingId === r.id}
+                              className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer disabled:opacity-50 flex items-center justify-center"
+                              title="Delete request"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                            {/* Hover Tooltip */}
+                            <div className="absolute bottom-full mb-1.5 hidden group-hover:flex flex-col items-center pointer-events-none z-30">
+                              <span className="whitespace-nowrap px-2 py-1 text-[10px] font-bold text-white bg-gray-900 rounded-md shadow-md">
+                                Delete request
+                              </span>
+                              <div className="w-1.5 h-1.5 bg-gray-900 rotate-45 -mt-0.5"></div>
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     </td>
                   </tr>

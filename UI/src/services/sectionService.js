@@ -129,8 +129,9 @@ export const sectionService = {
   },
 
   // Get paper master sections
-  getPaperMasterSections: async (paperId) => {
-    return apiCall(`/section/paper-masters/${paperId}`);
+  getPaperMasterSections: async (paperId, projectId = null) => {
+    const url = projectId ? `/section/paper-masters/${paperId}?projectId=${projectId}` : `/section/paper-masters/${paperId}`;
+    return apiCall(url);
   },
 
   // Save paper master sections

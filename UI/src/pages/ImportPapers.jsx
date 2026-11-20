@@ -24,7 +24,7 @@ import ColumnFilter from "../components/ColumnFilter";
 export default function ImportPapers() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { userType, user } = useAuth();
+  const { userType, user, hasPermission } = useAuth();
   const userUniversityId = user?.universityId;
   const universityId = searchParams.get("universityId");
   const activeUniversityId = userType === "coordinator" ? userUniversityId : universityId;
@@ -406,7 +406,7 @@ export default function ImportPapers() {
               </div>
 
               <div className="flex items-center gap-3">
-                {selectedPaperIds.length > 0 && (
+                {selectedPaperIds.length > 0 && hasPermission('IMPORT_PAPERS') && (
                   <button
                     onClick={handleImport}
                     disabled={importing}

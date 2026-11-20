@@ -33,7 +33,7 @@ import { encryptId } from '../utils/encryption';
 
 export default function CoordinatorDashboard() {
   const navigate = useNavigate();
-  const { userType, universityId: userUniversityId } = useAuth();
+  const { userType, universityId: userUniversityId, hasPermission } = useAuth();
   const [university, setUniversity] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [selectedSessionId, setSelectedSessionId] = useState('');
@@ -441,32 +441,36 @@ export default function CoordinatorDashboard() {
 
                       {/* Quick Actions (Direct Navigation) */}
                       <div className="mt-5 flex gap-2">
-                        <Link 
-                          to={userType === 'admin' 
-                            ? `/admin/project-dashboard?projectId=${encryptId(project.projectId.toString())}&tab=papers&add=true` 
-                            : `/project-dashboard?projectId=${encryptId(project.projectId.toString())}&tab=papers&add=true`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            sessionStorage.setItem('selectedProjectId', project.projectId.toString());
-                          }}
-                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-50 hover:bg-emerald-50 text-gray-600 hover:text-emerald-700 rounded-xl text-[10px] font-bold uppercase tracking-wider border border-gray-200 transition-colors"
-                        >
-                          <FileText size={12} />
-                          Add Paper
-                        </Link>
-                        <Link 
-                          to={userType === 'admin' 
-                            ? `/admin/allocate-scripts?projectId=${encryptId(project.projectId.toString())}` 
-                            : `/allocate-scripts?projectId=${encryptId(project.projectId.toString())}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            sessionStorage.setItem('selectedProjectId', project.projectId.toString());
-                          }}
-                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-50 hover:bg-teal-50 text-gray-600 hover:text-teal-700 rounded-xl text-[10px] font-bold uppercase tracking-wider border border-gray-200 transition-colors"
-                        >
-                          <Zap size={12} />
-                          Allocate
-                        </Link>
+                        {hasPermission('CREATE_PAPER') && (
+                          <Link 
+                            to={userType === 'admin' 
+                              ? `/admin/project-dashboard?projectId=${encryptId(project.projectId.toString())}&tab=papers&add=true` 
+                              : `/project-dashboard?projectId=${encryptId(project.projectId.toString())}&tab=papers&add=true`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              sessionStorage.setItem('selectedProjectId', project.projectId.toString());
+                            }}
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-50 hover:bg-emerald-50 text-gray-600 hover:text-emerald-700 rounded-xl text-[10px] font-bold uppercase tracking-wider border border-gray-200 transition-colors"
+                          >
+                            <FileText size={12} />
+                            Add Paper
+                          </Link>
+                        )}
+                        {hasPermission('CREATE_ALLOCATION') && (
+                          <Link 
+                            to={userType === 'admin' 
+                              ? `/admin/allocate-scripts?projectId=${encryptId(project.projectId.toString())}` 
+                              : `/allocate-scripts?projectId=${encryptId(project.projectId.toString())}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              sessionStorage.setItem('selectedProjectId', project.projectId.toString());
+                            }}
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-50 hover:bg-teal-50 text-gray-600 hover:text-teal-700 rounded-xl text-[10px] font-bold uppercase tracking-wider border border-gray-200 transition-colors"
+                          >
+                            <Zap size={12} />
+                            Allocate
+                          </Link>
+                        )}
                       </div>
                     </div>
                   );
@@ -486,30 +490,36 @@ export default function CoordinatorDashboard() {
             <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Quick Actions</h3>
 
             <div className="flex flex-col gap-1.5">
-              <SidebarLink
-                to="/departments"
-                label="Academic Setup"
-                desc="Configure academic"
-                icon={<Layers size={14} />}
-                color="text-emerald-600 bg-emerald-50"
-                disabled={false}
-              />
-              <SidebarLink
-                to="/projects"
-                label="Manage Projects"
-                desc="Manage evaluation projects"
-                icon={<Plus size={14} />}
-                color="text-teal-700 bg-teal-50"
-                disabled={false}
-              />
-              <SidebarLink
-                to="/admin/users"
-                label="Manage Users"
-                desc="Manage coordinators and examiners"
-                icon={<Users size={14} />}
-                color="text-orange-600 bg-orange-50"
-                disabled={false}
-              />
+              {(hasPermission('READ_DEPARTMENT') || hasPermission('READ_COURSE') || hasPermission('READ_SUBJECT')) && (
+                <SidebarLink
+                  to="/departments"
+                  label="Academic Setup"
+                  desc="Configure academic"
+                  icon={<Layers size={14} />}
+                  color="text-emerald-600 bg-emerald-50"
+                  disabled={false}
+                />
+              )}
+              {(hasPermission('READ_PROJECT') || hasPermission('CREATE_PROJECT')) && (
+                <SidebarLink
+                  to="/projects"
+                  label="Manage Projects"
+                  desc="Manage evaluation projects"
+                  icon={<Plus size={14} />}
+                  color="text-teal-700 bg-teal-50"
+                  disabled={false}
+                />
+              )}
+              {(hasPermission('READ_USER') || hasPermission('CREATE_USER')) && (
+                <SidebarLink
+                  to="/admin/users"
+                  label="Manage Users"
+                  desc="Manage coordinators and examiners"
+                  icon={<Users size={14} />}
+                  color="text-orange-600 bg-orange-50"
+                  disabled={false}
+                />
+              )}
             </div>
           </div>
         </div>

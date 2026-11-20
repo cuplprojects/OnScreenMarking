@@ -44,7 +44,12 @@ namespace API.Controllers
             }
 
             var cleanPath = filePath.TrimStart('/', '\\').Replace('\\', '/');
-            var parts = cleanPath.Split('/', System.StringSplitOptions.RemoveEmptyEntries);
+            string relativePath = cleanPath;
+            if (relativePath.StartsWith("osm/", StringComparison.OrdinalIgnoreCase))
+            {
+                relativePath = relativePath.Substring(4);
+            }
+            var parts = relativePath.Split('/', System.StringSplitOptions.RemoveEmptyEntries);
 
             // Path pattern check: osm/{projectId}/{paperId}/...
             if (parts.Length >= 2 && int.TryParse(parts[0], out int projectId) && int.TryParse(parts[1], out int paperId))
@@ -79,8 +84,11 @@ namespace API.Controllers
             var basePath = _configuration["StorageSettings:BasePath"] 
                 ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "storage");
 
-            var requestedUrl = "OSM/" + cleanPath;
-            var fullPath = Path.Combine(basePath, requestedUrl);
+            var fullPath = Path.Combine(basePath, "OSM", relativePath);
+            if (!System.IO.File.Exists(fullPath))
+            {
+                fullPath = Path.Combine(basePath, "osm", relativePath);
+            }
 
             if (!System.IO.File.Exists(fullPath))
             {

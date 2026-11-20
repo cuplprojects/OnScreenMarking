@@ -14,8 +14,10 @@ import {
   School
 } from 'lucide-react';
 import apiCall from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function UniversityDashboard() {
+  const { hasPermission } = useAuth();
   const { universityId } = useParams();
   const [university, setUniversity] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -60,7 +62,8 @@ export default function UniversityDashboard() {
       path: `/admin/masters?universityId=${universityId}`,
       color: 'text-teal-500',
       bgColor: 'bg-teal-500/10',
-      borderColor: 'border-teal-500/20'
+      borderColor: 'border-teal-500/20',
+      permission: hasPermission('READ_DEPARTMENT')
     },
     {
       id: 'subjects',
@@ -70,7 +73,8 @@ export default function UniversityDashboard() {
       path: `/admin/subjects?universityId=${universityId}`,
       color: 'text-green-400',
       bgColor: 'bg-green-400/10',
-      borderColor: 'border-green-500/20'
+      borderColor: 'border-green-500/20',
+      permission: hasPermission('READ_SUBJECT')
     },
     {
       id: 'sessions',
@@ -80,7 +84,8 @@ export default function UniversityDashboard() {
       path: `/admin/sessions?universityId=${universityId}`,
       color: 'text-yellow-400',
       bgColor: 'bg-yellow-400/10',
-      borderColor: 'border-yellow-500/20'
+      borderColor: 'border-yellow-500/20',
+      permission: hasPermission('READ_SESSION')
     },
     {
       id: 'projects',
@@ -90,7 +95,8 @@ export default function UniversityDashboard() {
       path: `/admin/projects?universityId=${universityId}`,
       color: 'text-red-400',
       bgColor: 'bg-red-400/10',
-      borderColor: 'border-red-500/20'
+      borderColor: 'border-red-500/20',
+      permission: hasPermission('READ_PROJECT')
     },
     {
       id: 'papers',
@@ -100,7 +106,8 @@ export default function UniversityDashboard() {
       path: `/admin/papers?universityId=${universityId}`,
       color: 'text-teal-500',
       bgColor: 'bg-teal-500/10',
-      borderColor: 'border-teal-500/20'
+      borderColor: 'border-teal-500/20',
+      permission: hasPermission('CREATE_PAPER') || hasPermission('IMPORT_PAPERS') || hasPermission('MANAGE_SECTIONS')
     },
     {
       id: 'users',
@@ -110,9 +117,10 @@ export default function UniversityDashboard() {
       path: `/admin/users?universityId=${universityId}`,
       color: 'text-orange-400',
       bgColor: 'bg-orange-400/10',
-      borderColor: 'border-orange-500/20'
+      borderColor: 'border-orange-500/20',
+      permission: hasPermission('READ_USER')
     }
-  ];
+  ].filter(m => m.permission);
 
   if (loading) {
     return (
