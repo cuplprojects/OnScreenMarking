@@ -306,7 +306,7 @@ namespace API.Controllers
                     {
                         paperId = p.PaperId,
                         projectPaperId = p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.Id).FirstOrDefault(),
-                        batchId = p.BatchId ?? p.ProjectPapers.Where(pp => pp.ProjectId == projectId).Select(pp => pp.BatchId).FirstOrDefault(),
+                        batchId = (projectId > 0 ? p.ProjectPapers.Where(pp => pp.ProjectId == projectId && pp.IsSectionConfigured).Select(pp => pp.BatchId).FirstOrDefault() : p.BatchId),
                         universityId = p.UniversityId,
                         paperCode = p.PaperCode,
                         paperName = p.PaperName,
@@ -652,7 +652,7 @@ namespace API.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<PaperDto>> GetPaper(int id)
+        public async Task<ActionResult<PaperDto>> GetPaper(int id, [FromQuery] int? projectId = null)
         {
             try
             {
@@ -666,7 +666,9 @@ namespace API.Controllers
                 if (paper == null)
                     return NotFound(new { success = false, message = "Paper not found" });
 
-                var firstProjectPaper = paper.ProjectPapers.FirstOrDefault();
+                var targetProjectPaper = (projectId.HasValue && projectId.Value > 0)
+                    ? paper.ProjectPapers.FirstOrDefault(pp => pp.ProjectId == projectId.Value)
+                    : paper.ProjectPapers.FirstOrDefault();
 
                 var paperDto = new PaperDto
                 {
@@ -677,13 +679,17 @@ namespace API.Controllers
                     MaxMarks = paper.MaxMarks,
                     TotalQuestions = paper.TotalQuestions,
                     Description = paper.Description,
-                    CatchNo = firstProjectPaper?.CatchNo ?? "",
-                    QuestionPaperPdfUrl = firstProjectPaper?.QuestionPaperPdfUrl ?? "",
+                    CatchNo = targetProjectPaper?.CatchNo ?? "",
+                    QuestionPaperPdfUrl = targetProjectPaper?.QuestionPaperPdfUrl ?? "",
                     IsActive = paper.IsActive,
                     UniversityId = paper.UniversityId,
-                    ProjectId = firstProjectPaper?.ProjectId,
-                    ProjectPaperId = firstProjectPaper?.Id,
-                    BatchId = paper.BatchId ?? firstProjectPaper?.BatchId,
+                    ProjectId = targetProjectPaper?.ProjectId ?? (projectId.HasValue && projectId.Value > 0 ? projectId.Value : null),
+                    ProjectPaperId = targetProjectPaper?.Id,
+                    BatchId = (projectId.HasValue && projectId.Value > 0)
+                        ? (targetProjectPaper != null && targetProjectPaper.IsSectionConfigured ? targetProjectPaper.BatchId : null)
+                        : (targetProjectPaper?.BatchId ?? paper.BatchId),
+                    IsSectionsConfigured = targetProjectPaper?.IsSectionConfigured ?? false,
+                    IsSectionConfigured = targetProjectPaper?.IsSectionConfigured ?? false,
                     SubjectIds = paper.SubjectPapers
                         .Select(sp => sp.SubjectId)
                         .ToList(),
@@ -1168,12 +1174,18 @@ namespace API.Controllers
                         return BadRequest(new { success = false, message = "Cannot update paper for an inactive project. Please activate the project first." });
                     }
 
-                    var pp = paper.ProjectPapers.FirstOrDefault(x => x.ProjectId == paperDto.ProjectId.Value);
+                    var pp = await _context.ProjectPapers.FirstOrDefaultAsync(x => x.PaperId == paper.PaperId && x.ProjectId == paperDto.ProjectId.Value);
                     if (pp != null)
                     {
-                        if (paperDto.CatchNo != null) pp.CatchNo = paperDto.CatchNo;
+                        if (paperDto.CatchNo != null) pp.CatchNo = paperDto.CatchNo.Trim();
                         if (paperDto.QuestionPaperPdfUrl != null) pp.QuestionPaperPdfUrl = paperDto.QuestionPaperPdfUrl;
+                        if (paperDto.BatchId.HasValue && paperDto.BatchId.Value > 0)
+                        {
+                            pp.BatchId = paperDto.BatchId.Value;
+                            pp.IsSectionConfigured = true;
+                        }
                         pp.UpdatedAt = DateTime.UtcNow;
+                        _context.ProjectPapers.Update(pp);
                     }
                     else
                     {
@@ -1181,47 +1193,59 @@ namespace API.Controllers
                         {
                             ProjectId = paperDto.ProjectId.Value,
                             PaperId = paper.PaperId,
-                            CatchNo = paperDto.CatchNo ?? "",
+                            CatchNo = paperDto.CatchNo?.Trim() ?? "",
                             QuestionPaperPdfUrl = paperDto.QuestionPaperPdfUrl ?? "",
+                            BatchId = paperDto.BatchId.HasValue && paperDto.BatchId.Value > 0 ? paperDto.BatchId.Value : null,
                             IsActive = true,
-                            IsSectionConfigured = _context.Sections.Any(s => s.PaperId == paper.PaperId),
+                            IsSectionConfigured = _context.Sections.Any(s => s.PaperId == paper.PaperId) || (paperDto.BatchId.HasValue && paperDto.BatchId.Value > 0),
                             IsExaminerAssigned = false,
                             CreatedAt = DateTime.UtcNow,
                             UpdatedAt = DateTime.UtcNow
                         });
                     }
                 }
-                else if (paperDto.CatchNo != null && paper.ProjectPapers.Any())
+                else if (paperDto.CatchNo != null)
                 {
-                    foreach (var pp in paper.ProjectPapers)
+                    var pps = await _context.ProjectPapers.Where(x => x.PaperId == paper.PaperId).ToListAsync();
+                    foreach (var pp in pps)
                     {
-                        pp.CatchNo = paperDto.CatchNo;
+                        pp.CatchNo = paperDto.CatchNo.Trim();
                         pp.UpdatedAt = DateTime.UtcNow;
+                        _context.ProjectPapers.Update(pp);
                     }
                 }
 
-                // Update subjects mapping if provided
+                // Update subjects mapping if provided and distinct
                 if (paperDto.SubjectIds != null && paperDto.SubjectIds.Any())
                 {
-                    _context.SubjectPapers.RemoveRange(paper.SubjectPapers);
-                    foreach (var sId in paperDto.SubjectIds)
+                    var existingSubIds = paper.SubjectPapers.Select(sp => sp.SubjectId).ToList();
+                    var newSubIds = paperDto.SubjectIds.Distinct().ToList();
+                    if (!existingSubIds.OrderBy(x => x).SequenceEqual(newSubIds.OrderBy(x => x)))
                     {
-                        _context.SubjectPapers.Add(new SubjectPaper
+                        _context.SubjectPapers.RemoveRange(paper.SubjectPapers);
+                        foreach (var sId in newSubIds)
                         {
-                            PaperId = paper.PaperId,
-                            SubjectId = sId
-                        });
+                            _context.SubjectPapers.Add(new SubjectPaper
+                            {
+                                PaperId = paper.PaperId,
+                                SubjectId = sId
+                            });
+                        }
                     }
                 }
 
+                // Detach collections to prevent navigation graph conflicts in NoTracking context
+                paper.SubjectPapers = new List<SubjectPaper>();
+                paper.ProjectPapers = new List<ProjectPaper>();
                 _context.Papers.Update(paper);
+
                 await _context.SaveChangesAsync();
 
                 return Ok(new { success = true, message = "Paper updated successfully" });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
+                return StatusCode(500, new { success = false, message = $"Failed to update paper: {ex.Message}{(ex.InnerException != null ? " | " + ex.InnerException.Message : "")}" });
             }
         }
 
@@ -1324,6 +1348,7 @@ namespace API.Controllers
                     {
                         projectPaper.QuestionPaperPdfUrl = fileUrl;
                         projectPaper.UpdatedAt = DateTime.UtcNow;
+                        _context.ProjectPapers.Update(projectPaper);
                     }
                     else
                     {
@@ -1348,6 +1373,7 @@ namespace API.Controllers
                         {
                             pp.QuestionPaperPdfUrl = fileUrl;
                             pp.UpdatedAt = DateTime.UtcNow;
+                            _context.ProjectPapers.Update(pp);
                         }
                     }
                 }
@@ -1401,6 +1427,7 @@ namespace API.Controllers
                     {
                         projectPaper.QuestionPaperPdfUrl = null;
                         projectPaper.UpdatedAt = DateTime.UtcNow;
+                        _context.ProjectPapers.Update(projectPaper);
                     }
                 }
                 else
@@ -1409,6 +1436,7 @@ namespace API.Controllers
                     {
                         pp.QuestionPaperPdfUrl = null;
                         pp.UpdatedAt = DateTime.UtcNow;
+                        _context.ProjectPapers.Update(pp);
                     }
                 }
 
@@ -1552,6 +1580,7 @@ namespace API.Controllers
                             {
                                 matchedProjectPaper.QuestionPaperPdfUrl = fileUrl;
                                 matchedProjectPaper.UpdatedAt = DateTime.UtcNow;
+                                _context.ProjectPapers.Update(matchedProjectPaper);
                             }
                             else
                             {
@@ -1575,6 +1604,7 @@ namespace API.Controllers
                             {
                                 pp.QuestionPaperPdfUrl = fileUrl;
                                 pp.UpdatedAt = DateTime.UtcNow;
+                                _context.ProjectPapers.Update(pp);
                             }
                         }
 

@@ -985,8 +985,8 @@ namespace API.Controllers
                     }
                 }
 
-                // 3. Max attempted questions validation per section
-                var attemptedCountBySection = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                // 3. Max attempted questions validation per section (sub-parts 1a, 1b, 1c count as 1 attempt)
+                var attemptedQuestionsBySection = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
                 foreach (var qm in questionMarks)
                 {
                     if (qm.IsSkipped) continue;
@@ -998,26 +998,27 @@ namespace API.Controllers
                         var isAttempted = qm.IsAttempted || qm.MarksAwarded > 0;
                         if (isAttempted)
                         {
-                            if (!attemptedCountBySection.ContainsKey(q.Section))
+                            if (!attemptedQuestionsBySection.ContainsKey(q.Section))
                             {
-                                attemptedCountBySection[q.Section] = 0;
+                                attemptedQuestionsBySection[q.Section] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                             }
-                            attemptedCountBySection[q.Section]++;
+                            // Add question number so sub-parts of the same question count as 1 attempt
+                            attemptedQuestionsBySection[q.Section].Add(q.Question);
                         }
                     }
                 }
 
-                foreach (var entry in attemptedCountBySection)
+                foreach (var entry in attemptedQuestionsBySection)
                 {
                     var sm = sMasters.FirstOrDefault(s => s.Name.Equals(entry.Key, StringComparison.OrdinalIgnoreCase));
                     var sectionName = sm?.Name ?? entry.Key;
                     var maxAttempts = sm?.MaxQuestionsToAttempt ?? 0;
 
-                    if (maxAttempts > 0 && entry.Value > maxAttempts)
+                    if (maxAttempts > 0 && entry.Value.Count > maxAttempts)
                     {
                         return BadRequest(new { 
                             success = false, 
-                            message = $"You have attempted {entry.Value} questions in Section '{sectionName}', which exceeds the maximum allowed attempts of {maxAttempts}." 
+                            message = $"You have attempted {entry.Value.Count} questions in Section '{sectionName}', which exceeds the maximum allowed attempts of {maxAttempts}." 
                         });
                     }
                 }
@@ -1037,14 +1038,15 @@ namespace API.Controllers
                     {
                         var groupCode = q.Group.Trim().ToUpper();
                         var groupKey = $"{q.Section}_{groupCode}";
+                        var qLabel = !string.IsNullOrWhiteSpace(q.Part) ? $"{q.Question} ({q.Part})" : q.Question;
                         if (groupsAttempted.TryGetValue(groupKey, out var existingQNo))
                         {
                             return BadRequest(new { 
                                 success = false, 
-                                message = $"Question {q.Question} and Question {existingQNo} both belong to Optional Group '{groupCode}'. Only one question from this group can be awarded marks." 
+                                message = $"Question {qLabel} and Question {existingQNo} both belong to Optional Group '{groupCode}'. Only one question from this group can be awarded marks." 
                             });
                         }
-                        groupsAttempted[groupKey] = q.Question;
+                        groupsAttempted[groupKey] = qLabel;
                     }
                 }
 
@@ -1122,6 +1124,7 @@ namespace API.Controllers
                         QuestionId = qm.QuestionMasterId,
                         ScriptId = qm.ScriptId ?? marking.ScriptId,
                         QuestionNo = qm.QuestionMaster != null ? qm.QuestionMaster.Question : "",
+                        Part = qm.QuestionMaster != null ? qm.QuestionMaster.Part : null,
                         MarksAwarded = Math.Round(qm.MarksAwarded, 2, MidpointRounding.AwayFromZero),
                         IsSkipped = qm.IsSkipped,
                         Remarks = qm.Remarks ?? "",

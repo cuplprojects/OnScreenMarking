@@ -130,6 +130,8 @@ namespace API.Models.DTOs
         public List<int>? MasterSectionIds { get; set; }
         public List<string>? MasterSectionNames { get; set; }
         public int SectionsCount { get; set; }
+        public bool IsSectionsConfigured { get; set; }
+        public bool IsSectionConfigured { get; set; }
         public int ExaminersCount { get; set; }
         public List<string>? ExaminerNames { get; set; }
     }

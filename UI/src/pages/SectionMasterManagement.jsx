@@ -242,6 +242,13 @@ export default function SectionMasterManagement() {
           return false;
         }
 
+        // Part
+        const cqPart = (cq.part || '').trim().toLowerCase();
+        const eqPart = (eq.part || '').trim().toLowerCase();
+        if (cqPart !== eqPart) {
+          return false;
+        }
+
         // Marks
         const cqM = parseFloat(cq.marks) || 0;
         const eqM = parseFloat(eq.marks) || 0;
@@ -287,10 +294,11 @@ export default function SectionMasterManagement() {
   }, [questionTypesList]);
 
   // Find if an identical batch already exists across all loaded batches
-  const findMatchingBatch = useCallback((candidateSections) => {
+  const findMatchingBatch = useCallback((candidateSections, excludeBatchId = null) => {
     if (!candidateSections || candidateSections.length === 0) return null;
     const batchIds = Object.keys(allBatchesMap).map(Number).sort((a, b) => a - b);
     for (const bId of batchIds) {
+      if (excludeBatchId && bId === excludeBatchId) continue;
       const existing = allBatchesMap[bId];
       if (checkBatchesIdentical(candidateSections, existing)) {
         return bId;
@@ -302,8 +310,9 @@ export default function SectionMasterManagement() {
   // Real-time matched existing batch ID for the modal
   const matchedExistingBatchId = useMemo(() => {
     if (!showCreateBatchModal || !newBatchSections || newBatchSections.length === 0) return null;
-    return findMatchingBatch(newBatchSections);
-  }, [showCreateBatchModal, newBatchSections, findMatchingBatch]);
+    if (modalBatchId > 0) return null;
+    return findMatchingBatch(newBatchSections, modalBatchId > 0 ? modalBatchId : null);
+  }, [showCreateBatchModal, newBatchSections, findMatchingBatch, modalBatchId]);
 
   // Update a field in the active section
   const updateSection = (idx, field, value) => {
@@ -384,6 +393,7 @@ export default function SectionMasterManagement() {
         type: matchedQt?.questionTypeName || existing?.type || defaultTypeName,
         isOptional: existing?.isOptional !== undefined ? existing.isOptional : false,
         optionalGroupCode: existing?.optionalGroupCode || '',
+        part: existing?.part || '',
       });
     }
 
@@ -411,6 +421,47 @@ export default function SectionMasterManagement() {
         }))
       };
     }));
+  };
+
+  // Compute next part label (e.g. "a" -> "b", "b" -> "c", "z" -> "aa", "i" -> "ii", "1" -> "2")
+  const getNextPart = (partStr) => {
+    const str = String(partStr || '').trim();
+    if (!str) return 'b';
+
+    // Lowercase Roman numerals
+    const lowerRomans = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'];
+    const lrIdx = lowerRomans.indexOf(str.toLowerCase());
+    if (lrIdx !== -1 && lrIdx < lowerRomans.length - 1 && str === str.toLowerCase()) {
+      return lowerRomans[lrIdx + 1];
+    }
+    // Uppercase Roman numerals
+    const upperRomans = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+    const urIdx = upperRomans.indexOf(str);
+    if (urIdx !== -1 && urIdx < upperRomans.length - 1) {
+      return upperRomans[urIdx + 1];
+    }
+
+    // Pure numeric: '1' -> '2'
+    if (/^\d+$/.test(str)) {
+      return String(parseInt(str, 10) + 1);
+    }
+
+    // Alphabetic: 'a' -> 'b', 'z' -> 'aa', 'A' -> 'B'
+    const isLower = str === str.toLowerCase();
+    const upper = str.toUpperCase();
+    const arr = upper.split('');
+    let i = arr.length - 1;
+    while (i >= 0) {
+      if (arr[i] < 'Z') {
+        arr[i] = String.fromCharCode(arr[i].charCodeAt(0) + 1);
+        break;
+      }
+      arr[i] = 'A';
+      i--;
+    }
+    if (i < 0) arr.unshift('A');
+    const res = arr.join('');
+    return isLower ? res.toLowerCase() : res;
   };
 
   // Compute the next question number after the given one.
@@ -443,23 +494,45 @@ export default function SectionMasterManagement() {
     return str + '_1';
   };
 
-  // Add a question row after qIdx, copying all details from qIdx, with next question number
+  // Add a question row after qIdx:
+  // If the source question has a part (e.g. Q1 part a), it adds the next part (Q1 part b) of the same question.
+  // Otherwise, it adds the next question number (Q2).
   const handleAddQuestion = (sIdx, qIdx) => {
     setNewBatchSections(prev => prev.map((sec, i) => {
       if (i !== sIdx) return sec;
       const qs = [...sec.questions];
       const source = qs[qIdx];
+      const hasPart = Boolean(source?.part && String(source.part).trim() !== '');
+
+      let newQuestionNo;
+      let newPart;
+      if (hasPart) {
+        newQuestionNo = source.questionNo;
+        newPart = getNextPart(source.part);
+      } else {
+        newQuestionNo = nextQuestionNo(source.questionNo);
+        newPart = '';
+      }
+
       const newQ = {
         ...source,
         id: null,
-        questionNo: nextQuestionNo(source.questionNo),
+        questionNo: newQuestionNo,
+        part: newPart,
       };
       qs.splice(qIdx + 1, 0, newQ);
+
       const startQ = parseInt(sec.startQuestion, 10) || 1;
+      const maxQ = Math.max(...qs.map(q => {
+        const m = String(q.questionNo || '').match(/^(\d+)/);
+        return m ? parseInt(m[1], 10) : 0;
+      }));
+      const newEndQ = maxQ >= startQ ? maxQ : Math.max(startQ, startQ + qs.length - 1);
+
       return { 
         ...sec, 
         questions: qs,
-        endQuestion: startQ + qs.length - 1,
+        endQuestion: newEndQ,
         maxQuestionsToAttempt: Math.min(sec.maxQuestionsToAttempt || qs.length, qs.length)
       };
     }));
@@ -476,10 +549,15 @@ export default function SectionMasterManagement() {
       const qs = [...sec.questions];
       qs.splice(qIdx, 1);
       const startQ = parseInt(sec.startQuestion, 10) || 1;
+      const maxQ = Math.max(...qs.map(q => {
+        const m = String(q.questionNo || '').match(/^(\d+)/);
+        return m ? parseInt(m[1], 10) : 0;
+      }));
+      const newEndQ = maxQ >= startQ ? maxQ : Math.max(startQ, startQ + qs.length - 1);
       return { 
         ...sec, 
         questions: qs,
-        endQuestion: Math.max(startQ, startQ + qs.length - 1),
+        endQuestion: newEndQ,
         maxQuestionsToAttempt: Math.min(sec.maxQuestionsToAttempt || qs.length, qs.length)
       };
     }));
@@ -639,6 +717,7 @@ export default function SectionMasterManagement() {
             marks: q.marks !== undefined ? parseFloat(q.marks) : marksPerQ,
             isOptional: Boolean(q.isOptional),
             optionalGroupCode: q.optionalGroupCode || '',
+            part: q.part || '',
           };
         });
       } else {
@@ -654,6 +733,7 @@ export default function SectionMasterManagement() {
             marks: marksPerQ,
             isOptional: false,
             optionalGroupCode: '',
+            part: '',
           });
         }
       }
@@ -689,6 +769,8 @@ export default function SectionMasterManagement() {
     setDeletedSectionIds([]);
     setModalBatchId(0);
   };
+
+
 
   // Save new batch to backend with full SectionConfig error & validation logic
   const handleSaveNewBatch = async () => {
@@ -748,10 +830,16 @@ export default function SectionMasterManagement() {
       }
 
       // 6. Duplicate question numbers in section
-      const qNos = sec.questions.map(q => String(q.questionNo || '').trim().toLowerCase());
-      const dupQ = qNos.find((q, i) => qNos.indexOf(q) !== i);
-      if (dupQ) {
-        message.error(`Duplicate question number '${dupQ}' in section '${secName}'`);
+      const qKeys = sec.questions.map(q => {
+        const no = String(q.questionNo || '').trim().toLowerCase();
+        const p = String(q.part || '').trim().toLowerCase();
+        return p ? `${no}_part_${p}` : no;
+      });
+      const dupIdx = qKeys.findIndex((k, i) => qKeys.indexOf(k) !== i);
+      if (dupIdx !== -1) {
+        const dupQ = sec.questions[dupIdx];
+        const label = dupQ.part ? `Q${dupQ.questionNo} (Part ${dupQ.part})` : `Q${dupQ.questionNo}`;
+        message.error(`Duplicate question '${label}' in section '${secName}'`);
         setActiveSectionIdx(idx);
         return;
       }
@@ -778,47 +866,37 @@ export default function SectionMasterManagement() {
         }
       }
 
-      // 9. Exact marks mismatch validation from SectionConfig
-      const expectedTotalMarks = parseFloat(sec.totalMarks) || 0;
-      const maxAttempts = parseInt(sec.maxQuestionsToAttempt, 10) || sec.questions.length;
-
-      const compulsoryMarks = sec.questions.filter(q => !q.isOptional && !q.optionalGroupCode).map(q => parseFloat(q.marks) || 0);
-      const independentOptionalMarks = sec.questions.filter(q => (q.isOptional || q.optionalGroupCode) && !q.optionalGroupCode).map(q => parseFloat(q.marks) || 0);
-
-      const groupCodeToMarks = {};
-      sec.questions.forEach(q => {
-        if (q.optionalGroupCode) {
-          const code = q.optionalGroupCode.trim();
-          if (code) {
-            const marks = parseFloat(q.marks) || 0;
-            if (!groupCodeToMarks[code] || marks > groupCodeToMarks[code]) {
-              groupCodeToMarks[code] = marks;
-            }
-          } else {
-            independentOptionalMarks.push(parseFloat(q.marks) || 0);
+      // Validate that questions sharing the same Optional Group have identical marks
+      const groupQuestionsMap = {};
+      (sec.questions || []).forEach(q => {
+        const code = q.optionalGroupCode ? q.optionalGroupCode.trim().toUpperCase() : '';
+        if (code) {
+          if (!groupQuestionsMap[code]) {
+            groupQuestionsMap[code] = [];
           }
+          groupQuestionsMap[code].push(q);
         }
       });
 
-      const groupOptionalMarks = Object.values(groupCodeToMarks);
-      const selectablePool = [...compulsoryMarks, ...independentOptionalMarks, ...groupOptionalMarks];
-      selectablePool.sort((a, b) => b - a);
-
-      const maxAchievableSum = selectablePool.slice(0, maxAttempts).reduce((sum, m) => sum + m, 0);
-
-      if (Math.abs(maxAchievableSum - expectedTotalMarks) > 0.01) {
-        if (maxAttempts < sec.questions.length) {
-          message.warning(`Mismatched Marks! Under 'Structure' in '${secName}', Total Marks is configured as ${sec.totalMarks}. However, based on attempting a maximum of ${maxAttempts} question(s) and optional group rules, the maximum achievable marks is ${maxAchievableSum}. Please update Total Marks to ${maxAchievableSum} or adjust the Attempt count to ${selectablePool.length} before saving.`);
-        } else {
-          message.warning(`Mismatched Marks! Under 'Structure' in '${secName}', Total Marks is configured as ${sec.totalMarks}. However, based on optional group rules, the maximum achievable marks is ${maxAchievableSum}. Please update Total Marks to ${maxAchievableSum} before saving.`);
+      for (const [code, qList] of Object.entries(groupQuestionsMap)) {
+        if (qList.length > 1) {
+          const firstMarks = parseFloat(qList[0].marks) || 0;
+          const mismatchedQ = qList.find(q => Math.abs((parseFloat(q.marks) || 0) - firstMarks) > 0.001);
+          if (mismatchedQ) {
+            const q1Label = qList[0].part ? `Q${qList[0].questionNo} (${qList[0].part})` : `Q${qList[0].questionNo}`;
+            const q2Label = mismatchedQ.part ? `Q${mismatchedQ.questionNo} (${mismatchedQ.part})` : `Q${mismatchedQ.questionNo}`;
+            message.error(`Questions in Optional Group '${code}' in '${secName}' must have identical marks. ${q1Label} has ${firstMarks}m, but ${q2Label} has ${mismatchedQ.marks}m.`);
+            setActiveSectionIdx(idx);
+            return;
+          }
         }
-        setActiveSectionIdx(idx);
-        return;
       }
+
+
     }
 
-    // Check if an identical batch already exists
-    const matchedBatchId = findMatchingBatch(newBatchSections);
+    // Check if an identical batch already exists (excluding current batch being edited)
+    const matchedBatchId = findMatchingBatch(newBatchSections, modalBatchId > 0 ? modalBatchId : null);
     if (matchedBatchId) {
       const msg = `Same section configuration batch already exists (Batch #${matchedBatchId})`;
       message.warning(msg, 6000);
@@ -847,7 +925,7 @@ export default function SectionMasterManagement() {
           endQuestion: parseInt(sec.endQuestion, 10) || 1,
           totalMarks: parseFloat(sec.totalMarks) || 0,
           maxQuestionsToAttempt: parseInt(sec.maxQuestionsToAttempt, 10) || 1,
-          totalQuestions: sec.questions.length,
+          totalQuestions: new Set((sec.questions || []).map(q => String(q.questionNo || '').trim()).filter(Boolean)).size || (parseInt(sec.endQuestion, 10) - parseInt(sec.startQuestion, 10) + 1) || 1,
           questions: sec.questions.map(q => {
             const matchedQt = questionTypesList.find(qt => 
               (q.questionTypeId && String(qt.questionTypeId || qt.id) === String(q.questionTypeId)) ||
@@ -864,6 +942,7 @@ export default function SectionMasterManagement() {
               marks: parseFloat(q.marks) || 0,
               isOptional: Boolean(q.isOptional),
               optionalGroupCode: q.optionalGroupCode || null,
+              part: q.part ? String(q.part).trim() : null,
             };
           }),
         }))
@@ -1004,6 +1083,7 @@ export default function SectionMasterManagement() {
     const questions = (section.questions && section.questions.length > 0)
       ? section.questions.map(q => ({
           questionNo: q.questionNo,
+          part: q.part || '',
           type: q.type || q.questionType || 'MCQ',
           marks: parseFloat(q.marks) || 0,
           optionalGroupCode: q.optionalGroupCode || null
@@ -1012,6 +1092,7 @@ export default function SectionMasterManagement() {
           const qNum = (section.startQuestion || 1) + i;
           return {
             questionNo: String(qNum),
+            part: '',
             type: 'MCQ',
             marks: parseFloat(marksPerQ),
             optionalGroupCode: null
@@ -1037,12 +1118,13 @@ export default function SectionMasterManagement() {
         endQuestion: parseInt(editForm.endQuestion) || 1,
         totalMarks: parseFloat(editForm.totalMarks) || 0,
         maxQuestionsToAttempt: parseInt(editForm.maxQuestionsToAttempt) || 1,
-        totalQuestions: editQuestions.length,
+        totalQuestions: new Set(editQuestions.map(q => String(q.questionNo || '').trim()).filter(Boolean)).size || editQuestions.length,
         questions: editQuestions.map(q => ({
           questionNo: q.questionNo,
           type: q.type || 'MCQ',
           marks: parseFloat(q.marks) || 0,
-          optionalGroupCode: q.optionalGroupCode || null
+          optionalGroupCode: q.optionalGroupCode || null,
+          part: q.part ? String(q.part).trim() : null
         }))
       };
 
@@ -1269,7 +1351,11 @@ export default function SectionMasterManagement() {
                   >
                     <span className="block truncate">{sec.name || `Section ${idx + 1}`}</span>
                     <span className="text-[10px] font-semibold text-gray-400 block mt-0.5">
-                      {sec.questions?.length > 0 ? `${sec.questions.length} questions` : 'No questions'}
+                      {sec.questions?.length > 0 ? (() => {
+                        const distinctCount = new Set((sec.questions || []).map(q => String(q.questionNo || '').trim()).filter(Boolean)).size;
+                        const partsCount = sec.questions.length;
+                        return partsCount > distinctCount ? `${distinctCount} questions (${partsCount} parts)` : `${distinctCount} questions`;
+                      })() : 'No questions'}
                     </span>
                   </button>
                 ))}
@@ -1418,6 +1504,7 @@ export default function SectionMasterManagement() {
                             <thead>
                               <tr className="bg-gray-50 border-b border-gray-200">
                                 <th className="py-2.5 px-3 font-black text-gray-500 uppercase tracking-wider text-[10px] w-24">Q#</th>
+                                <th className="py-2.5 px-3 font-black text-gray-500 uppercase tracking-wider text-[10px] w-20">Part</th>
                                 <th className="py-2.5 px-3 font-black text-gray-500 uppercase tracking-wider text-[10px]">Type</th>
                                 <th className="py-2.5 px-3 text-center font-black text-gray-500 uppercase tracking-wider text-[10px] w-24">Marks</th>
                                 <th className="py-2.5 px-3 font-black text-gray-500 uppercase tracking-wider text-[10px]">Group Code</th>
@@ -1439,6 +1526,17 @@ export default function SectionMasterManagement() {
                                         placeholder="No."
                                       />
                                     </div>
+                                  </td>
+
+                                  {/* Part Input */}
+                                  <td className="py-1.5 px-3">
+                                    <input
+                                      type="text"
+                                      value={q.part || ''}
+                                      onChange={e => updateSectionQuestion(activeSectionIdx, qIdx, 'part', e.target.value)}
+                                      className="w-14 px-1.5 py-1 border border-gray-300 rounded text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-teal-500 text-center bg-white"
+                                      placeholder="Part"
+                                    />
                                   </td>
 
                                   {/* Question Type dropdown populated from questiontypes table */}
@@ -1479,13 +1577,36 @@ export default function SectionMasterManagement() {
 
                                   {/* Optional Group Code */}
                                   <td className="py-1.5 px-3">
-                                    <input
-                                      type="text"
-                                      value={q.optionalGroupCode || ''}
-                                      onChange={e => updateSectionQuestion(activeSectionIdx, qIdx, 'optionalGroupCode', e.target.value)}
-                                      placeholder="Group code (optional)"
-                                      className="w-full px-2.5 py-1 border border-gray-300 rounded text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-teal-500 bg-white"
-                                    />
+                                    {(() => {
+                                      const code = q.optionalGroupCode?.trim()?.toUpperCase();
+                                      const otherInGroup = code ? newBatchSections[activeSectionIdx]?.questions?.find(
+                                        (other, oIdx) => oIdx !== qIdx && other.optionalGroupCode?.trim()?.toUpperCase() === code && Math.abs((parseFloat(other.marks) || 0) - (parseFloat(q.marks) || 0)) > 0.001
+                                      ) : null;
+                                      const hasMismatch = Boolean(otherInGroup);
+                                      const oLabel = otherInGroup ? (otherInGroup.part ? `Q${otherInGroup.questionNo} (${otherInGroup.part})` : `Q${otherInGroup.questionNo}`) : '';
+
+                                      return (
+                                        <div>
+                                          <input
+                                            type="text"
+                                            value={q.optionalGroupCode || ''}
+                                            onChange={e => updateSectionQuestion(activeSectionIdx, qIdx, 'optionalGroupCode', e.target.value)}
+                                            placeholder="Group code (optional)"
+                                            title={hasMismatch ? `Group '${q.optionalGroupCode}' marks mismatch! ${oLabel} has ${otherInGroup.marks}m. Questions in same group must have identical marks.` : ''}
+                                            className={`w-full px-2.5 py-1 border rounded text-xs font-semibold focus:outline-none focus:ring-1 bg-white ${
+                                              hasMismatch
+                                                ? 'border-amber-400 bg-amber-50/50 text-amber-900 focus:ring-amber-500 ring-1 ring-amber-300'
+                                                : 'border-gray-300 text-gray-700 focus:ring-teal-500'
+                                            }`}
+                                          />
+                                          {hasMismatch && (
+                                            <div className="text-[9px] text-amber-700 font-bold mt-0.5 leading-tight flex items-center gap-1">
+                                              <span>⚠ Must match {oLabel} ({otherInGroup.marks}m)</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                   </td>
                                   {/* Row Actions */}
                                   <td className="py-1.5 px-3 text-center">
@@ -1539,39 +1660,23 @@ export default function SectionMasterManagement() {
               </div>
             </div>
 
-            {/* Real-time Matching Batch Warning Banner */}
-            {matchedExistingBatchId && (
-              <div className="px-6 py-2.5 bg-amber-50 border-t border-amber-200 flex items-center justify-between gap-3 text-amber-900 animate-in fade-in duration-200 shrink-0">
-                <div className="flex items-center gap-2 min-w-0">
-                  <AlertCircle size={16} className="text-amber-600 shrink-0" />
-                  <span className="text-xs font-bold truncate">
-                    Same section configuration batch already exists (<strong className="text-amber-950 font-black">Batch #{matchedExistingBatchId}</strong>).
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const targetId = matchedExistingBatchId;
-                    setShowCreateBatchModal(false);
-                    setNewBatchSections([]);
-                    setModalBatchId(0);
-                    setPreviewBatchId(targetId);
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-black shrink-0 transition-colors cursor-pointer shadow-2xs"
-                >
-                  <Eye size={13} />
-                  <span>Preview Batch #{matchedExistingBatchId}</span>
-                </button>
-              </div>
-            )}
+
 
             {/* Modal Footer */}
             <div className="px-6 py-4 border-t border-gray-150 flex items-center justify-between shrink-0 bg-white">
               <p className="text-xs text-gray-600 font-semibold">
                 <span className="font-bold text-gray-900">{newBatchSections.length}</span> section{newBatchSections.length !== 1 ? 's' : ''} •{' '}
                 <span className="font-bold text-teal-800">
-                  {newBatchSections.reduce((s, sec) => s + (sec.questions?.length || 0), 0)}
-                </span> total questions •{' '}
+                  {(() => {
+                    const distinctTotal = new Set(
+                      newBatchSections.flatMap(sec => (sec.questions || []).map(q => String(q.questionNo || '').trim())).filter(Boolean)
+                    ).size;
+                    const totalParts = newBatchSections.reduce((s, sec) => s + (sec.questions?.length || 0), 0);
+                    return totalParts > distinctTotal
+                      ? `${distinctTotal} total questions (${totalParts} parts)`
+                      : `${distinctTotal} total questions`;
+                  })()}
+                </span> •{' '}
                 <span className="font-bold text-teal-800">
                   {newBatchSections.reduce((s, sec) => s + (parseFloat(sec.totalMarks) || 0), 0)}
                 </span> total marks
@@ -1679,6 +1784,7 @@ export default function SectionMasterManagement() {
                           <thead>
                             <tr className="bg-gray-50 border-b border-gray-200 text-xs">
                               <th className="py-2.5 px-3.5 font-black text-gray-600 uppercase tracking-wider">Q#</th>
+                              <th className="py-2.5 px-3.5 font-black text-gray-600 uppercase tracking-wider">Part</th>
                               <th className="py-2.5 px-3.5 font-black text-gray-600 uppercase tracking-wider">Type</th>
                               <th className="py-2.5 px-3.5 text-center font-black text-gray-600 uppercase tracking-wider">Marks</th>
                               <th className="py-2.5 px-3.5 font-black text-gray-600 uppercase tracking-wider">Optional</th>
@@ -1691,7 +1797,10 @@ export default function SectionMasterManagement() {
                               return (
                                 <tr key={qIdx} className="hover:bg-teal-50/30 transition-colors duration-150 text-xs">
                                   <td className="py-2.5 px-3.5 font-bold text-gray-900">
-                                    Q{q.questionNo}
+                                    Q{q.questionNo}{q.part ? (q.part.startsWith('(') ? q.part : ` (${q.part})`) : ''}
+                                  </td>
+                                  <td className="py-2.5 px-3.5 text-xs text-gray-700 font-semibold">
+                                    {q.part ? <span className="px-2 py-0.5 rounded bg-teal-50 text-teal-800 font-bold border border-teal-200/60">{q.part}</span> : '–'}
                                   </td>
                                   <td className="py-2.5 px-3.5">
                                     <span className="px-2.5 py-1 rounded bg-gray-100 text-gray-800 font-semibold text-xs">

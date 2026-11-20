@@ -5,6 +5,7 @@ using API.Data;
 using API.Models;
 using API.Models.DTOs;
 using API.Attributes;
+using API.Services;
 
 namespace API.Controllers
 {
@@ -14,6 +15,7 @@ namespace API.Controllers
     public class SectionController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IDailyAllocationService? _dailyAllocationService;
 
         private async Task<(int typeId, string typeName)> ResolveQuestionTypeAsync(int? dtoTypeId, string? dtoTypeName)
         {
@@ -50,9 +52,10 @@ namespace API.Controllers
             return (defaultQt.QuestionTypeId, defaultQt.QuestionTypeName);
         }
 
-        public SectionController(ApplicationDbContext context)
+        public SectionController(ApplicationDbContext context, IDailyAllocationService? dailyAllocationService = null)
         {
             _context = context;
+            _dailyAllocationService = dailyAllocationService;
         }
 
         [HttpGet("Masters")]
@@ -269,7 +272,8 @@ namespace API.Controllers
                                 type = !string.IsNullOrWhiteSpace(typeName) ? typeName : "MCQ",
                                 isOptional = isOptional,
                                 optionalGroupCode = groupCode,
-                                marks = questionMarks
+                                marks = questionMarks,
+                                part = q.Part
                             };
                         }).ToList();
 
@@ -369,6 +373,7 @@ namespace API.Controllers
                             Marks = Math.Round(q.Marks, 2, MidpointRounding.AwayFromZero),
                             QuestionTypeId = resTypeId,
                             Group = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                            Part = !string.IsNullOrWhiteSpace(q.Part) ? q.Part.Trim() : null,
                             Status = true,
                             CreatedAt = DateTime.UtcNow
                         });
@@ -427,6 +432,34 @@ namespace API.Controllers
                 if (duplicateInList != null)
                 {
                     return BadRequest(new { success = false, message = $"Duplicate section name '{duplicateInList.Key}' found in the submitted batch" });
+                }
+
+                // Validate that questions sharing the same Optional Group have identical marks
+                foreach (var s in dto.Sections)
+                {
+                    if (s.Questions != null && s.Questions.Any())
+                    {
+                        var grouped = s.Questions
+                            .Where(q => !string.IsNullOrWhiteSpace(q.OptionalGroupCode))
+                            .GroupBy(q => q.OptionalGroupCode.Trim().ToUpper());
+
+                        foreach (var grp in grouped)
+                        {
+                            var distinctMarks = grp.Select(q => Math.Round(q.Marks, 2, MidpointRounding.AwayFromZero)).Distinct().ToList();
+                            if (distinctMarks.Count > 1)
+                            {
+                                var qList = grp.ToList();
+                                var first = qList[0];
+                                var second = qList.FirstOrDefault(x => Math.Abs(x.Marks - first.Marks) > 0.001m);
+                                var q1Label = !string.IsNullOrWhiteSpace(first.Part) ? $"Q{first.QuestionNo} ({first.Part})" : $"Q{first.QuestionNo}";
+                                var q2Label = second != null ? (!string.IsNullOrWhiteSpace(second.Part) ? $"Q{second.QuestionNo} ({second.Part})" : $"Q{second.QuestionNo}") : "another question";
+                                return BadRequest(new { 
+                                    success = false, 
+                                    message = $"Questions in Optional Group '{grp.Key}' in section '{s.Name}' must have the same marks. {q1Label} has {first.Marks}m, but {q2Label} has {second?.Marks}m." 
+                                });
+                            }
+                        }
+                    }
                 }
 
                 // Check if an identical section batch with identical question masters already exists
@@ -578,6 +611,7 @@ namespace API.Controllers
                                 Marks = Math.Round(q.Marks, 2, MidpointRounding.AwayFromZero),
                                 QuestionTypeId = resTypeId,
                                 Group = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                                Part = !string.IsNullOrWhiteSpace(q.Part) ? q.Part.Trim() : null,
                                 Status = true,
                                 CreatedAt = DateTime.UtcNow
                             });
@@ -694,6 +728,7 @@ namespace API.Controllers
                             targetQm.Marks = Math.Round(qDto.Marks, 2, MidpointRounding.AwayFromZero);
                             targetQm.QuestionTypeId = resolvedTypeId;
                             targetQm.Group = !string.IsNullOrWhiteSpace(qDto.OptionalGroupCode) ? qDto.OptionalGroupCode.Trim() : null;
+                            targetQm.Part = !string.IsNullOrWhiteSpace(qDto.Part) ? qDto.Part.Trim() : null;
                             _context.QuestionMasters.Update(targetQm);
                         }
                         else
@@ -706,6 +741,7 @@ namespace API.Controllers
                                 Marks = Math.Round(qDto.Marks, 2, MidpointRounding.AwayFromZero),
                                 QuestionTypeId = resolvedTypeId,
                                 Group = !string.IsNullOrWhiteSpace(qDto.OptionalGroupCode) ? qDto.OptionalGroupCode.Trim() : null,
+                                Part = !string.IsNullOrWhiteSpace(qDto.Part) ? qDto.Part.Trim() : null,
                                 Status = true,
                                 CreatedAt = DateTime.UtcNow
                             };
@@ -757,6 +793,34 @@ namespace API.Controllers
 
                 if (duplicateInList != null)
                     return BadRequest(new { success = false, message = $"Duplicate section name '{duplicateInList.Key}' found in the submitted batch" });
+
+                // Validate that questions sharing the same Optional Group have identical marks
+                foreach (var s in dto.Sections)
+                {
+                    if (s.Questions != null && s.Questions.Any())
+                    {
+                        var grouped = s.Questions
+                            .Where(q => !string.IsNullOrWhiteSpace(q.OptionalGroupCode))
+                            .GroupBy(q => q.OptionalGroupCode.Trim().ToUpper());
+
+                        foreach (var grp in grouped)
+                        {
+                            var distinctMarks = grp.Select(q => Math.Round(q.Marks, 2, MidpointRounding.AwayFromZero)).Distinct().ToList();
+                            if (distinctMarks.Count > 1)
+                            {
+                                var qList = grp.ToList();
+                                var first = qList[0];
+                                var second = qList.FirstOrDefault(x => Math.Abs(x.Marks - first.Marks) > 0.001m);
+                                var q1Label = !string.IsNullOrWhiteSpace(first.Part) ? $"Q{first.QuestionNo} ({first.Part})" : $"Q{first.QuestionNo}";
+                                var q2Label = second != null ? (!string.IsNullOrWhiteSpace(second.Part) ? $"Q{second.QuestionNo} ({second.Part})" : $"Q{second.QuestionNo}") : "another question";
+                                return BadRequest(new { 
+                                    success = false, 
+                                    message = $"Questions in Optional Group '{grp.Key}' in section '{s.Name}' must have the same marks. {q1Label} has {first.Marks}m, but {q2Label} has {second?.Marks}m." 
+                                });
+                            }
+                        }
+                    }
+                }
 
                 var existingMasters = await _context.SectionMasters
                     .Where(sm => sm.BatchId == targetBatchId)
@@ -877,6 +941,7 @@ namespace API.Controllers
                                 targetQm.Marks = Math.Round(qDto.Marks, 2, MidpointRounding.AwayFromZero);
                                 targetQm.QuestionTypeId = resolvedTypeId;
                                 targetQm.Group = !string.IsNullOrWhiteSpace(qDto.OptionalGroupCode) ? qDto.OptionalGroupCode.Trim() : null;
+                                targetQm.Part = !string.IsNullOrWhiteSpace(qDto.Part) ? qDto.Part.Trim() : null;
                                 _context.QuestionMasters.Update(targetQm);
                             }
                             else
@@ -889,6 +954,7 @@ namespace API.Controllers
                                     Marks = Math.Round(qDto.Marks, 2, MidpointRounding.AwayFromZero),
                                     QuestionTypeId = resolvedTypeId,
                                     Group = !string.IsNullOrWhiteSpace(qDto.OptionalGroupCode) ? qDto.OptionalGroupCode.Trim() : null,
+                                    Part = !string.IsNullOrWhiteSpace(qDto.Part) ? qDto.Part.Trim() : null,
                                     Status = true,
                                     CreatedAt = DateTime.UtcNow
                                 };
@@ -1042,14 +1108,44 @@ namespace API.Controllers
                     return BadRequest(new { success = false, message = "Paper not found" });
 
                 // Validate start and end question
-                // Calculate total questions from range or list
-                int calculatedTotalQuestions = sectionDto.Questions != null && sectionDto.Questions.Count > 0
-                    ? sectionDto.Questions.Count
-                    : (sectionDto.EndQuestion >= sectionDto.StartQuestion ? sectionDto.EndQuestion - sectionDto.StartQuestion + 1 : 0);
+                // Calculate total questions from range or list (distinct questions, so subparts 11a, 11b count as 1 question)
+                int distinctQuestions = sectionDto.Questions != null && sectionDto.Questions.Count > 0
+                    ? sectionDto.Questions.Select(q => q.QuestionNo?.Trim()).Where(q => !string.IsNullOrEmpty(q)).Distinct(StringComparer.OrdinalIgnoreCase).Count()
+                    : 0;
+                int calculatedTotalQuestions = distinctQuestions > 0
+                    ? distinctQuestions
+                    : (sectionDto.Questions != null && sectionDto.Questions.Count > 0
+                        ? sectionDto.Questions.Count
+                        : (sectionDto.EndQuestion >= sectionDto.StartQuestion ? sectionDto.EndQuestion - sectionDto.StartQuestion + 1 : 0));
                 
                 if (sectionDto.TotalQuestions <= 0)
                 {
                     sectionDto.TotalQuestions = calculatedTotalQuestions;
+                }
+
+                // Validate questions in the same Optional Group have identical marks
+                if (sectionDto.Questions != null && sectionDto.Questions.Any())
+                {
+                    var grouped = sectionDto.Questions
+                        .Where(q => !string.IsNullOrWhiteSpace(q.OptionalGroupCode))
+                        .GroupBy(q => q.OptionalGroupCode.Trim().ToUpper());
+
+                    foreach (var grp in grouped)
+                    {
+                        var distinctMarks = grp.Select(q => Math.Round(q.Marks, 2, MidpointRounding.AwayFromZero)).Distinct().ToList();
+                        if (distinctMarks.Count > 1)
+                        {
+                            var qList = grp.ToList();
+                            var first = qList[0];
+                            var second = qList.FirstOrDefault(x => Math.Abs(x.Marks - first.Marks) > 0.001m);
+                            var q1Label = !string.IsNullOrWhiteSpace(first.Part) ? $"Q{first.QuestionNo} ({first.Part})" : $"Q{first.QuestionNo}";
+                            var q2Label = second != null ? (!string.IsNullOrWhiteSpace(second.Part) ? $"Q{second.QuestionNo} ({second.Part})" : $"Q{second.QuestionNo}") : "another question";
+                            return BadRequest(new { 
+                                success = false, 
+                                message = $"Questions in Optional Group '{grp.Key}' in section '{sectionDto.Name}' must have the same marks. {q1Label} has {first.Marks}m, but {q2Label} has {second?.Marks}m." 
+                            });
+                        }
+                    }
                 }
 
                 // 1. Resolve BatchId for this paper:
@@ -1083,19 +1179,19 @@ namespace API.Controllers
 
                 if (finalBatchId <= 0) finalBatchId = 1;
 
-                // Link ProjectPapers if any
-                var linkedPps = await _context.ProjectPapers.Where(pp => pp.PaperId == sectionDto.PaperId).ToListAsync();
-                foreach (var pp in linkedPps)
-                {
-                    pp.BatchId = finalBatchId;
-                    pp.IsSectionConfigured = true;
-                    pp.UpdatedAt = DateTime.UtcNow;
-                }
+                // Link ProjectPapers and update Paper
+                await _context.ProjectPapers
+                    .Where(pp => pp.PaperId == sectionDto.PaperId)
+                    .ExecuteUpdateAsync(setter => setter
+                        .SetProperty(p => p.BatchId, finalBatchId)
+                        .SetProperty(p => p.IsSectionConfigured, true)
+                        .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
 
-                // Also update the Paper's BatchId in Papers table
-                paper.BatchId = finalBatchId;
-                paper.UpdatedAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync();
+                await _context.Papers
+                    .Where(p => p.PaperId == sectionDto.PaperId)
+                    .ExecuteUpdateAsync(setter => setter
+                        .SetProperty(p => p.BatchId, finalBatchId)
+                        .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
 
                 // 2. Handle SectionMaster for this batch and section name
                 var masterName = sectionDto.Name.Trim();
@@ -1165,6 +1261,7 @@ namespace API.Controllers
                             Type = qTypeName,
                             IsOptional = questionDto.IsOptional,
                             OptionalGroupCode = questionDto.OptionalGroupCode,
+                            Part = questionDto.Part,
                             CreatedAt = DateTime.UtcNow
                         };
                         questions.Add(question);
@@ -1210,6 +1307,7 @@ namespace API.Controllers
                     Marks          = q.Marks,
                     QuestionTypeId = q.TypeId ?? syncDefTypeId,
                     Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                    Part           = !string.IsNullOrWhiteSpace(q.Part) ? q.Part.Trim() : null,
                     Status         = true,
                     CreatedAt      = DateTime.UtcNow
                 }).ToList();
@@ -1235,11 +1333,41 @@ namespace API.Controllers
                 if (section == null)
                     return NotFound(new { success = false, message = "Section not found" });
 
+                // Validate questions in the same Optional Group have identical marks
+                if (sectionDto.Questions != null && sectionDto.Questions.Any())
+                {
+                    var grouped = sectionDto.Questions
+                        .Where(q => !string.IsNullOrWhiteSpace(q.OptionalGroupCode))
+                        .GroupBy(q => q.OptionalGroupCode.Trim().ToUpper());
+
+                    foreach (var grp in grouped)
+                    {
+                        var distinctMarks = grp.Select(q => Math.Round(q.Marks, 2, MidpointRounding.AwayFromZero)).Distinct().ToList();
+                        if (distinctMarks.Count > 1)
+                        {
+                            var qList = grp.ToList();
+                            var first = qList[0];
+                            var second = qList.FirstOrDefault(x => Math.Abs(x.Marks - first.Marks) > 0.001m);
+                            var q1Label = !string.IsNullOrWhiteSpace(first.Part) ? $"Q{first.QuestionNo} ({first.Part})" : $"Q{first.QuestionNo}";
+                            var q2Label = second != null ? (!string.IsNullOrWhiteSpace(second.Part) ? $"Q{second.QuestionNo} ({second.Part})" : $"Q{second.QuestionNo}") : "another question";
+                            return BadRequest(new { 
+                                success = false, 
+                                message = $"Questions in Optional Group '{grp.Key}' in section '{sectionDto.Name}' must have the same marks. {q1Label} has {first.Marks}m, but {q2Label} has {second?.Marks}m." 
+                            });
+                        }
+                    }
+                }
+
                 if (sectionDto.BatchId > 0) section.BatchId = sectionDto.BatchId;
                 if (section.BatchId <= 0) section.BatchId = 1;
                 section.Name = sectionDto.Name.Trim();
                 section.Description = sectionDto.Description;
-                section.TotalQuestions = sectionDto.TotalQuestions;
+                int distinctUpdateQ = sectionDto.Questions != null && sectionDto.Questions.Count > 0
+                    ? sectionDto.Questions.Select(q => q.QuestionNo?.Trim()).Where(q => !string.IsNullOrEmpty(q)).Distinct(StringComparer.OrdinalIgnoreCase).Count()
+                    : 0;
+                section.TotalQuestions = sectionDto.TotalQuestions > 0 
+                    ? sectionDto.TotalQuestions 
+                    : (distinctUpdateQ > 0 ? distinctUpdateQ : section.TotalQuestions);
                 section.TotalMarks = Math.Round(sectionDto.TotalMarks, 2, MidpointRounding.AwayFromZero);
                 section.StartQuestion = sectionDto.StartQuestion;
                 section.EndQuestion = sectionDto.EndQuestion;
@@ -1251,21 +1379,18 @@ namespace API.Controllers
                 // Also ensure Paper and ProjectPapers reflect this section's BatchId
                 if (section.PaperId > 0 && section.BatchId > 0)
                 {
-                    var paper = await _context.Papers.FindAsync(section.PaperId);
-                    if (paper != null)
-                    {
-                        paper.BatchId = section.BatchId;
-                        paper.UpdatedAt = DateTime.UtcNow;
-                    }
+                    await _context.Papers
+                        .Where(p => p.PaperId == section.PaperId)
+                        .ExecuteUpdateAsync(setter => setter
+                            .SetProperty(p => p.BatchId, section.BatchId)
+                            .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
 
-                    var linkedPps = await _context.ProjectPapers.Where(pp => pp.PaperId == section.PaperId).ToListAsync();
-                    foreach (var pp in linkedPps)
-                    {
-                        pp.BatchId = section.BatchId;
-                        pp.IsSectionConfigured = true;
-                        pp.UpdatedAt = DateTime.UtcNow;
-                    }
-                    await _context.SaveChangesAsync();
+                    await _context.ProjectPapers
+                        .Where(pp => pp.PaperId == section.PaperId)
+                        .ExecuteUpdateAsync(setter => setter
+                            .SetProperty(p => p.BatchId, section.BatchId)
+                            .SetProperty(p => p.IsSectionConfigured, true)
+                            .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
                 }
 
                 // Handle SectionMaster updates
@@ -1323,6 +1448,7 @@ namespace API.Controllers
                             Marks          = Math.Round(q.Marks, 2, MidpointRounding.AwayFromZero),
                             QuestionTypeId = resolvedQTypeId,
                             Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                            Part           = !string.IsNullOrWhiteSpace(q.Part) ? q.Part.Trim() : null,
                             Status         = true,
                             CreatedAt      = DateTime.UtcNow
                         });
@@ -1455,6 +1581,7 @@ namespace API.Controllers
                                 Type = questionDto.Type ?? "MCQ",
                                 IsOptional = questionDto.IsOptional,
                                 OptionalGroupCode = questionDto.OptionalGroupCode,
+                                Part = questionDto.Part,
                                 CreatedAt = DateTime.UtcNow
                             });
                         }
@@ -1485,6 +1612,7 @@ namespace API.Controllers
                         Marks          = q.Marks,
                         QuestionTypeId = q.TypeId ?? bulkDefTypeId,
                         Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                        Part           = !string.IsNullOrWhiteSpace(q.Part) ? q.Part.Trim() : null,
                         Status         = true,
                         CreatedAt      = DateTime.UtcNow
                     }).ToList();
@@ -1583,6 +1711,7 @@ namespace API.Controllers
                             Type = q.Type,
                             IsOptional = q.IsOptional,
                             OptionalGroupCode = q.OptionalGroupCode,
+                            Part = q.Part,
                             CreatedAt = DateTime.UtcNow
                         }).ToList();
 
@@ -1595,6 +1724,7 @@ namespace API.Controllers
                             Marks          = q.Marks,
                             QuestionTypeId = q.TypeId ?? importDefTypeId,
                             Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
+                            Part           = !string.IsNullOrWhiteSpace(q.Part) ? q.Part.Trim() : null,
                             Status         = true,
                             CreatedAt      = DateTime.UtcNow
                         }).ToList();
@@ -1602,28 +1732,30 @@ namespace API.Controllers
                         await _context.SaveChangesAsync();
                     }
 
-                    var targetPaper = await _context.Papers.FindAsync(targetPaperId);
-                    if (targetPaper != null && sourceSections.Any())
+                    var firstSecBatch = sourceSections.FirstOrDefault(s => s.BatchId > 0)?.BatchId;
+                    if (firstSecBatch.HasValue && firstSecBatch.Value > 0)
                     {
-                        var firstSecBatch = sourceSections.FirstOrDefault(s => s.BatchId > 0)?.BatchId;
-                        if (firstSecBatch.HasValue && firstSecBatch.Value > 0)
-                        {
-                            targetPaper.BatchId = firstSecBatch.Value;
-                            targetPaper.UpdatedAt = DateTime.UtcNow;
-                        }
+                        await _context.Papers
+                            .Where(p => p.PaperId == targetPaperId)
+                            .ExecuteUpdateAsync(setter => setter
+                                .SetProperty(p => p.BatchId, firstSecBatch.Value)
+                                .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
+
+                        await _context.ProjectPapers
+                            .Where(pp => pp.PaperId == targetPaperId)
+                            .ExecuteUpdateAsync(setter => setter
+                                .SetProperty(p => p.BatchId, firstSecBatch.Value)
+                                .SetProperty(p => p.IsSectionConfigured, true)
+                                .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
                     }
-                    var targetPps = await _context.ProjectPapers.Where(pp => pp.PaperId == targetPaperId).ToListAsync();
-                    foreach (var pp in targetPps)
+                    else
                     {
-                        var firstSecBatch = sourceSections.FirstOrDefault(s => s.BatchId > 0)?.BatchId;
-                        if (firstSecBatch.HasValue && firstSecBatch.Value > 0)
-                        {
-                            pp.BatchId = firstSecBatch.Value;
-                        }
-                        pp.IsSectionConfigured = true;
-                        pp.UpdatedAt = DateTime.UtcNow;
+                        await _context.ProjectPapers
+                            .Where(pp => pp.PaperId == targetPaperId)
+                            .ExecuteUpdateAsync(setter => setter
+                                .SetProperty(p => p.IsSectionConfigured, true)
+                                .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
                     }
-                    await _context.SaveChangesAsync();
                     
                     importedCount++;
                 }
@@ -1657,7 +1789,8 @@ namespace API.Controllers
                         questionTypeId    = qm.QuestionTypeId,
                         type              = qm.Type != null ? qm.Type : "MCQ",
                         isOptional        = !string.IsNullOrEmpty(qm.Group),
-                        optionalGroupCode = qm.Group
+                        optionalGroupCode = qm.Group,
+                        part              = qm.Part
                     })
                     .ToListAsync();
 
@@ -1687,6 +1820,7 @@ namespace API.Controllers
                 var (resolvedTypeId, resolvedTypeName) = await ResolveQuestionTypeAsync(questionDto.TypeId ?? questionDto.QuestionTypeId, questionDto.Type);
                 qm.QuestionTypeId = resolvedTypeId;
                 qm.Group = !string.IsNullOrWhiteSpace(questionDto.OptionalGroupCode) ? questionDto.OptionalGroupCode.Trim() : null;
+                qm.Part = !string.IsNullOrWhiteSpace(questionDto.Part) ? questionDto.Part.Trim() : null;
 
                 _context.QuestionMasters.Update(qm);
                 await _context.SaveChangesAsync();
@@ -1779,78 +1913,116 @@ namespace API.Controllers
                         _context.Sections.Add(newSection);
                         await _context.SaveChangesAsync();
 
-                        // Create questions
-                        decimal marksPerQ = totalQ > 0 ? Math.Round((decimal)master.TotalMarks / totalQ, 2, MidpointRounding.AwayFromZero) : 1;
-                        var questions = new List<Question>();
-                        for (int qNo = startQ; qNo <= endQ; qNo++)
+                        // Ensure QuestionMasters exist for this batch & section
+                        var existingMasterQuestions = await _context.QuestionMasters
+                            .Where(qm => qm.BatchId == master.BatchId && qm.Section == master.Name)
+                            .OrderBy(qm => qm.Id)
+                            .ToListAsync();
+
+                        if (!existingMasterQuestions.Any())
                         {
-                            var (defTypeId, defTypeName) = await ResolveQuestionTypeAsync(null, "MCQ");
-                            questions.Add(new Question
+                            decimal marksPerQ = totalQ > 0 ? Math.Round((decimal)master.TotalMarks / totalQ, 2, MidpointRounding.AwayFromZero) : 1;
+                            var (importMsDefTypeId, _) = await ResolveQuestionTypeAsync(null, "MCQ");
+                            for (int qNo = startQ; qNo <= endQ; qNo++)
                             {
-                                SectionId = newSection.Id,
-                                QuestionNo = qNo.ToString(),
-                                Marks = marksPerQ,
-                                TypeId = defTypeId,
-                                Type = defTypeName,
-                                IsOptional = false,
-                                CreatedAt = DateTime.UtcNow
-                            });
+                                var newQm = new QuestionMaster
+                                {
+                                    BatchId = master.BatchId,
+                                    Section = master.Name,
+                                    Question = qNo.ToString(),
+                                    Marks = marksPerQ,
+                                    QuestionTypeId = importMsDefTypeId,
+                                    Type = "MCQ",
+                                    Group = null,
+                                    Part = null,
+                                    Status = true,
+                                    CreatedAt = DateTime.UtcNow
+                                };
+                                _context.QuestionMasters.Add(newQm);
+                            }
+                            await _context.SaveChangesAsync();
                         }
 
-                        var (importMsDefTypeId, _) = await ResolveQuestionTypeAsync(null, "MCQ");
-                        var qmImportMs = questions.Select(q => new QuestionMaster
-                        {
-                            BatchId        = newSection.BatchId,
-                            Section        = newSection.Name,
-                            Question       = q.QuestionNo,
-                            Marks          = q.Marks,
-                            QuestionTypeId = q.TypeId ?? importMsDefTypeId,
-                            Group          = !string.IsNullOrWhiteSpace(q.OptionalGroupCode) ? q.OptionalGroupCode.Trim() : null,
-                            Status         = true,
-                            CreatedAt      = DateTime.UtcNow
-                        }).ToList();
-                        _context.QuestionMasters.AddRange(qmImportMs);
-                        await _context.SaveChangesAsync();
                         importedCount++;
                     }
 
                     int masterBatchId = masters.FirstOrDefault()?.BatchId ?? 1;
-                    if (paper != null)
+
+                    // Update Paper BatchId
+                    await _context.Papers
+                        .Where(p => p.PaperId == paperId)
+                        .ExecuteUpdateAsync(setter => setter
+                            .SetProperty(p => p.BatchId, masterBatchId)
+                            .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
+
+                    // Update ProjectPapers BatchId and IsSectionConfigured
+                    var ppQuery = _context.ProjectPapers.Where(pp => pp.PaperId == paperId);
+                    if (request.ProjectId.HasValue && request.ProjectId.Value > 0)
                     {
-                        paper.BatchId = masterBatchId;
-                        paper.UpdatedAt = DateTime.UtcNow;
+                        ppQuery = ppQuery.Where(pp => pp.ProjectId == request.ProjectId.Value);
                     }
-                    var linkedPps = await _context.ProjectPapers.Where(pp => pp.PaperId == paperId).ToListAsync();
-                    foreach (var pp in linkedPps)
+
+                    int affectedPps = await ppQuery.ExecuteUpdateAsync(setter => setter
+                        .SetProperty(p => p.BatchId, masterBatchId)
+                        .SetProperty(p => p.IsSectionConfigured, true)
+                        .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
+
+                    // If ProjectId was provided and no ProjectPaper exists yet, create one
+                    if (affectedPps == 0 && request.ProjectId.HasValue && request.ProjectId.Value > 0)
                     {
-                        pp.BatchId = masterBatchId;
-                        pp.IsSectionConfigured = true;
-                        pp.UpdatedAt = DateTime.UtcNow;
+                        var newPp = new ProjectPaper
+                        {
+                            ProjectId = request.ProjectId.Value,
+                            PaperId = paperId,
+                            BatchId = masterBatchId,
+                            IsSectionConfigured = true,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+                        _context.ProjectPapers.Add(newPp);
+                        await _context.SaveChangesAsync();
                     }
-                    await _context.SaveChangesAsync();
+
+                    if (paper?.UniversityId != null)
+                    {
+                        _dailyAllocationService?.TriggerAutoAllocationBackground(paper.UniversityId);
+                    }
                 }
 
                 return Ok(new { success = true, message = $"Successfully imported {importedCount} sections" });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request." });
+                Console.WriteLine($"[ImportMasterSections ERROR] {ex}");
+                return StatusCode(500, new { success = false, message = "An unexpected error occurred while processing your request: " + ex.Message });
             }
         }
 
         [HttpGet("paper-masters/{paperId}")]
         [Authorize]
-        public async Task<IActionResult> GetPaperMasterSections(int paperId)
+        public async Task<IActionResult> GetPaperMasterSections(int paperId, [FromQuery] int? projectId = null)
         {
             try
             {
-                var batchIds = await _context.ProjectPapers
-                    .Where(pp => pp.PaperId == paperId && pp.BatchId.HasValue && pp.BatchId.Value > 0)
+                var ppQuery = _context.ProjectPapers.Where(pp => pp.PaperId == paperId);
+                if (projectId.HasValue && projectId.Value > 0)
+                {
+                    ppQuery = ppQuery.Where(pp => pp.ProjectId == projectId.Value);
+                    var targetPp = await ppQuery.FirstOrDefaultAsync();
+                    if (targetPp == null || !targetPp.IsSectionConfigured || !targetPp.BatchId.HasValue || targetPp.BatchId.Value <= 0)
+                    {
+                        return Ok(new List<SectionMaster>());
+                    }
+                }
+
+                var batchIds = await ppQuery
+                    .Where(pp => pp.BatchId.HasValue && pp.BatchId.Value > 0)
                     .Select(pp => pp.BatchId!.Value)
                     .Distinct()
                     .ToListAsync();
 
-                if (!batchIds.Any())
+                if (!batchIds.Any() && (!projectId.HasValue || projectId.Value <= 0))
                 {
                     batchIds = await _context.Sections
                         .Where(sec => sec.PaperId == paperId && sec.BatchId > 0)
@@ -1915,31 +2087,36 @@ namespace API.Controllers
                 }
 
                 int targetBatchId = masterSections.FirstOrDefault()?.BatchId ?? (request.BatchIds?.FirstOrDefault() ?? 0);
-                var projectPapers = await _context.ProjectPapers
-                    .Where(pp => pp.PaperId == request.PaperId)
-                    .ToListAsync();
-
-                foreach (var pp in projectPapers)
+                if (targetBatchId > 0)
                 {
-                    if (targetBatchId > 0)
-                    {
-                        pp.BatchId = targetBatchId;
-                        pp.IsSectionConfigured = true;
-                    }
-                    else
-                    {
-                        pp.BatchId = null;
-                        pp.IsSectionConfigured = false;
-                    }
-                    pp.UpdatedAt = DateTime.UtcNow;
-                }
+                    await _context.Papers
+                        .Where(p => p.PaperId == request.PaperId)
+                        .ExecuteUpdateAsync(setter => setter
+                            .SetProperty(p => p.BatchId, targetBatchId)
+                            .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
 
-                if (paper != null)
-                {
-                    paper.BatchId = targetBatchId > 0 ? targetBatchId : (int?)null;
-                    paper.UpdatedAt = DateTime.UtcNow;
+                    await _context.ProjectPapers
+                        .Where(pp => pp.PaperId == request.PaperId)
+                        .ExecuteUpdateAsync(setter => setter
+                            .SetProperty(p => p.BatchId, targetBatchId)
+                            .SetProperty(p => p.IsSectionConfigured, true)
+                            .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
                 }
-                await _context.SaveChangesAsync();
+                else
+                {
+                    await _context.Papers
+                        .Where(p => p.PaperId == request.PaperId)
+                        .ExecuteUpdateAsync(setter => setter
+                            .SetProperty(p => p.BatchId, (int?)null)
+                            .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
+
+                    await _context.ProjectPapers
+                        .Where(pp => pp.PaperId == request.PaperId)
+                        .ExecuteUpdateAsync(setter => setter
+                            .SetProperty(p => p.BatchId, (int?)null)
+                            .SetProperty(p => p.IsSectionConfigured, false)
+                            .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
+                }
                 return Ok(new { success = true, message = "Paper master section mapping updated successfully" });
             }
             catch (Exception ex)
@@ -1971,6 +2148,7 @@ namespace API.Controllers
     public class ImportMasterSectionsRequest
     {
         public int PaperId { get; set; }
+        public int? ProjectId { get; set; }
         public List<int>? TargetPaperIds { get; set; }
         public List<int> MasterSectionIds { get; set; } = new List<int>();
         public bool OverwriteExisting { get; set; } = false;
@@ -2007,5 +2185,6 @@ namespace API.Controllers
         public decimal Marks { get; set; }
         public bool IsOptional { get; set; }
         public string? OptionalGroupCode { get; set; }
+        public string? Part { get; set; }
     }
 }

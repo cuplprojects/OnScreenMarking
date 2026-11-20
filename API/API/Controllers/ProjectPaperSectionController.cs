@@ -195,6 +195,7 @@ namespace API.Controllers
                     {
                         questionId        = qm.Id,
                         questionNo        = qm.Question,
+                        part              = qm.Part,
                         marks             = qm.Marks,
                         typeId            = qm.QuestionTypeId,
                         questionTypeId    = qm.QuestionTypeId,
@@ -310,6 +311,8 @@ namespace API.Controllers
                                 BatchId        = resolvedBatchId,
                                 Section        = es.Name,
                                 Question       = eqm.Question,
+                                Part           = eqm.Part,
+                                Marks          = eqm.Marks,
                                 QuestionTypeId = eqm.QuestionTypeId,
                                 Type           = eqm.Type,
                                 Group          = eqm.Group,
@@ -334,10 +337,38 @@ namespace API.Controllers
                 }
 
                 // ── SectionMaster: create or update ──────────────────────────────────
+                // Validate questions in the same Optional Group have identical marks
+                if (dto.Questions != null && dto.Questions.Any())
+                {
+                    var grouped = dto.Questions
+                        .Where(q => !string.IsNullOrWhiteSpace(q.OptionalGroupCode))
+                        .GroupBy(q => q.OptionalGroupCode.Trim().ToUpper());
+
+                    foreach (var grp in grouped)
+                    {
+                        var distinctMarks = grp.Select(q => Math.Round(q.Marks, 2, MidpointRounding.AwayFromZero)).Distinct().ToList();
+                        if (distinctMarks.Count > 1)
+                        {
+                            var qList = grp.ToList();
+                            var first = qList[0];
+                            var second = qList.FirstOrDefault(x => Math.Abs(x.Marks - first.Marks) > 0.001m);
+                            var q1Label = !string.IsNullOrWhiteSpace(first.Part) ? $"Q{first.QuestionNo} ({first.Part})" : $"Q{first.QuestionNo}";
+                            var q2Label = second != null ? (!string.IsNullOrWhiteSpace(second.Part) ? $"Q{second.QuestionNo} ({second.Part})" : $"Q{second.QuestionNo}") : "another question";
+                            return BadRequest(new { 
+                                success = false, 
+                                message = $"Questions in Optional Group '{grp.Key}' in section '{dto.Name}' must have the same marks. {q1Label} has {first.Marks}m, but {q2Label} has {second?.Marks}m." 
+                            });
+                        }
+                    }
+                }
+
                 var masterName = dto.Name.Trim();
+                int distinctQ = dto.Questions != null && dto.Questions.Count > 0
+                    ? dto.Questions.Select(q => q.QuestionNo?.Trim()).Where(q => !string.IsNullOrEmpty(q)).Distinct(StringComparer.OrdinalIgnoreCase).Count()
+                    : 0;
                 int totalQ = dto.TotalQuestions > 0
                     ? dto.TotalQuestions
-                    : (dto.Questions?.Count ?? (dto.EndQuestion >= dto.StartQuestion ? dto.EndQuestion - dto.StartQuestion + 1 : 1));
+                    : (distinctQ > 0 ? distinctQ : (dto.Questions?.Count ?? (dto.EndQuestion >= dto.StartQuestion ? dto.EndQuestion - dto.StartQuestion + 1 : 1)));
 
                 var master = await _context.SectionMasters
                     .FirstOrDefaultAsync(sm => sm.BatchId == resolvedBatchId && sm.Name.ToLower() == masterName.ToLower());
@@ -449,6 +480,7 @@ namespace API.Controllers
                             BatchId        = resolvedBatchId,
                             Section        = masterName,
                             Question       = q.QuestionNo,
+                            Part           = !string.IsNullOrWhiteSpace(q.Part) ? q.Part.Trim() : null,
                             QuestionTypeId = qTypeId ?? defType?.QuestionTypeId ?? 1,
                             Type           = !string.IsNullOrWhiteSpace(qTypeName) ? qTypeName : "MCQ",
                             Marks          = q.Marks,
@@ -516,6 +548,31 @@ namespace API.Controllers
                 if (master == null)
                     return NotFound(new { success = false, message = "Section not found" });
 
+                // Validate questions in the same Optional Group have identical marks
+                if (dto.Questions != null && dto.Questions.Any())
+                {
+                    var grouped = dto.Questions
+                        .Where(q => !string.IsNullOrWhiteSpace(q.OptionalGroupCode))
+                        .GroupBy(q => q.OptionalGroupCode.Trim().ToUpper());
+
+                    foreach (var grp in grouped)
+                    {
+                        var distinctMarks = grp.Select(q => Math.Round(q.Marks, 2, MidpointRounding.AwayFromZero)).Distinct().ToList();
+                        if (distinctMarks.Count > 1)
+                        {
+                            var qList = grp.ToList();
+                            var first = qList[0];
+                            var second = qList.FirstOrDefault(x => Math.Abs(x.Marks - first.Marks) > 0.001m);
+                            var q1Label = !string.IsNullOrWhiteSpace(first.Part) ? $"Q{first.QuestionNo} ({first.Part})" : $"Q{first.QuestionNo}";
+                            var q2Label = second != null ? (!string.IsNullOrWhiteSpace(second.Part) ? $"Q{second.QuestionNo} ({second.Part})" : $"Q{second.QuestionNo}") : "another question";
+                            return BadRequest(new { 
+                                success = false, 
+                                message = $"Questions in Optional Group '{grp.Key}' in section '{dto.Name}' must have the same marks. {q1Label} has {first.Marks}m, but {q2Label} has {second?.Marks}m." 
+                            });
+                        }
+                    }
+                }
+
                 var oldName    = master.Name;
                 var oldBatchId = master.BatchId;
 
@@ -579,6 +636,8 @@ namespace API.Controllers
                                 BatchId        = newBatchId,
                                 Section        = om.Name,
                                 Question       = qm.Question,
+                                Part           = qm.Part,
+                                Marks          = qm.Marks,
                                 QuestionTypeId = qm.QuestionTypeId,
                                 Type           = qm.Type,
                                 Group          = qm.Group,
@@ -589,7 +648,10 @@ namespace API.Controllers
                     }
 
                     // 2. Add the EDITED section under newBatchId
-                    int totalQ = dto.TotalQuestions > 0 ? dto.TotalQuestions : (dto.Questions?.Count ?? (dto.EndQuestion >= dto.StartQuestion ? dto.EndQuestion - dto.StartQuestion + 1 : 1));
+                    int distinctEditQ = dto.Questions != null && dto.Questions.Count > 0
+                        ? dto.Questions.Select(q => q.QuestionNo?.Trim()).Where(q => !string.IsNullOrEmpty(q)).Distinct(StringComparer.OrdinalIgnoreCase).Count()
+                        : 0;
+                    int totalQ = dto.TotalQuestions > 0 ? dto.TotalQuestions : (distinctEditQ > 0 ? distinctEditQ : (dto.Questions?.Count ?? (dto.EndQuestion >= dto.StartQuestion ? dto.EndQuestion - dto.StartQuestion + 1 : 1)));
                     var newMaster = new SectionMaster
                     {
                         BatchId               = newBatchId,
@@ -639,6 +701,7 @@ namespace API.Controllers
                                 BatchId        = newBatchId,
                                 Section        = newMaster.Name,
                                 Question       = q.QuestionNo,
+                                Part           = !string.IsNullOrWhiteSpace(q.Part) ? q.Part.Trim() : null,
                                 QuestionTypeId = qTypeId ?? defTypeUpdate?.QuestionTypeId ?? 1,
                                 Type           = !string.IsNullOrWhiteSpace(qTypeName) ? qTypeName : "MCQ",
                                 Marks          = q.Marks,
@@ -749,6 +812,7 @@ namespace API.Controllers
                                 BatchId        = master.BatchId,
                                 Section        = master.Name,
                                 Question       = q.QuestionNo,
+                                Part           = !string.IsNullOrWhiteSpace(q.Part) ? q.Part.Trim() : null,
                                 QuestionTypeId = qTypeId ?? defTypeDirect?.QuestionTypeId ?? 1,
                                 Type           = !string.IsNullOrWhiteSpace(qTypeName) ? qTypeName : "MCQ",
                                 Marks          = q.Marks,
@@ -898,6 +962,7 @@ namespace API.Controllers
                                     BatchId        = newBatchId,
                                     Section        = rem.Name,
                                     Question       = qm.Question,
+                                    Part           = qm.Part,
                                     QuestionTypeId = qm.QuestionTypeId,
                                     Marks          = qm.Marks,
                                     Type           = qm.Type,
@@ -1234,6 +1299,7 @@ namespace API.Controllers
                             {
                                 questionId        = qm.Id,
                                 questionNo        = qm.Question,
+                                part              = qm.Part,
                                 typeId            = typeId,
                                 questionTypeId    = typeId,
                                 type              = !string.IsNullOrWhiteSpace(typeName) ? typeName : "MCQ",

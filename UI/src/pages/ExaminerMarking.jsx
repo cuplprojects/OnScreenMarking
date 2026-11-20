@@ -935,7 +935,9 @@ const ExaminerMarking = () => {
       // Sum marks from annotations for each question
       newAnnotations.forEach(anno => {
         if (anno.questionId && anno.marks !== undefined) {
-          const q = findQuestionByNo(anno.questionId);
+          const q = findQuestionById(anno.questionMasterId) || 
+                    findQuestionByLabel(anno.questionId) || 
+                    findQuestionByNo(anno.questionNo || anno.questionId, anno.part);
           if (q && updated[q.questionId]) {
             const section = sections.find(s => s.id === q.sectionId);
             
@@ -948,42 +950,55 @@ const ExaminerMarking = () => {
               // Enforce optional group mutual exclusivity restriction
               if (anno.marks > 0 && q.optionalGroupCode && q.optionalGroupCode.trim()) {
                 const grp = q.optionalGroupCode.trim().toUpperCase();
-                const conflicting = (section?.questions || []).find(sq => 
+                const grpQuestions = (section?.questions || []).filter(sq => sq.optionalGroupCode && sq.optionalGroupCode.trim().toUpperCase() === grp);
+                const maxAllowedInGroup = (section?.maxQuestionsToAttempt > 1 && grpQuestions.length >= section.maxQuestionsToAttempt)
+                  ? section.maxQuestionsToAttempt
+                  : 1;
+
+                const attemptedInGroup = grpQuestions.filter(sq => 
                   String(sq.questionId) !== String(q.questionId) &&
-                  sq.optionalGroupCode &&
-                  sq.optionalGroupCode.trim().toUpperCase() === grp &&
                   ((Number(updated[sq.questionId]?.marksAwarded) > 0) || updated[sq.questionId]?.isAttempted) &&
                   !updated[sq.questionId]?.isSkipped
                 );
-                if (conflicting) {
-                  setError(`Cannot award marks to Question ${q.questionNo}: Question ${conflicting.questionNo} in Group '${grp}' already has marks.`);
+
+                const distinctAttemptedInGroup = new Set(attemptedInGroup.map(sq => sq.part ? `${sq.questionNo}_${sq.part}` : String(sq.questionNo)));
+
+                if (distinctAttemptedInGroup.size >= maxAllowedInGroup) {
+                  const conflicting = attemptedInGroup[0];
+                  const qLabel = q.part ? `${q.questionNo} (${q.part})` : q.questionNo;
+                  const cLabel = conflicting?.part ? `${conflicting.questionNo} (${conflicting.part})` : conflicting?.questionNo;
+                  setError(`Cannot award marks to Question ${qLabel}: Maximum attempt limit (${maxAllowedInGroup}) for Group '${grp}' already reached.`);
                   setTimeout(() => setError(''), 4000);
                   return;
                 }
               }
 
-              // Enforce maxQuestionsToAttempt restriction
+              // Enforce maxQuestionsToAttempt restriction (distinct question numbers count as 1 attempt)
               const currentMarks = updated[q.questionId];
               const isCurrentlyAttempted = currentMarks?.isAttempted || currentMarks?.marksAwarded > 0;
               const willAttempt = anno.marks > 0;
               
               if (willAttempt && !isCurrentlyAttempted && section && section.maxQuestionsToAttempt > 0) {
-                const attemptedCount = section.questions?.filter(sq => {
+                const attemptedQuestionsSet = new Set();
+                section.questions?.forEach(sq => {
                   const m = updated[sq.questionId];
-                  return m?.isAttempted || m?.marksAwarded > 0;
-                }).length || 0;
-                
-                if (attemptedCount >= section.maxQuestionsToAttempt) {
+                  if ((m?.isAttempted || m?.marksAwarded > 0) && !m?.isSkipped) {
+                    attemptedQuestionsSet.add(String(sq.questionNo));
+                  }
+                });
+
+                const isQuestionNumberAlreadyAttempted = attemptedQuestionsSet.has(String(q.questionNo));
+                if (!isQuestionNumberAlreadyAttempted && attemptedQuestionsSet.size >= section.maxQuestionsToAttempt) {
                   setError(`Cannot attempt more than ${section.maxQuestionsToAttempt} questions in ${section.name}. Capped marks at 0.`);
                   setTimeout(() => setError(''), 4000);
                   return;
                 }
               }
 
-              updated[q.questionId].marksAwarded += anno.marks;
+              updated[q.questionId].marksAwarded = anno.marks;
               updated[q.questionId].isAttempted = true;
               
-              // Cap at max marks for the question
+              // Cap at max marks for this specific question/sub-part
               if (updated[q.questionId].marksAwarded > q.marks) {
                 updated[q.questionId].marksAwarded = q.marks;
               }
@@ -1032,9 +1047,14 @@ const ExaminerMarking = () => {
     });
   };
 
-  const findQuestionByNo = (qNo) => {
+  const findQuestionByNo = (qNo, part = null) => {
     for (const section of sections) {
-      const q = section.questions?.find((q) => String(q.questionNo) === String(qNo));
+      const q = section.questions?.find((q) => {
+        if (part !== null && part !== undefined && q.part) {
+          return String(q.questionNo) === String(qNo) && q.part.toLowerCase() === String(part).toLowerCase();
+        }
+        return String(q.questionNo) === String(qNo);
+      });
       if (q) return q;
     }
     return null;
@@ -1049,53 +1069,89 @@ const ExaminerMarking = () => {
     return null;
   };
 
-  const getConflictingGroupQuestion = (targetQ) => {
-    if (!targetQ || !targetQ.optionalGroupCode || !targetQ.optionalGroupCode.trim()) return null;
-    const targetGroup = targetQ.optionalGroupCode.trim().toUpperCase();
-    
-    // Find the section this question belongs to
-    const sec = sections.find(s => s.id === targetQ.sectionId);
-    if (!sec || !sec.questions) return null;
-
-    for (const sq of sec.questions) {
-      if (String(sq.questionId) === String(targetQ.questionId)) continue;
-      if (sq.optionalGroupCode && sq.optionalGroupCode.trim().toUpperCase() === targetGroup) {
-        const sm = questionMarks[sq.questionId];
-        const isAttemptedWithMarks = ((Number(sm?.marksAwarded) > 0) || sm?.isAttempted) && !sm?.isSkipped;
-        if (isAttemptedWithMarks) {
-          return sq;
-        }
+  const findQuestionByLabel = (label) => {
+    if (!label) return null;
+    const str = String(label).trim().toLowerCase();
+    for (const section of sections) {
+      for (const q of (section.questions || [])) {
+        if (String(q.questionId).toLowerCase() === str) return q;
+        const full = q.part ? `${q.questionNo}${q.part}`.toLowerCase() : String(q.questionNo).toLowerCase();
+        if (full === str) return q;
       }
     }
     return null;
   };
 
-  const getQuestionBlockedReason = (qNo) => {
-    const q = findQuestionByNo(qNo);
+  const findQuestion = (target) => {
+    if (!target) return null;
+    if (typeof target === 'object' && target.questionNo !== undefined) return target;
+    return findQuestionById(target) || findQuestionByLabel(target) || findQuestionByNo(target);
+  };
+
+  const getConflictingGroupQuestion = (targetQ, marksState = null) => {
+    if (!targetQ || !targetQ.optionalGroupCode || !targetQ.optionalGroupCode.trim()) return null;
+    const targetGroup = targetQ.optionalGroupCode.trim().toUpperCase();
+    
+    // Find the section this question belongs to
+    const sec = sections.find(s => (s.id !== undefined && targetQ.sectionId !== undefined && String(s.id) === String(targetQ.sectionId)) || s.questions?.some(sq => String(sq.questionId) === String(targetQ.questionId)));
+    if (!sec || !sec.questions) return null;
+
+    const grpQuestions = sec.questions.filter(sq => sq.optionalGroupCode && sq.optionalGroupCode.trim().toUpperCase() === targetGroup);
+    const maxAllowedInGroup = (sec.maxQuestionsToAttempt > 1 && grpQuestions.length >= sec.maxQuestionsToAttempt)
+      ? sec.maxQuestionsToAttempt
+      : 1;
+
+    const currentMarks = marksState || questionMarks;
+
+    const attemptedInGroup = grpQuestions.filter(sq => {
+      if (String(sq.questionId) === String(targetQ.questionId)) return false;
+      const sm = currentMarks[sq.questionId];
+      return ((Number(sm?.marksAwarded) > 0) || sm?.isAttempted) && !sm?.isSkipped;
+    });
+
+    const distinctAttemptedQKeys = new Set(attemptedInGroup.map(sq => sq.part ? `${sq.questionNo}_${sq.part}` : String(sq.questionNo)));
+
+    if (distinctAttemptedQKeys.size >= maxAllowedInGroup) {
+      return attemptedInGroup[0];
+    }
+    return null;
+  };
+
+  const getQuestionBlockedReason = (target, marksState = null) => {
+    const q = findQuestion(target);
     if (!q) return null;
 
+    const currentMarks = marksState || questionMarks;
+
     // A question that already has marks or is attempted can always be edited or cleared
-    const m = questionMarks[q.questionId];
+    const m = currentMarks[q.questionId];
     const isAlreadyAttempted = ((Number(m?.marksAwarded) > 0) || m?.isAttempted) && !m?.isSkipped;
     if (isAlreadyAttempted) {
       return null;
     }
 
     // 1. Check optional group mutual exclusivity conflict
-    const conflictingQ = getConflictingGroupQuestion(q);
+    const conflictingQ = getConflictingGroupQuestion(q, currentMarks);
     if (conflictingQ) {
       const groupCode = q.optionalGroupCode.trim().toUpperCase();
-      return `Question ${q.questionNo} belongs to Optional Group '${groupCode}'. Question ${conflictingQ.questionNo} is already awarded marks in this group. Only 1 question can be attempted in Group '${groupCode}'.`;
+      const qLabel = q.part ? `${q.questionNo} (${q.part})` : q.questionNo;
+      return `Question ${qLabel} belongs to Optional Group '${groupCode}'. The maximum attempt limit for Group '${groupCode}' has already been reached.`;
     }
 
-    // 2. Check section attempt limit
-    const sec = sections.find(s => s.id === q.sectionId);
+    // 2. Check section attempt limit (sub-parts of an already attempted question are NOT blocked)
+    const sec = sections.find(s => (s.id !== undefined && q.sectionId !== undefined && String(s.id) === String(q.sectionId)) || s.questions?.some(sq => String(sq.questionId) === String(q.questionId)));
     if (sec && sec.maxQuestionsToAttempt && sec.maxQuestionsToAttempt > 0) {
-      const attemptedCount = (sec.questions || []).filter(sq => {
-        const sm = questionMarks[sq.questionId];
-        return (sm?.isAttempted || (Number(sm?.marksAwarded) > 0)) && !sm?.isSkipped;
-      }).length;
-      if (attemptedCount >= sec.maxQuestionsToAttempt) {
+      const attemptedQuestionsSet = new Set();
+      (sec.questions || []).forEach(sq => {
+        const sm = currentMarks[sq.questionId];
+        const isAtt = (sm?.isAttempted || (Number(sm?.marksAwarded) > 0)) && !sm?.isSkipped;
+        if (isAtt) {
+          attemptedQuestionsSet.add(String(sq.questionNo));
+        }
+      });
+
+      const isQuestionNumberAlreadyAttempted = attemptedQuestionsSet.has(String(q.questionNo));
+      if (!isQuestionNumberAlreadyAttempted && attemptedQuestionsSet.size >= sec.maxQuestionsToAttempt) {
         return `Section '${sec.name}' maximum attempt limit (${sec.maxQuestionsToAttempt} questions) reached.`;
       }
     }
@@ -1103,8 +1159,8 @@ const ExaminerMarking = () => {
     return null;
   };
 
-  const canAttemptQuestion = (qNo) => {
-    return !getQuestionBlockedReason(qNo);
+  const canAttemptQuestion = (target, marksState = null) => {
+    return !getQuestionBlockedReason(target, marksState);
   };
 
   const handleConfirmGroupSwitch = (targetQ, conflictingQ) => {
@@ -1124,17 +1180,19 @@ const ExaminerMarking = () => {
     });
 
     // 2. Remove conflicting question annotation from annotator canvas and storage
-    annotatorRef.current?.clearQuestionMarks?.(conflictingQ.questionNo);
+    annotatorRef.current?.clearQuestionMarks?.(conflictingQ);
 
     // 3. Select target question
     setSelectedQuestion(targetQ.questionId);
 
     // 4. Open mark allotment modal for target question
     setTimeout(() => {
-      annotatorRef.current?.openMarkModalForQuestion?.(targetQ.questionNo);
+      annotatorRef.current?.openMarkModalForQuestion?.(targetQ);
     }, 120);
 
-    message.success(`Cleared marks from Question ${conflictingQ.questionNo}. Now evaluating Question ${targetQ.questionNo}.`);
+    const cLabel = conflictingQ.part ? `${conflictingQ.questionNo}${conflictingQ.part}` : conflictingQ.questionNo;
+    const tLabel = targetQ.part ? `${targetQ.questionNo}${targetQ.part}` : targetQ.questionNo;
+    message.success(`Cleared marks from Question ${cLabel}. Now evaluating Question ${tLabel}.`);
   };
 
   const calculateTotal = (marks) => {
@@ -1190,15 +1248,24 @@ const ExaminerMarking = () => {
     // Check optional group mutual exclusivity
     if (question.optionalGroupCode && question.optionalGroupCode.trim() && numValue > 0) {
       const grp = question.optionalGroupCode.trim().toUpperCase();
-      const conflicting = section.questions?.find(sq => 
+      const grpQuestions = (section?.questions || []).filter(sq => sq.optionalGroupCode && sq.optionalGroupCode.trim().toUpperCase() === grp);
+      const maxAllowedInGroup = (section?.maxQuestionsToAttempt > 1 && grpQuestions.length >= section.maxQuestionsToAttempt)
+        ? section.maxQuestionsToAttempt
+        : 1;
+
+      const attemptedInGroup = grpQuestions.filter(sq => 
         String(sq.questionId) !== String(question.questionId) &&
-        sq.optionalGroupCode &&
-        sq.optionalGroupCode.trim().toUpperCase() === grp &&
         ((Number(questionMarks[sq.questionId]?.marksAwarded) > 0) || questionMarks[sq.questionId]?.isAttempted) &&
         !questionMarks[sq.questionId]?.isSkipped
       );
-      if (conflicting) {
-        setError(`Cannot award marks to Question ${question.questionNo}: Question ${conflicting.questionNo} in Group '${grp}' already has marks.`);
+
+      const distinctAttemptedInGroup = new Set(attemptedInGroup.map(sq => sq.part ? `${sq.questionNo}_${sq.part}` : String(sq.questionNo)));
+
+      if (distinctAttemptedInGroup.size >= maxAllowedInGroup) {
+        const conflicting = attemptedInGroup[0];
+        const qLabel = question.part ? `${question.questionNo} (${question.part})` : question.questionNo;
+        const cLabel = conflicting?.part ? `${conflicting.questionNo} (${conflicting.part})` : conflicting?.questionNo;
+        setError(`Cannot award marks to Question ${qLabel}: Maximum attempt limit (${maxAllowedInGroup}) for Group '${grp}' already reached.`);
         setTimeout(() => setError(''), 4000);
         return;
       }
@@ -1210,13 +1277,17 @@ const ExaminerMarking = () => {
     const isNewAttempt = numValue > 0 && !isCurrentlyAttempted;
 
     if (isNewAttempt && section.maxQuestionsToAttempt > 0) {
-      // Count how many questions in this section are already attempted
-      const attemptedCount = section.questions?.filter(q => {
+      // Count distinct question numbers already attempted
+      const attemptedQuestionsSet = new Set();
+      section.questions?.forEach(q => {
         const marks = questionMarks[q.questionId];
-        return marks?.isAttempted || marks?.marksAwarded > 0;
-      }).length || 0;
+        if ((marks?.isAttempted || marks?.marksAwarded > 0) && !marks?.isSkipped) {
+          attemptedQuestionsSet.add(String(q.questionNo));
+        }
+      });
 
-      if (attemptedCount >= section.maxQuestionsToAttempt) {
+      const isQuestionNumberAlreadyAttempted = attemptedQuestionsSet.has(String(question.questionNo));
+      if (!isQuestionNumberAlreadyAttempted && attemptedQuestionsSet.size >= section.maxQuestionsToAttempt) {
         setError(`Cannot mark more than ${section.maxQuestionsToAttempt} questions in ${section.name}. Capped marks at 0.`);
         setTimeout(() => setError(''), 3000);
         numValue = 0;
@@ -1281,15 +1352,59 @@ const ExaminerMarking = () => {
     });
   };
 
-  const handleNextQuestion = () => {
-    if (!selectedQuestion) return;
-    
+  const handleNextQuestion = (justMarkedAnno = null) => {
+    // Determine the question that was just marked or currently selected
+    const resolvedJustMarkedQ = justMarkedAnno 
+      ? (findQuestion(justMarkedAnno.questionMasterId) || findQuestion(justMarkedAnno.questionId) || findQuestion(selectedQuestion))
+      : findQuestion(selectedQuestion);
+    const currentQId = resolvedJustMarkedQ?.questionId || selectedQuestion;
+    if (!currentQId) return;
+
     // Find flat list of all questions to find the next one
     const allQuestions = sections.flatMap(s => s.questions || []);
-    const currentIndex = allQuestions.findIndex(q => q.questionId === selectedQuestion);
-    
-    if (currentIndex !== -1 && currentIndex < allQuestions.length - 1) {
-      setSelectedQuestion(allQuestions[currentIndex + 1].questionId);
+    const currentIndex = allQuestions.findIndex(q => q.questionId === currentQId);
+    if (currentIndex === -1) return;
+
+    // Build latest projected marks map so conflict checks see the just-awarded mark immediately
+    const effectiveMarks = { ...questionMarks };
+    if (resolvedJustMarkedQ && justMarkedAnno) {
+      effectiveMarks[resolvedJustMarkedQ.questionId] = {
+        ...(effectiveMarks[resolvedJustMarkedQ.questionId] || {}),
+        marksAwarded: justMarkedAnno.marks,
+        isAttempted: !justMarkedAnno.isSkipped && justMarkedAnno.marks !== undefined && justMarkedAnno.marks !== null,
+        isSkipped: Boolean(justMarkedAnno.isSkipped)
+      };
+    } else {
+      effectiveMarks[currentQId] = {
+        ...(effectiveMarks[currentQId] || {}),
+        isAttempted: true
+      };
+    }
+
+    // 1. Search forward from currentIndex + 1 for the next unattempted, unblocked question
+    for (let i = currentIndex + 1; i < allQuestions.length; i++) {
+      const candidateQ = allQuestions[i];
+      const m = effectiveMarks[candidateQ.questionId];
+      const isAlreadyAttempted = (m?.isAttempted || Number(m?.marksAwarded) > 0 || m?.isSkipped);
+      if (isAlreadyAttempted) continue;
+
+      if (canAttemptQuestion(candidateQ, effectiveMarks)) {
+        setSelectedQuestion(candidateQ.questionId);
+        return;
+      }
+    }
+
+    // 2. Wrap around from start up to currentIndex - 1
+    for (let i = 0; i < currentIndex; i++) {
+      const candidateQ = allQuestions[i];
+      const m = effectiveMarks[candidateQ.questionId];
+      const isAlreadyAttempted = (m?.isAttempted || Number(m?.marksAwarded) > 0 || m?.isSkipped);
+      if (isAlreadyAttempted) continue;
+
+      if (canAttemptQuestion(candidateQ, effectiveMarks)) {
+        setSelectedQuestion(candidateQ.questionId);
+        return;
+      }
     }
   };
 
@@ -1302,12 +1417,15 @@ const ExaminerMarking = () => {
       // Check if this section has a maximum attempt limit and we have reached it
       let limitReached = false;
       if (section && section.maxQuestionsToAttempt > 0) {
-        const attemptedCount = section.questions?.filter(q => {
+        const attemptedQuestionNos = new Set();
+        (section.questions || []).forEach(q => {
           const m = questionMarks[q.questionId];
-          return m && (m.isAttempted || m.marksAwarded > 0);
-        }).length || 0;
+          if (m && (m.isAttempted || Number(m.marksAwarded) > 0) && !m.isSkipped) {
+            attemptedQuestionNos.add(String(q.questionNo));
+          }
+        });
         
-        limitReached = attemptedCount >= section.maxQuestionsToAttempt;
+        limitReached = attemptedQuestionNos.size >= section.maxQuestionsToAttempt;
       }
 
       const isAttempted = mark.isAttempted || mark.marksAwarded > 0;
@@ -1318,7 +1436,8 @@ const ExaminerMarking = () => {
         questionMasterId: questionId,
         questionId: questionId,
         scriptId: scriptId ? parseInt(scriptId) : null,
-        questionNo: mark.questionNo,
+        questionNo: question?.questionNo || mark.questionNo,
+        part: question?.part || null,
         marksAwarded: mark.marksAwarded || 0,
         isSkipped: isSkipped,
         isAttempted: isAttempted,
@@ -1416,10 +1535,14 @@ const ExaminerMarking = () => {
 
     sections.forEach(sec => {
       const secQuestions = sec.questions || [];
-      const attemptedCount = secQuestions.filter(q => {
+      const attemptedQuestionsSet = new Set();
+      secQuestions.forEach(q => {
         const m = questionMarks[q.questionId];
-        return m && (m.isAttempted || (m.marksAwarded && m.marksAwarded > 0)) && !m.isSkipped;
-      }).length;
+        if (m && (m.isAttempted || (Number(m.marksAwarded) > 0)) && !m.isSkipped) {
+          attemptedQuestionsSet.add(String(q.questionNo));
+        }
+      });
+      const attemptedCount = attemptedQuestionsSet.size;
 
       if (sec.maxQuestionsToAttempt > 0) {
         // If candidate attempted maxQuestionsToAttempt (e.g. 3 in Section C), section is satisfied!
@@ -1435,7 +1558,7 @@ const ExaminerMarking = () => {
 
         if (unreviewedQuestions.length > 0) {
           pendingSectionRequirements.push(
-            `${sec.name} (${attemptedCount}/${sec.maxQuestionsToAttempt} attempted, pending: ${unreviewedQuestions.map(q => `Q${q.questionNo}`).join(', ')})`
+            `${sec.name} (${attemptedCount}/${sec.maxQuestionsToAttempt} attempted, pending: ${unreviewedQuestions.map(q => `Q${q.questionNo}${q.part ? ` (${q.part})` : ''}`).join(', ')})`
           );
         }
       } else {
@@ -1449,7 +1572,7 @@ const ExaminerMarking = () => {
 
         if (unreviewedQuestions.length > 0) {
           pendingSectionRequirements.push(
-            `${sec.name} pending: ${unreviewedQuestions.map(q => `Q${q.questionNo}`).join(', ')}`
+            `${sec.name} pending: ${unreviewedQuestions.map(q => `Q${q.questionNo}${q.part ? ` (${q.part})` : ''}`).join(', ')}`
           );
         }
       }
@@ -1530,10 +1653,14 @@ const ExaminerMarking = () => {
 
   sections.forEach(sec => {
     const secQuestions = sec.questions || [];
-    const attemptedCount = secQuestions.filter(q => {
+    const attemptedQuestionsSet = new Set();
+    secQuestions.forEach(q => {
       const m = questionMarks[q.questionId];
-      return m && (m.isAttempted || (m.marksAwarded && m.marksAwarded > 0)) && !m.isSkipped;
-    }).length;
+      if (m && (m.isAttempted || (Number(m.marksAwarded) > 0)) && !m.isSkipped) {
+        attemptedQuestionsSet.add(String(q.questionNo));
+      }
+    });
+    const attemptedCount = attemptedQuestionsSet.size;
 
     if (sec.maxQuestionsToAttempt > 0) {
       // If candidate attempted maxQuestionsToAttempt (e.g. 3 in Section C), section is complete!
@@ -1549,7 +1676,7 @@ const ExaminerMarking = () => {
 
       if (unreviewedQuestions.length > 0) {
         pendingSectionRequirements.push(
-          `${sec.name}: ${attemptedCount}/${sec.maxQuestionsToAttempt} attempted (${unreviewedQuestions.map(q => `Q${q.questionNo}`).join(', ')} pending)`
+          `${sec.name}: ${attemptedCount}/${sec.maxQuestionsToAttempt} attempted (${unreviewedQuestions.map(q => `Q${q.questionNo}${q.part ? ` (${q.part})` : ''}`).join(', ')} pending)`
         );
       }
     } else {
@@ -1563,7 +1690,7 @@ const ExaminerMarking = () => {
 
       if (unreviewedQuestions.length > 0) {
         pendingSectionRequirements.push(
-          `${sec.name} pending: ${unreviewedQuestions.map(q => `Q${q.questionNo}`).join(', ')}`
+          `${sec.name} pending: ${unreviewedQuestions.map(q => `Q${q.questionNo}${q.part ? ` (${q.part})` : ''}`).join(', ')}`
         );
       }
     }
@@ -1659,9 +1786,14 @@ const ExaminerMarking = () => {
           <PDFAnnotator 
             ref={annotatorRef}
             onAnnotationsChange={handleAnnotationsChange}
-            currentQuestionId={selectedQuestion ? findQuestionById(selectedQuestion)?.questionNo : null}
+            currentQuestion={selectedQuestion ? findQuestionById(selectedQuestion) : null}
+            currentQuestionId={selectedQuestion ? (() => {
+              const q = findQuestionById(selectedQuestion);
+              return q?.part ? `${q.questionNo}${q.part}` : q?.questionNo;
+            })() : null}
             maxMarks={selectedQuestion ? findQuestionById(selectedQuestion)?.marks : 0}
             onNextQuestion={handleNextQuestion}
+            onSelectQuestion={(q) => setSelectedQuestion(q?.questionId)}
             sections={sections}
             pdfUrl={pdfUrl}
             scriptId={scriptId}
@@ -1702,9 +1834,9 @@ const ExaminerMarking = () => {
             onSelectQuestion={(q) => {
               setSelectedQuestion(q.questionId);
               if (isEffectiveReadOnly) {
-                annotatorRef.current?.navigateToQuestionPage?.(q.questionNo);
+                annotatorRef.current?.navigateToQuestionPage?.(q);
               } else {
-                annotatorRef.current?.openMarkModalForQuestion?.(q.questionNo);
+                annotatorRef.current?.openMarkModalForQuestion?.(q);
               }
             }}
             onGroupSwitch={(modalInfo) => setGroupSwitchModal(modalInfo)}

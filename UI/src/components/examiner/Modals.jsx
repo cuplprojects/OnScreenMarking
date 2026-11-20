@@ -61,6 +61,13 @@ export const GroupSwitchModal = ({
   if (!modalData) return null;
   const { targetQuestion, conflictingQuestion, groupCode } = modalData;
 
+  const targetLabel = targetQuestion.part
+    ? `${targetQuestion.questionNo} (${targetQuestion.part})`
+    : targetQuestion.questionNo;
+  const conflictingLabel = conflictingQuestion.part
+    ? `${conflictingQuestion.questionNo} (${conflictingQuestion.part})`
+    : conflictingQuestion.questionNo;
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-[80] p-4">
       <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full p-5 animate-in zoom-in-95 duration-150">
@@ -69,20 +76,20 @@ export const GroupSwitchModal = ({
             <AlertCircle size={22} className="text-amber-600" />
           </div>
           <div>
-            <h3 className="font-bold text-gray-900 text-sm">Switch to Question {targetQuestion.questionNo}?</h3>
+            <h3 className="font-bold text-gray-900 text-sm">Switch to Question {targetLabel}?</h3>
             <p className="text-xs text-gray-500">Optional Group {groupCode} allows only 1 question to be evaluated</p>
           </div>
         </div>
 
         <div className="bg-amber-50/80 border border-amber-200 rounded-lg p-3 text-xs text-gray-700 mb-4 space-y-1.5">
           <p>
-            <strong>Question {conflictingQuestion.questionNo}</strong> currently holds{' '}
+            <strong>Question {conflictingLabel}</strong> currently holds{' '}
             <span className="font-bold text-teal-800">
               {questionMarks[conflictingQuestion.questionId]?.marksAwarded || 0} marks
             </span> in Optional Group {groupCode}.
           </p>
           <p className="text-gray-600">
-            To evaluate <strong>Question {targetQuestion.questionNo}</strong> instead, the marks and annotation for Question {conflictingQuestion.questionNo} will be cleared.
+            To evaluate <strong>Question {targetLabel}</strong> instead, the marks and annotation for Question {conflictingLabel} will be cleared.
           </p>
         </div>
 
@@ -102,7 +109,7 @@ export const GroupSwitchModal = ({
             }}
             className="px-3.5 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition-colors cursor-pointer flex items-center gap-1.5"
           >
-            <span>Clear Q{conflictingQuestion.questionNo} & Mark Q{targetQuestion.questionNo}</span>
+            <span>Clear Q{conflictingLabel} & Mark Q{targetLabel}</span>
           </button>
         </div>
       </div>
