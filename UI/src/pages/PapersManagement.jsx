@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import {
-  FileText, Plus, Edit2, UserPlus, X, Search, CheckCircle2, Trash2,
+  FileText, Plus, Edit2, UserPlus, X, Search, CheckCircle2, XCircle, Trash2,
   ChevronRight, ChevronDown, Filter, Users, User, BookOpen, Layers, Folder, AlertCircle, Copy, Upload, Info, Settings, Loader, FileCheck, Eye, UserCheck, Check, Download, AlertTriangle, Flag, SlidersHorizontal, Hash, Columns, ExternalLink
 } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -33,8 +33,7 @@ const COLUMN_DEFINITIONS = [
   { key: 'totalQuestions', label: 'Total Qs', default: true },
   { key: 'maxMarks', label: 'Max Marks', default: true },
   { key: 'questionPaper', label: 'Question Paper', default: true },
-  { key: 'assignedExaminers', label: 'Allotted Examiners', default: true },
-  { key: 'statusFilter', label: 'Configuration Status', default: true }
+  { key: 'assignedExaminers', label: 'Allotted Examiners', default: true }
 ];
 
 const DEFAULT_VISIBLE_COLUMNS = COLUMN_DEFINITIONS.reduce((acc, col) => {
@@ -336,6 +335,9 @@ export default function PapersManagement({ isTab = false }) {
   const [showImportSectionsModal, setShowImportSectionsModal] = useState(false);
   const [previewBatchId, setPreviewBatchId] = useState(null);
 
+  // Paper Preview State (Open same side drawer in read-only mode)
+  const [isReadOnlyPreview, setIsReadOnlyPreview] = useState(false);
+
   // Form State
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
@@ -426,13 +428,19 @@ export default function PapersManagement({ isTab = false }) {
   const [loadingEditExaminers, setLoadingEditExaminers] = useState(false);
   const [isEditExaminerDropdownOpen, setIsEditExaminerDropdownOpen] = useState(false);
   const [isUploadingEditPdf, setIsUploadingEditPdf] = useState(false);
+  const [selectedEditFileName, setSelectedEditFileName] = useState("");
   const editPdfInputRef = React.useRef(null);
   const editExaminerDropdownRef = React.useRef(null);
+  const [isBatchDropdownOpen, setIsBatchDropdownOpen] = useState(false);
+  const batchDropdownRef = React.useRef(null);
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
       if (editExaminerDropdownRef.current && !editExaminerDropdownRef.current.contains(event.target)) {
         setIsEditExaminerDropdownOpen(false);
+      }
+      if (batchDropdownRef.current && !batchDropdownRef.current.contains(event.target)) {
+        setIsBatchDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handleOutsideClick);
@@ -700,6 +708,7 @@ export default function PapersManagement({ isTab = false }) {
   // -------------------------------------------------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isReadOnlyPreview) return;
     if (isProjectInactive) {
       return message.warning("This project is inactive. Modifying or adding papers is not permitted.");
     }
@@ -767,11 +776,10 @@ export default function PapersManagement({ isTab = false }) {
         savedPaperId = res?.paperId || res?.id || res;
       }
 
-      // Save examiner assignments if changed in edit mode
-      if (editingId && (editAssignedExaminers.some(a => a.isNew) || editPendingRemovals.length > 0)) {
+      // Save examiner assignments in edit mode
+      if (editingId) {
         try {
           const targetProjId = targetProjectId || projectId;
-          const targetProjPaperId = editingPaper?.projectPaperId;
 
           // 1. Process removals
           for (const remId of editPendingRemovals) {
@@ -782,23 +790,42 @@ export default function PapersManagement({ isTab = false }) {
             }
           }
 
-          // 2. Process additions
-          const newExams = editAssignedExaminers.filter(a => a.isNew);
-          for (const newEx of newExams) {
-            try {
-              await apiCall('/PaperExaminers/assign', {
-                method: 'POST',
-                body: JSON.stringify({
-                  paperId: parseInt(savedPaperId, 10),
-                  projectPaperId: targetProjPaperId || null,
-                  projectId: targetProjId ? parseInt(targetProjId, 10) : null,
-                  examinerId: newEx.examinerId
-                })
-              });
-            } catch (assignErr) {
-              console.warn("Failed to assign examiner:", assignErr);
-            }
+          // 2. Process additions / all currently selected examiners
+          const currentExaminerIds = editAssignedExaminers
+            .map(a => a.examinerId || (a.examiner && a.examiner.id) || a.id)
+            .filter(id => id && !String(id).startsWith('temp-'))
+            .map(id => parseInt(id, 10))
+            .filter(id => !isNaN(id) && id > 0);
+
+          if (currentExaminerIds.length > 0) {
+            await apiCall('/paperexaminers/bulk-assign', {
+              method: 'POST',
+              body: {
+                paperIds: [parseInt(savedPaperId, 10)],
+                examinerIds: currentExaminerIds,
+                projectId: targetProjId ? parseInt(targetProjId, 10) : null
+              }
+            });
           }
+
+          // Optimistically update the table row for this paper immediately
+          setPapers(prev => prev.map(p => {
+            if (p.paperId === parseInt(savedPaperId, 10)) {
+              const updatedExaminers = editAssignedExaminers.map(a => ({
+                id: a.examinerId || (a.examiner && a.examiner.id) || a.id,
+                name: a.examiner?.name || a.name || 'Examiner',
+                email: a.examiner?.email || a.email || ''
+              }));
+              return {
+                ...p,
+                catchNo: newCatchNo,
+                assignedExaminers: updatedExaminers,
+                isExaminerAssigned: updatedExaminers.length > 0,
+                expertsCount: updatedExaminers.length
+              };
+            }
+            return p;
+          }));
         } catch (exErr) {
           console.error("Failed to persist examiner assignments:", exErr);
         }
@@ -1000,14 +1027,38 @@ export default function PapersManagement({ isTab = false }) {
     setEditAssignedExaminers(prev => prev.filter(item => item !== assignment && item.id !== assignment.id));
   };
 
-  const handleEditPdfChange = async (e) => {
-    const file = e.target.files?.[0];
+  const toggleExaminerInEdit = (ex) => {
+    const existing = editAssignedExaminers.find(a => a.examinerId === ex.id || a.examiner?.id === ex.id);
+    if (existing) {
+      handleRemoveExaminerInEdit(existing);
+    } else {
+      handleAddExaminerInEdit(ex);
+    }
+  };
+
+  const handleSelectAllExaminersInEdit = () => {
+    editAvailableExaminers.forEach(ex => {
+      const already = editAssignedExaminers.some(a => a.examinerId === ex.id || a.examiner?.id === ex.id);
+      if (!already) {
+        handleAddExaminerInEdit(ex);
+      }
+    });
+  };
+
+  const handleClearAllExaminersInEdit = () => {
+    editAssignedExaminers.forEach(a => {
+      handleRemoveExaminerInEdit(a);
+    });
+  };
+
+  const handleUploadEditFile = async (file) => {
     if (!file || !editingId) return;
     if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
       message.error("Please select a valid PDF file.");
       if (editPdfInputRef.current) editPdfInputRef.current.value = "";
       return;
     }
+    setSelectedEditFileName(file.name);
     setIsUploadingEditPdf(true);
     try {
       const targetProjId = formData.projectId || projectId;
@@ -1033,8 +1084,21 @@ export default function PapersManagement({ isTab = false }) {
     }
   };
 
-  const handleEdit = async (paper) => {
+  const handleEditPdfChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) handleUploadEditFile(file);
+  };
+
+  const handleEditDrop = (e) => {
+    e.preventDefault();
+    if (isReadOnlyPreview || isUploadingEditPdf) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleUploadEditFile(file);
+  };
+
+  const handleEdit = async (paper, isReadOnly = false) => {
     try {
+      setIsReadOnlyPreview(Boolean(isReadOnly));
       const fullPaper = await paperService.getPaperById(paper.paperId, projectId);
       // Strictly match what is displayed in the table for this selected project:
       // If paper.catchNo in the table is null/empty, keep it empty in the edit panel.
@@ -1056,6 +1120,10 @@ export default function PapersManagement({ isTab = false }) {
       });
       loadExaminersForEdit(paper, fullPaper);
 
+      const paperBatchId = fullPaper.batchId ?? paper.batchId ?? null;
+      const effectiveQpUrl = (paper.questionPaperPdfUrl !== undefined && paper.questionPaperPdfUrl !== null) ? paper.questionPaperPdfUrl : (fullPaper.questionPaperPdfUrl || "");
+      setSelectedEditFileName(effectiveQpUrl ? effectiveQpUrl.split('/').pop() : "");
+
       setFormData({
         paperCode: fullPaper.paperCode || paper.paperCode || "",
         paperName: fullPaper.paperName || paper.paperName || "",
@@ -1066,8 +1134,8 @@ export default function PapersManagement({ isTab = false }) {
         catchNo: effectiveCatchNo,
         projectId: projectId ? String(projectId) : (fullPaper.projectId ? String(fullPaper.projectId) : ""),
         isActive: paper.isActive !== undefined ? paper.isActive : fullPaper.isActive,
-        questionPaperPdfUrl: (paper.questionPaperPdfUrl !== undefined && paper.questionPaperPdfUrl !== null) ? paper.questionPaperPdfUrl : (fullPaper.questionPaperPdfUrl || ""),
-        batchId: isConfigured ? (fullPaper.batchId ?? paper.batchId ?? null) : null,
+        questionPaperPdfUrl: effectiveQpUrl,
+        batchId: isConfigured ? paperBatchId : null,
       });
       if (fullPaper.subjectIds && fullPaper.subjectIds.length > 0) {
         setSelectedSubjects(fullPaper.subjectIds);
@@ -1102,6 +1170,7 @@ export default function PapersManagement({ isTab = false }) {
         console.warn("Failed to reload section masters on edit", masterErr);
       }
 
+      let resolvedBatchId = paperBatchId;
       if (!isConfigured) {
         setSelectedMasterSectionIds([]);
       } else {
@@ -1109,10 +1178,12 @@ export default function PapersManagement({ isTab = false }) {
           const mappedMasters = await sectionService.getPaperMasterSections(fullPaper.paperId, projectId);
           if (Array.isArray(mappedMasters) && mappedMasters.length > 0) {
             setSelectedMasterSectionIds(mappedMasters.map(m => m.id));
+            if (!resolvedBatchId && mappedMasters[0].batchId) {
+              resolvedBatchId = mappedMasters[0].batchId;
+            }
           } else {
-            const effectiveBatchId = fullPaper.batchId ?? paper.batchId;
-            if (effectiveBatchId) {
-              const batchSecs = currentMasterList.filter(m => m.batchId === effectiveBatchId);
+            if (resolvedBatchId) {
+              const batchSecs = currentMasterList.filter(m => m.batchId === resolvedBatchId);
               if (batchSecs.length > 0) {
                 setSelectedMasterSectionIds(batchSecs.map(m => m.id));
               } else {
@@ -1128,6 +1199,18 @@ export default function PapersManagement({ isTab = false }) {
         }
       }
 
+      if (!resolvedBatchId && selectedMasterSectionIds.length > 0) {
+        const found = currentMasterList.find(m => selectedMasterSectionIds.includes(m.id));
+        if (found?.batchId) resolvedBatchId = found.batchId;
+      }
+
+      // Auto-select the configured batch (preview hidden until Eye icon is clicked)
+      if (resolvedBatchId) {
+        setFormData(prev => ({ ...prev, batchId: resolvedBatchId }));
+      }
+      setPreviewBatchId(null);
+      setIsBatchDropdownOpen(false);
+
       setEditingId(fullPaper.paperId);
       setShowForm(true);
     } catch (err) {
@@ -1135,7 +1218,13 @@ export default function PapersManagement({ isTab = false }) {
     }
   };
 
+  const handlePreviewPaper = (paper) => {
+    handleEdit(paper, true);
+  };
+
   const handleCancel = () => {
+    setIsReadOnlyPreview(false);
+    setPreviewBatchId(null);
     setFormData({
       paperCode: "", paperName: "", paperNumber: "", maxMarks: "", totalQuestions: "", description: "",
       catchNo: "", projectId: projectId || (projects.length > 0 ? String(projects[0].projectId) : ""),
@@ -1143,15 +1232,43 @@ export default function PapersManagement({ isTab = false }) {
     });
     setSelectedSubjects([]);
     setSelectedMasterSectionIds([]);
+    setSelectedEditFileName("");
     setEditingId(null);
     setEditingPaper(null);
     setEditAssignedExaminers([]);
     setEditAvailableExaminers([]);
     setEditPendingRemovals([]);
     setIsEditExaminerDropdownOpen(false);
+    setIsBatchDropdownOpen(false);
     setIsSubjectDropdownOpen(false);
     setShowForm(false);
+    autoOpenedPaperIdRef.current = null;
+
+    if (searchParams.get("editPaperId")) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("editPaperId");
+      setSearchParams(nextParams, { replace: true });
+    }
   };
+
+  const autoOpenedPaperIdRef = useRef(null);
+
+  useEffect(() => {
+    const rawEditPaperId = searchParams.get("editPaperId");
+    if (!rawEditPaperId) return;
+    const targetEditPaperId = decryptId(rawEditPaperId);
+    if (!targetEditPaperId) return;
+
+    if (autoOpenedPaperIdRef.current === String(targetEditPaperId)) return;
+    autoOpenedPaperIdRef.current = String(targetEditPaperId);
+
+    const matchedPaper = papers.find(p => String(p.paperId) === String(targetEditPaperId));
+    handleEdit(matchedPaper || { paperId: parseInt(targetEditPaperId, 10) });
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("editPaperId");
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, papers]);
 
   // -------------------------------------------------------------
   // Examiner Allocation
@@ -2399,7 +2516,7 @@ export default function PapersManagement({ isTab = false }) {
                               <Columns size={13} className="text-gray-500" />
                               <span>Columns</span>
                               <span className="text-[10px] bg-gray-100 text-gray-600 font-bold px-1.5 py-0.5 rounded-full">
-                                {Object.values(visibleColumns).filter(Boolean).length}/{COLUMN_DEFINITIONS.length}
+                                {COLUMN_DEFINITIONS.filter(col => visibleColumns[col.key]).length}/{COLUMN_DEFINITIONS.length}
                               </span>
                               <ChevronDown size={12} className={`text-gray-400 transition-transform ${showColumnDropdown ? 'rotate-180' : ''}`} />
                             </button>
@@ -2544,6 +2661,15 @@ export default function PapersManagement({ isTab = false }) {
                         </div>
                       ) : (
                         <>
+                          <TablePagination
+                            page={page}
+                            totalPages={totalPages}
+                            totalCount={totalCount}
+                            pageSize={pageSize}
+                            setPage={setPage}
+                            setPageSize={setPageSize}
+                            position="top"
+                          />
                           <div className="overflow-x-auto">
                             <table className="w-full text-left">
                               <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
@@ -2556,7 +2682,29 @@ export default function PapersManagement({ isTab = false }) {
                                       className="rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer w-4 h-4"
                                     />
                                   </th>
-                                  {visibleColumns.paperCode && <SortHeader label="Paper Code" field="paperCode" hasFilter={true} />}
+                                  {visibleColumns.paperCode && (
+                                    <SortHeader
+                                      label="Paper Code"
+                                      field="paperCode"
+                                      hasFilter={true}
+                                      customFilter={
+                                        <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                                          <ColumnFilter columnKey="paperCode" currentFilter={filters.paperCode} setFilter={setFilter} placeholder="Filter code..." title="Filter by paper code" />
+                                          <ColumnFilter
+                                            columnKey="statusFilter"
+                                            currentFilter={filters.statusFilter}
+                                            setFilter={setFilter}
+                                            title="Filter by status"
+                                            options={[
+                                              { value: '', label: 'All Statuses' },
+                                              { value: 'ready_for_allocation', label: 'Configured' },
+                                              { value: 'sections_missing', label: 'Not Configured' }
+                                            ]}
+                                          />
+                                        </div>
+                                      }
+                                    />
+                                  )}
                                   {visibleColumns.paperName && <SortHeader label="Paper Name" field="paperName" hasFilter={true} />}
                                   {visibleColumns.catchNo && <SortHeader label="Catch No" field="catchNo" hasFilter={true} isCenter={true} />}
                                   {visibleColumns.paperNumber && <SortHeader label="Paper No" field="paperNumber" isCenter={true} />}
@@ -2584,25 +2732,11 @@ export default function PapersManagement({ isTab = false }) {
                                       filterOptions={examinerFilterOptions}
                                     />
                                   )}
-                                  {visibleColumns.statusFilter && (
-                                    <SortHeader
-                                      label="Configuration Status"
-                                      field="statusFilter"
-                                      hasFilter={true}
-                                      filterOptions={[
-                                        { value: '', label: 'All Papers' },
-                                        { value: 'sections_missing', label: 'Sections/Questions Not Defined' },
-                                        { value: 'pdf_missing', label: 'PDF Not Uploaded' },
-                                        { value: 'not_assigned', label: 'Not Assigned' },
-                                        { value: 'ready_for_allocation', label: 'Ready for Script Allocation' }
-                                      ]}
-                                    />
-                                  )}
                                   <th className="px-4 py-3.5 text-right border-b border-gray-100 min-w-[120px]">Actions</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-100 text-xs font-bold text-gray-700">
-                                {papers.map((paper) => {
+                                {papers.map((paper, index) => {
                                   const isSelected = selectedPaperIds.includes(paper.paperId);
                                   const isEditing = inlineEditingId === paper.paperId;
 
@@ -2617,16 +2751,21 @@ export default function PapersManagement({ isTab = false }) {
                                         {/* Paper Code */}
                                         {visibleColumns.paperCode && (
                                           <td className="px-3 py-2">
-                                            <input
-                                              type="text"
-                                              placeholder="Code *"
-                                              required
-                                              value={inlineFormData.paperCode}
-                                              onChange={(e) => setInlineFormData(prev => ({ ...prev, paperCode: e.target.value }))}
-                                              className={`w-28 px-2 py-1 text-xs font-mono font-bold bg-white border rounded-md focus:outline-none focus:ring-2 shadow-2xs ${!inlineFormData.paperCode?.trim() ? 'border-rose-400 focus:ring-rose-400' : 'border-gray-300 focus:ring-teal-500'
-                                                }`}
-                                              title="Paper Code (Required)"
-                                            />
+                                            <div className="flex flex-col items-start gap-1">
+                                              <input
+                                                type="text"
+                                                placeholder="Code *"
+                                                required
+                                                value={inlineFormData.paperCode}
+                                                onChange={(e) => setInlineFormData(prev => ({ ...prev, paperCode: e.target.value }))}
+                                                className={`w-28 px-2 py-1 text-xs font-mono font-bold bg-white border rounded-md focus:outline-none focus:ring-2 shadow-2xs ${!inlineFormData.paperCode?.trim() ? 'border-rose-400 focus:ring-rose-400' : 'border-gray-300 focus:ring-teal-500'
+                                                  }`}
+                                                title="Paper Code (Required)"
+                                              />
+                                              <span className="inline-block text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                                Editing
+                                              </span>
+                                            </div>
                                           </td>
                                         )}
 
@@ -2786,15 +2925,6 @@ export default function PapersManagement({ isTab = false }) {
                                           </td>
                                         )}
 
-                                        {/* Configuration Status */}
-                                        {visibleColumns.statusFilter && (
-                                          <td className="px-4 py-2 text-center">
-                                            <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-full border border-amber-200">
-                                              Editing
-                                            </span>
-                                          </td>
-                                        )}
-
                                         {/* Actions: Save & Cancel */}
                                         <td className="px-4 py-2 text-right">
                                           <div className="flex items-center justify-end gap-1.5">
@@ -2828,6 +2958,8 @@ export default function PapersManagement({ isTab = false }) {
                                     );
                                   }
 
+                                  const isTopRow = index === 0;
+
                                   return (
                                     <tr key={paper.paperId} className={`hover:bg-gray-50/50 transition-colors ${isSelected ? 'bg-teal-50/30' : ''}`}>
                                       <td className="px-3 py-2.5 text-center">
@@ -2840,9 +2972,61 @@ export default function PapersManagement({ isTab = false }) {
                                       </td>
                                       {visibleColumns.paperCode && (
                                         <td className="px-4 py-2.5">
-                                          <span className="font-mono bg-gray-100 text-gray-800 font-extrabold px-2 py-0.5 rounded text-xs uppercase tracking-wider">
-                                            {paper.paperCode}
-                                          </span>
+                                          {(() => {
+                                            const hasSections = Boolean(paper.isSectionsConfigured ?? paper.isSectionConfigured ?? (paper.batchId && paper.batchId > 0));
+                                            const hasQp = Boolean(paper.questionPaperPdfUrl);
+                                            const hasExaminers = Boolean((paper.assignedExaminers && paper.assignedExaminers.length > 0) || (paper.expertsCount || 0) > 0);
+
+                                            const missing = [];
+                                            if (!hasSections) missing.push("Section");
+                                            if (!hasQp) missing.push("QP PDF");
+                                            if (!hasExaminers) missing.push("Examiner");
+
+                                            const titleTooltip = missing.length > 0
+                                              ? missing.map(m => `✕ ${m}`).join("   ")
+                                              : "Configured";
+
+                                            return (
+                                              <div
+                                                className="relative group/papercode inline-flex flex-col items-start gap-1 cursor-default"
+                                                title={titleTooltip}
+                                              >
+                                                <span className="font-mono bg-gray-100 text-gray-800 font-extrabold px-2 py-0.5 rounded text-xs uppercase tracking-wider">
+                                                  {paper.paperCode}
+                                                </span>
+
+                                                {hasSections ? (
+                                                  <span
+                                                    className="inline-flex items-center gap-1 text-[9.5px] font-bold text-teal-800 bg-teal-50 border border-teal-200/70 px-1.5 py-0.2 rounded"
+                                                  >
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-teal-600 shrink-0"></span>
+                                                    Configured
+                                                  </span>
+                                                ) : (
+                                                  <span
+                                                    className="inline-flex items-center gap-1 text-[9.5px] font-bold text-gray-400 bg-gray-50 border border-gray-200 px-1.5 py-0.2 rounded"
+                                                  >
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0"></span>
+                                                    Not Configured
+                                                  </span>
+                                                )}
+
+                                                {/* Tooltip on Hover showing only what is NOT configured with cross icon */}
+                                                {missing.length > 0 && (
+                                                  <div
+                                                    className={`absolute ${isTopRow ? 'top-full mt-1.5' : 'bottom-full mb-1.5'} left-0 whitespace-nowrap bg-white/95 backdrop-blur-xs text-gray-800 text-[11px] font-bold p-1 rounded-lg shadow-lg shadow-rose-950/5 opacity-0 invisible group-hover/papercode:opacity-100 group-hover/papercode:visible transition-all duration-150 z-50 pointer-events-none flex items-center gap-1.5 border border-rose-200/80`}
+                                                  >
+                                                    {missing.map((item, idx) => (
+                                                      <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-rose-50 text-rose-700 border border-rose-200/70 shadow-2xs">
+                                                        <X size={11} className="text-rose-500 stroke-[3]" />
+                                                        <span>{item}</span>
+                                                      </span>
+                                                    ))}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            );
+                                          })()}
                                         </td>
                                       )}
                                       {visibleColumns.paperName && (
@@ -2897,10 +3081,10 @@ export default function PapersManagement({ isTab = false }) {
                                               href={`${import.meta.env.VITE_API_URL.replace('/api', '')}/${paper.questionPaperPdfUrl.replace(/^\//, '')}`}
                                               target="_blank"
                                               rel="noopener noreferrer"
-                                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200/90 hover:border-blue-300 transition-all shadow-2xs group cursor-pointer"
+                                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300/80 hover:border-emerald-400 transition-all shadow-2xs group cursor-pointer"
                                               title="View Question Paper PDF"
                                             >
-                                              <Eye size={12} className="text-blue-600 group-hover:scale-110 transition-transform" />
+                                              <Eye size={12} className="text-emerald-600 group-hover:scale-110 transition-transform" />
                                               <span>View PDF</span>
                                             </a>
                                           ) : (
@@ -2908,17 +3092,17 @@ export default function PapersManagement({ isTab = false }) {
                                               type="button"
                                               onClick={() => triggerTableUpload(paper)}
                                               disabled={uploadingPaperId === paper.paperId}
-                                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider text-blue-700 hover:text-blue-800 bg-blue-50/70 hover:bg-blue-100 border border-dashed border-blue-300 hover:border-blue-400 transition-all shadow-2xs group cursor-pointer disabled:opacity-50"
+                                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider text-amber-800 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border border-dashed border-amber-300 hover:border-amber-400 transition-all shadow-2xs group cursor-pointer disabled:opacity-50"
                                               title="Upload Question Paper PDF"
                                             >
                                               {uploadingPaperId === paper.paperId ? (
-                                                <span className="flex items-center gap-1 text-blue-600 animate-pulse">
-                                                  <span className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin inline-block"></span>
+                                                <span className="flex items-center gap-1 text-amber-700 animate-pulse">
+                                                  <span className="w-3 h-3 border-2 border-amber-600 border-t-transparent rounded-full animate-spin inline-block"></span>
                                                   <span>Uploading...</span>
                                                 </span>
                                               ) : (
                                                 <>
-                                                  <Upload size={12} className="text-blue-600 group-hover:-translate-y-0.5 transition-transform" />
+                                                  <Upload size={12} className="text-amber-600 group-hover:-translate-y-0.5 transition-transform" />
                                                   <span>Upload PDF</span>
                                                 </>
                                               )}
@@ -2927,141 +3111,106 @@ export default function PapersManagement({ isTab = false }) {
                                         </td>
                                       )}
                                       {visibleColumns.assignedExaminers && (
-                                        <td className="px-4 py-2.5 text-center">
-                                          {paper.assignedExaminers && paper.assignedExaminers.length > 0 ? (
-                                            <div className="flex flex-wrap items-center justify-center gap-1 max-w-[220px] mx-auto">
-                                              {Array.from(new Map(paper.assignedExaminers.map(ex => [ex.id, ex])).values()).map(ex => (
-                                                <span
-                                                  key={ex.id}
-                                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-teal-50 text-teal-800 border border-teal-200/80 shadow-2xs"
-                                                  title={ex.email ? `${ex.name} (${ex.email})` : ex.name}
-                                                >
-                                                  <User size={10} className="text-teal-600 shrink-0" />
-                                                  <span className="truncate max-w-[100px]">{ex.name}</span>
-                                                </span>
-                                              ))}
-                                            </div>
-                                          ) : (
-                                            <span className="text-gray-400 italic text-[11px]">Not Allotted</span>
-                                          )}
-                                        </td>
-                                      )}
-                                      {visibleColumns.statusFilter && (
-                                        <td className="px-4 py-2.5 text-center">
+                                        <td className="px-4 py-2.5 text-center relative hover:z-30 focus-within:z-30">
                                           {(() => {
-                                            const missingReasons = [];
-                                            const statusDetails = [];
+                                            const distinctExaminers = Array.from(
+                                              new Map((paper.assignedExaminers || []).map(ex => [ex.id, ex])).values()
+                                            );
 
-                                            const hasSections = !!paper.isSectionsConfigured;
-                                            const marksMatch = true; // Always true, no longer checking marks
-                                            const hasEvaluators = (paper.expertsCount || 0) > 0;
-                                            const hasQp = !!paper.questionPaperPdfUrl;
-
-                                            if (!hasSections) {
-                                              missingReasons.push("No sections configured for this paper");
-                                              statusDetails.push({ label: "Sections", ok: false, text: "Sections not configured" });
-                                            } else {
-                                              statusDetails.push({
-                                                label: "Sections",
-                                                ok: true,
-                                                text: "Sections configured"
-                                              });
+                                            if (distinctExaminers.length === 0) {
+                                              return <span className="text-gray-400 italic text-[11px]">Not Allotted</span>;
                                             }
 
-                                            if (!hasEvaluators) {
-                                              missingReasons.push("No evaluators / examiners assigned");
-                                              statusDetails.push({ label: "Evaluators", ok: false, text: "0 evaluators assigned" });
-                                            } else {
-                                              statusDetails.push({ label: "Evaluators", ok: true, text: `${paper.expertsCount} evaluator(s) assigned` });
-                                            }
-
-                                            if (!hasQp) {
-                                              missingReasons.push("Question Paper PDF not uploaded");
-                                              statusDetails.push({ label: "Question Paper", ok: false, text: "PDF not uploaded" });
-                                            } else {
-                                              statusDetails.push({ label: "Question Paper", ok: true, text: "PDF uploaded" });
-                                            }
-
-                                            const tooltipTitle = missingReasons.length > 0
-                                              ? `Configuration Status:\n• ` + missingReasons.join("\n• ")
-                                              : "Configuration complete: Sections, Marks, Evaluators and Question Paper are fully configured.";
+                                            // Show up to 2 examiners if <= 2; if 3 or more (e.g. 4 or 5), show 1 and "+X more" badge
+                                            const shouldCollapse = distinctExaminers.length > 2;
+                                            const visibleExaminers = shouldCollapse ? distinctExaminers.slice(0, 1) : distinctExaminers;
+                                            const remainingCount = distinctExaminers.length - visibleExaminers.length;
+                                            const isExaminerTopRow = index < 2;
 
                                             return (
-                                              <div className="flex items-center justify-center gap-2 text-[11px] font-medium text-gray-600" title={tooltipTitle}>
-                                                <span
-                                                  className={`inline-flex items-center gap-1 ${hasSections ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`}
-                                                  title={hasSections ? 'Sections: Configured' : 'Sections: Not configured'}
+                                              <div className="relative group/examiners inline-block">
+                                                <div className="flex items-center justify-center gap-1 max-w-[220px] mx-auto flex-wrap">
+                                                  {visibleExaminers.map(ex => (
+                                                    <span
+                                                      key={ex.id}
+                                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs shrink-0 cursor-default"
+                                                    >
+                                                      <User size={10} className="text-blue-600 shrink-0" />
+                                                      <span className="truncate max-w-[100px]">{ex.name}</span>
+                                                    </span>
+                                                  ))}
+
+                                                  {remainingCount > 0 && (
+                                                    <span
+                                                      className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-black bg-blue-100/90 hover:bg-blue-200 text-blue-800 border border-blue-300 shadow-2xs transition-colors cursor-pointer shrink-0"
+                                                    >
+                                                      +{remainingCount} more
+                                                    </span>
+                                                  )}
+                                                </div>
+
+                                                {/* Tooltip on hover showing all assigned examiners with details */}
+                                                <div
+                                                  className={`absolute ${isExaminerTopRow ? 'top-full mt-2' : 'bottom-full mb-2'} left-1/2 -translate-x-1/2 w-max min-w-[220px] max-w-xs bg-white/95 backdrop-blur-md text-gray-800 rounded-xl shadow-xl shadow-blue-900/10 border border-gray-200/90 p-3 opacity-0 invisible group-hover/examiners:opacity-100 group-hover/examiners:visible transition-all duration-150 z-50 pointer-events-none text-left`}
                                                 >
-                                                  {hasSections ? <CheckCircle2 size={12} className="text-emerald-600 shrink-0" /> : <X size={12} className="text-rose-500 shrink-0" />}
-                                                  Sections
-                                                </span>
-                                                <span className="text-gray-300">•</span>
-                                                <span
-                                                  className={`inline-flex items-center gap-1 ${hasEvaluators ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`}
-                                                  title={hasEvaluators ? `Evaluators: ${paper.expertsCount} assigned` : 'Evaluators: None assigned'}
-                                                >
-                                                  {hasEvaluators ? <CheckCircle2 size={12} className="text-emerald-600 shrink-0" /> : <X size={12} className="text-rose-500 shrink-0" />}
-                                                  Evaluator
-                                                </span>
-                                                <span className="text-gray-300">•</span>
-                                                <span
-                                                  className={`inline-flex items-center gap-1 ${hasQp ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-bold'}`}
-                                                  title={hasQp ? 'Question Paper: PDF uploaded' : 'Question Paper: PDF missing'}
-                                                >
-                                                  {hasQp ? <CheckCircle2 size={12} className="text-emerald-600 shrink-0" /> : <X size={12} className="text-rose-500 shrink-0" />}
-                                                  QP PDF
-                                                </span>
+                                                  <div className="flex items-center justify-between gap-3 pb-1.5 mb-2 border-b border-gray-100">
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
+                                                      <Users size={12} className="text-blue-600" />
+                                                      Allotted Examiners ({distinctExaminers.length})
+                                                    </span>
+                                                  </div>
+                                                  <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                                                    {distinctExaminers.map((ex, idx) => (
+                                                      <div key={ex.id || idx} className="flex items-center gap-2.5 p-1 rounded-lg hover:bg-gray-50/80 transition-colors">
+                                                        <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-700 border border-blue-200/90 flex items-center justify-center text-[10.5px] font-extrabold shrink-0 shadow-2xs">
+                                                          {(ex.name || 'E').trim().charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                          <p className="font-bold text-gray-800 truncate text-[11px] leading-tight">
+                                                            {ex.name}
+                                                          </p>
+                                                          {ex.email && (
+                                                            <p className="text-[10px] text-gray-500 truncate leading-tight mt-0.5 font-medium">
+                                                              {ex.email}
+                                                            </p>
+                                                          )}
+                                                        </div>
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                  {/* Tooltip arrow */}
+                                                  <div
+                                                    className={`absolute ${isExaminerTopRow ? 'bottom-full border-b-white' : 'top-full border-t-white'} left-1/2 -translate-x-1/2 border-4 border-transparent drop-shadow-[0_-1px_1px_rgba(0,0,0,0.06)]`}
+                                                  ></div>
+                                                </div>
                                               </div>
                                             );
                                           })()}
                                         </td>
                                       )}
-                                      <td className="px-4 py-2.5 text-right">
-                                        <div className="flex items-center justify-end gap-1.5">
-                                          <div className="relative group/tooltip inline-block">
-                                            <Link
-                                              to={userType === 'admin'
-                                                ? `/admin/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`
-                                                : `/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`}
-                                              className="p-1.5 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 rounded-lg transition-all block shadow-2xs"
-                                            >
-                                              <Layers size={14} />
-                                            </Link>
-                                            <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-bold rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50">
-                                              Manual Section Configuration
-                                              <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-900"></div>
-                                            </div>
-                                          </div>
-
-                                          {hasPermission("CREATE_ALLOCATION") && (
-                                            <div className="relative group/tooltip inline-block">
-                                              <button
-                                                onClick={() => openAllocationModal(paper)}
-                                                className="p-1.5 text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200/80 rounded-lg transition-all block shadow-2xs cursor-pointer"
-                                              >
-                                                <Users size={14} />
-                                              </button>
-                                              <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-bold rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50">
-                                                Assign Evaluators
-                                                <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-900"></div>
-                                              </div>
-                                            </div>
-                                          )}
-
+                                      <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
+                                        <div className="flex items-center justify-end gap-2">
+                                          {/* Edit Action */}
                                           {hasPermission("UPDATE_PAPER") && (
-                                            <div className="relative group/tooltip inline-block">
-                                              <button
-                                                onClick={() => handleEdit(paper)}
-                                                className="p-1.5 text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200/80 rounded-lg transition-all block shadow-2xs cursor-pointer"
-                                              >
-                                                <Edit2 size={14} />
-                                              </button>
-                                              <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-[10px] font-bold rounded shadow-sm opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50">
-                                                Edit Paper Configuration
-                                                <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-900"></div>
-                                              </div>
-                                            </div>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleEdit(paper)}
+                                              className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl border border-gray-200 transition cursor-pointer"
+                                              title="Edit Paper Configuration"
+                                            >
+                                              <Edit2 size={13} />
+                                            </button>
                                           )}
+
+                                          {/* Preview Action */}
+                                          <button
+                                            type="button"
+                                            onClick={() => handlePreviewPaper(paper)}
+                                            className="p-2 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-xl border border-teal-100 transition cursor-pointer"
+                                            title="Preview Paper Details"
+                                          >
+                                            <Eye size={13} />
+                                          </button>
                                         </div>
                                       </td>
                                     </tr>
@@ -3072,7 +3221,7 @@ export default function PapersManagement({ isTab = false }) {
                           </div>
 
                           {/* Standard Centralized Table Pagination (outside overflow-x-auto, fixed/sticky) */}
-                          <div className="sticky bottom-0 z-10 bg-gray-50 rounded-b-xl border-t border-gray-100 shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
+                          <div className="sticky bottom-0 z-10 rounded-b-xl overflow-hidden shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
                             <TablePagination
                               page={page}
                               totalPages={totalPages}
@@ -3170,6 +3319,15 @@ export default function PapersManagement({ isTab = false }) {
                         </div>
                       ) : (
                         <>
+                          <TablePagination
+                            page={importPage}
+                            totalPages={getFilteredImportPapers().totalPages}
+                            totalCount={getFilteredImportPapers().totalCount}
+                            pageSize={importPageSize}
+                            setPage={setImportPage}
+                            setPageSize={setImportPageSize}
+                            position="top"
+                          />
                           <div className="overflow-x-auto">
                             <table className="w-full text-left text-sm">
                               <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
@@ -3274,7 +3432,7 @@ export default function PapersManagement({ isTab = false }) {
                             </table>
                           </div>
 
-                          <div className="sticky bottom-0 z-10 bg-gray-50 rounded-b-xl border-t border-gray-100 shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
+                          <div className="sticky bottom-0 z-10 rounded-b-xl overflow-hidden shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
                             <TablePagination
                               page={importPage}
                               totalPages={getFilteredImportPapers().totalPages}
@@ -4043,6 +4201,15 @@ export default function PapersManagement({ isTab = false }) {
                             </div>
                           ) : (
                             <>
+                              <TablePagination
+                                page={bulkPage}
+                                totalPages={totalBulkPages}
+                                totalCount={totalBulkCount}
+                                pageSize={bulkPageSize}
+                                setPage={setBulkPage}
+                                setPageSize={setBulkPageSize}
+                                position="top"
+                              />
                               <div className="overflow-visible min-h-[220px]">
                                 <table className="w-full text-left">
                                   <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
@@ -4183,7 +4350,7 @@ export default function PapersManagement({ isTab = false }) {
                                                   {selectedExaminers.map(ex => (
                                                     <div
                                                       key={ex.id}
-                                                      className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 bg-teal-50 border border-teal-200 rounded-lg text-xs font-bold text-teal-900 shadow-2xs"
+                                                      className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 bg-blue-50 border border-blue-200 rounded-lg text-xs font-bold text-blue-900 shadow-2xs"
                                                     >
                                                       <img
                                                         src={ex.profileImage || getInitialsAvatar(ex.name)}
@@ -4346,7 +4513,7 @@ export default function PapersManagement({ isTab = false }) {
                                 </table>
                               </div>
 
-                              <div className="sticky bottom-0 z-10 bg-gray-50 rounded-b-xl border-t border-gray-100 shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
+                              <div className="sticky bottom-0 z-10 rounded-b-xl overflow-hidden shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
                                 <TablePagination
                                   page={bulkPage}
                                   totalPages={totalBulkPages}
@@ -4998,19 +5165,35 @@ export default function PapersManagement({ isTab = false }) {
                       })
                       .sort((a, b) => a - b);
 
+                    // Determine the configured batchId for this paper
+                    const configuredBatchId = formData.batchId || editingPaper?.batchId || previewBatchId || (() => {
+                      if (selectedMasterSectionIds.length > 0) {
+                        const matchedSec = safeSectionMasters.find(m => selectedMasterSectionIds.includes(m.id));
+                        return matchedSec?.batchId || null;
+                      }
+                      return null;
+                    })();
+
+                    // In preview mode: show ONLY the configured batch
+                    const batchesToRender = isReadOnlyPreview
+                      ? (configuredBatchId ? [configuredBatchId] : [])
+                      : availableBatches;
+
                     return (
                       <div className="w-full bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col overflow-hidden sticky top-6 max-h-[calc(100vh-3rem)] animate-in fade-in duration-200">
                         {/* Panel Header */}
                         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/70 shrink-0">
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 bg-teal-100 text-teal-800 rounded-xl flex items-center justify-center font-bold shadow-xs">
-                              {editingId ? <Edit2 size={17} /> : <Plus size={17} />}
+                            <div className={`w-9 h-9 ${isReadOnlyPreview ? 'bg-blue-100 text-blue-800' : 'bg-teal-100 text-teal-800'} rounded-xl flex items-center justify-center font-bold shadow-xs`}>
+                              {isReadOnlyPreview ? <Eye size={17} /> : (editingId ? <Edit2 size={17} /> : <Plus size={17} />)}
                             </div>
                             <div>
                               <h2 className="text-base font-extrabold text-gray-900 leading-tight">
-                                {editingId ? "Edit Paper Configuration" : "Add Paper"}
+                                {isReadOnlyPreview ? "Paper Preview" : (editingId ? "Edit Paper Configuration" : "Add Paper")}
                               </h2>
-                              <p className="text-xs text-gray-500 font-medium">Configure paper details & import sections by Batch ID</p>
+                              <p className="text-xs text-gray-500 font-medium">
+                                {isReadOnlyPreview ? "View paper details and configured section blueprint" : "Configure paper details & import sections by Batch ID"}
+                              </p>
                             </div>
                           </div>
                           <button
@@ -5046,247 +5229,287 @@ export default function PapersManagement({ isTab = false }) {
                               </div>
                             )}
 
-                            {/* Row 1: Code, Name, Catch No */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                              <div>
-                                <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
-                                  Paper Code <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                  type="text"
-                                  value={formData.paperCode}
-                                  onChange={(e) => setFormData({ ...formData, paperCode: e.target.value })}
-                                  disabled={Boolean(editingId)}
-                                  className={`w-full text-xs px-3 py-2 rounded-lg transition-all outline-none font-medium border ${editingId
-                                    ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed select-none'
-                                    : 'bg-gray-50/70 border-gray-200 text-gray-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500'
-                                    }`}
-                                  placeholder=""
-                                  autoComplete="off"
-                                  required
-                                />
+                            {/* In Edit mode (editingId && !isReadOnlyPreview), show ONLY Paper Code (non-editable) and Catch Number (editable) */}
+                            {(editingId && !isReadOnlyPreview) ? (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                <div>
+                                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                                    Paper Code
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={formData.paperCode}
+                                    disabled
+                                    className="w-full text-xs px-3 py-2 rounded-lg outline-none font-bold bg-gray-100 text-gray-600 border border-gray-200 cursor-not-allowed select-none"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                                    Catch Number <span className="text-red-500">*</span>
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={formData.catchNo}
+                                    onChange={(e) => setFormData({ ...formData, catchNo: e.target.value })}
+                                    disabled={isProjectInactive}
+                                    className="w-full text-xs px-3 py-2 rounded-lg transition-all outline-none font-bold bg-white border border-teal-400 text-gray-900 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs"
+                                    placeholder="e.g. 1024"
+                                    autoComplete="off"
+                                    required
+                                  />
+                                </div>
                               </div>
-                              <div>
-                                <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
-                                  Paper Name <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                  type="text"
-                                  value={formData.paperName}
-                                  onChange={(e) => setFormData({ ...formData, paperName: e.target.value })}
-                                  disabled={Boolean(editingId)}
-                                  className={`w-full text-xs px-3 py-2 rounded-lg transition-all outline-none font-medium border ${editingId
-                                    ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed select-none'
-                                    : 'bg-gray-50/70 border-gray-200 text-gray-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500'
-                                    }`}
-                                  placeholder=""
-                                  autoComplete="off"
-                                  required
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
-                                  Catch Number <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                  type="text"
-                                  value={formData.catchNo}
-                                  onChange={(e) => setFormData({ ...formData, catchNo: e.target.value })}
-                                  className="w-full bg-white border border-teal-400 text-gray-900 text-xs px-3 py-2 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all outline-none font-bold shadow-2xs"
-                                  placeholder="e.g. 1024"
-                                  autoComplete="off"
-                                  required
-                                />
-                              </div>
-                            </div>
-
-                            {/* Row 2: Subjects, Paper Number, Max Marks, Total Questions in ONE Row */}
-                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-start">
-                              {/* Multi-Select Subjects Dropdown */}
-                              <div className="sm:col-span-5 relative" ref={subjectDropdownRef}>
-                                <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
-                                  Subjects ({selectedSubjects.length} selected) <span className="text-red-500">*</span>
-                                </label>
-                                <div
-                                  onClick={() => { if (!editingId) setIsSubjectDropdownOpen(prev => !prev); }}
-                                  className={`w-full text-xs px-2.5 py-1.5 rounded-lg transition-all outline-none font-medium flex items-center justify-between gap-1.5 min-h-[38px] shadow-2xs select-none border ${editingId
-                                    ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed'
-                                    : 'bg-gray-50/70 border-gray-200 text-gray-900 hover:border-gray-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-teal-500 cursor-pointer'
-                                    }`}
-                                >
-                                  <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
-                                    {selectedSubjects.length === 0 ? (
-                                      <span className="text-gray-400 font-normal py-0.5">Select subjects...</span>
-                                    ) : (
-                                      selectedSubjects.map(subId => {
-                                        const sub = subjects.find(s => s.subjectId === subId);
-                                        if (!sub) return null;
-                                        return (
-                                          <span
-                                            key={subId}
-                                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-semibold animate-in fade-in ${editingId
-                                              ? 'bg-gray-200/80 border-gray-300 text-gray-700'
-                                              : 'bg-teal-50 border-teal-200 text-teal-800'
-                                              }`}
-                                          >
-                                            <span>{sub.subjectName}</span>
-                                            {!editingId && (
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  toggleSubject(subId);
-                                                }}
-                                                className="text-teal-600 hover:text-teal-900 hover:bg-teal-100 rounded-full p-0.5 transition-colors cursor-pointer"
-                                                title="Remove subject"
-                                              >
-                                                <X size={10} />
-                                              </button>
-                                            )}
-                                          </span>
-                                        );
-                                      })
-                                    )}
+                            ) : (
+                              <>
+                                {/* Row 1: Code, Name, Catch No (Shown in Preview or Add Paper mode) */}
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                                  <div>
+                                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                                      Paper Code <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={formData.paperCode}
+                                      onChange={(e) => setFormData({ ...formData, paperCode: e.target.value })}
+                                      disabled={Boolean(editingId)}
+                                      className={`w-full text-xs px-3 py-2 rounded-lg transition-all outline-none font-medium border ${editingId
+                                        ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed select-none'
+                                        : 'bg-gray-50/70 border-gray-200 text-gray-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500'
+                                        }`}
+                                      placeholder=""
+                                      autoComplete="off"
+                                      required
+                                    />
                                   </div>
-                                  <ChevronDown size={14} className={`text-gray-400 transition-transform shrink-0 ml-1 ${isSubjectDropdownOpen ? "rotate-180" : ""}`} />
+                                  <div>
+                                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                                      Paper Name <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={formData.paperName}
+                                      onChange={(e) => setFormData({ ...formData, paperName: e.target.value })}
+                                      disabled={Boolean(editingId)}
+                                      className={`w-full text-xs px-3 py-2 rounded-lg transition-all outline-none font-medium border ${editingId
+                                        ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed select-none'
+                                        : 'bg-gray-50/70 border-gray-200 text-gray-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500'
+                                        }`}
+                                      placeholder=""
+                                      autoComplete="off"
+                                      required
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                                      Catch Number <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={formData.catchNo}
+                                      onChange={(e) => setFormData({ ...formData, catchNo: e.target.value })}
+                                      disabled={isReadOnlyPreview || isProjectInactive}
+                                      className={`w-full text-xs px-3 py-2 rounded-lg transition-all outline-none font-bold ${isReadOnlyPreview
+                                        ? 'bg-gray-100 text-gray-500 border border-gray-200 cursor-not-allowed select-none'
+                                        : 'bg-white border border-teal-400 text-gray-900 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 shadow-2xs'
+                                        }`}
+                                      placeholder="e.g. 1024"
+                                      autoComplete="off"
+                                      required
+                                    />
+                                  </div>
                                 </div>
 
-                                {isSubjectDropdownOpen && !editingId && (
-                                  <div className="absolute left-0 top-full mt-1 w-72 sm:w-80 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2.5 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
-                                    <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
-                                      <Search size={13} className="text-gray-400" />
-                                      <input
-                                        type="text"
-                                        placeholder="Search subjects..."
-                                        value={subjectSearchText}
-                                        onChange={(e) => setSubjectSearchText(e.target.value)}
-                                        className="w-full bg-transparent text-xs text-gray-800 outline-none placeholder-gray-400"
-                                      />
-                                      {subjectSearchText && (
-                                        <button type="button" onClick={() => setSubjectSearchText("")} className="text-gray-400 hover:text-gray-600">
-                                          <X size={12} />
-                                        </button>
-                                      )}
-                                    </div>
-
-                                    <div className="flex items-center justify-between text-[11px] px-1 text-gray-500 font-medium">
-                                      <span>{selectedSubjects.length} selected</span>
-                                      <div className="flex items-center gap-2">
-                                        <button
-                                          type="button"
-                                          onClick={() => setSelectedSubjects(subjects.map(s => s.subjectId))}
-                                          className="text-teal-700 hover:underline font-semibold"
-                                        >
-                                          Select All
-                                        </button>
-                                        <span>•</span>
-                                        <button
-                                          type="button"
-                                          onClick={() => setSelectedSubjects([])}
-                                          className="text-gray-500 hover:underline"
-                                        >
-                                          Clear
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar pr-1">
-                                      {subjects.filter(s => (s.subjectName || "").toLowerCase().includes(subjectSearchText.toLowerCase())).length === 0 ? (
-                                        <div className="text-xs text-gray-400 py-2 text-center">No subjects found</div>
-                                      ) : (
-                                        subjects
-                                          .filter(s => (s.subjectName || "").toLowerCase().includes(subjectSearchText.toLowerCase()))
-                                          .map(s => {
-                                            const isSelected = selectedSubjects.includes(s.subjectId);
+                                {/* Row 2: Subjects, Paper Number, Max Marks, Total Questions in ONE Row */}
+                                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-start">
+                                  {/* Multi-Select Subjects Dropdown */}
+                                  <div className="sm:col-span-5 relative" ref={subjectDropdownRef}>
+                                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                                      Subjects ({selectedSubjects.length} selected) <span className="text-red-500">*</span>
+                                    </label>
+                                    <div
+                                      onClick={() => { if (!editingId && !isReadOnlyPreview) setIsSubjectDropdownOpen(prev => !prev); }}
+                                      className={`w-full text-xs px-2.5 py-1.5 rounded-lg transition-all outline-none font-medium flex items-center justify-between gap-1.5 min-h-[38px] shadow-2xs select-none border ${editingId || isReadOnlyPreview
+                                        ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed'
+                                        : 'bg-gray-50/70 border-gray-200 text-gray-900 hover:border-gray-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-teal-500 cursor-pointer'
+                                        }`}
+                                    >
+                                      <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
+                                        {selectedSubjects.length === 0 ? (
+                                          <span className="text-gray-400 font-normal py-0.5">Select subjects...</span>
+                                        ) : (
+                                          selectedSubjects.map(subId => {
+                                            const sub = subjects.find(s => s.subjectId === subId);
+                                            if (!sub) return null;
                                             return (
-                                              <label
-                                                key={s.subjectId}
-                                                className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer select-none transition-all ${isSelected ? "bg-teal-50 text-teal-900 font-medium" : "hover:bg-gray-50 text-gray-700"
+                                              <span
+                                                key={subId}
+                                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-semibold animate-in fade-in ${editingId || isReadOnlyPreview
+                                                  ? 'bg-gray-200/80 border-gray-300 text-gray-700'
+                                                  : 'bg-teal-50 border-teal-200 text-teal-800'
                                                   }`}
                                               >
-                                                <input
-                                                  type="checkbox"
-                                                  checked={isSelected}
-                                                  onChange={() => toggleSubject(s.subjectId)}
-                                                  className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300"
-                                                />
-                                                <span className="truncate">{s.subjectName}</span>
-                                              </label>
+                                                <span>{sub.subjectName}</span>
+                                                {!editingId && !isReadOnlyPreview && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      toggleSubject(subId);
+                                                    }}
+                                                    className="text-teal-600 hover:text-teal-900 hover:bg-teal-100 rounded-full p-0.5 transition-colors cursor-pointer"
+                                                    title="Remove subject"
+                                                  >
+                                                    <X size={10} />
+                                                  </button>
+                                                )}
+                                              </span>
                                             );
                                           })
+                                        )}
+                                      </div>
+                                      {!isReadOnlyPreview && (
+                                        <ChevronDown size={14} className={`text-gray-400 transition-transform shrink-0 ml-1 ${isSubjectDropdownOpen ? "rotate-180" : ""}`} />
                                       )}
                                     </div>
+
+                                    {isSubjectDropdownOpen && !editingId && !isReadOnlyPreview && (
+                                      <div className="absolute left-0 top-full mt-1 w-72 sm:w-80 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2.5 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
+                                        <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
+                                          <Search size={13} className="text-gray-400" />
+                                          <input
+                                            type="text"
+                                            placeholder="Search subjects..."
+                                            value={subjectSearchText}
+                                            onChange={(e) => setSubjectSearchText(e.target.value)}
+                                            className="w-full bg-transparent text-xs text-gray-800 outline-none placeholder-gray-400"
+                                          />
+                                          {subjectSearchText && (
+                                            <button type="button" onClick={() => setSubjectSearchText("")} className="text-gray-400 hover:text-gray-600">
+                                              <X size={12} />
+                                            </button>
+                                          )}
+                                        </div>
+
+                                        <div className="flex items-center justify-between text-[11px] px-1 text-gray-500 font-medium">
+                                          <span>{selectedSubjects.length} selected</span>
+                                          <div className="flex items-center gap-2">
+                                            <button
+                                              type="button"
+                                              onClick={() => setSelectedSubjects(subjects.map(s => s.subjectId))}
+                                              className="text-teal-700 hover:underline font-semibold"
+                                            >
+                                              Select All
+                                            </button>
+                                            <span>•</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => setSelectedSubjects([])}
+                                              className="text-gray-500 hover:underline"
+                                            >
+                                              Clear
+                                            </button>
+                                          </div>
+                                        </div>
+
+                                        <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar pr-1">
+                                          {subjects.filter(s => (s.subjectName || "").toLowerCase().includes(subjectSearchText.toLowerCase())).length === 0 ? (
+                                            <div className="text-xs text-gray-400 py-2 text-center">No subjects found</div>
+                                          ) : (
+                                            subjects
+                                              .filter(s => (s.subjectName || "").toLowerCase().includes(subjectSearchText.toLowerCase()))
+                                              .map(s => {
+                                                const isSelected = selectedSubjects.includes(s.subjectId);
+                                                return (
+                                                  <label
+                                                    key={s.subjectId}
+                                                    className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer select-none transition-all ${isSelected ? "bg-teal-50 text-teal-900 font-medium" : "hover:bg-gray-50 text-gray-700"
+                                                      }`}
+                                                  >
+                                                    <input
+                                                      type="checkbox"
+                                                      checked={isSelected}
+                                                      onChange={() => toggleSubject(s.subjectId)}
+                                                      className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-gray-300"
+                                                    />
+                                                    <span className="truncate">{s.subjectName}</span>
+                                                  </label>
+                                                );
+                                              })
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
-                                )}
-                              </div>
 
-                              {/* Paper Number */}
-                              <div className="sm:col-span-2">
-                                <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Paper Number</label>
-                                <input
-                                  type="number"
-                                  value={formData.paperNumber}
-                                  onChange={(e) => setFormData({ ...formData, paperNumber: e.target.value })}
-                                  disabled={Boolean(editingId)}
-                                  className={`w-full text-xs px-3 py-2 rounded-lg transition-all outline-none font-medium border ${editingId
-                                    ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed select-none'
-                                    : 'bg-gray-50/70 border-gray-200 text-gray-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500'
-                                    }`}
-                                  placeholder=""
-                                  autoComplete="off"
-                                  min="1"
-                                />
-                              </div>
+                                  {/* Paper Number */}
+                                  <div className="sm:col-span-2">
+                                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Paper Number</label>
+                                    <input
+                                      type="number"
+                                      value={formData.paperNumber}
+                                      onChange={(e) => setFormData({ ...formData, paperNumber: e.target.value })}
+                                      disabled={Boolean(editingId)}
+                                      className={`w-full text-xs px-3 py-2 rounded-lg transition-all outline-none font-medium border ${editingId
+                                        ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed select-none'
+                                        : 'bg-gray-50/70 border-gray-200 text-gray-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500'
+                                        }`}
+                                      placeholder=""
+                                      autoComplete="off"
+                                      min="1"
+                                    />
+                                  </div>
 
-                              {/* Max Marks */}
-                              <div className="sm:col-span-2">
-                                <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
-                                  Max Marks <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                  type="number"
-                                  value={formData.maxMarks}
-                                  onChange={(e) => setFormData({ ...formData, maxMarks: e.target.value })}
-                                  disabled={Boolean(editingId)}
-                                  className={`w-full text-xs px-3 py-2 rounded-lg transition-all outline-none font-medium border ${editingId
-                                    ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed select-none'
-                                    : 'bg-gray-50/70 border-gray-200 text-gray-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500'
-                                    }`}
-                                  placeholder=""
-                                  autoComplete="off"
-                                  min="1"
-                                  required
-                                />
-                              </div>
+                                  {/* Max Marks */}
+                                  <div className="sm:col-span-2">
+                                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">
+                                      Max Marks <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="number"
+                                      value={formData.maxMarks}
+                                      onChange={(e) => setFormData({ ...formData, maxMarks: e.target.value })}
+                                      disabled={Boolean(editingId)}
+                                      className={`w-full text-xs px-3 py-2 rounded-lg transition-all outline-none font-medium border ${editingId
+                                        ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed select-none'
+                                        : 'bg-gray-50/70 border-gray-200 text-gray-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500'
+                                        }`}
+                                      placeholder=""
+                                      autoComplete="off"
+                                      min="1"
+                                      required
+                                    />
+                                  </div>
 
-                              {/* Total Questions */}
-                              <div className="sm:col-span-3">
-                                <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1 whitespace-nowrap">
-                                  Total Questions <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                  type="number"
-                                  value={formData.totalQuestions}
-                                  onChange={(e) => setFormData({ ...formData, totalQuestions: e.target.value })}
-                                  disabled={Boolean(editingId)}
-                                  className={`w-full text-xs px-3 py-2 rounded-lg outline-none font-medium transition-all border ${editingId
-                                    ? "bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed select-none"
-                                    : isQuestionMismatch
-                                      ? "bg-amber-50/70 border-2 border-amber-400 text-amber-900 focus:ring-2 focus:ring-amber-500"
-                                      : "bg-gray-50/70 border-gray-200 text-gray-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                                    }`}
-                                  placeholder=""
-                                  autoComplete="off"
-                                  min="1"
-                                  required
-                                />
-                                {selectedMasterSectionIds.length > 0 && (
-                                  <p className={`mt-1 text-[10px] ${isQuestionMismatch ? "text-amber-600 font-bold" : "text-gray-500 font-medium"}`}>
-                                    Master: {masterTotalQuestions}Q
-                                  </p>
-                                )}
-                              </div>
-                            </div>
+                                  {/* Total Questions */}
+                                  <div className="sm:col-span-3">
+                                    <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1 whitespace-nowrap">
+                                      Total Questions <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                      type="number"
+                                      value={formData.totalQuestions}
+                                      onChange={(e) => setFormData({ ...formData, totalQuestions: e.target.value })}
+                                      disabled={Boolean(editingId)}
+                                      className={`w-full text-xs px-3 py-2 rounded-lg outline-none font-medium transition-all border ${editingId
+                                        ? "bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed select-none"
+                                        : isQuestionMismatch
+                                          ? "bg-amber-50/70 border-2 border-amber-400 text-amber-900 focus:ring-2 focus:ring-amber-500"
+                                          : "bg-gray-50/70 border-gray-200 text-gray-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                                        }`}
+                                      placeholder=""
+                                      autoComplete="off"
+                                      min="1"
+                                      required
+                                    />
+                                    {selectedMasterSectionIds.length > 0 && (
+                                      <p className={`mt-1 text-[10px] ${isQuestionMismatch ? "text-amber-600 font-bold" : "text-gray-500 font-medium"}`}>
+                                        Master: {masterTotalQuestions}Q
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </>
+                            )}
 
                             {/* Master Sections Question Count Mismatch Alert */}
                             {isQuestionMismatch && !editingId && (
@@ -5312,152 +5535,223 @@ export default function PapersManagement({ isTab = false }) {
                               </div>
                             )}
 
-                            {/* Row 3: Description */}
-                            <div>
-                              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-gray-600 mb-1">Description</label>
-                              <input
-                                type="text"
-                                value={formData.description}
-                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                disabled={Boolean(editingId)}
-                                className={`w-full text-xs px-3 py-2 rounded-lg transition-all outline-none font-medium border ${editingId
-                                  ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed select-none'
-                                  : 'bg-gray-50/70 border-gray-200 text-gray-900 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500'
-                                  }`}
-                                placeholder=""
-                                autoComplete="off"
-                              />
-                            </div>
-
-                            {/* Question Paper PDF Card */}
-                            <div className="border border-blue-100 bg-blue-50/20 rounded-2xl p-4 space-y-3">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs font-extrabold text-blue-950 uppercase tracking-wider block">
+                            {/* Row 3: Question Paper PDF & Assigned Examiners Side-by-Side (Matching Section Config Theme) */}
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-stretch">
+                              
+                              {/* Question Paper PDF Card (Compact Width) */}
+                              <div className="sm:col-span-5 border border-teal-100 bg-teal-50/20 rounded-xl p-2.5 space-y-1.5 flex flex-col justify-between">
+                                <div className="flex items-center justify-between gap-1.5 min-h-[22px]">
+                                  <span className="text-xs font-bold text-teal-950 uppercase tracking-wider block">
                                     Question Paper PDF
                                   </span>
-                                  {formData.questionPaperPdfUrl ? (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 flex items-center gap-1">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Uploaded
-                                    </span>
-                                  ) : (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 flex items-center gap-1">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Not Uploaded
-                                    </span>
-                                  )}
                                 </div>
+
+                                {editingId ? (
+                                  !isReadOnlyPreview ? (
+                                    <div className="space-y-1">
+                                      {/* File Selector Input */}
+                                      <div className="flex items-center gap-2 bg-white border border-teal-200/80 hover:border-teal-300 rounded-lg px-2 py-1 min-h-[36px] max-h-[36px] shadow-2xs transition-colors">
+                                        <button
+                                          type="button"
+                                          onClick={() => editPdfInputRef.current?.click()}
+                                          disabled={isUploadingEditPdf}
+                                          className="px-2.5 py-1 text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 rounded transition-colors shrink-0 cursor-pointer disabled:opacity-50"
+                                        >
+                                          {isUploadingEditPdf ? "Uploading..." : "Choose File"}
+                                        </button>
+                                        <span className="text-xs text-gray-400 font-normal truncate flex-1">
+                                          {selectedEditFileName || "No file chosen"}
+                                        </span>
+                                        <input
+                                          type="file"
+                                          ref={editPdfInputRef}
+                                          accept="application/pdf"
+                                          disabled={isUploadingEditPdf}
+                                          onChange={handleEditPdfChange}
+                                          className="hidden"
+                                        />
+                                      </div>
+
+                                      {/* Small text in blue color showing file name */}
+                                      {(formData.questionPaperPdfUrl || selectedEditFileName) && (() => {
+                                        const fileName = selectedEditFileName || formData.questionPaperPdfUrl.split('/').pop();
+                                        const fileUrl = formData.questionPaperPdfUrl
+                                          ? (formData.questionPaperPdfUrl.startsWith('http://') || formData.questionPaperPdfUrl.startsWith('https://') || formData.questionPaperPdfUrl.startsWith('blob:')
+                                            ? formData.questionPaperPdfUrl
+                                            : `${import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : ''}/${formData.questionPaperPdfUrl.replace(/^\//, '')}`)
+                                          : '#';
+
+                                        return (
+                                          <a
+                                            href={fileUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-[11px] text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1.5 truncate font-medium cursor-pointer pl-0.5"
+                                            title={`Click to view: ${fileName}`}
+                                          >
+                                            <FileText size={12} className="text-blue-500 shrink-0" />
+                                            <span className="truncate">{fileName}</span>
+                                          </a>
+                                        );
+                                      })()}
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-1">
+                                      <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1 min-h-[36px] max-h-[36px]">
+                                        {formData.questionPaperPdfUrl ? (() => {
+                                          const fileName = formData.questionPaperPdfUrl.split('/').pop();
+                                          const fileUrl = formData.questionPaperPdfUrl.startsWith('http://') || formData.questionPaperPdfUrl.startsWith('https://') || formData.questionPaperPdfUrl.startsWith('blob:')
+                                            ? formData.questionPaperPdfUrl
+                                            : `${import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : ''}/${formData.questionPaperPdfUrl.replace(/^\//, '')}`;
+
+                                          return (
+                                            <a
+                                              href={fileUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-[11px] text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1.5 truncate font-medium cursor-pointer"
+                                              title={`Click to view: ${fileName}`}
+                                            >
+                                              <FileText size={12} className="text-blue-500 shrink-0" />
+                                              <span className="truncate">{fileName}</span>
+                                            </a>
+                                          );
+                                        })() : (
+                                          <span className="text-xs text-gray-400 font-medium italic">
+                                            No PDF uploaded
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )
+                                ) : (
+                                  <div className="min-h-[36px] max-h-[36px] px-2.5 py-1 rounded-lg border border-dashed border-teal-200 text-center text-xs text-gray-400 flex items-center justify-center font-medium">
+                                    PDF can be uploaded after saving paper.
+                                  </div>
+                                )}
                               </div>
 
-                              {editingId ? (
-                                formData.questionPaperPdfUrl ? (
-                                  <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-blue-200/80 shadow-2xs gap-3 flex-wrap sm:flex-nowrap">
-                                    <div className="flex items-center gap-2.5 min-w-0">
-                                      <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center shrink-0">
-                                        <FileText size={16} />
-                                      </div>
-                                      <div className="min-w-0">
-                                        <p className="text-xs font-bold text-gray-900 truncate max-w-[200px]" title={formData.questionPaperPdfUrl}>
-                                          {formData.questionPaperPdfUrl.split('/').pop() || 'QuestionPaper.pdf'}
-                                        </p>
-                                        <p className="text-[10px] text-gray-400">PDF allocated to this paper</p>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                      <a
-                                        href={`${import.meta.env.VITE_API_URL.replace('/api', '')}/${formData.questionPaperPdfUrl.replace(/^\//, '')}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                                      >
-                                        <Eye size={13} /> View PDF
-                                      </a>
-                                      <button
-                                        type="button"
-                                        onClick={() => editPdfInputRef.current?.click()}
-                                        disabled={isUploadingEditPdf}
-                                        className="px-2.5 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
-                                      >
-                                        {isUploadingEditPdf ? (
-                                          <span className="flex items-center gap-1">
-                                            <span className="w-3 h-3 border-2 border-gray-600 border-t-transparent rounded-full animate-spin"></span>
-                                            Uploading...
-                                          </span>
-                                        ) : (
-                                          <>
-                                            <Upload size={13} /> Replace PDF
-                                          </>
-                                        )}
-                                      </button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div
-                                    onClick={() => !isUploadingEditPdf && editPdfInputRef.current?.click()}
-                                    className="p-4 bg-white rounded-xl border-2 border-dashed border-blue-300 hover:border-blue-400 text-center cursor-pointer transition-all hover:bg-blue-50/50 group"
-                                  >
-                                    {isUploadingEditPdf ? (
-                                      <div className="flex flex-col items-center justify-center py-2 text-blue-700">
-                                        <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mb-2"></div>
-                                        <p className="text-xs font-bold">Uploading Question Paper PDF...</p>
-                                      </div>
-                                    ) : (
-                                      <div className="flex flex-col items-center justify-center py-2">
-                                        <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                                          <Upload size={18} />
-                                        </div>
-                                        <p className="text-xs font-bold text-gray-800">
-                                          Click to upload Question Paper PDF
-                                        </p>
-                                        <p className="text-[11px] text-gray-400 mt-0.5">
-                                          Supports PDF file named by Catch No or Paper Code (Max 50MB)
-                                        </p>
-                                      </div>
-                                    )}
-                                  </div>
-                                )
-                              ) : (
-                                <div className="p-3 bg-white rounded-xl border border-dashed border-gray-200 text-center text-xs text-gray-400 font-medium">
-                                  Question paper PDF can be uploaded after saving the paper.
-                                </div>
-                              )}
-
-                              <input
-                                type="file"
-                                ref={editPdfInputRef}
-                                accept="application/pdf"
-                                style={{ display: "none" }}
-                                onChange={handleEditPdfChange}
-                              />
-                            </div>
-
-                            {/* Allotted Examiners Card */}
-                            <div className="border border-orange-100 bg-orange-50/20 rounded-2xl p-4 space-y-3">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs font-extrabold text-orange-950 uppercase tracking-wider block">
-                                    Allotted Examiners
-                                  </span>
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-100 text-orange-800">
-                                    {editAssignedExaminers.length} Assigned
+                              {/* Assigned Examiners Card (Expanded Width) */}
+                              <div className="sm:col-span-7 border border-teal-100 bg-teal-50/20 rounded-xl p-2.5 space-y-1.5 flex flex-col justify-between">
+                                <div className="flex items-center justify-between gap-1.5 min-h-[22px]">
+                                  <span className="text-xs font-bold text-teal-950 uppercase tracking-wider block">
+                                    Assigned Examiners
                                   </span>
                                 </div>
-                                {editingId && (
+
+                                {editingId ? (
                                   <div className="relative" ref={editExaminerDropdownRef}>
-                                    <button
-                                      type="button"
-                                      onClick={() => setIsEditExaminerDropdownOpen(prev => !prev)}
-                                      className="px-2.5 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer shadow-xs"
+                                    <div
+                                      onClick={() => { if (!isReadOnlyPreview && editingId) setIsEditExaminerDropdownOpen(prev => !prev); }}
+                                      className={`w-full text-xs px-2.5 py-1 rounded-lg transition-all outline-none font-medium flex items-center justify-between gap-1.5 min-h-[36px] max-h-[36px] shadow-2xs select-none border ${isReadOnlyPreview
+                                        ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed'
+                                        : 'bg-white border-teal-200 text-gray-900 hover:border-teal-300 focus-within:ring-2 focus-within:ring-teal-500 cursor-pointer'
+                                        }`}
                                     >
-                                      <UserPlus size={13} /> Add Examiner
-                                    </button>
+                                      <div className="flex items-center gap-1.5 flex-1 min-w-0 flex-nowrap">
+                                        {(() => {
+                                          if (editAssignedExaminers.length === 0) {
+                                            return <span className="text-gray-400 font-normal py-0.5">Select examiners...</span>;
+                                          }
 
-                                    {isEditExaminerDropdownOpen && (
-                                      <div className="absolute right-0 top-full mt-1.5 w-72 sm:w-80 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2.5 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
+                                          // Show up to 2 examiners if total <= 2; if 3 or more, show first 2 and "+X more" badge
+                                          const shouldCollapse = editAssignedExaminers.length > 2;
+                                          const visibleExaminers = shouldCollapse ? editAssignedExaminers.slice(0, 2) : editAssignedExaminers;
+                                          const remainingCount = editAssignedExaminers.length - visibleExaminers.length;
+
+                                          return (
+                                            <>
+                                              {visibleExaminers.map(a => {
+                                                const exName = a.examiner?.name || a.name || `Examiner #${a.examinerId}`;
+                                                const exImg = a.examiner?.profileImage || a.profileImage || getInitialsAvatar(exName);
+                                                return (
+                                                  <span
+                                                    key={a.id || a.examinerId}
+                                                    title={exName}
+                                                    className={`inline-flex items-center gap-1 pl-1 pr-1.5 py-0.5 rounded-md border text-[10px] font-semibold shrink-0 animate-in fade-in ${isReadOnlyPreview
+                                                      ? 'bg-blue-50 border-blue-200 text-blue-800'
+                                                      : 'bg-blue-50 border-blue-200 text-blue-800'
+                                                      }`}
+                                                  >
+                                                    <img src={exImg} alt="" className="w-3.5 h-3.5 rounded-full object-cover border border-gray-300 shrink-0" />
+                                                    <span className="truncate max-w-[80px] sm:max-w-[105px]">{exName}</span>
+                                                    {!isReadOnlyPreview && (
+                                                      <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          handleRemoveExaminerInEdit(a);
+                                                        }}
+                                                        className="text-gray-400 hover:text-red-500 hover:bg-gray-200 rounded-full p-0.5 transition-colors cursor-pointer shrink-0"
+                                                        title="Remove examiner"
+                                                      >
+                                                        <X size={9} />
+                                                      </button>
+                                                    )}
+                                                  </span>
+                                                );
+                                              })}
+
+                                              {remainingCount > 0 && (
+                                                <div className="relative group/more shrink-0">
+                                                  <span
+                                                    className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 hover:bg-blue-200 text-blue-800 border border-blue-200 shadow-2xs transition-colors cursor-pointer shrink-0"
+                                                  >
+                                                    +{remainingCount} more
+                                                  </span>
+
+                                                  {!isEditExaminerDropdownOpen && (
+                                                    <div className="absolute right-0 bottom-full mb-2 hidden group-hover/more:flex flex-col w-max min-w-[220px] max-w-xs bg-white/95 backdrop-blur-md text-gray-800 rounded-xl shadow-xl shadow-blue-900/10 p-3 border border-gray-200/90 z-50 pointer-events-none text-left animate-in fade-in zoom-in-95 duration-150">
+                                                      <div className="flex items-center justify-between gap-2 pb-1.5 mb-2 border-b border-gray-100">
+                                                        <span className="text-[10px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
+                                                          <Users size={12} className="text-blue-600" />
+                                                          All Assigned Examiners ({editAssignedExaminers.length})
+                                                        </span>
+                                                      </div>
+                                                      <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                                                        {editAssignedExaminers.map((ex, idx) => {
+                                                          const exName = ex.examiner?.name || ex.name || `Examiner #${ex.examinerId || ex.id}`;
+                                                          const exEmail = ex.examiner?.email || ex.email || '';
+                                                          const exImg = ex.examiner?.profileImage || ex.profileImage || getInitialsAvatar(exName);
+                                                          return (
+                                                            <div key={ex.id || ex.examinerId || idx} className="flex items-center gap-2.5 p-1 rounded-lg hover:bg-gray-50/80 transition-colors">
+                                                              <img src={exImg} alt="" className="w-6 h-6 rounded-full object-cover border border-blue-200 shadow-2xs shrink-0" />
+                                                              <div className="min-w-0 flex-1">
+                                                                <p className="font-bold text-gray-800 truncate text-[11px] leading-tight">
+                                                                  {exName}
+                                                                </p>
+                                                                {exEmail && (
+                                                                  <p className="text-[10px] text-gray-500 truncate leading-tight mt-0.5 font-medium">
+                                                                    {exEmail}
+                                                                  </p>
+                                                                )}
+                                                              </div>
+                                                            </div>
+                                                          );
+                                                        })}
+                                                      </div>
+                                                      {/* Tooltip arrow */}
+                                                      <div className="absolute top-full right-3 border-4 border-transparent border-t-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.06)]"></div>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              )}
+                                            </>
+                                          );
+                                        })()}
+                                      </div>
+                                      {!isReadOnlyPreview && (
+                                        <ChevronDown size={14} className={`text-gray-400 transition-transform shrink-0 ml-1 ${isEditExaminerDropdownOpen ? "rotate-180" : ""}`} />
+                                      )}
+                                    </div>
+
+                                    {isEditExaminerDropdownOpen && !isReadOnlyPreview && (
+                                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-2.5 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
                                         <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
                                           <Search size={13} className="text-gray-400" />
                                           <input
                                             type="text"
-                                            placeholder="Search examiners by name..."
+                                            placeholder="Search examiners..."
                                             value={editExaminerSearch}
                                             onChange={(e) => setEditExaminerSearch(e.target.value)}
                                             className="w-full bg-transparent text-xs text-gray-800 outline-none placeholder-gray-400 font-medium"
@@ -5468,98 +5762,80 @@ export default function PapersManagement({ isTab = false }) {
                                             </button>
                                           )}
                                         </div>
-                                        <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar pr-1">
+
+                                        <div className="flex items-center justify-between text-[11px] px-1 text-gray-500 font-medium">
+                                          <span>{editAssignedExaminers.length} selected</span>
+                                          <div className="flex items-center gap-2">
+                                            <button
+                                              type="button"
+                                              onClick={handleSelectAllExaminersInEdit}
+                                              className="text-teal-700 hover:underline font-semibold cursor-pointer"
+                                            >
+                                              Select All
+                                            </button>
+                                            <span>•</span>
+                                            <button
+                                              type="button"
+                                              onClick={handleClearAllExaminersInEdit}
+                                              className="text-gray-500 hover:underline cursor-pointer"
+                                            >
+                                              Clear
+                                            </button>
+                                          </div>
+                                        </div>
+
+                                        <div className="max-h-44 overflow-y-auto space-y-1 custom-scrollbar pr-1">
                                           {loadingEditExaminers ? (
                                             <div className="text-center py-4 text-xs text-gray-400 font-medium">Loading examiners...</div>
-                                          ) : editAvailableExaminers.filter(ex =>
-                                            (ex.name || "").toLowerCase().includes(editExaminerSearch.toLowerCase()) &&
-                                            !editAssignedExaminers.some(a => a.examinerId === ex.id || a.examiner?.id === ex.id)
-                                          ).length === 0 ? (
-                                            <div className="text-xs text-gray-400 py-3 text-center">
-                                              No additional examiners available for this subject.
-                                            </div>
-                                          ) : (
-                                            editAvailableExaminers
-                                              .filter(ex =>
-                                                (ex.name || "").toLowerCase().includes(editExaminerSearch.toLowerCase()) &&
-                                                !editAssignedExaminers.some(a => a.examinerId === ex.id || a.examiner?.id === ex.id)
-                                              )
-                                              .map(ex => (
-                                                <div
+                                          ) : (() => {
+                                            const selectable = [...editAvailableExaminers];
+                                            editAssignedExaminers.forEach(a => {
+                                              const exId = a.examinerId || a.examiner?.id;
+                                              if (exId && !selectable.some(e => e.id === exId)) {
+                                                selectable.push(a.examiner || { id: exId, name: a.name || `Examiner #${exId}`, profileImage: a.profileImage });
+                                              }
+                                            });
+                                            const filtered = selectable.filter(ex => (ex.name || "").toLowerCase().includes(editExaminerSearch.toLowerCase()));
+
+                                            if (filtered.length === 0) {
+                                              return <div className="text-xs text-gray-400 py-3 text-center">No examiners available for this subject.</div>;
+                                            }
+
+                                            return filtered.map(ex => {
+                                              const isAssigned = editAssignedExaminers.some(a => a.examinerId === ex.id || a.examiner?.id === ex.id);
+                                              return (
+                                                <label
                                                   key={ex.id}
-                                                  onClick={() => {
-                                                    handleAddExaminerInEdit(ex);
-                                                    setIsEditExaminerDropdownOpen(false);
-                                                  }}
-                                                  className="flex items-center justify-between p-2 rounded-lg hover:bg-orange-50 cursor-pointer border border-transparent hover:border-orange-200 transition-all group"
+                                                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer select-none transition-all ${isAssigned ? "bg-blue-50 text-blue-950 font-medium border border-blue-200" : "hover:bg-gray-50 text-gray-700"}`}
                                                 >
-                                                  <div className="flex items-center gap-2">
+                                                  <div className="flex items-center gap-2 min-w-0">
+                                                    <input
+                                                      type="checkbox"
+                                                      checked={isAssigned}
+                                                      onChange={() => toggleExaminerInEdit(ex)}
+                                                      className="w-3.5 h-3.5 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                                                    />
                                                     <img
                                                       src={ex.profileImage || getInitialsAvatar(ex.name)}
                                                       alt=""
-                                                      className="w-6 h-6 rounded-full border border-gray-200 object-cover"
+                                                      className="w-5 h-5 rounded-full object-cover border border-gray-200 shrink-0"
                                                     />
-                                                    <span className="text-xs font-bold text-gray-800 group-hover:text-orange-950">
-                                                      {ex.name}
-                                                    </span>
+                                                    <span className="truncate">{ex.name}</span>
                                                   </div>
-                                                  <span className="text-[10px] font-bold text-orange-700 bg-orange-100 group-hover:bg-orange-600 group-hover:text-white px-2 py-0.5 rounded transition-colors">
-                                                    + Assign
-                                                  </span>
-                                                </div>
-                                              ))
-                                          )}
+                                                </label>
+                                              );
+                                            });
+                                          })()}
                                         </div>
                                       </div>
                                     )}
                                   </div>
+                                ) : (
+                                  <div className="min-h-[36px] max-h-[36px] px-2.5 py-1 rounded-lg border border-dashed border-gray-200 text-center text-xs text-gray-400 flex items-center justify-center font-medium">
+                                    Examiners can be allotted after saving paper.
+                                  </div>
                                 )}
                               </div>
-
-                              {editingId ? (
-                                editAssignedExaminers.length === 0 ? (
-                                  <div className="p-3 bg-white rounded-xl border border-dashed border-orange-200 text-center text-xs text-gray-400 font-medium">
-                                    No examiners assigned yet to this paper. Click "+ Add Examiner" above to allot.
-                                  </div>
-                                ) : (
-                                  <div className="flex flex-wrap gap-2">
-                                    {editAssignedExaminers.map(a => {
-                                      const exName = a.examiner?.name || a.name || `Examiner #${a.examinerId}`;
-                                      const exImg = a.examiner?.profileImage || a.profileImage || getInitialsAvatar(exName);
-                                      return (
-                                        <div
-                                          key={a.id || a.examinerId}
-                                          className="inline-flex items-center gap-2 pl-1.5 pr-2 py-1 rounded-xl bg-white border border-orange-200 shadow-2xs animate-in fade-in"
-                                        >
-                                          <img
-                                            src={exImg}
-                                            alt=""
-                                            className="w-5 h-5 rounded-full object-cover border border-orange-300"
-                                          />
-                                          <span className="text-xs font-bold text-gray-800">{exName}</span>
-                                          {a.isNew && (
-                                            <span className="text-[9px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 rounded">
-                                              New
-                                            </span>
-                                          )}
-                                          <button
-                                            type="button"
-                                            onClick={() => handleRemoveExaminerInEdit(a)}
-                                            className="text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full p-0.5 transition-colors cursor-pointer ml-0.5"
-                                            title="Remove examiner from paper"
-                                          >
-                                            <X size={12} />
-                                          </button>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )
-                              ) : (
-                                <div className="p-3 bg-white rounded-xl border border-dashed border-gray-200 text-center text-xs text-gray-400 font-medium">
-                                  Examiners can be allotted after saving the paper.
-                                </div>
-                              )}
                             </div>
 
                             {/* Row 4: Section Configuration (Batch Selection & Manual Config) */}
@@ -5570,44 +5846,44 @@ export default function PapersManagement({ isTab = false }) {
                                     <span className="text-xs font-extrabold text-teal-950 uppercase tracking-wider block">
                                       Section Configuration
                                     </span>
-                                    {editingPaper?.isSectionsConfigured ? (
-                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 flex items-center gap-1">
-                                        <CheckCircle2 size={11} className="text-emerald-600" /> Configured
-                                      </span>
-                                    ) : (
-                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 flex items-center gap-1">
-                                        <AlertTriangle size={11} className="text-amber-600" /> Not Configured
-                                      </span>
-                                    )}
-                                    {parsedFormTotalQ > 0 && parsedFormMaxMarks > 0 && (
-                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-teal-100 text-teal-800">
-                                        Matching {parsedFormTotalQ} Questions • {parsedFormMaxMarks} Marks
-                                      </span>
-                                    )}
                                   </div>
                                   <span className="text-[11px] text-teal-700 font-medium mt-0.5 block">
-                                    {editingId ? "Select a suitable section batch for this paper, or configure manually" : "Select a batch to import its section template & configuration"}
+                                    {isReadOnlyPreview
+                                      ? "Configured section blueprint and questions structure for this paper"
+                                      : (editingId
+                                        ? "Select a section batch for this paper, or configure manually"
+                                        : "Select a batch to import its section template & configuration")}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
-                                  {editingId && (
-                                    <Link
-                                      to={userType === 'admin'
-                                        ? `/admin/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(editingPaper?.subjectId || selectedSubjects[0] || 0)}&paperId=${encryptId(editingId)}&from=papers`
-                                        : `/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(editingPaper?.subjectId || selectedSubjects[0] || 0)}&paperId=${encryptId(editingId)}&from=papers`}
-                                      target="_blank"
-                                      className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-2xs"
-                                      title="Open detailed manual section configuration in a new tab"
+                                  {!isReadOnlyPreview && editingId && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const currentPaperId = editingId;
+                                        const subjId = editingPaper?.subjectId || selectedSubjects[0] || 0;
+                                        const targetPapersPath = userType === 'admin' ? '/admin/papers' : '/papers';
+                                        
+                                        // Update history so browser back button returns with edit drawer open
+                                        navigate(`${targetPapersPath}?projectId=${encryptedProjectId}&editPaperId=${encryptId(currentPaperId)}`, { replace: true });
+
+                                        // Navigate to Section Configuration in the same view
+                                        const configPath = userType === 'admin' ? '/admin/section-config' : '/section-config';
+                                        navigate(`${configPath}?projectId=${encryptedProjectId}&subjectId=${encryptId(subjId)}&paperId=${encryptId(currentPaperId)}&from=papers`);
+                                      }}
+                                      className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                      title="Open detailed manual section configuration"
                                     >
-                                      <Layers size={13} /> Manual Config <ExternalLink size={11} />
-                                    </Link>
+                                      <Layers size={13} /> Manual Config
+                                    </button>
                                   )}
-                                  {selectedMasterSectionIds.length > 0 && (
+                                  {!isReadOnlyPreview && (selectedMasterSectionIds.length > 0 || formData.batchId) && (
                                     <button
                                       type="button"
                                       onClick={() => {
                                         setSelectedMasterSectionIds([]);
                                         setFormData(prev => ({ ...prev, batchId: null }));
+                                        setPreviewBatchId(null);
                                       }}
                                       className="text-[11px] font-bold text-red-600 hover:underline cursor-pointer"
                                     >
@@ -5617,192 +5893,289 @@ export default function PapersManagement({ isTab = false }) {
                                 </div>
                               </div>
 
-                              {availableBatches.length === 0 ? (
-                                <div className="p-4 bg-white rounded-xl border border-dashed border-gray-300 text-center text-xs text-gray-500 font-medium">
-                                  No section batches found matching exactly {parsedFormTotalQ} questions and {parsedFormMaxMarks} marks.
-                                </div>
-                              ) : (
-                                <div className="space-y-2.5">
-                                  {availableBatches.map(bId => {
-                                    const bSections = batchMap[bId] || [];
-                                    const bTotalQ = bSections.reduce((sum, s) => sum + getSecQuestionsCount(s), 0);
-                                    const bTotalM = bSections.reduce((sum, s) => sum + getSecTotalMarks(s), 0);
-                                    const isBatchApplied = bSections.length > 0 && bSections.every(s => selectedMasterSectionIds.includes(s.id));
-                                    const isPreviewOpen = previewBatchId === bId;
+                              {(() => {
+                                const activeSelectedBatchId = (() => {
+                                  if (formData.batchId) return Number(formData.batchId);
+                                  if (editingPaper?.batchId) return Number(editingPaper.batchId);
+                                  if (configuredBatchId) return Number(configuredBatchId);
+                                  if (selectedMasterSectionIds && selectedMasterSectionIds.length > 0) {
+                                    const matched = safeSectionMasters.find(m => selectedMasterSectionIds.includes(m.id));
+                                    if (matched?.batchId) return Number(matched.batchId);
+                                  }
+                                  return null;
+                                })();
 
-                                    return (
+                                const currentPreviewBatchId = previewBatchId;
+
+                                return (
+                                  <div className="space-y-3">
+                                    {/* Batch Selection Dropdown */}
+                                    <div className="relative" ref={batchDropdownRef}>
                                       <div
-                                        key={bId}
-                                        className={`rounded-xl border transition-all ${isBatchApplied
-                                          ? "bg-teal-50/80 border-teal-400 shadow-xs ring-1 ring-teal-400"
-                                          : "bg-white border-gray-200 hover:border-teal-200"
+                                        onClick={() => { if (!isReadOnlyPreview && availableBatches.length > 0) setIsBatchDropdownOpen(prev => !prev); }}
+                                        className={`w-full text-xs px-3 py-2 rounded-xl transition-all outline-none font-medium flex items-center justify-between gap-2 shadow-2xs select-none border ${isReadOnlyPreview
+                                          ? 'bg-gray-50 text-gray-700 border-gray-200 cursor-default'
+                                          : 'bg-white border-teal-200 text-gray-900 hover:border-teal-300 focus-within:ring-2 focus-within:ring-teal-500 cursor-pointer'
                                           }`}
                                       >
-                                        <div className="p-3 flex items-center justify-between gap-3 flex-wrap">
-                                          <div className="flex items-center gap-2.5">
-                                            <span className="font-extrabold text-xs px-2.5 py-1 rounded-lg bg-teal-700 text-white shadow-2xs">
-                                              Batch #{bId}
-                                            </span>
-                                            <div>
-                                              <span className="font-bold text-xs text-gray-900 block">
-                                                {bSections.map(s => s.name).join(", ")}
-                                              </span>
-                                              <span className="text-[11px] text-gray-500 font-medium">
-                                                {bSections.length} Sections &bull; {bTotalQ} Questions &bull; {bTotalM} Marks
-                                              </span>
-                                            </div>
-                                          </div>
-
-                                          <div className="flex items-center gap-2">
-                                            <button
-                                              type="button"
-                                              onClick={() => setPreviewBatchId(prev => prev === bId ? null : bId)}
-                                              className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-teal-800 bg-teal-100/70 hover:bg-teal-100 transition-colors flex items-center gap-1 cursor-pointer"
-                                              title="Preview section configuration inside this batch"
-                                            >
-                                              <Eye size={12} />
-                                              {isPreviewOpen ? "Hide Config" : "Preview Config"}
-                                            </button>
-
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                const bSecIds = bSections.map(s => s.id);
-                                                if (isBatchApplied) {
-                                                  setSelectedMasterSectionIds([]);
-                                                  setFormData(prev => ({ ...prev, batchId: null }));
-                                                } else {
-                                                  setSelectedMasterSectionIds(bSecIds);
-                                                  setFormData(prev => ({
-                                                    ...prev,
-                                                    totalQuestions: String(bTotalQ),
-                                                    maxMarks: String(bTotalM),
-                                                    batchId: bId
-                                                  }));
-                                                }
-                                              }}
-                                              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${isBatchApplied
-                                                ? "bg-teal-700 text-white shadow-xs"
-                                                : "bg-gray-100 text-gray-700 hover:bg-teal-50 hover:text-teal-800 border border-gray-200"
-                                                }`}
-                                            >
-                                              {isBatchApplied ? "✓ Selected" : "Select Batch"}
-                                            </button>
-                                          </div>
-                                        </div>
-
-                                        {/* Preview Section & Questions Config Inside This Batch */}
-                                        {isPreviewOpen && (
-                                          <div className="border-t border-teal-100 p-3.5 bg-teal-50/40 rounded-b-xl space-y-3 animate-in fade-in duration-150">
-                                            <div className="text-[10px] font-extrabold uppercase tracking-wider text-teal-900 flex items-center justify-between">
-                                              <span>Section & Questions Preview for Batch #{bId}:</span>
-                                              <span className="text-teal-700 normal-case">{bSections.length} Sections • {bTotalQ} Questions</span>
-                                            </div>
-                                            <div className="grid grid-cols-1 gap-2.5">
-                                              {bSections.map(sec => {
-                                                const questionsList = (sec.questions && sec.questions.length > 0)
-                                                  ? sec.questions
-                                                  : Array.from({ length: sec.totalQuestions || (sec.endQuestion - sec.startQuestion + 1) || 1 }, (_, i) => {
-                                                    const qNum = (sec.startQuestion || 1) + i;
-                                                    return {
-                                                      questionNo: String(qNum),
-                                                      type: 'MCQ',
-                                                      marks: ((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1),
-                                                      isOptional: false,
-                                                      optionalGroupCode: null
-                                                    };
-                                                  });
-
-                                                return (
-                                                  <div
-                                                    key={sec.id}
-                                                    className="p-3 bg-white rounded-xl border border-teal-100 space-y-2.5 shadow-2xs"
+                                        {activeSelectedBatchId ? (() => {
+                                          const bSecs = batchMap[activeSelectedBatchId] || safeSectionMasters.filter(sm => sm.batchId === activeSelectedBatchId) || [];
+                                          const bTotalQ = bSecs.reduce((sum, s) => sum + getSecQuestionsCount(s), 0);
+                                          const bTotalM = bSecs.reduce((sum, s) => sum + getSecTotalMarks(s), 0);
+                                          return (
+                                            <div className="flex items-center justify-between gap-2 flex-1 min-w-0">
+                                              <div className="flex items-center gap-2 min-w-0">
+                                                <span className="font-extrabold text-xs px-2.5 py-1 rounded-lg bg-teal-700 text-white shadow-2xs shrink-0">
+                                                  Batch #{activeSelectedBatchId}
+                                                </span>
+                                                <div className="min-w-0">
+                                                  <span
+                                                    className="font-bold text-xs text-gray-900 truncate block"
+                                                    title={bSecs.map(s => `${s.name} (${getSecTotalMarks(s)} Marks)`).join(", ")}
                                                   >
-                                                    <div className="flex items-center justify-between text-xs flex-wrap gap-2">
-                                                      <div>
-                                                        <span className="font-extrabold text-gray-900">{sec.name}</span>
-                                                        <span className="text-[11px] text-gray-500 ml-2 font-medium">
-                                                          Q{sec.startQuestion} - Q{sec.endQuestion}
-                                                        </span>
-                                                        {sec.description && (
-                                                          <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{sec.description}</p>
-                                                        )}
-                                                      </div>
-                                                      <div className="flex items-center gap-1.5 shrink-0">
-                                                        <span className="px-2 py-0.5 bg-gray-100 rounded text-gray-700 text-[10px] font-bold">
-                                                          {sec.totalQuestions} Questions
-                                                        </span>
-                                                        <span className="px-2 py-0.5 bg-teal-50 text-teal-800 border border-teal-200/60 rounded text-[10px] font-extrabold">
-                                                          {sec.totalMarks} Marks
-                                                        </span>
-                                                        <span className="text-gray-500 text-[10px] font-semibold">
-                                                          Attempt {sec.maxQuestionsToAttempt || sec.totalQuestions}
-                                                        </span>
-                                                      </div>
-                                                    </div>
-
-                                                    {/* Questions Details Table */}
-                                                    <div className="pt-2 border-t border-gray-100">
-                                                      <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1.5 flex items-center justify-between">
-                                                        <span>Questions Details ({questionsList.length}):</span>
-                                                        <span className="text-teal-700 font-extrabold lowercase">
-                                                          {((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1)} marks each
-                                                        </span>
-                                                      </div>
-                                                      <div className="overflow-x-auto rounded-lg border border-gray-100 max-h-48 overflow-y-auto custom-scrollbar">
-                                                        <table className="w-full text-left border-collapse text-[11px]">
-                                                          <thead>
-                                                            <tr className="bg-gray-50 text-[10px] font-bold uppercase tracking-wider text-gray-500 border-b border-gray-100 sticky top-0 z-10">
-                                                              <th className="py-1.5 px-2.5">Q#</th>
-                                                              <th className="py-1.5 px-2.5">Part</th>
-                                                              <th className="py-1.5 px-2.5">Type</th>
-                                                              <th className="py-1.5 px-2.5">Marks</th>
-                                                              <th className="py-1.5 px-2.5">Choice / Group</th>
-                                                            </tr>
-                                                          </thead>
-                                                          <tbody className="divide-y divide-gray-100 bg-white">
-                                                            {questionsList.map((q, qIdx) => (
-                                                              <tr key={q.id || q.questionId || qIdx} className="hover:bg-teal-50/20">
-                                                                <td className="py-1 px-2.5 font-bold text-gray-900">
-                                                                  {q.questionNo ? (String(q.questionNo).startsWith('Q') ? q.questionNo : `Q${q.questionNo}`) : `Q${(sec.startQuestion || 1) + qIdx}`}{q.part ? (q.part.startsWith('(') ? q.part : ` (${q.part})`) : ''}
-                                                                </td>
-                                                                <td className="py-1 px-2.5 text-[10px] text-gray-700 font-semibold">
-                                                                  {q.part ? <span className="px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 font-bold border border-teal-200/60">{q.part}</span> : '–'}
-                                                                </td>
-                                                                <td className="py-1 px-2.5">
-                                                                  <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-[10px] font-semibold">
-                                                                    {q.type || 'MCQ'}
-                                                                  </span>
-                                                                </td>
-                                                                <td className="py-1 px-2.5 font-extrabold text-teal-800">
-                                                                  {q.marks !== undefined && q.marks !== null ? q.marks : ((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1)}
-                                                                </td>
-                                                                <td className="py-1 px-2.5">
-                                                                  {q.isOptional || q.optionalGroupCode ? (
-                                                                    <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
-                                                                      {q.optionalGroupCode ? `Group: ${q.optionalGroupCode}` : 'Optional'}
-                                                                    </span>
-                                                                  ) : (
-                                                                    <span className="text-gray-400 text-[10px]">Compulsory</span>
-                                                                  )}
-                                                                </td>
-                                                              </tr>
-                                                            ))}
-                                                          </tbody>
-                                                        </table>
-                                                      </div>
-                                                    </div>
-                                                  </div>
-                                                );
-                                              })}
+                                                    {bSecs.map(s => `${s.name} (${getSecTotalMarks(s)} Marks)`).join(", ")}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                              <div className="flex items-center gap-1 shrink-0">
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setPreviewBatchId(prev => (prev === activeSelectedBatchId ? null : activeSelectedBatchId));
+                                                  }}
+                                                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                                    currentPreviewBatchId === activeSelectedBatchId
+                                                      ? "text-teal-700 bg-teal-100 hover:bg-teal-200"
+                                                      : "text-gray-400 hover:text-teal-700 hover:bg-gray-100"
+                                                  }`}
+                                                  title={currentPreviewBatchId === activeSelectedBatchId ? "Hide preview" : "View preview"}
+                                                >
+                                                  <Eye size={15} />
+                                                </button>
+                                              </div>
                                             </div>
-                                          </div>
+                                          );
+                                        })() : (
+                                          <span className="text-gray-400 font-normal py-0.5">Select a section batch...</span>
+                                        )}
+
+                                        {!isReadOnlyPreview && (
+                                          <ChevronDown size={15} className={`text-gray-400 transition-transform shrink-0 ml-1 ${isBatchDropdownOpen ? "rotate-180" : ""}`} />
                                         )}
                                       </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
+
+                                      {/* Dropdown Menu (In-Flow, No Scrollbar) */}
+                                      {isBatchDropdownOpen && !isReadOnlyPreview && (
+                                        <div className="mt-2 bg-white border border-teal-200/80 rounded-xl shadow-xs p-2 space-y-1.5 animate-in fade-in duration-150">
+                                          <div className="px-2 py-1 flex items-center justify-between text-[11px] font-bold text-gray-500 border-b border-gray-100">
+                                            <span className="uppercase tracking-wider">Available Batches ({availableBatches.length})</span>
+                                          </div>
+
+                                          {availableBatches.length === 0 ? (
+                                            <div className="p-3 text-center text-xs text-gray-400 font-medium">
+                                              No batches found matching {parsedFormTotalQ} questions and {parsedFormMaxMarks} marks.
+                                            </div>
+                                          ) : (
+                                            availableBatches.map(bId => {
+                                              const bSections = batchMap[bId] || safeSectionMasters.filter(sm => sm.batchId === bId) || [];
+                                              const bTotalQ = bSections.reduce((sum, s) => sum + getSecQuestionsCount(s), 0);
+                                              const bTotalM = bSections.reduce((sum, s) => sum + getSecTotalMarks(s), 0);
+                                              const isSelected = activeSelectedBatchId === bId;
+
+                                              const handleSelectThisBatch = () => {
+                                                const bSecIds = bSections.map(s => s.id);
+                                                setSelectedMasterSectionIds(bSecIds);
+                                                setFormData(prev => ({
+                                                  ...prev,
+                                                  totalQuestions: String(bTotalQ),
+                                                  maxMarks: String(bTotalM),
+                                                  batchId: bId
+                                                }));
+                                              };
+
+                                              return (
+                                                <div
+                                                  key={bId}
+                                                  className={`px-3 py-2 rounded-xl border transition-all flex items-center justify-between gap-2 select-none ${isSelected
+                                                    ? "bg-teal-50/90 border-teal-400 shadow-xs ring-1 ring-teal-400"
+                                                    : "bg-white hover:bg-gray-50 border-gray-200"
+                                                    }`}
+                                                >
+                                                  <div
+                                                    className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+                                                    onClick={handleSelectThisBatch}
+                                                  >
+                                                    {/* Checkbox */}
+                                                    <input
+                                                      type="checkbox"
+                                                      checked={isSelected}
+                                                      onChange={(e) => {
+                                                        e.stopPropagation();
+                                                        handleSelectThisBatch();
+                                                      }}
+                                                      onClick={(e) => e.stopPropagation()}
+                                                      className="w-4 h-4 rounded text-teal-700 focus:ring-teal-500 border-gray-300 shrink-0 cursor-pointer"
+                                                    />
+                                                    <span className={`font-extrabold text-xs px-2 py-0.5 rounded-md shrink-0 ${isSelected ? 'bg-teal-700 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                                                      Batch #{bId}
+                                                    </span>
+                                                    <span
+                                                      className="font-bold text-xs text-gray-900 truncate"
+                                                      title={bSections.map(s => `${s.name} (${getSecTotalMarks(s)} Marks)`).join(", ")}
+                                                    >
+                                                      {bSections.map(s => `${s.name} (${getSecTotalMarks(s)} Marks)`).join(", ")}
+                                                    </span>
+                                                  </div>
+
+                                                  {/* Absolute Right Eye Icon to Preview */}
+                                                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setPreviewBatchId(prev => (prev === bId ? null : bId));
+                                                      }}
+                                                      className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                                                        currentPreviewBatchId === bId
+                                                          ? "text-teal-800 bg-teal-100 hover:bg-teal-200 shadow-2xs font-bold ring-1 ring-teal-300"
+                                                          : "text-gray-400 hover:text-teal-700 hover:bg-gray-100"
+                                                      }`}
+                                                      title={currentPreviewBatchId === bId ? `Hide preview for Batch #${bId}` : `Preview Batch #${bId}`}
+                                                    >
+                                                      <Eye size={15} />
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                              );
+                                            })
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Section & Questions Preview for Selected / Inspected Batch (Shown ONLY when Eye icon is clicked) */}
+                                    {(() => {
+                                      const previewId = currentPreviewBatchId;
+                                      if (!previewId) return null;
+
+                                      const bSections = batchMap[previewId] || safeSectionMasters.filter(sm => sm.batchId === previewId) || [];
+
+                                      if (bSections.length === 0) {
+                                        return (
+                                          <div className="p-4 bg-white rounded-xl border border-dashed border-gray-200 text-center text-xs text-gray-400 font-medium">
+                                            No sections found in Batch #{previewId}.
+                                          </div>
+                                        );
+                                      }
+
+                                      return (
+                                        <div className="border border-teal-100 bg-teal-50/40 rounded-xl p-3.5 space-y-3 animate-in fade-in duration-150">
+                                          <div className="text-[10px] font-extrabold uppercase tracking-wider text-teal-900 flex items-center justify-between">
+                                            <span className="flex items-center gap-1.5">
+                                              <Eye size={12} className="text-teal-700" />
+                                              Section &amp; Questions Preview for Batch #{previewId}:
+                                            </span>
+                                          </div>
+
+                                          <div className="grid grid-cols-1 gap-2.5">
+                                            {bSections.map(sec => {
+                                              const questionsList = (sec.questions && sec.questions.length > 0)
+                                                ? sec.questions
+                                                : Array.from({ length: sec.totalQuestions || (sec.endQuestion - sec.startQuestion + 1) || 1 }, (_, i) => {
+                                                  const qNum = (sec.startQuestion || 1) + i;
+                                                  return {
+                                                    questionNo: String(qNum),
+                                                    type: 'MCQ',
+                                                    marks: ((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1),
+                                                    isOptional: false,
+                                                    optionalGroupCode: null
+                                                  };
+                                                });
+
+                                              return (
+                                                <div
+                                                  key={sec.id}
+                                                  className="p-3 bg-white rounded-xl border border-teal-100 space-y-2.5 shadow-2xs"
+                                                >
+                                                  <div className="flex items-center justify-between text-xs flex-wrap gap-2">
+                                                    <div>
+                                                      <span className="font-extrabold text-gray-900">{sec.name}</span>
+                                                      <span className="text-[11px] text-gray-500 ml-2 font-medium">
+                                                        Q{sec.startQuestion} - Q{sec.endQuestion}
+                                                      </span>
+                                                      {sec.description && (
+                                                        <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{sec.description}</p>
+                                                      )}
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                      <span className="px-2 py-0.5 bg-gray-100 rounded text-gray-700 text-[10px] font-bold">
+                                                        {sec.totalQuestions} Questions
+                                                      </span>
+                                                      <span className="px-2 py-0.5 bg-teal-50 text-teal-800 border border-teal-200/60 rounded text-[10px] font-extrabold">
+                                                        {sec.totalMarks} Marks
+                                                      </span>
+                                                      <span className="text-gray-500 text-[10px] font-semibold">
+                                                        Attempt {sec.maxQuestionsToAttempt || sec.totalQuestions}
+                                                      </span>
+                                                    </div>
+                                                  </div>
+
+                                                  {/* Questions Details Table */}
+                                                  <div className="pt-2 border-t border-gray-100">
+                                                    <div className="overflow-x-auto rounded-lg border border-gray-100 max-h-48 overflow-y-auto custom-scrollbar">
+                                                      <table className="w-full text-left border-collapse text-[11px]">
+                                                        <thead>
+                                                          <tr className="bg-gray-50 text-[10px] font-bold uppercase tracking-wider text-gray-500 border-b border-gray-100 sticky top-0 z-10">
+                                                            <th className="py-1.5 px-2.5">Q#</th>
+                                                            <th className="py-1.5 px-2.5">Part</th>
+                                                            <th className="py-1.5 px-2.5">Type</th>
+                                                            <th className="py-1.5 px-2.5">Marks</th>
+                                                            <th className="py-1.5 px-2.5">Choice / Group</th>
+                                                          </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-100 bg-white">
+                                                          {questionsList.map((q, qIdx) => (
+                                                            <tr key={q.id || q.questionId || qIdx} className="hover:bg-teal-50/20">
+                                                              <td className="py-1 px-2.5 font-bold text-gray-900">
+                                                                {q.questionNo ? (String(q.questionNo).startsWith('Q') ? q.questionNo : `Q${q.questionNo}`) : `Q${(sec.startQuestion || 1) + qIdx}`}{q.part ? (q.part.startsWith('(') ? q.part : ` (${q.part})`) : ''}
+                                                              </td>
+                                                              <td className="py-1 px-2.5 text-[10px] text-gray-700 font-semibold">
+                                                                {q.part ? <span className="px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 font-bold border border-teal-200/60">{q.part}</span> : '–'}
+                                                              </td>
+                                                              <td className="py-1 px-2.5">
+                                                                <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-[10px] font-semibold">
+                                                                  {q.type || 'MCQ'}
+                                                                </span>
+                                                              </td>
+                                                              <td className="py-1 px-2.5 font-extrabold text-teal-800">
+                                                                {q.marks !== undefined && q.marks !== null ? q.marks : ((sec.totalMarks || 0) / (sec.totalQuestions || 1)).toFixed(1)}
+                                                              </td>
+                                                              <td className="py-1 px-2.5">
+                                                                {q.isOptional || q.optionalGroupCode ? (
+                                                                  <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
+                                                                    {q.optionalGroupCode ? `Group: ${q.optionalGroupCode}` : 'Optional'}
+                                                                  </span>
+                                                                ) : (
+                                                                  <span className="text-gray-400 text-[10px]">Compulsory</span>
+                                                                )}
+                                                              </td>
+                                                            </tr>
+                                                          ))}
+                                                        </tbody>
+                                                      </table>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
 
@@ -5811,17 +6184,29 @@ export default function PapersManagement({ isTab = false }) {
                             <button
                               type="button"
                               onClick={handleCancel}
-                              className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-100 transition-all cursor-pointer"
+                              className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-100 transition-all cursor-pointer shadow-2xs"
                             >
-                              Cancel
+                              {isReadOnlyPreview ? "Close Preview" : "Cancel"}
                             </button>
-                            <button
-                              type="submit"
-                              className="px-6 py-2.5 rounded-xl text-xs font-extrabold text-white bg-teal-700 hover:bg-teal-800 shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer"
-                            >
-                              {editingId ? <Edit2 size={13} /> : <Plus size={13} />}
-                              {editingId ? "Update Configuration" : "Save Paper"}
-                            </button>
+                            {isReadOnlyPreview ? (
+                              hasPermission("UPDATE_PAPER") && !isProjectInactive && (
+                                <button
+                                  type="button"
+                                  onClick={() => setIsReadOnlyPreview(false)}
+                                  className="px-5 py-2.5 rounded-xl text-xs font-extrabold text-white bg-teal-700 hover:bg-teal-800 shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <Edit2 size={13} /> Edit Configuration
+                                </button>
+                              )
+                            ) : (
+                              <button
+                                type="submit"
+                                className="px-6 py-2.5 rounded-xl text-xs font-extrabold text-white bg-teal-700 hover:bg-teal-800 shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer"
+                              >
+                                {editingId ? <Edit2 size={13} /> : <Plus size={13} />}
+                                {editingId ? "Update Configuration" : "Save Paper"}
+                              </button>
+                            )}
                           </div>
                         </form>
                       </div>

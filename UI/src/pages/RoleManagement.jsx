@@ -240,6 +240,15 @@ export default function RoleManagement() {
 
         {/* Table Card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden animate-fade-in">
+          <TablePagination 
+            page={page} 
+            totalPages={totalPages} 
+            totalCount={totalCount} 
+            pageSize={pageSize} 
+            setPage={setPage} 
+            setPageSize={setPageSize}
+            position="top"
+          />
           <div className="overflow-x-auto">
             <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
               <thead>

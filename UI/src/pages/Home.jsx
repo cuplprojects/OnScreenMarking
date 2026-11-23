@@ -469,6 +469,15 @@ const Home = () => {
           </div>
         ) : (
           <>
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              pageSize={pageSize}
+              setPage={setPage}
+              setPageSize={setPageSize}
+              position="top"
+            />
             <div className="overflow-x-auto">
               <table className="w-full text-left min-w-[900px] relative">
                 <thead className="bg-gray-50 border-b border-gray-100 sticky top-0 z-10 shadow-sm">

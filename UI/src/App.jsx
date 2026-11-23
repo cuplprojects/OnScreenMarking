@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import {
-  BrowserRouter as Router,
+  HashRouter as Router,
   Routes,
   Route,
   Navigate,
@@ -305,8 +305,12 @@ function AppRoutes() {
             element={hasPermission("READ_MARKING") ? <ExaminerMarking /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
+            path="/admin/reports" 
+            element={userType === 'admin' || userType === 'coordinator' || hasPermission("VIEW_REPORTS") ? <Reports /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+          />
+          <Route 
             path="/reports" 
-            element={hasPermission("VIEW_REPORTS") ? <Reports /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
+            element={userType === 'admin' || userType === 'coordinator' || hasPermission("VIEW_REPORTS") ? <Reports /> : isAuthenticated ? <Navigate to="/" replace /> : null} 
           />
           <Route 
             path="/settings" 

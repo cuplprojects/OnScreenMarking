@@ -387,8 +387,6 @@ namespace API.Controllers
                         isSectionsConfigured = isConfigured,
                         isSectionConfigured = isConfigured,
                         p.isExaminerAssigned,
-                        sectionsCount = 0, // No longer calculating section count
-                        configuredMarks = 0m, // No longer calculating marks
                         p.expertsCount,
                         assignedExaminers = examinersGrouped.TryGetValue(p.paperId, out var exList) ? exList : new List<object>()
                     };

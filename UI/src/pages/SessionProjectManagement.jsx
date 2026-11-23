@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useConfigHeader } from '../context/ConfigHeaderContext';
+import { UniversityConfigTabBar } from '../components/UniversityConfigHeader';
 import sessionService from '../services/sessionService';
 import { useTable } from '../services/tableService';
 import TablePagination from '../components/TablePagination';
@@ -112,7 +113,7 @@ export default function SessionProjectManagement() {
   useEffect(() => {
     const canCreate = hasPermission('CREATE_SESSION');
     setConfigHeader({
-      title: 'Sessions Management',
+      title: 'Sessions',
       search,
       setSearch,
       searchPlaceholder: 'Search sessions…',
@@ -134,7 +135,8 @@ export default function SessionProjectManagement() {
       />
 
       {/* Main List */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <UniversityConfigTabBar />
         {loading && sessions.length === 0 ? (
           <div className="p-12 text-center text-gray-400 font-bold text-xs flex flex-col items-center gap-3">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
@@ -150,6 +152,15 @@ export default function SessionProjectManagement() {
           </div>
         ) : (
           <div className="overflow-x-auto">
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              pageSize={pageSize}
+              setPage={setPage}
+              setPageSize={setPageSize}
+              position="top"
+            />
             <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
@@ -215,10 +226,10 @@ export default function SessionProjectManagement() {
                         {hasPermission('UPDATE_SESSION') && (
                           <button
                             onClick={() => handleEdit(session)}
-                            className="p-2 bg-gray-50 hover:bg-teal-50 hover:text-teal-700 text-gray-600 rounded-xl border border-gray-200 hover:border-teal-200 transition-all cursor-pointer shadow-sm group"
+                            className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl border border-gray-200 transition cursor-pointer"
                             title="Edit Session"
                           >
-                            <Edit2 size={14} className="group-hover:scale-110 transition-transform" />
+                            <Edit2 size={13} />
                           </button>
                         )}
                       </div>

@@ -3,6 +3,7 @@ import { Layers, Plus, Edit2, Edit, Trash2, X, Award, Hash, CheckCircle2, Check,
 import { useAuth } from '../context/AuthContext';
 import { useBreadcrumb } from '../context/BreadcrumbContext';
 import { useConfigHeader } from '../context/ConfigHeaderContext';
+import { UniversityConfigTabBar } from '../components/UniversityConfigHeader';
 import { sectionService, questionTypeService } from '../services';
 import message from '../services/messageService';
 import { useTable } from '../services/tableService';
@@ -111,7 +112,7 @@ export default function SectionMasterManagement() {
     const currentPath = userType === 'admin' ? '/admin/section-masters' : '/section-masters';
     setBreadcrumb([
       { label: 'Dashboard', path: parentPath, icon: 'Home' },
-      { label: 'Section Masters', path: currentPath, icon: 'Layers' },
+      { label: 'Sections', path: currentPath, icon: 'Layers' },
     ]);
   }, [userType, setBreadcrumb]);
 
@@ -591,6 +592,20 @@ export default function SectionMasterManagement() {
             type: '',
           };
         }
+      } else if (field === 'isOptional') {
+        const isOpt = Boolean(value);
+        updatedQuestions[qIdx] = {
+          ...updatedQuestions[qIdx],
+          isOptional: isOpt,
+          optionalGroupCode: !isOpt ? '' : (updatedQuestions[qIdx].optionalGroupCode || '')
+        };
+      } else if (field === 'optionalGroupCode') {
+        const code = value ? value.toUpperCase().trim() : '';
+        updatedQuestions[qIdx] = {
+          ...updatedQuestions[qIdx],
+          optionalGroupCode: code,
+          isOptional: Boolean(code) || updatedQuestions[qIdx].isOptional
+        };
       } else {
         updatedQuestions[qIdx] = {
           ...updatedQuestions[qIdx],
@@ -866,26 +881,34 @@ export default function SectionMasterManagement() {
         }
       }
 
-      // Validate that questions sharing the same Optional Group have identical marks
+      // Validate that questions sharing the same Optional Group have identical total marks per question number
       const groupQuestionsMap = {};
       (sec.questions || []).forEach(q => {
         const code = q.optionalGroupCode ? q.optionalGroupCode.trim().toUpperCase() : '';
         if (code) {
           if (!groupQuestionsMap[code]) {
-            groupQuestionsMap[code] = [];
+            groupQuestionsMap[code] = {};
           }
-          groupQuestionsMap[code].push(q);
+          const qKey = String(q.questionNo || '').trim().toUpperCase();
+          if (!groupQuestionsMap[code][qKey]) {
+            groupQuestionsMap[code][qKey] = { qNo: q.questionNo, parts: [], totalMarks: 0 };
+          }
+          groupQuestionsMap[code][qKey].totalMarks += (parseFloat(q.marks) || 0);
+          if (q.part && q.part !== 'Part') {
+            groupQuestionsMap[code][qKey].parts.push(q.part);
+          }
         }
       });
 
-      for (const [code, qList] of Object.entries(groupQuestionsMap)) {
+      for (const [code, qDict] of Object.entries(groupQuestionsMap)) {
+        const qList = Object.values(qDict);
         if (qList.length > 1) {
-          const firstMarks = parseFloat(qList[0].marks) || 0;
-          const mismatchedQ = qList.find(q => Math.abs((parseFloat(q.marks) || 0) - firstMarks) > 0.001);
+          const firstTotal = qList[0].totalMarks;
+          const mismatchedQ = qList.find(q => Math.abs(q.totalMarks - firstTotal) > 0.001);
           if (mismatchedQ) {
-            const q1Label = qList[0].part ? `Q${qList[0].questionNo} (${qList[0].part})` : `Q${qList[0].questionNo}`;
-            const q2Label = mismatchedQ.part ? `Q${mismatchedQ.questionNo} (${mismatchedQ.part})` : `Q${mismatchedQ.questionNo}`;
-            message.error(`Questions in Optional Group '${code}' in '${secName}' must have identical marks. ${q1Label} has ${firstMarks}m, but ${q2Label} has ${mismatchedQ.marks}m.`);
+            const q1Label = qList[0].parts.length > 0 ? `Q${qList[0].qNo} (${qList[0].parts.join(', ')})` : `Q${qList[0].qNo}`;
+            const q2Label = mismatchedQ.parts.length > 0 ? `Q${mismatchedQ.qNo} (${mismatchedQ.parts.join(', ')})` : `Q${mismatchedQ.qNo}`;
+            message.error(`Questions in Optional Group '${code}' in '${secName}' must have identical total marks. ${q1Label} has ${firstTotal}m, but ${q2Label} has ${mismatchedQ.totalMarks}m.`);
             setActiveSectionIdx(idx);
             return;
           }
@@ -1009,7 +1032,7 @@ export default function SectionMasterManagement() {
   useEffect(() => {
     const canManage = hasPermission('MANAGE_SECTIONS');
     setConfigHeader({
-      title: 'Section Masters Management',
+      title: 'Section Masters',
       search,
       setSearch,
       searchPlaceholder: 'Search section name, description, batch ID…',
@@ -1158,7 +1181,8 @@ export default function SectionMasterManagement() {
   return (
     <div className="w-full flex items-start gap-4">
       {/* Main Table Section - Height according to content */}
-      <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all ${previewBatchId ? 'flex-1' : 'w-full'}`}>
+      <div className={`bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden transition-all ${previewBatchId ? 'flex-1' : 'w-full'}`}>
+        <UniversityConfigTabBar />
         {tableLoading && masters.length === 0 ? (
           <div className="p-12 text-center text-gray-400 font-bold text-xs flex flex-col items-center gap-3">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
@@ -1186,6 +1210,15 @@ export default function SectionMasterManagement() {
           </div>
         ) : (
           <>
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              pageSize={pageSize}
+              setPage={setPage}
+              setPageSize={setPageSize}
+              position="top"
+            />
             {/* Table */}
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -1206,13 +1239,18 @@ export default function SectionMasterManagement() {
                       <th className="py-3.5 text-center md:px-6 px-4">Sections Count</th>
                       <th className="py-3.5 text-center md:px-6 px-4">Total Questions</th>
                       <th className="py-3.5 text-center md:px-6 px-4">Total Marks</th>
-                      <th className="py-3.5 text-center md:px-6 px-4">Actions</th>
+                      <th className="py-2.5 text-right md:px-6 px-4">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {sortedBatchIds.map((batchId) => {
                       const sections = groupedByBatch[batchId] || [];
-                      const totalQuestions = sections.reduce((sum, s) => sum + (s.totalQuestions || (s.endQuestion - s.startQuestion + 1)), 0);
+                      const allQs = sections.flatMap(s => s.questions || []);
+                      const distinctQ = allQs.length > 0 
+                        ? new Set(allQs.map(q => String(q.questionNo || '').trim()).filter(Boolean)).size 
+                        : sections.reduce((sum, s) => sum + (s.totalQuestions || (s.endQuestion - s.startQuestion + 1)), 0);
+                      const totalQuestions = distinctQ;
+                      const totalParts = allQs.length;
                       const totalMarks = sections.reduce((sum, s) => sum + (s.totalMarks || 0), 0);
                       const isDeleting = deletingId === `batch-${batchId}`;
                       const isPreviewOpen = previewBatchId === batchId;
@@ -1238,6 +1276,9 @@ export default function SectionMasterManagement() {
                             <span className="font-bold text-gray-900">
                               {totalQuestions}
                             </span>
+                            {totalParts > totalQuestions && (
+                              <span className="text-[10px] text-gray-500 font-semibold block">({totalParts} parts)</span>
+                            )}
                           </td>
                           <td className="py-3.5 text-center md:px-6 px-4">
                             <span className="inline-flex items-center gap-1 font-black text-teal-800 bg-teal-50 border border-teal-100 px-3 py-1 rounded-lg text-xs">
@@ -1245,28 +1286,16 @@ export default function SectionMasterManagement() {
                               {totalMarks}
                             </span>
                           </td>
-                          <td className="py-3.5 text-center md:px-6 px-4">
-                            <div className="flex items-center justify-center gap-1.5">
-                              {/* Preview Button */}
-                              <button
-                                onClick={() => setPreviewBatchId(previewBatchId === batchId ? null : batchId)}
-                                className={`p-1.5 rounded-lg transition-all duration-200 cursor-pointer ${
-                                  previewBatchId === batchId
-                                    ? 'text-teal-700 bg-teal-50 ring-1 ring-teal-200'
-                                    : 'text-gray-400 hover:text-teal-700 hover:bg-teal-50'
-                                }`}
-                                title={previewBatchId === batchId ? "Close Preview" : "Preview Batch"}
-                              >
-                                <Eye size={14} />
-                              </button>
+                          <td className="py-2.5 text-right md:px-6 px-4">
+                            <div className="flex items-center justify-end gap-2">
                               {/* Edit Button - opens batch sections modal */}
                               {hasPermission('MANAGE_SECTIONS') && (
                                 <button
                                   onClick={() => openEditBatchModal(batchId)}
-                                  className="p-1.5 text-gray-400 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-all duration-200 cursor-pointer"
+                                  className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl border border-gray-200 transition cursor-pointer"
                                   title="Edit Batch"
                                 >
-                                  <Edit2 size={14} />
+                                  <Edit2 size={13} />
                                 </button>
                               )}
                               {/* Delete Button */}
@@ -1274,12 +1303,24 @@ export default function SectionMasterManagement() {
                                 <button
                                   onClick={() => handleDeleteBatch(batchId)}
                                   disabled={isDeleting}
-                                  className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all duration-200 disabled:opacity-50 cursor-pointer"
+                                  className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-100 transition cursor-pointer disabled:opacity-50"
                                   title="Delete Batch"
                                 >
-                                  <Trash2 size={14} />
+                                  <Trash2 size={13} />
                                 </button>
                               )}
+                              {/* Preview Button */}
+                              <button
+                                onClick={() => setPreviewBatchId(previewBatchId === batchId ? null : batchId)}
+                                className={`p-2 rounded-xl border transition cursor-pointer ${
+                                  previewBatchId === batchId
+                                    ? 'bg-teal-100 text-teal-800 border-teal-200 ring-1 ring-teal-200'
+                                    : 'bg-teal-50 hover:bg-teal-100 text-teal-700 border-teal-100'
+                                }`}
+                                title={previewBatchId === batchId ? "Close Preview" : "Preview Batch"}
+                              >
+                                <Eye size={13} />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -1455,7 +1496,14 @@ export default function SectionMasterManagement() {
                       <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
                         <div className="flex items-center gap-3">
                           <label className="text-xs font-black text-gray-700 uppercase tracking-wide shrink-0">
-                            Questions
+                            {(() => {
+                              const qs = newBatchSections[activeSectionIdx]?.questions || [];
+                              const distinctQ = new Set(qs.map(q => String(q.questionNo || '').trim()).filter(Boolean)).size;
+                              const partsCount = qs.length;
+                              return partsCount > distinctQ 
+                                ? `QUESTIONS (${distinctQ} • ${partsCount} PARTS)` 
+                                : `QUESTIONS (${distinctQ})`;
+                            })()}
                           </label>
 
                           {/* Universal Question Type Selector: selects question type for ALL questions in this section */}
@@ -1507,6 +1555,7 @@ export default function SectionMasterManagement() {
                                 <th className="py-2.5 px-3 font-black text-gray-500 uppercase tracking-wider text-[10px] w-20">Part</th>
                                 <th className="py-2.5 px-3 font-black text-gray-500 uppercase tracking-wider text-[10px]">Type</th>
                                 <th className="py-2.5 px-3 text-center font-black text-gray-500 uppercase tracking-wider text-[10px] w-24">Marks</th>
+                                <th className="py-2.5 px-3 text-center font-black text-gray-500 uppercase tracking-wider text-[10px] w-20">Optional</th>
                                 <th className="py-2.5 px-3 font-black text-gray-500 uppercase tracking-wider text-[10px]">Group Code</th>
                                 <th className="py-2.5 px-3 text-center font-black text-gray-500 uppercase tracking-wider text-[10px] w-20">Actions</th>
                               </tr>
@@ -1575,15 +1624,56 @@ export default function SectionMasterManagement() {
                                     />
                                   </td>
 
+                                  {/* Optional Checkbox */}
+                                  <td className="py-1.5 px-3 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(q.isOptional || q.optionalGroupCode)}
+                                      onChange={e => updateSectionQuestion(activeSectionIdx, qIdx, 'isOptional', e.target.checked)}
+                                      className="w-3.5 h-3.5 rounded text-teal-700 focus:ring-teal-500 cursor-pointer"
+                                    />
+                                  </td>
+
                                   {/* Optional Group Code */}
                                   <td className="py-1.5 px-3">
                                     {(() => {
                                       const code = q.optionalGroupCode?.trim()?.toUpperCase();
-                                      const otherInGroup = code ? newBatchSections[activeSectionIdx]?.questions?.find(
-                                        (other, oIdx) => oIdx !== qIdx && other.optionalGroupCode?.trim()?.toUpperCase() === code && Math.abs((parseFloat(other.marks) || 0) - (parseFloat(q.marks) || 0)) > 0.001
-                                      ) : null;
-                                      const hasMismatch = Boolean(otherInGroup);
-                                      const oLabel = otherInGroup ? (otherInGroup.part ? `Q${otherInGroup.questionNo} (${otherInGroup.part})` : `Q${otherInGroup.questionNo}`) : '';
+                                      if (!code) {
+                                        return (
+                                          <div>
+                                            <input
+                                              type="text"
+                                              value={q.optionalGroupCode || ''}
+                                              onChange={e => updateSectionQuestion(activeSectionIdx, qIdx, 'optionalGroupCode', e.target.value)}
+                                              placeholder="Group code (optional)"
+                                              className="w-full px-2.5 py-1 border border-gray-300 rounded text-xs font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-teal-500 bg-white"
+                                            />
+                                          </div>
+                                        );
+                                      }
+
+                                      const allSectionQuestions = newBatchSections[activeSectionIdx]?.questions || [];
+                                      const groupQuestions = allSectionQuestions.filter(other => other.optionalGroupCode?.trim()?.toUpperCase() === code);
+                                      const questionTotals = {};
+                                      groupQuestions.forEach(other => {
+                                        const qKey = String(other.questionNo || '').trim().toUpperCase();
+                                        if (!questionTotals[qKey]) {
+                                          questionTotals[qKey] = { total: 0, qNo: other.questionNo, parts: [] };
+                                        }
+                                        questionTotals[qKey].total += (parseFloat(other.marks) || 0);
+                                        if (other.part && other.part !== 'Part') {
+                                          questionTotals[qKey].parts.push(other.part);
+                                        }
+                                      });
+
+                                      const myKey = String(q.questionNo || '').trim().toUpperCase();
+                                      const myTotal = questionTotals[myKey]?.total || 0;
+                                      const conflictingKey = Object.keys(questionTotals).find(otherKey => 
+                                        otherKey !== myKey && Math.abs(questionTotals[otherKey].total - myTotal) > 0.001
+                                      );
+                                      const conflicting = conflictingKey ? questionTotals[conflictingKey] : null;
+                                      const hasMismatch = Boolean(conflicting);
+                                      const oLabel = conflicting ? (conflicting.parts.length > 0 ? `Q${conflicting.qNo} (${conflicting.parts.join(', ')})` : `Q${conflicting.qNo}`) : '';
 
                                       return (
                                         <div>
@@ -1592,7 +1682,7 @@ export default function SectionMasterManagement() {
                                             value={q.optionalGroupCode || ''}
                                             onChange={e => updateSectionQuestion(activeSectionIdx, qIdx, 'optionalGroupCode', e.target.value)}
                                             placeholder="Group code (optional)"
-                                            title={hasMismatch ? `Group '${q.optionalGroupCode}' marks mismatch! ${oLabel} has ${otherInGroup.marks}m. Questions in same group must have identical marks.` : ''}
+                                            title={hasMismatch ? `Group '${q.optionalGroupCode}' marks mismatch! ${oLabel} has ${conflicting.total}m, but Q${q.questionNo} total is ${myTotal}m. Questions in same group must have identical total marks.` : ''}
                                             className={`w-full px-2.5 py-1 border rounded text-xs font-semibold focus:outline-none focus:ring-1 bg-white ${
                                               hasMismatch
                                                 ? 'border-amber-400 bg-amber-50/50 text-amber-900 focus:ring-amber-500 ring-1 ring-amber-300'
@@ -1601,7 +1691,7 @@ export default function SectionMasterManagement() {
                                           />
                                           {hasMismatch && (
                                             <div className="text-[9px] text-amber-700 font-bold mt-0.5 leading-tight flex items-center gap-1">
-                                              <span>⚠ Must match {oLabel} ({otherInGroup.marks}m)</span>
+                                              <span>⚠ Must match {oLabel} ({conflicting.total}m)</span>
                                             </div>
                                           )}
                                         </div>
@@ -1793,7 +1883,7 @@ export default function SectionMasterManagement() {
                           </thead>
                           <tbody className="divide-y divide-gray-100">
                             {questionsList.map((q, qIdx) => {
-                              const isOptional = q.optionalGroupCode ? true : (totalQ > (section.maxQuestionsToAttempt || totalQ));
+                              const isOptional = Boolean(q.isOptional || q.optionalGroupCode || (totalQ > (section.maxQuestionsToAttempt || totalQ)));
                               return (
                                 <tr key={qIdx} className="hover:bg-teal-50/30 transition-colors duration-150 text-xs">
                                   <td className="py-2.5 px-3.5 font-bold text-gray-900">

@@ -901,6 +901,16 @@ export default function ScriptAllocation({ isTab = false }) {
                     </div>
                   </div>
 
+                  <TablePagination 
+                    page={page}
+                    totalPages={totalPages}
+                    totalCount={totalCount}
+                    pageSize={pageSize}
+                    setPage={setPage}
+                    setPageSize={setPageSize}
+                    position="top"
+                  />
+
                   <div className="overflow-x-auto">
                     <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse whitespace-nowrap">
                       <thead>

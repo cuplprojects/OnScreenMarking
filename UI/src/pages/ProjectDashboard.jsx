@@ -12,7 +12,8 @@ import {
   Zap,
   Search,
   Sliders,
-  X
+  X,
+  PieChart
 } from 'lucide-react';
 import { useTable } from '../services/tableService';
 import TablePagination from '../components/TablePagination';
@@ -26,6 +27,17 @@ import message from '../services/messageService';
 import PapersManagement from './PapersManagement';
 import ScriptAllocation from './ScriptAllocation';
 import Attendance from './Attendance';
+
+const getInitialsAvatar = (name) => {
+  const initial = (name || 'U').trim().charAt(0).toUpperCase() || 'U';
+  const colors = ['%23F97316', '%230D9488', '%233B82F6', '%238B5CF6', '%23EC4899', '%2310B981'];
+  let hash = 0;
+  for (let i = 0; i < (name || '').length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const color = colors[Math.abs(hash) % colors.length];
+  return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" fill="${color}"/><text x="50%" y="54%" font-size="28" font-family="sans-serif" font-weight="600" fill="%23ffffff" dominant-baseline="middle" text-anchor="middle">${encodeURIComponent(initial)}</text></svg>`;
+};
 
 export default function ProjectDashboard() {
   const [searchParams] = useSearchParams();
@@ -54,13 +66,13 @@ export default function ProjectDashboard() {
     if (projectId) {
       const searchVal = params.search || '';
       const pageVal = params.page || 1;
-      const pageSizeVal = params.pageSize || 10;
+      const pageSizeVal = params.pageSize || 5;
       const sortFieldVal = params.sortField || '';
       const sortOrderVal = params.sortOrder || '';
       const statusFilterVal = params.statusFilter || '';
       return apiCall(`/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}&statusFilter=${statusFilterVal}`);
     }
-    return Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 10, totalPages: 1 });
+    return Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 5, totalPages: 1 });
   }, [projectId]);
 
   const {
@@ -82,15 +94,18 @@ export default function ProjectDashboard() {
     refresh: refreshTable
   } = useTable({
     fetchFn,
-    initialParams: { pageSize: 10 }
+    initialParams: { pageSize: 5 }
   });
 
 
 
 
-  // Bulk Actions State
-  const [selectedPaperIds, setSelectedPaperIds] = useState([]);
+  // Selected Paper for Interactive Right Charts
+  const [selectedPaper, setSelectedPaper] = useState(null);
   const [isBulkAutoAllocating, setIsBulkAutoAllocating] = useState(false);
+
+  // Synced active paper with freshest data from papers list
+  const activePaper = selectedPaper ? (papers.find(p => p.paperId === selectedPaper.paperId) || selectedPaper) : null;
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
@@ -461,7 +476,7 @@ export default function ProjectDashboard() {
       <div className="grid grid-cols-12 gap-6">
         
         {/* LEFT COMPONENT - Papers & Mapped Details */}
-        <div className="col-span-12 lg:col-span-8 space-y-6">
+        <div className="col-span-12 xl:col-span-8 space-y-6">
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="p-5 border-b border-gray-100 flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-gray-50/40">
               <div>
@@ -473,18 +488,28 @@ export default function ProjectDashboard() {
                       Filtered: {filters.statusFilter}
                     </span>
                   )}
+                  {activePaper ? (
+                    <span className="ml-2 bg-teal-100 text-teal-900 border border-teal-300 px-2.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
+                      Viewing: {activePaper.paperCode}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedPaper(null);
+                        }}
+                        className="hover:text-red-600 transition-colors ml-0.5 cursor-pointer"
+                        title="Show overall project stats"
+                      >
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ) : (
+                    ""
+                  )}
                 </h3>
               </div>
 
               <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
-                {selectedPaperIds.length > 0 && project?.isActive !== false && (
-                  <button 
-                    onClick={() => setIsBulkAssignModalOpen(true)}
-                    className="px-3 py-2 bg-teal-700 hover:bg-teal-800 text-white text-[10px] font-bold uppercase tracking-wider rounded-md shadow-sm transition-all whitespace-nowrap"
-                  >
-                    Bulk Assign ({selectedPaperIds.length})
-                  </button>
-                )}
+                
                 
                 {stats.pendingScripts > 0 && project?.isActive !== false && (
                   <button
@@ -529,18 +554,22 @@ export default function ProjectDashboard() {
               </div>
             ) : (
               <>
+                {/* Standard Centralized Table Pagination (Top) */}
+                <TablePagination
+                  page={page}
+                  totalPages={totalPages}
+                  totalCount={totalCount}
+                  pageSize={pageSize}
+                  setPage={setPage}
+                  setPageSize={setPageSize}
+                  position="top"
+                />
+
                 <div className="overflow-x-auto">
                   <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left">
                     <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
                       <tr>
-                        <th className="px-3 py-3 w-8 text-center">
-                          <input 
-                            type="checkbox" 
-                            className="rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer"
-                            checked={papers.length > 0 && selectedPaperIds.length === papers.length}
-                            onChange={handleSelectAll}
-                          />
-                        </th>
+
                         <SortHeader label="Code & Name" field="paperCode" hasFilter={true} className="min-w-[130px]" />
                         <SortHeader label="Subject" field="subjectName" hasFilter={true} className="min-w-[90px]" />
                         <SortHeader label="Catch No" field="catchNo" isCenter={true} className="min-w-[70px]" />
@@ -548,71 +577,44 @@ export default function ProjectDashboard() {
                         <SortHeader label="Pending" field="pendingScripts" isCenter={true} className="min-w-[50px]" />
                         <SortHeader label="Allocated" field="allocatedScripts" isCenter={true} className="min-w-[55px]" />
                         <SortHeader label="Completed" field="completedScripts" isCenter={true} className="min-w-[55px]" />
-                        <th className="px-2.5 py-3 text-center min-w-[90px]">Stage</th>
+                        <SortHeader label="Assigned Examiner" field="examiners" isCenter={true} className="min-w-[140px]" />
                         <th className="sticky right-0 z-20 bg-gray-50 px-3 py-3 text-center w-28 min-w-[110px] shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] border-l border-gray-200/80">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-xs font-bold text-gray-700">
-                      {papers.map((paper) => {
+                      {papers.map((paper, index) => {
+                        const isTopRow = index < 2;
+                        const examiners = Array.isArray(paper.assignedExaminers) && paper.assignedExaminers.length > 0 
+                          ? paper.assignedExaminers 
+                          : (paper.expertsCount > 0 ? [{ id: 1, name: `${paper.expertsCount} Assigned` }] : []);
+
                         // Determine current pipeline stage
                         let currentStage = 1;
-                        let stageText = "1. Config Sections";
-                        let stageColor = "bg-rose-50 text-rose-700 border-rose-200";
-
                         const isConfigured = paper.isSectionsConfigured && paper.configuredMarks === paper.maxMarks;
                         const hasExaminers = (paper.expertsCount || 0) > 0;
 
                         if (isConfigured) {
                           if (!hasExaminers) {
                             currentStage = 2;
-                            stageText = "2. Assign Examiners";
-                            stageColor = "bg-amber-50 text-amber-700 border-amber-200";
                           } else if (paper.pendingScripts > 0) {
                             currentStage = 3;
-                            stageText = "3. Allocate Scripts";
-                            stageColor = "bg-teal-50 text-teal-700 border-teal-200";
                           } else if (paper.totalScripts > 0) {
-                            if (paper.completedScripts === paper.totalScripts) {
-                              currentStage = 5;
-                              stageText = "5. Done";
-                            } else {
-                              currentStage = 4;
-                              stageText = "4. In Progress";
-                            }
-                            stageColor = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                            currentStage = paper.completedScripts === paper.totalScripts ? 5 : 4;
                           } else {
                             currentStage = 3;
-                            stageText = "Awaiting Scripts";
-                            stageColor = "bg-gray-50 text-gray-600 border-gray-200";
                           }
-                        }
-
-                        let stageTooltip = stageText;
-                        if (currentStage === 1) {
-                          if (!paper.isSectionsConfigured) {
-                            stageTooltip = "Sections not created yet. Click 'Sections' to configure.";
-                          } else if (paper.configuredMarks !== paper.maxMarks) {
-                            stageTooltip = `Section marks (${paper.configuredMarks || 0}) do not match Paper Max Marks (${paper.maxMarks}). Click 'Sections' to balance marks.`;
-                          }
-                        } else if (currentStage === 2) {
-                          stageTooltip = "Sections complete. Next: Assign Examiners to this paper.";
-                        } else if (currentStage === 3) {
-                          stageTooltip = "Examiners assigned. Ready to allocate pending scripts.";
                         }
 
                         const isAllocateDisabled = currentStage < 3 || paper.pendingScripts <= 0;
                         const isAssignDisabled = currentStage < 2;
 
                         return (
-                          <tr key={paper.paperId} className={`group transition ${selectedPaperIds.includes(paper.paperId) ? 'bg-teal-50/40' : 'hover:bg-gray-50/60'}`}>
-                            <td className="px-3 py-2.5 text-center">
-                              <input 
-                                type="checkbox" 
-                                className="rounded border-gray-300 text-teal-700 focus:ring-teal-500 cursor-pointer"
-                                checked={selectedPaperIds.includes(paper.paperId)}
-                                onChange={() => handleSelectPaper(paper.paperId)}
-                              />
-                            </td>
+                          <tr 
+                            key={paper.paperId} 
+                            onClick={() => setSelectedPaper(prev => prev?.paperId === paper.paperId ? null : paper)}
+                            className={`group transition hover:z-30 cursor-pointer ${activePaper?.paperId === paper.paperId ? 'bg-teal-50/80 border-l-4 border-l-teal-600 shadow-2xs' : 'hover:bg-gray-50/70'}`}
+                            title="Click to view charts for this paper"
+                          >
                             <td className="px-3 py-2.5">
                               <span className="text-gray-900 font-extrabold">{paper.paperCode}</span>
                               <span className="text-sm text-gray-800 block font-semibold mt-0.5 line-clamp-1">{paper.paperName}</span>
@@ -625,15 +627,65 @@ export default function ProjectDashboard() {
                             <td className="px-2 py-2.5 text-center text-amber-600">{paper.pendingScripts}</td>
                             <td className="px-2 py-2.5 text-center text-teal-700">{paper.allocatedScripts}</td>
                             <td className="px-2 py-2.5 text-center text-emerald-600">{paper.completedScripts}</td>
-                            <td className="px-2 py-2.5 text-center">
-                              <span 
-                                className={`inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-bold border whitespace-nowrap cursor-help ${stageColor}`}
-                                title={stageTooltip}
-                              >
-                                {stageText}
-                              </span>
+                            <td className="px-3 py-2.5 text-center relative hover:z-40 focus-within:z-40">
+                              {examiners.length > 0 ? (
+                                <div className="relative group/examiners inline-flex items-center gap-1 justify-center">
+                                  <span 
+                                    className="px-2 py-0.5 bg-teal-50 text-teal-800 border border-teal-200 rounded text-[10.5px] font-bold max-w-[130px] truncate inline-block cursor-default" 
+                                  >
+                                    {examiners[0].name || examiners[0].email || `Examiner #${examiners[0].id}`}
+                                  </span>
+                                  {examiners.length > 1 && (
+                                    <span
+                                      className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-bold border border-gray-200 cursor-pointer hover:bg-gray-200 transition-colors"
+                                    >
+                                      +{examiners.length - 1}
+                                    </span>
+                                  )}
+
+                                  {/* Tooltip popover showing all assigned examiners with avatar, name & email */}
+                                  <div
+                                    className={`absolute ${isTopRow ? 'top-full mt-2' : 'bottom-full mb-2'} right-0 hidden group-hover/examiners:flex flex-col w-max min-w-[220px] max-w-xs bg-white/95 backdrop-blur-md text-gray-800 rounded-xl shadow-xl shadow-blue-900/10 p-3 border border-gray-200/90 z-50 pointer-events-none text-left animate-in fade-in zoom-in-95 duration-150`}
+                                  >
+                                    <div className="flex items-center justify-between gap-2 pb-1.5 mb-2 border-b border-gray-100">
+                                      <span className="text-[10px] font-black uppercase tracking-wider text-teal-700 flex items-center gap-1.5">
+                                        <Users size={12} className="text-teal-600" />
+                                        All Assigned Examiners ({examiners.length})
+                                      </span>
+                                    </div>
+                                    <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                                      {examiners.map((ex, idx) => {
+                                        const exName = ex.name || ex.email || `Examiner #${ex.id}`;
+                                        const exEmail = ex.email || '';
+                                        const exImg = ex.profileImage || getInitialsAvatar(exName);
+                                        return (
+                                          <div key={ex.id || idx} className="flex items-center gap-2.5 p-1 rounded-lg hover:bg-gray-50/80 transition-colors">
+                                            <img src={exImg} alt="" className="w-6 h-6 rounded-full object-cover border border-teal-200 shadow-2xs shrink-0" />
+                                            <div className="min-w-0 flex-1">
+                                              <p className="font-bold text-gray-800 truncate text-[11px] leading-tight">
+                                                {exName}
+                                              </p>
+                                              {exEmail && (
+                                                <p className="text-[10px] text-gray-500 truncate leading-tight mt-0.5 font-medium">
+                                                  {exEmail}
+                                                </p>
+                                              )}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                    {/* Tooltip arrow */}
+                                    <div
+                                      className={`absolute ${isTopRow ? 'bottom-full border-b-white drop-shadow-[0_-1px_1px_rgba(0,0,0,0.06)]' : 'top-full border-t-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.06)]'} right-3 border-4 border-transparent`}
+                                    ></div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-gray-400 font-medium italic">Not Assigned</span>
+                              )}
                             </td>
-                            <td className={`sticky right-0 z-10 px-3 py-2.5 text-center whitespace-nowrap w-28 min-w-[110px] shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] border-l border-gray-100 ${selectedPaperIds.includes(paper.paperId) ? 'bg-[#f4f8fc]' : 'bg-white group-hover:bg-gray-50'}`}>
+                            <td onClick={(e) => e.stopPropagation()} className={`sticky right-0 z-10 group-hover:z-30 hover:z-30 focus-within:z-30 px-3 py-2.5 text-center whitespace-nowrap w-28 min-w-[110px] shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] border-l border-gray-100 ${activePaper?.paperId === paper.paperId ? 'bg-teal-50/80' : 'bg-white group-hover:bg-gray-50'}`}>
                               <div className="flex items-center justify-center gap-1.5">
                                 {/* Allocate Scripts Button */}
                                 <div className="relative group/tooltip inline-block">
@@ -642,7 +694,7 @@ export default function ProjectDashboard() {
                                       to={userType === 'admin'
                                         ? `/admin/allocate-scripts?projectId=${encryptedProjectId}&paperId=${encryptId(paper.paperId)}`
                                         : `/allocate-scripts?projectId=${encryptedProjectId}&paperId=${encryptId(paper.paperId)}`}
-                                      title="Allocate Scripts: Allocate pending scripts to examiners"
+                                      
                                       className="p-1.5 text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200/80 rounded-lg transition-all block shadow-2xs"
                                     >
                                       <Zap size={14} />
@@ -651,12 +703,12 @@ export default function ProjectDashboard() {
                                     <button
                                       disabled
                                       className="p-1.5 text-gray-300 bg-gray-50 border border-gray-200/60 rounded-lg cursor-not-allowed block shadow-2xs"
-                                      title={currentStage < 3 ? "Allocate Scripts: Requires sections & assigned examiners" : "Allocate Scripts: No pending scripts"}
+                                      
                                     >
                                       <Zap size={14} />
                                     </button>
                                   )}
-                                  <div className="absolute bottom-full right-0 mb-2 px-2.5 py-1.5 bg-gray-900 text-white text-[10px] rounded-lg shadow-lg opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50 pointer-events-none text-left">
+                                  <div className={`absolute ${isTopRow ? "top-full mt-2" : "bottom-full mb-2"} right-0 px-2.5 py-1.5 bg-gray-900 text-white text-[10px] rounded-lg shadow-xl opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50 pointer-events-none text-left`}>
                                     <div className="font-bold text-gray-100 flex items-center gap-1">
                                       <Zap size={10} className="text-teal-400" /> Allocate Scripts
                                     </div>
@@ -665,7 +717,7 @@ export default function ProjectDashboard() {
                                         ? (paper.pendingScripts > 0 ? `Allocate ${paper.pendingScripts} pending script${paper.pendingScripts > 1 ? 's' : ''}` : "Allocate scripts to examiners")
                                         : (currentStage < 3 ? "Complete previous stages first" : "No pending scripts to allocate")}
                                     </div>
-                                    <div className="absolute top-full right-3 border-4 border-transparent border-t-gray-900"></div>
+                                    <div className={`absolute ${isTopRow ? "bottom-full border-b-gray-900" : "top-full border-t-gray-900"} right-3 border-4 border-transparent`}></div>
                                   </div>
                                 </div>
 
@@ -676,12 +728,12 @@ export default function ProjectDashboard() {
                                       to={userType === 'admin'
                                         ? `/admin/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`
                                         : `/section-config?projectId=${encryptedProjectId}&subjectId=${encryptId(paper.subjectId || 0)}&paperId=${encryptId(paper.paperId)}&from=papers`}
-                                      title={!isConfigured ? 'Configure Sections: Create question sections & set marks' : 'Edit Sections: View/modify section configuration'}
+                                      
                                       className="p-1.5 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 rounded-lg transition-all block shadow-2xs"
                                     >
                                       <Layers size={14} />
                                     </Link>
-                                    <div className="absolute bottom-full right-0 mb-2 px-2.5 py-1.5 bg-gray-900 text-white text-[10px] rounded-lg shadow-lg opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50 pointer-events-none text-left">
+                                    <div className={`absolute ${isTopRow ? "top-full mt-2" : "bottom-full mb-2"} right-0 px-2.5 py-1.5 bg-gray-900 text-white text-[10px] rounded-lg shadow-xl opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50 pointer-events-none text-left`}>
                                       <div className="font-bold text-gray-100 flex items-center gap-1">
                                         <Layers size={10} className="text-indigo-400" /> {!isConfigured ? "Configure Sections" : "Edit Sections"}
                                       </div>
@@ -690,7 +742,7 @@ export default function ProjectDashboard() {
                                           ? (!paper.isSectionsConfigured ? "Create sections & set max marks" : `Balance marks: ${paper.configuredMarks}/${paper.maxMarks}`)
                                           : `Sections configured (${paper.configuredMarks} marks)`}
                                       </div>
-                                      <div className="absolute top-full right-3 border-4 border-transparent border-t-gray-900"></div>
+                                      <div className={`absolute ${isTopRow ? "bottom-full border-b-gray-900" : "top-full border-t-gray-900"} right-3 border-4 border-transparent`}></div>
                                     </div>
                                   </div>
                                 )}
@@ -706,7 +758,7 @@ export default function ProjectDashboard() {
                                             ? `/admin/papers?projectId=${encryptedProjectId}&action=assign&paperId=${encryptId(paper.paperId)}`
                                             : `/papers?projectId=${encryptedProjectId}&action=assign&paperId=${encryptId(paper.paperId)}`;
                                         }}
-                                        title="Assign Examiners: Assign examiners to evaluate scripts"
+                                        
                                         className="p-1.5 text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200/80 rounded-lg transition-all block shadow-2xs cursor-pointer"
                                       >
                                         <Users size={14} />
@@ -715,12 +767,12 @@ export default function ProjectDashboard() {
                                       <button
                                         disabled
                                         className="p-1.5 text-gray-300 bg-gray-50 border border-gray-200/60 rounded-lg cursor-not-allowed block shadow-2xs"
-                                        title="Assign Examiners: Configure sections first"
+                                        
                                       >
                                         <Users size={14} />
                                       </button>
                                     )}
-                                    <div className="absolute bottom-full right-0 mb-2 px-2.5 py-1.5 bg-gray-900 text-white text-[10px] rounded-lg shadow-lg opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50 pointer-events-none text-left">
+                                    <div className={`absolute ${isTopRow ? "top-full mt-2" : "bottom-full mb-2"} right-0 px-2.5 py-1.5 bg-gray-900 text-white text-[10px] rounded-lg shadow-xl opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all whitespace-nowrap z-50 pointer-events-none text-left`}>
                                       <div className="font-bold text-gray-100 flex items-center gap-1">
                                         <Users size={10} className="text-orange-400" /> Assign Examiners
                                       </div>
@@ -729,7 +781,7 @@ export default function ProjectDashboard() {
                                           ? ((paper.expertsCount || 0) > 0 ? `${paper.expertsCount} examiner${paper.expertsCount > 1 ? 's' : ''} assigned` : "Assign examiners to paper")
                                           : "Configure sections first"}
                                       </div>
-                                      <div className="absolute top-full right-3 border-4 border-transparent border-t-gray-900"></div>
+                                      <div className={`absolute ${isTopRow ? "bottom-full border-b-gray-900" : "top-full border-t-gray-900"} right-3 border-4 border-transparent`}></div>
                                     </div>
                                   </div>
                                 )}
@@ -754,6 +806,150 @@ export default function ProjectDashboard() {
               </>
             )}
           </div>
+        </div>
+
+        {/* RIGHT COMPONENT - Interactive Visual Charts & Analytics */}
+        <div className="col-span-12 xl:col-span-4 space-y-6">
+          {(() => {
+            const currentTotal = activePaper ? (activePaper.totalScripts || 0) : stats.totalScripts;
+            const currentCompleted = activePaper ? (activePaper.completedScripts || 0) : stats.completedScripts;
+            const currentAllocated = activePaper ? (activePaper.allocatedScripts || 0) : stats.allocatedScripts;
+            const currentPending = activePaper ? (activePaper.pendingScripts || 0) : stats.pendingScripts;
+            const currentPct = currentTotal > 0 ? Math.round((currentCompleted / currentTotal) * 100) : 0;
+
+            return (
+              <>
+                {/* Chart 1: Script Evaluation Status (Donut Chart) */}
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 transition-all">
+                  <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-100">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={`p-1.5 rounded-lg shrink-0 ${activePaper ? 'bg-teal-100 text-teal-800' : 'bg-teal-50 text-teal-700'}`}>
+                        <PieChart size={15} />
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-black uppercase text-gray-900 tracking-wider truncate">
+                          {activePaper ? `${activePaper.paperCode} Evaluation` : "Evaluation Breakdown"}
+                        </h4>
+                        <p className="text-[10px] text-gray-400 font-medium truncate">
+                          {activePaper ? (activePaper.paperName || activePaper.subjectName) : "Script marking lifecycle"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {activePaper ? (
+                        <button
+                          onClick={() => setSelectedPaper(null)}
+                          className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 transition flex items-center gap-1 cursor-pointer"
+                          title="Return to overall project stats"
+                        >
+                          <span>Overall</span>
+                          <X size={10} />
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200">
+                          Overall
+                        </span>
+                      )}
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                        {currentTotal} Scripts
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* SVG Donut Chart */}
+                  <div className="flex flex-col items-center justify-center pt-2 pb-2">
+                    <div className="relative w-40 h-40 flex items-center justify-center">
+                      <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 120 120">
+                        {/* Background track */}
+                        <circle
+                          cx="60"
+                          cy="60"
+                          r="48"
+                          stroke="#f3f4f6"
+                          strokeWidth="12"
+                          fill="transparent"
+                        />
+                        {/* Pending segment (Amber) */}
+                        {currentTotal > 0 && currentPending > 0 && (
+                          <circle
+                            cx="60"
+                            cy="60"
+                            r="48"
+                            stroke="#f59e0b"
+                            strokeWidth="12"
+                            fill="transparent"
+                            strokeDasharray={`${(currentPending / currentTotal) * 301.6} 301.6`}
+                            strokeDashoffset={`-${((currentCompleted + currentAllocated) / currentTotal) * 301.6}`}
+                            className="transition-all duration-700"
+                          />
+                        )}
+                        {/* In Marking segment (Teal) */}
+                        {currentTotal > 0 && currentAllocated > 0 && (
+                          <circle
+                            cx="60"
+                            cy="60"
+                            r="48"
+                            stroke="#0d9488"
+                            strokeWidth="12"
+                            fill="transparent"
+                            strokeDasharray={`${(currentAllocated / currentTotal) * 301.6} 301.6`}
+                            strokeDashoffset={`-${(currentCompleted / currentTotal) * 301.6}`}
+                            className="transition-all duration-700"
+                          />
+                        )}
+                        {/* Completed segment (Emerald) */}
+                        {currentTotal > 0 && currentCompleted > 0 && (
+                          <circle
+                            cx="60"
+                            cy="60"
+                            r="48"
+                            stroke="#10b981"
+                            strokeWidth="12"
+                            fill="transparent"
+                            strokeDasharray={`${(currentCompleted / currentTotal) * 301.6} 301.6`}
+                            strokeDashoffset="0"
+                            className="transition-all duration-700"
+                          />
+                        )}
+                      </svg>
+                      {/* Center text */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                        <span className="text-2xl font-black text-gray-900 tracking-tight leading-none">
+                          {currentPct}%
+                        </span>
+                        <span className="text-[10px] uppercase font-bold text-gray-400 mt-1 tracking-wider">
+                          Completed
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Legend items */}
+                    <div className="w-full grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-gray-100 text-center">
+                      <div className="p-2 rounded-lg bg-emerald-50/50 border border-emerald-100">
+                        <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-emerald-800">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Completed
+                        </div>
+                        <span className="text-sm font-black text-emerald-900 mt-0.5 block">{currentCompleted}</span>
+                      </div>
+                      <div className="p-2 rounded-lg bg-teal-50/50 border border-teal-100">
+                        <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-teal-800">
+                          <span className="w-2 h-2 rounded-full bg-teal-500"></span> In Marking
+                        </div>
+                        <span className="text-sm font-black text-teal-900 mt-0.5 block">{currentAllocated}</span>
+                      </div>
+                      <div className="p-2 rounded-lg bg-amber-50/50 border border-amber-100">
+                        <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-amber-800">
+                          <span className="w-2 h-2 rounded-full bg-amber-500"></span> Pending
+                        </div>
+                        <span className="text-sm font-black text-amber-900 mt-0.5 block">{currentPending}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </div>
       </div>
               </>

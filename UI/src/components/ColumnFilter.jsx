@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Filter, X, Check } from 'lucide-react';
 
-export default function ColumnFilter({ columnKey, currentFilter, setFilter, placeholder = "Search...", options = null }) {
+export default function ColumnFilter({ columnKey, currentFilter, setFilter, placeholder = "Search...", options = null, title = null }) {
   const [isOpen, setIsOpen] = useState(false);
   const [value, setValue] = useState(currentFilter || '');
   const wrapperRef = useRef(null);
@@ -51,7 +51,7 @@ export default function ColumnFilter({ columnKey, currentFilter, setFilter, plac
             ? 'bg-teal-100 text-teal-700'
             : 'text-gray-300 hover:text-gray-500 hover:bg-gray-100'
         }`}
-        title={`Filter by ${columnKey}`}
+        title={title || `Filter by ${columnKey}`}
       >
         <Filter size={12} />
       </button>

@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useConfigHeader } from '../context/ConfigHeaderContext';
+import { UniversityConfigTabBar } from '../components/UniversityConfigHeader';
 import projectService from '../services/projectService';
 import sessionService from '../services/sessionService';
 import { useTable } from '../services/tableService';
@@ -15,7 +16,8 @@ import {
   Trash2,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  FileText
 } from 'lucide-react';
 import message from '../services/messageService';
 
@@ -106,7 +108,7 @@ export default function ProjectManagement() {
   useEffect(() => {
     const canCreate = hasPermission('CREATE_PROJECT');
     setConfigHeader({
-      title: 'Projects Management',
+      title: 'Projects',
       search,
       setSearch,
       searchPlaceholder: 'Search projects…',
@@ -184,7 +186,8 @@ export default function ProjectManagement() {
       />
 
       {/* Main List */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <UniversityConfigTabBar />
         {loading && projects.length === 0 ? (
           <div className="p-12 text-center text-gray-400 font-bold text-xs flex flex-col items-center gap-3">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
@@ -200,6 +203,15 @@ export default function ProjectManagement() {
           </div>
         ) : (
           <div className="overflow-x-auto">
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              pageSize={pageSize}
+              setPage={setPage}
+              setPageSize={setPageSize}
+              position="top"
+            />
             <table className="block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">
@@ -299,9 +311,10 @@ export default function ProjectManagement() {
                             to={userType === 'admin'
                               ? `/admin/project-dashboard?projectId=${encryptId(project.projectId)}&tab=papers`
                               : `/project-dashboard?projectId=${encryptId(project.projectId)}&tab=papers`}
-                            className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-xl font-bold text-[10px] uppercase tracking-wider border border-teal-100 transition cursor-pointer"
+                            className="p-2 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-xl border border-teal-100 transition cursor-pointer"
+                            title="Configure Papers & Sections"
                           >
-                            Configure Paper
+                            <FileText size={13} />
                           </Link>
                         )}
                       </div>

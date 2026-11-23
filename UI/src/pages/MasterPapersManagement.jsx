@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useConfigHeader } from '../context/ConfigHeaderContext';
+import { UniversityConfigTabBar } from '../components/UniversityConfigHeader';
 import paperService from '../services/paperService';
 import subjectService from '../services/subjectService';
 import sectionService from '../services/sectionService';
@@ -200,7 +201,7 @@ function ManagePaperSectionsModal({ isOpen, onClose, paper, masterSections = [],
             <div className="text-center text-xs font-semibold text-gray-400 p-4 md:p-8">Loading master sections...</div>
           ) : masterSections.length === 0 ? (
             <div className="text-center text-xs text-gray-500 bg-amber-50 border border-amber-200 rounded-xl p-4 md:p-8">
-              No Section Masters created yet. Create section templates under <strong>Section Masters Management</strong> first.
+              No Section Masters created yet. Create section templates under <strong>Section Masters</strong> first.
             </div>
           ) : (
             <div className="space-y-2">
@@ -839,7 +840,7 @@ export default function MasterPapersManagement() {
   useEffect(() => {
     const canCreate = hasPermission('CREATE_PAPER');
     setConfigHeader({
-      title: 'Academic Papers Management',
+      title: 'Papers',
       search,
       setSearch,
       searchPlaceholder: 'Search papers by code or name…',
@@ -920,8 +921,9 @@ export default function MasterPapersManagement() {
       <div className={showForm ? "grid grid-cols-1 xl:grid-cols-12 gap-5 items-start" : "w-full"}>
         {/* Left Column: Papers List Table */}
         <div className={showForm ? "xl:col-span-7 space-y-3 min-w-0" : "w-full space-y-3 min-w-0"}>
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {loading && papers.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <UniversityConfigTabBar />
+            {loading && papers.length === 0 ? (
             <div className="p-12 text-center text-gray-450 font-bold text-xs flex flex-col items-center gap-3">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
               <span>Loading papers...</span>
@@ -936,6 +938,15 @@ export default function MasterPapersManagement() {
             </div>
           ) : (
             <>
+              <TablePagination
+                page={page}
+                totalPages={totalPages}
+                totalCount={totalCount}
+                pageSize={pageSize}
+                setPage={setPage}
+                setPageSize={setPageSize}
+                position="top"
+              />
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                 <thead>
@@ -1022,15 +1033,15 @@ export default function MasterPapersManagement() {
                         )}
                       </td>
                      
-                      <td className="py-2.5 text-right md:px-6 px-4">
-                        <div className="flex items-center justify-end gap-1.5">
+                      <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
+                        <div className="flex items-center justify-end gap-2">
                           {hasPermission('UPDATE_PAPER') && (
                             <button
                               onClick={() => handleEdit(paper)}
-                              className="p-2 bg-gray-50 hover:bg-teal-50 hover:text-teal-700 text-gray-600 rounded-xl border border-gray-200 hover:border-teal-200 transition-all cursor-pointer shadow-sm group"
+                              className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl border border-gray-200 transition cursor-pointer"
                               title="Edit Paper"
                             >
-                              <Edit2 size={14} className="group-hover:scale-110 transition-transform" />
+                              <Edit2 size={13} />
                             </button>
                           )}
                         </div>

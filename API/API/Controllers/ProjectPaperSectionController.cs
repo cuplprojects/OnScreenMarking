@@ -337,7 +337,7 @@ namespace API.Controllers
                 }
 
                 // ── SectionMaster: create or update ──────────────────────────────────
-                // Validate questions in the same Optional Group have identical marks
+                // Validate questions in the same Optional Group have identical total marks per question number
                 if (dto.Questions != null && dto.Questions.Any())
                 {
                     var grouped = dto.Questions
@@ -346,18 +346,28 @@ namespace API.Controllers
 
                     foreach (var grp in grouped)
                     {
-                        var distinctMarks = grp.Select(q => Math.Round(q.Marks, 2, MidpointRounding.AwayFromZero)).Distinct().ToList();
-                        if (distinctMarks.Count > 1)
+                        var questionAggregates = grp
+                            .GroupBy(q => (q.QuestionNo ?? "").Trim().ToUpper())
+                            .Select(g => new {
+                                QuestionNo = g.First().QuestionNo,
+                                TotalMarks = Math.Round(g.Sum(x => x.Marks), 2, MidpointRounding.AwayFromZero),
+                                Parts = g.Where(x => !string.IsNullOrWhiteSpace(x.Part) && x.Part != "Part").Select(x => x.Part).ToList()
+                            })
+                            .ToList();
+
+                        if (questionAggregates.Count > 1)
                         {
-                            var qList = grp.ToList();
-                            var first = qList[0];
-                            var second = qList.FirstOrDefault(x => Math.Abs(x.Marks - first.Marks) > 0.001m);
-                            var q1Label = !string.IsNullOrWhiteSpace(first.Part) ? $"Q{first.QuestionNo} ({first.Part})" : $"Q{first.QuestionNo}";
-                            var q2Label = second != null ? (!string.IsNullOrWhiteSpace(second.Part) ? $"Q{second.QuestionNo} ({second.Part})" : $"Q{second.QuestionNo}") : "another question";
-                            return BadRequest(new { 
-                                success = false, 
-                                message = $"Questions in Optional Group '{grp.Key}' in section '{dto.Name}' must have the same marks. {q1Label} has {first.Marks}m, but {q2Label} has {second?.Marks}m." 
-                            });
+                            var first = questionAggregates[0];
+                            var second = questionAggregates.FirstOrDefault(x => Math.Abs(x.TotalMarks - first.TotalMarks) > 0.001m);
+                            if (second != null)
+                            {
+                                var q1Label = first.Parts.Any() ? $"Q{first.QuestionNo} ({string.Join(", ", first.Parts)})" : $"Q{first.QuestionNo}";
+                                var q2Label = second.Parts.Any() ? $"Q{second.QuestionNo} ({string.Join(", ", second.Parts)})" : $"Q{second.QuestionNo}";
+                                return BadRequest(new { 
+                                    success = false, 
+                                    message = $"Questions in Optional Group '{grp.Key}' in section '{dto.Name}' must have the same total marks. {q1Label} has {first.TotalMarks}m, but {q2Label} has {second.TotalMarks}m." 
+                                });
+                            }
                         }
                     }
                 }
@@ -548,7 +558,7 @@ namespace API.Controllers
                 if (master == null)
                     return NotFound(new { success = false, message = "Section not found" });
 
-                // Validate questions in the same Optional Group have identical marks
+                // Validate questions in the same Optional Group have identical total marks per question number
                 if (dto.Questions != null && dto.Questions.Any())
                 {
                     var grouped = dto.Questions
@@ -557,18 +567,28 @@ namespace API.Controllers
 
                     foreach (var grp in grouped)
                     {
-                        var distinctMarks = grp.Select(q => Math.Round(q.Marks, 2, MidpointRounding.AwayFromZero)).Distinct().ToList();
-                        if (distinctMarks.Count > 1)
+                        var questionAggregates = grp
+                            .GroupBy(q => (q.QuestionNo ?? "").Trim().ToUpper())
+                            .Select(g => new {
+                                QuestionNo = g.First().QuestionNo,
+                                TotalMarks = Math.Round(g.Sum(x => x.Marks), 2, MidpointRounding.AwayFromZero),
+                                Parts = g.Where(x => !string.IsNullOrWhiteSpace(x.Part) && x.Part != "Part").Select(x => x.Part).ToList()
+                            })
+                            .ToList();
+
+                        if (questionAggregates.Count > 1)
                         {
-                            var qList = grp.ToList();
-                            var first = qList[0];
-                            var second = qList.FirstOrDefault(x => Math.Abs(x.Marks - first.Marks) > 0.001m);
-                            var q1Label = !string.IsNullOrWhiteSpace(first.Part) ? $"Q{first.QuestionNo} ({first.Part})" : $"Q{first.QuestionNo}";
-                            var q2Label = second != null ? (!string.IsNullOrWhiteSpace(second.Part) ? $"Q{second.QuestionNo} ({second.Part})" : $"Q{second.QuestionNo}") : "another question";
-                            return BadRequest(new { 
-                                success = false, 
-                                message = $"Questions in Optional Group '{grp.Key}' in section '{dto.Name}' must have the same marks. {q1Label} has {first.Marks}m, but {q2Label} has {second?.Marks}m." 
-                            });
+                            var first = questionAggregates[0];
+                            var second = questionAggregates.FirstOrDefault(x => Math.Abs(x.TotalMarks - first.TotalMarks) > 0.001m);
+                            if (second != null)
+                            {
+                                var q1Label = first.Parts.Any() ? $"Q{first.QuestionNo} ({string.Join(", ", first.Parts)})" : $"Q{first.QuestionNo}";
+                                var q2Label = second.Parts.Any() ? $"Q{second.QuestionNo} ({string.Join(", ", second.Parts)})" : $"Q{second.QuestionNo}";
+                                return BadRequest(new { 
+                                    success = false, 
+                                    message = $"Questions in Optional Group '{grp.Key}' in section '{dto.Name}' must have the same total marks. {q1Label} has {first.TotalMarks}m, but {q2Label} has {second.TotalMarks}m." 
+                                });
+                            }
                         }
                     }
                 }
