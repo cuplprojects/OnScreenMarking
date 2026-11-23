@@ -353,6 +353,15 @@ export default function AdminDashboard() {
               </div>
             ) : (
               <div className="flex flex-col shrink min-h-0 overflow-hidden">
+                <TablePagination
+                  page={page}
+                  totalPages={totalPages}
+                  totalCount={totalCount}
+                  pageSize={pageSize}
+                  setPage={setPage}
+                  setPageSize={setPageSize}
+                  position="top"
+                />
                 <div className="overflow-auto shrink min-h-0">
                   <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left">
                     <thead className="bg-gray-50 border-b border-gray-100 sticky top-0 z-10">

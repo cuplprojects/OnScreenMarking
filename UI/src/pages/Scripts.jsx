@@ -184,6 +184,15 @@ const Scripts = () => {
           </div>
         ) : (
           <div className="overflow-x-auto bg-white relative">
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              pageSize={pageSize}
+              setPage={setPage}
+              setPageSize={setPageSize}
+              position="top"
+            />
             <table className="w-full text-left min-w-[900px] border-collapse">
               <thead className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none sticky top-0 z-10 shadow-sm">
                 <tr>

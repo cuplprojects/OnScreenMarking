@@ -171,6 +171,15 @@ export default function UniversityManagement() {
             </div>
           ) : (
             <div className="overflow-x-auto">
+              <TablePagination
+                page={page}
+                totalPages={totalPages}
+                totalCount={totalCount}
+                pageSize={pageSize}
+                setPage={setPage}
+                setPageSize={setPageSize}
+                position="top"
+              />
               <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">

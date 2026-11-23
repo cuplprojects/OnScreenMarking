@@ -955,18 +955,20 @@ const ExaminerMarking = () => {
                   ? section.maxQuestionsToAttempt
                   : 1;
 
-                const attemptedInGroup = grpQuestions.filter(sq => 
-                  String(sq.questionId) !== String(q.questionId) &&
-                  ((Number(updated[sq.questionId]?.marksAwarded) > 0) || updated[sq.questionId]?.isAttempted) &&
-                  !updated[sq.questionId]?.isSkipped
-                );
+                const qNo = String(q.questionNo || '').trim().toUpperCase();
+                const attemptedInGroup = grpQuestions.filter(sq => {
+                  const sqNo = String(sq.questionNo || '').trim().toUpperCase();
+                  if (sqNo === qNo) return false;
+                  return ((Number(updated[sq.questionId]?.marksAwarded) > 0) || updated[sq.questionId]?.isAttempted) &&
+                         !updated[sq.questionId]?.isSkipped;
+                });
 
-                const distinctAttemptedInGroup = new Set(attemptedInGroup.map(sq => sq.part ? `${sq.questionNo}_${sq.part}` : String(sq.questionNo)));
+                const distinctAttemptedInGroup = new Set(attemptedInGroup.map(sq => String(sq.questionNo || '').trim().toUpperCase()));
 
                 if (distinctAttemptedInGroup.size >= maxAllowedInGroup) {
                   const conflicting = attemptedInGroup[0];
-                  const qLabel = q.part ? `${q.questionNo} (${q.part})` : q.questionNo;
-                  const cLabel = conflicting?.part ? `${conflicting.questionNo} (${conflicting.part})` : conflicting?.questionNo;
+                  const qLabel = q.part && q.part !== 'Part' ? `${q.questionNo} (${q.part})` : q.questionNo;
+                  const cLabel = conflicting?.part && conflicting?.part !== 'Part' ? `${conflicting.questionNo} (${conflicting.part})` : conflicting?.questionNo;
                   setError(`Cannot award marks to Question ${qLabel}: Maximum attempt limit (${maxAllowedInGroup}) for Group '${grp}' already reached.`);
                   setTimeout(() => setError(''), 4000);
                   return;
@@ -1102,16 +1104,18 @@ const ExaminerMarking = () => {
       : 1;
 
     const currentMarks = marksState || questionMarks;
+    const targetQNo = String(targetQ.questionNo || '').trim().toUpperCase();
 
     const attemptedInGroup = grpQuestions.filter(sq => {
-      if (String(sq.questionId) === String(targetQ.questionId)) return false;
+      const sqNo = String(sq.questionNo || '').trim().toUpperCase();
+      if (sqNo === targetQNo) return false;
       const sm = currentMarks[sq.questionId];
       return ((Number(sm?.marksAwarded) > 0) || sm?.isAttempted) && !sm?.isSkipped;
     });
 
-    const distinctAttemptedQKeys = new Set(attemptedInGroup.map(sq => sq.part ? `${sq.questionNo}_${sq.part}` : String(sq.questionNo)));
+    const distinctAttemptedQNos = new Set(attemptedInGroup.map(sq => String(sq.questionNo || '').trim().toUpperCase()));
 
-    if (distinctAttemptedQKeys.size >= maxAllowedInGroup) {
+    if (distinctAttemptedQNos.size >= maxAllowedInGroup) {
       return attemptedInGroup[0];
     }
     return null;
@@ -1163,24 +1167,35 @@ const ExaminerMarking = () => {
     return !getQuestionBlockedReason(target, marksState);
   };
 
-  const handleConfirmGroupSwitch = (targetQ, conflictingQ) => {
-    // 1. Clear marks for conflicting question from questionMarks state
+  const handleConfirmGroupSwitch = (targetQ, conflictingQ, conflictingParts = null) => {
+    const sec = sections.find(s => (s.id !== undefined && targetQ.sectionId !== undefined && String(s.id) === String(targetQ.sectionId)) || s.questions?.some(sq => String(sq.questionId) === String(targetQ.questionId)));
+    const conflictingQNo = String(conflictingQ.questionNo || '').trim().toUpperCase();
+    const partsToClear = conflictingParts || (sec?.questions || []).filter(sq => 
+      String(sq.questionNo || '').trim().toUpperCase() === conflictingQNo
+    );
+    const resolvedParts = partsToClear.length > 0 ? partsToClear : [conflictingQ];
+
+    // 1. Clear marks for all conflicting question parts from questionMarks state
     setQuestionMarks(prev => {
-      const updated = {
-        ...prev,
-        [conflictingQ.questionId]: {
-          ...prev[conflictingQ.questionId],
-          marksAwarded: 0,
-          isAttempted: false,
-          isSkipped: false
+      const updated = { ...prev };
+      resolvedParts.forEach(part => {
+        if (updated[part.questionId]) {
+          updated[part.questionId] = {
+            ...updated[part.questionId],
+            marksAwarded: 0,
+            isAttempted: false,
+            isSkipped: false
+          };
         }
-      };
+      });
       calculateTotal(updated);
       return updated;
     });
 
-    // 2. Remove conflicting question annotation from annotator canvas and storage
-    annotatorRef.current?.clearQuestionMarks?.(conflictingQ);
+    // 2. Remove annotations for all conflicting question parts
+    resolvedParts.forEach(part => {
+      annotatorRef.current?.clearQuestionMarks?.(part);
+    });
 
     // 3. Select target question
     setSelectedQuestion(targetQ.questionId);
@@ -1190,9 +1205,24 @@ const ExaminerMarking = () => {
       annotatorRef.current?.openMarkModalForQuestion?.(targetQ);
     }, 120);
 
-    const cLabel = conflictingQ.part ? `${conflictingQ.questionNo}${conflictingQ.part}` : conflictingQ.questionNo;
-    const tLabel = targetQ.part ? `${targetQ.questionNo}${targetQ.part}` : targetQ.questionNo;
+    const cParts = resolvedParts.filter(p => p.part && p.part !== 'Part').map(p => p.part);
+    const cLabel = cParts.length > 0 ? `${conflictingQ.questionNo} (${cParts.join(', ')})` : conflictingQ.questionNo;
+    const tLabel = targetQ.part && targetQ.part !== 'Part' ? `${targetQ.questionNo} (${targetQ.part})` : targetQ.questionNo;
     message.success(`Cleared marks from Question ${cLabel}. Now evaluating Question ${tLabel}.`);
+  };
+
+  const handleOpenGroupSwitch = (modalInfo) => {
+    if (!modalInfo) return;
+    const { targetQuestion, conflictingQuestion } = modalInfo;
+    const sec = sections.find(s => (s.id !== undefined && targetQuestion?.sectionId !== undefined && String(s.id) === String(targetQuestion.sectionId)) || s.questions?.some(sq => String(sq.questionId) === String(targetQuestion?.questionId)));
+    const conflictingQNo = String(conflictingQuestion?.questionNo || '').trim().toUpperCase();
+    const conflictingParts = (sec?.questions || []).filter(sq => 
+      String(sq.questionNo || '').trim().toUpperCase() === conflictingQNo
+    );
+    setGroupSwitchModal({
+      ...modalInfo,
+      conflictingParts: conflictingParts.length > 0 ? conflictingParts : [conflictingQuestion]
+    });
   };
 
   const calculateTotal = (marks) => {
@@ -1253,18 +1283,20 @@ const ExaminerMarking = () => {
         ? section.maxQuestionsToAttempt
         : 1;
 
-      const attemptedInGroup = grpQuestions.filter(sq => 
-        String(sq.questionId) !== String(question.questionId) &&
-        ((Number(questionMarks[sq.questionId]?.marksAwarded) > 0) || questionMarks[sq.questionId]?.isAttempted) &&
-        !questionMarks[sq.questionId]?.isSkipped
-      );
+      const qNo = String(question.questionNo || '').trim().toUpperCase();
+      const attemptedInGroup = grpQuestions.filter(sq => {
+        const sqNo = String(sq.questionNo || '').trim().toUpperCase();
+        if (sqNo === qNo) return false;
+        return ((Number(questionMarks[sq.questionId]?.marksAwarded) > 0) || questionMarks[sq.questionId]?.isAttempted) &&
+               !questionMarks[sq.questionId]?.isSkipped;
+      });
 
-      const distinctAttemptedInGroup = new Set(attemptedInGroup.map(sq => sq.part ? `${sq.questionNo}_${sq.part}` : String(sq.questionNo)));
+      const distinctAttemptedInGroup = new Set(attemptedInGroup.map(sq => String(sq.questionNo || '').trim().toUpperCase()));
 
       if (distinctAttemptedInGroup.size >= maxAllowedInGroup) {
         const conflicting = attemptedInGroup[0];
-        const qLabel = question.part ? `${question.questionNo} (${question.part})` : question.questionNo;
-        const cLabel = conflicting?.part ? `${conflicting.questionNo} (${conflicting.part})` : conflicting?.questionNo;
+        const qLabel = question.part && question.part !== 'Part' ? `${question.questionNo} (${question.part})` : question.questionNo;
+        const cLabel = conflicting?.part && conflicting?.part !== 'Part' ? `${conflicting.questionNo} (${conflicting.part})` : conflicting?.questionNo;
         setError(`Cannot award marks to Question ${qLabel}: Maximum attempt limit (${maxAllowedInGroup}) for Group '${grp}' already reached.`);
         setTimeout(() => setError(''), 4000);
         return;
@@ -1839,7 +1871,7 @@ const ExaminerMarking = () => {
                 annotatorRef.current?.openMarkModalForQuestion?.(q);
               }
             }}
-            onGroupSwitch={(modalInfo) => setGroupSwitchModal(modalInfo)}
+            onGroupSwitch={handleOpenGroupSwitch}
           />
 
           <RemarksSection

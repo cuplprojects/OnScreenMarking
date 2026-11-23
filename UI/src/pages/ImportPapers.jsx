@@ -520,6 +520,15 @@ export default function ImportPapers() {
               </div>
             ) : (
               <div className="overflow-x-auto">
+                <TablePagination 
+                  page={page}
+                  totalPages={totalPages}
+                  totalCount={totalCount}
+                  pageSize={pageSize}
+                  setPage={setPage}
+                  setPageSize={setPageSize}
+                  position="top"
+                />
                 <table className="w-full text-left text-sm">
                   <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-400 tracking-wider">
                     <tr>

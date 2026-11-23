@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useConfigHeader } from '../context/ConfigHeaderContext';
+import { UniversityConfigTabBar } from '../components/UniversityConfigHeader';
 import departmentService from '../services/departmentService';
 import { useTable } from '../services/tableService';
 import TablePagination from '../components/TablePagination';
@@ -95,7 +96,7 @@ export default function DepartmentManagement() {
   useEffect(() => {
     const canCreate = hasPermission('CREATE_DEPARTMENT');
     setConfigHeader({
-      title: 'Departments Management',
+      title: 'Departments',
       search,
       setSearch,
       searchPlaceholder: 'Search departments…',
@@ -158,7 +159,8 @@ export default function DepartmentManagement() {
         />
 
         {/* Departments List Table */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <UniversityConfigTabBar />
           {loading && departments.length === 0 ? (
             <div className="p-12 text-center text-gray-400 font-bold text-xs flex flex-col items-center gap-3">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
@@ -184,6 +186,15 @@ export default function DepartmentManagement() {
             </div>
           ) : (
             <div className="overflow-x-auto">
+              <TablePagination
+                page={page}
+                totalPages={totalPages}
+                totalCount={totalCount}
+                pageSize={pageSize}
+                setPage={setPage}
+                setPageSize={setPageSize}
+                position="top"
+              />
               <table className=" block w-full overflow-x-auto whitespace-nowrap md:table md:whitespace-normal w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-450 uppercase tracking-widest select-none">

@@ -100,8 +100,9 @@ function useNavGroups(userType, hasPermission) {
   if (hasPermission('READ_SCRIPT')) {
     examItems.push({ label: 'Scripts', path: '/scripts', icon: FileText });
   }
-  if (hasPermission('VIEW_REPORTS')) {
-    examItems.push({ label: 'Reports', path: '/reports', icon: BarChart3 });
+  if (isAdmin || isCoordinator || hasPermission('VIEW_REPORTS')) {
+    const reportsPath = isAdmin ? '/admin/reports' : '/reports';
+    examItems.push({ label: 'Reports', path: reportsPath, icon: BarChart3 });
   }
   if (examItems.length > 0) {
     groups.push({ label: 'Examination', items: examItems });

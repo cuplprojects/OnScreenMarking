@@ -49,6 +49,18 @@ export default function SectionConfig() {
   const navigate = useNavigate();
 
   const handleBackFromSections = () => {
+    const fromParam = searchParams.get('from');
+    if (fromParam === 'papers') {
+      const targetPath = userType === 'admin' ? '/admin/papers' : '/papers';
+      const params = new URLSearchParams();
+      if (encryptedProjectId) params.set('projectId', encryptedProjectId);
+      const paperIdToEdit = searchParams.get('paperId') || (selectedPaper?.paperId ? String(selectedPaper.paperId) : null);
+      if (paperIdToEdit) {
+        params.set('editPaperId', paperIdToEdit);
+      }
+      navigate(`${targetPath}?${params.toString()}`);
+      return;
+    }
     navigate(-1);
   };
 
@@ -113,9 +125,17 @@ export default function SectionConfig() {
       const fromParam = searchParams.get('from');
       const isFromPapers = fromParam === 'papers';
 
-      const parentPath = isFromPapers
+      let parentPath = isFromPapers
         ? (userType === 'admin' ? '/admin/papers' : '/papers')
         : (userType === 'admin' ? '/admin/sessions' : '/sessions');
+
+      if (isFromPapers && encryptedProjectId) {
+        parentPath += `?projectId=${encryptedProjectId}`;
+        const paperIdToEdit = searchParams.get('paperId') || (selectedPaper?.paperId ? String(selectedPaper.paperId) : null);
+        if (paperIdToEdit) {
+          parentPath += `&editPaperId=${paperIdToEdit}`;
+        }
+      }
 
       const parentLabel = isFromPapers ? 'Paper Management' : 'Sessions & Projects';
       const parentIcon = isFromPapers ? 'FileText' : 'Calendar';
@@ -137,7 +157,7 @@ export default function SectionConfig() {
       fetchQuestionTypes();
       fetchSectionMasters();
     }
-  }, [projectId, encryptedProjectId, userType, searchParams]);
+  }, [projectId, encryptedProjectId, userType, searchParams, selectedPaper]);
 
   const fetchSectionMasters = async () => {
     try {
@@ -537,26 +557,34 @@ export default function SectionConfig() {
       }
     }
 
-    // Validate that questions sharing the same Optional Group have identical marks
+    // Validate that questions sharing the same Optional Group have identical total marks per question number
     const groupQuestionsMap = {};
     (questions || []).forEach(q => {
       const code = q.optionalGroupCode ? q.optionalGroupCode.trim().toUpperCase() : '';
       if (code) {
         if (!groupQuestionsMap[code]) {
-          groupQuestionsMap[code] = [];
+          groupQuestionsMap[code] = {};
         }
-        groupQuestionsMap[code].push(q);
+        const qKey = String(q.questionNo || '').trim().toUpperCase();
+        if (!groupQuestionsMap[code][qKey]) {
+          groupQuestionsMap[code][qKey] = { qNo: q.questionNo, parts: [], totalMarks: 0 };
+        }
+        groupQuestionsMap[code][qKey].totalMarks += (parseFloat(q.marks) || 0);
+        if (q.part && q.part !== 'Part') {
+          groupQuestionsMap[code][qKey].parts.push(q.part);
+        }
       }
     });
 
-    for (const [code, qList] of Object.entries(groupQuestionsMap)) {
+    for (const [code, qDict] of Object.entries(groupQuestionsMap)) {
+      const qList = Object.values(qDict);
       if (qList.length > 1) {
-        const firstMarks = parseFloat(qList[0].marks) || 0;
-        const mismatchedQ = qList.find(q => Math.abs((parseFloat(q.marks) || 0) - firstMarks) > 0.001);
+        const firstTotal = qList[0].totalMarks;
+        const mismatchedQ = qList.find(q => Math.abs(q.totalMarks - firstTotal) > 0.001);
         if (mismatchedQ) {
-          const q1Label = qList[0].part ? `Q${qList[0].questionNo} (${qList[0].part})` : `Q${qList[0].questionNo}`;
-          const q2Label = mismatchedQ.part ? `Q${mismatchedQ.questionNo} (${mismatchedQ.part})` : `Q${mismatchedQ.questionNo}`;
-          message.error(`Questions in Optional Group '${code}' must have identical marks. ${q1Label} has ${firstMarks}m, but ${q2Label} has ${mismatchedQ.marks}m.`);
+          const q1Label = qList[0].parts.length > 0 ? `Q${qList[0].qNo} (${qList[0].parts.join(', ')})` : `Q${qList[0].qNo}`;
+          const q2Label = mismatchedQ.parts.length > 0 ? `Q${mismatchedQ.qNo} (${mismatchedQ.parts.join(', ')})` : `Q${mismatchedQ.qNo}`;
+          message.error(`Questions in Optional Group '${code}' must have identical total marks. ${q1Label} has ${firstTotal}m, but ${q2Label} has ${mismatchedQ.totalMarks}m.`);
           return;
         }
       }
@@ -1567,26 +1595,34 @@ export default function SectionConfig() {
         }
       }
 
-      // Validate that questions sharing the same Optional Group have identical marks
+      // Validate that questions sharing the same Optional Group have identical total marks per question number
       const groupQuestionsMap = {};
       (sec.questions || []).forEach(q => {
         const code = q.optionalGroupCode ? q.optionalGroupCode.trim().toUpperCase() : '';
         if (code) {
           if (!groupQuestionsMap[code]) {
-            groupQuestionsMap[code] = [];
+            groupQuestionsMap[code] = {};
           }
-          groupQuestionsMap[code].push(q);
+          const qKey = String(q.questionNo || '').trim().toUpperCase();
+          if (!groupQuestionsMap[code][qKey]) {
+            groupQuestionsMap[code][qKey] = { qNo: q.questionNo, parts: [], totalMarks: 0 };
+          }
+          groupQuestionsMap[code][qKey].totalMarks += (parseFloat(q.marks) || 0);
+          if (q.part && q.part !== 'Part') {
+            groupQuestionsMap[code][qKey].parts.push(q.part);
+          }
         }
       });
 
-      for (const [code, qList] of Object.entries(groupQuestionsMap)) {
+      for (const [code, qDict] of Object.entries(groupQuestionsMap)) {
+        const qList = Object.values(qDict);
         if (qList.length > 1) {
-          const firstMarks = parseFloat(qList[0].marks) || 0;
-          const mismatchedQ = qList.find(q => Math.abs((parseFloat(q.marks) || 0) - firstMarks) > 0.001);
+          const firstTotal = qList[0].totalMarks;
+          const mismatchedQ = qList.find(q => Math.abs(q.totalMarks - firstTotal) > 0.001);
           if (mismatchedQ) {
-            const q1Label = qList[0].part ? `Q${qList[0].questionNo} (${qList[0].part})` : `Q${qList[0].questionNo}`;
-            const q2Label = mismatchedQ.part ? `Q${mismatchedQ.questionNo} (${mismatchedQ.part})` : `Q${mismatchedQ.questionNo}`;
-            message.error(`Questions in Optional Group '${code}' in '${secName}' must have identical marks. ${q1Label} has ${firstMarks}m, but ${q2Label} has ${mismatchedQ.marks}m.`);
+            const q1Label = qList[0].parts.length > 0 ? `Q${qList[0].qNo} (${qList[0].parts.join(', ')})` : `Q${qList[0].qNo}`;
+            const q2Label = mismatchedQ.parts.length > 0 ? `Q${mismatchedQ.qNo} (${mismatchedQ.parts.join(', ')})` : `Q${mismatchedQ.qNo}`;
+            message.error(`Questions in Optional Group '${code}' in '${secName}' must have identical total marks. ${q1Label} has ${firstTotal}m, but ${q2Label} has ${mismatchedQ.totalMarks}m.`);
             setActiveSectionIdx(idx);
             return;
           }
@@ -2306,24 +2342,24 @@ export default function SectionConfig() {
                       <td className="py-3 md:px-6 px-4 font-bold text-gray-900 text-xs">
                         {calculateAverageMarks(section)}
                       </td>
-                      <td className="py-3 md:px-6 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                      <td className="py-2.5 text-right whitespace-nowrap md:px-6 px-4">
+                        <div className="flex items-center justify-end gap-2">
                           {hasPermission("MANAGE_SECTIONS") && (
                             <button
                               onClick={() => handleEditSection(section)}
-                              className="p-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-100 rounded-lg transition-colors cursor-pointer"
+                              className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-xl border border-gray-200 transition cursor-pointer"
                               title="Edit Section"
                             >
-                              <Edit size={14} />
+                              <Edit2 size={13} />
                             </button>
                           )}
                           {hasPermission("MANAGE_SECTIONS") && (
                             <button
                               onClick={() => confirmDeleteSection(section.id)}
-                              className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 rounded-lg transition-colors cursor-pointer"
+                              className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-100 transition cursor-pointer"
                               title="Delete Section"
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={13} />
                             </button>
                           )}
                         </div>
@@ -2793,11 +2829,42 @@ export default function SectionConfig() {
                                     <td className="py-1.5 px-3">
                                       {(() => {
                                         const code = q.optionalGroupCode?.trim()?.toUpperCase();
-                                        const otherInGroup = code ? newBatchSections[activeSectionIdx]?.questions?.find(
-                                          (other, oIdx) => oIdx !== qIdx && other.optionalGroupCode?.trim()?.toUpperCase() === code && Math.abs((parseFloat(other.marks) || 0) - (parseFloat(q.marks) || 0)) > 0.001
-                                        ) : null;
-                                        const hasMismatch = Boolean(otherInGroup);
-                                        const oLabel = otherInGroup ? (otherInGroup.part ? `Q${otherInGroup.questionNo} (${otherInGroup.part})` : `Q${otherInGroup.questionNo}`) : '';
+                                        if (!code) {
+                                          return (
+                                            <div>
+                                              <input
+                                                type="text"
+                                                value={q.optionalGroupCode || ''}
+                                                onChange={e => updateBatchSectionQuestion(activeSectionIdx, qIdx, 'optionalGroupCode', e.target.value)}
+                                                placeholder="Group code (optional)"
+                                                className="w-full px-2.5 py-1 border border-gray-300 rounded text-xs font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-teal-500 bg-white"
+                                              />
+                                            </div>
+                                          );
+                                        }
+
+                                        const allSectionQuestions = newBatchSections[activeSectionIdx]?.questions || [];
+                                        const groupQuestions = allSectionQuestions.filter(other => other.optionalGroupCode?.trim()?.toUpperCase() === code);
+                                        const questionTotals = {};
+                                        groupQuestions.forEach(other => {
+                                          const qKey = String(other.questionNo || '').trim().toUpperCase();
+                                          if (!questionTotals[qKey]) {
+                                            questionTotals[qKey] = { total: 0, qNo: other.questionNo, parts: [] };
+                                          }
+                                          questionTotals[qKey].total += (parseFloat(other.marks) || 0);
+                                          if (other.part && other.part !== 'Part') {
+                                            questionTotals[qKey].parts.push(other.part);
+                                          }
+                                        });
+
+                                        const myKey = String(q.questionNo || '').trim().toUpperCase();
+                                        const myTotal = questionTotals[myKey]?.total || 0;
+                                        const conflictingKey = Object.keys(questionTotals).find(otherKey => 
+                                          otherKey !== myKey && Math.abs(questionTotals[otherKey].total - myTotal) > 0.001
+                                        );
+                                        const conflicting = conflictingKey ? questionTotals[conflictingKey] : null;
+                                        const hasMismatch = Boolean(conflicting);
+                                        const oLabel = conflicting ? (conflicting.parts.length > 0 ? `Q${conflicting.qNo} (${conflicting.parts.join(', ')})` : `Q${conflicting.qNo}`) : '';
 
                                         return (
                                           <div>
@@ -2806,7 +2873,7 @@ export default function SectionConfig() {
                                               value={q.optionalGroupCode || ''}
                                               onChange={e => updateBatchSectionQuestion(activeSectionIdx, qIdx, 'optionalGroupCode', e.target.value)}
                                               placeholder="Group code (optional)"
-                                              title={hasMismatch ? `Group '${q.optionalGroupCode}' marks mismatch! ${oLabel} has ${otherInGroup.marks}m. Questions in same group must have identical marks.` : ''}
+                                              title={hasMismatch ? `Group '${q.optionalGroupCode}' marks mismatch! ${oLabel} has ${conflicting.total}m, but Q${q.questionNo} total is ${myTotal}m. Questions in same group must have identical total marks.` : ''}
                                               className={`w-full px-2.5 py-1 border rounded text-xs font-semibold focus:outline-none focus:ring-1 bg-white ${
                                                 hasMismatch
                                                   ? 'border-amber-400 bg-amber-50/50 text-amber-900 focus:ring-amber-500 ring-1 ring-amber-300'
@@ -2815,7 +2882,7 @@ export default function SectionConfig() {
                                             />
                                             {hasMismatch && (
                                               <div className="text-[9px] text-amber-700 font-bold mt-0.5 leading-tight flex items-center gap-1">
-                                                <span>⚠ Must match {oLabel} ({otherInGroup.marks}m)</span>
+                                                <span>⚠ Must match {oLabel} ({conflicting.total}m)</span>
                                               </div>
                                             )}
                                           </div>

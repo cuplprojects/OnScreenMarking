@@ -59,13 +59,18 @@ export const GroupSwitchModal = ({
   onClose
 }) => {
   if (!modalData) return null;
-  const { targetQuestion, conflictingQuestion, groupCode } = modalData;
+  const { targetQuestion, conflictingQuestion, groupCode, conflictingParts } = modalData;
 
-  const targetLabel = targetQuestion.part
+  const partsList = conflictingParts && conflictingParts.length > 0 ? conflictingParts : [conflictingQuestion];
+  const totalConflictingMarks = partsList.reduce((sum, p) => sum + (Number(questionMarks[p.questionId]?.marksAwarded) || 0), 0);
+
+  const targetLabel = targetQuestion.part && targetQuestion.part !== 'Part'
     ? `${targetQuestion.questionNo} (${targetQuestion.part})`
     : targetQuestion.questionNo;
-  const conflictingLabel = conflictingQuestion.part
-    ? `${conflictingQuestion.questionNo} (${conflictingQuestion.part})`
+
+  const distinctParts = partsList.filter(p => p.part && p.part !== 'Part').map(p => p.part);
+  const conflictingLabel = distinctParts.length > 0
+    ? `${conflictingQuestion.questionNo} (${distinctParts.join(', ')})`
     : conflictingQuestion.questionNo;
 
   return (
@@ -85,7 +90,7 @@ export const GroupSwitchModal = ({
           <p>
             <strong>Question {conflictingLabel}</strong> currently holds{' '}
             <span className="font-bold text-teal-800">
-              {questionMarks[conflictingQuestion.questionId]?.marksAwarded || 0} marks
+              {totalConflictingMarks} marks
             </span> in Optional Group {groupCode}.
           </p>
           <p className="text-gray-600">
@@ -104,7 +109,7 @@ export const GroupSwitchModal = ({
           <button
             type="button"
             onClick={() => {
-              onConfirmSwitch(targetQuestion, conflictingQuestion);
+              onConfirmSwitch(targetQuestion, conflictingQuestion, partsList);
               onClose();
             }}
             className="px-3.5 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition-colors cursor-pointer flex items-center gap-1.5"
