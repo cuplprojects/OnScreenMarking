@@ -36,8 +36,12 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestion, current
   const [pendingAnno, setPendingAnno] = useState(null);
   const [isSkipped, setIsSkipped] = useState(false);
   const [loadingPdf, setLoadingPdf] = useState(false);
+  const [pageLoading, setPageLoading] = useState(false);
   const [pdfError, setPdfError] = useState(null);
   const [isToolbarOpen, setIsToolbarOpen] = useState(true);
+  const pdfDocRef = useRef(null);
+  const pdfPagesRef = useRef([]);
+  const renderingPagesRef = useRef(new Set());
 
   // Notify parent of total pages
   useEffect(() => {
@@ -146,9 +150,13 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestion, current
           tempCtx.fillStyle = '#ffffff';
           tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
           
-          // Draw clean page image
-          if (pdfPages[i]) {
-            tempCtx.drawImage(pdfPages[i], 0, 0, tempCanvas.width, tempCanvas.height);
+          // Draw clean page image (render on demand if not yet cached)
+          let pageCanvas = pdfPages[i];
+          if (!pageCanvas && pdfDocRef.current) {
+            pageCanvas = await renderPageCanvas(i);
+          }
+          if (pageCanvas) {
+            tempCtx.drawImage(pageCanvas, 0, 0, tempCanvas.width, tempCanvas.height);
           }
           
           // Draw annotations at standard zoom scale of 1
@@ -410,7 +418,56 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestion, current
     return () => container.removeEventListener('wheel', handleWheel);
   }, []);
 
-  // Auto-load PDF from URL
+  // Render an individual page to an offscreen canvas and cache it
+  const renderPageCanvas = async (pageIndex) => {
+    if (!pdfDocRef.current || pageIndex < 0 || pageIndex >= pdfDocRef.current.numPages) {
+      return null;
+    }
+    if (pdfPagesRef.current[pageIndex]) {
+      return pdfPagesRef.current[pageIndex];
+    }
+    if (renderingPagesRef.current.has(pageIndex)) {
+      return null;
+    }
+
+    renderingPagesRef.current.add(pageIndex);
+    try {
+      const page = await pdfDocRef.current.getPage(pageIndex + 1);
+      const viewport = page.getViewport({ scale: 2 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const context = canvas.getContext('2d');
+
+      await page.render({
+        canvasContext: context,
+        viewport: viewport,
+      }).promise;
+
+      pdfPagesRef.current[pageIndex] = canvas;
+      return canvas;
+    } catch (err) {
+      console.error(`Failed to render PDF page ${pageIndex + 1}:`, err);
+      return null;
+    } finally {
+      renderingPagesRef.current.delete(pageIndex);
+    }
+  };
+
+  // Clean up PDF.js document on unmount
+  useEffect(() => {
+    return () => {
+      if (pdfDocRef.current) {
+        try {
+          pdfDocRef.current.destroy();
+        } catch (e) {}
+      }
+    };
+  }, []);
+
+  // Auto-load PDF from URL with Lazy Loading:
+  // Immediately render only Page 1 so examiner can begin working in < 1 second.
+  // Other pages are rendered on-demand when navigated to, with background prefetching.
   useEffect(() => {
     if (pdfUrl) {
       loadPdfFromUrl(pdfUrl);
@@ -421,6 +478,16 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestion, current
     try {
       setLoadingPdf(true);
       setPdfError(null);
+
+      if (pdfDocRef.current) {
+        try {
+          pdfDocRef.current.destroy();
+        } catch (e) {}
+        pdfDocRef.current = null;
+      }
+      pdfPagesRef.current = [];
+      setPdfPages([]);
+
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
       const headers = {};
       if (token) {
@@ -443,40 +510,93 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestion, current
       const arrayBuffer = await response.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({
         data: arrayBuffer,
-        isEvalSupported: false // Hardening against arbitrary JS execution in untrusted PDFs
+        isEvalSupported: false
       }).promise;
-      const pages = [];
 
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 2 });
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+      pdfDocRef.current = pdf;
+      const numPages = pdf.numPages;
+      const initialPages = new Array(numPages).fill(null);
+      pdfPagesRef.current = initialPages;
 
-        await page.render({
-          canvasContext: context,
-          viewport: viewport,
-        }).promise;
+      // Render ONLY the first page immediately
+      const firstCanvas = await renderPageCanvas(0);
+      initialPages[0] = firstCanvas;
+      pdfPagesRef.current = initialPages;
 
-        pages.push(canvas);
-      }
-
-      setPdfPages(pages);
+      setPdfPages([...initialPages]);
       setCurrentPage(0);
       setImageSource(null);
-      if (pages.length > 0) {
-        setCanvasSize({ width: pages[0].width, height: pages[0].height });
-        fitZoomToContainer(pages[0].width);
+      if (firstCanvas) {
+        setCanvasSize({ width: firstCanvas.width, height: firstCanvas.height });
+        fitZoomToContainer(firstCanvas.width);
+      }
+
+      // Hide loading spinner right away — first page is ready for marking!
+      setLoadingPdf(false);
+
+      // Proactively pre-render Page 2 in background if it exists
+      if (numPages > 1) {
+        renderPageCanvas(1).then((secondCanvas) => {
+          if (secondCanvas) {
+            initialPages[1] = secondCanvas;
+            pdfPagesRef.current = initialPages;
+            setPdfPages([...initialPages]);
+          }
+        }).catch(() => {});
       }
     } catch (err) {
       console.error("Failed to load PDF:", err);
       setPdfError(err.message || "Failed to load script PDF.");
-    } finally {
       setLoadingPdf(false);
     }
   };
+
+  // Ensure current page is rendered on demand and prefetch next page
+  useEffect(() => {
+    if (!pdfDocRef.current || pdfPages.length === 0) return;
+
+    let isMounted = true;
+
+    const ensureCurrentAndPrefetchNext = async () => {
+      // If current page is not yet rendered, render it now
+      if (!pdfPagesRef.current[currentPage]) {
+        setPageLoading(true);
+        const canvas = await renderPageCanvas(currentPage);
+        if (isMounted && canvas) {
+          const updated = [...pdfPagesRef.current];
+          updated[currentPage] = canvas;
+          pdfPagesRef.current = updated;
+          setPdfPages(updated);
+          setCanvasSize({ width: canvas.width, height: canvas.height });
+        }
+        if (isMounted) setPageLoading(false);
+      } else {
+        const canvas = pdfPagesRef.current[currentPage];
+        if (canvas) {
+          setCanvasSize({ width: canvas.width, height: canvas.height });
+        }
+      }
+
+      // Prefetch next page in the background
+      const nextPage = currentPage + 1;
+      if (nextPage < pdfDocRef.current.numPages && !pdfPagesRef.current[nextPage]) {
+        renderPageCanvas(nextPage).then((canvas) => {
+          if (isMounted && canvas) {
+            const updated = [...pdfPagesRef.current];
+            updated[nextPage] = canvas;
+            pdfPagesRef.current = updated;
+            setPdfPages(updated);
+          }
+        }).catch(() => {});
+      }
+    };
+
+    ensureCurrentAndPrefetchNext();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentPage, pdfPages.length]);
 
   // Sync stepName to first section name when sections are loaded
   useEffect(() => {
@@ -2015,6 +2135,14 @@ const PDFAnnotator = forwardRef(({ onAnnotationsChange, currentQuestion, current
               <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-bounce" style={{ animationDelay: '150ms' }} />
               <span className="w-1.5 h-1.5 rounded-full bg-teal-300 animate-bounce" style={{ animationDelay: '300ms' }} />
             </div>
+          </div>
+        )}
+
+        {/* Page Render Loading Overlay (brief on-demand page flip) */}
+        {pageLoading && !loadingPdf && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/70 backdrop-blur-[1px] pointer-events-none">
+            <div className="w-10 h-10 rounded-full border-3 border-teal-200 border-t-teal-600 animate-spin" />
+            <p className="text-xs font-semibold text-teal-800 mt-2">Loading page {currentPage + 1}…</p>
           </div>
         )}
 
