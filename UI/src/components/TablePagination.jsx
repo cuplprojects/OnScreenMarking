@@ -12,10 +12,16 @@ export default function TablePagination({
   setPage,
   setPageSize,
   position = 'bottom',
-  className = ''
+  className = '',
+  pageSizeOptions = [5, 10, 25, 50, 100],
+  maxPageSize
 }) {
   const [goToPage, setGoToPage] = useState('');
   const debounceTimerRef = useRef(null);
+
+  const availablePageSizes = maxPageSize
+    ? pageSizeOptions.filter((s) => s <= maxPageSize)
+    : pageSizeOptions;
 
   // Sync input value with external page changes
   useEffect(() => {
@@ -203,7 +209,7 @@ export default function TablePagination({
           }}
           className="h-7 px-2.5 bg-white border border-gray-200 rounded-lg font-medium text-xs text-gray-700 hover:border-gray-300 focus:outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-500/20 transition cursor-pointer shadow-2xs"
         >
-          {[5, 10, 25, 50, 100].map((size) => (
+          {availablePageSizes.map((size) => (
             <option key={size} value={size}>
               {size} / page
             </option>

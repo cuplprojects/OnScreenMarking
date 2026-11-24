@@ -66,13 +66,13 @@ export default function ProjectDashboard() {
     if (projectId) {
       const searchVal = params.search || '';
       const pageVal = params.page || 1;
-      const pageSizeVal = params.pageSize || 5;
+      const pageSizeVal = params.pageSize || 10;
       const sortFieldVal = params.sortField || '';
       const sortOrderVal = params.sortOrder || '';
       const statusFilterVal = params.statusFilter || '';
       return apiCall(`/papers/dashboard-stats?projectId=${projectId}&page=${pageVal}&pageSize=${pageSizeVal}&search=${searchVal}&sortField=${sortFieldVal}&sortOrder=${sortOrderVal}&statusFilter=${statusFilterVal}`);
     }
-    return Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 5, totalPages: 1 });
+    return Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: 10, totalPages: 1 });
   }, [projectId]);
 
   const {
@@ -94,7 +94,7 @@ export default function ProjectDashboard() {
     refresh: refreshTable
   } = useTable({
     fetchFn,
-    initialParams: { pageSize: 5 }
+    initialParams: { pageSize: 10 }
   });
 
 
@@ -177,7 +177,7 @@ export default function ProjectDashboard() {
     return (
       <th 
         onClick={() => handleSort(field)}
-        className={`px-3 py-3 cursor-pointer hover:bg-gray-100/80 transition-colors select-none group/header ${isCenter ? 'text-center' : ''} ${className}`}
+        className={`px-3 py-2 cursor-pointer hover:bg-gray-100/80 transition-colors select-none group/header ${isCenter ? 'text-center' : ''} ${className}`}
       >
         <div className={`flex items-center gap-1 ${isCenter ? 'justify-center' : ''}`}>
           <span className="whitespace-nowrap">{label}</span>
@@ -289,11 +289,11 @@ export default function ProjectDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-transparent w-full max-w-none px-4 py-3 lg:px-8 lg:py-4">
-      <div className="w-full space-y-4">
+    <div className="min-h-[calc(100vh-64px)] bg-transparent w-full max-w-none px-4 py-2 lg:px-6 lg:py-2.5">
+      <div className="w-full space-y-2.5">
         
         {/* Unified Card Header */}
-        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+        <div className="bg-white rounded-xl border border-gray-100 px-4 py-2 shadow-sm">
           <ProjectConfigHeader 
             completePercentage={stats?.completePercentage || 0}
             initialProjectName={project?.projectName}
@@ -323,7 +323,7 @@ export default function ProjectDashboard() {
         ) : (
           <>
             {project?.isActive === false && (
-              <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl flex items-center justify-between shadow-sm mb-3">
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2.5 rounded-xl flex items-center justify-between shadow-sm mb-2">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="text-amber-500 shrink-0" size={18} />
                   <div>
@@ -339,19 +339,19 @@ export default function ProjectDashboard() {
             {activeTab === 'project-dashboard' && (
               <>
                 {/* Stats Banner */}
-                <div className="grid lg:grid-cols-6 gap-3 w-full grid-cols-1 md:grid-cols-2">
+                <div className="grid lg:grid-cols-6 gap-2 w-full grid-cols-1 md:grid-cols-2">
             
             {/* Total Papers */}
             <div 
               onClick={() => handleCardClick('')}
-              className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 transition-all duration-200 cursor-pointer hover:bg-gray-50 flex flex-col justify-between gap-2 ${
+              className={`bg-white rounded-xl border border-gray-100 shadow-sm px-3 py-2 transition-all duration-200 cursor-pointer hover:bg-gray-50 flex flex-col justify-between gap-1.5 ${
                 !filters.statusFilter ? 'bg-teal-50/50 shadow-[inset_0_-2px_0_0_#3b82f6]' : ''
               }`}
             >
           <div className="flex items-start justify-between w-full">
             <div>
               <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-0.5"> Papers</span>
-              <h3 className="text-xl font-black text-gray-900">{stats.papersCount}</h3>
+              <h3 className="text-lg font-black text-gray-900">{stats.papersCount}</h3>
             </div>
             <div className="p-1.5 bg-teal-50 rounded-xl text-teal-700"><FileText size={14} /></div>
           </div>
@@ -362,7 +362,7 @@ export default function ProjectDashboard() {
                 ? `/admin/project-dashboard?projectId=${encryptedProjectId}&tab=papers` 
                 : `/project-dashboard?projectId=${encryptedProjectId}&tab=papers`}
               onClick={(e) => e.stopPropagation()}
-              className="w-full flex items-center justify-center gap-1.5 px-2 py-1 mt-1 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors"
+              className="w-full flex items-center justify-center gap-1.5 px-2 py-0.5 mt-0.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors"
             >
               <Layers size={12} />
               Configure Sections & Papers
@@ -373,13 +373,13 @@ export default function ProjectDashboard() {
         {/* Total Scripts */}
         <div 
           onClick={() => handleCardClick('')}
-          className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 transition-all duration-200 cursor-pointer hover:bg-gray-50 flex items-center justify-between gap-2 ${
+          className={`bg-white rounded-xl border border-gray-100 shadow-sm px-3 py-2 transition-all duration-200 cursor-pointer hover:bg-gray-50 flex items-center justify-between gap-2 ${
             !filters.statusFilter ? 'bg-teal-50/50 shadow-[inset_0_-2px_0_0_#3b82f6]' : ''
           }`}
         >
           <div>
             <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Total Scripts</span>
-            <h3 className="text-xl font-black text-gray-900">{stats.totalScripts}</h3>
+            <h3 className="text-lg font-black text-gray-900">{stats.totalScripts}</h3>
           </div>
           <div className="p-1.5 bg-gray-100 rounded-xl text-gray-600"><BookOpen size={14} /></div>
         </div>
@@ -387,14 +387,14 @@ export default function ProjectDashboard() {
         {/* Pending Allocation */}
         <div 
           onClick={() => handleCardClick('pending')}
-          className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 transition-all duration-200 cursor-pointer hover:bg-amber-50/30 flex flex-col justify-between gap-2 ${
+          className={`bg-white rounded-xl border border-gray-100 shadow-sm px-3 py-2 transition-all duration-200 cursor-pointer hover:bg-amber-50/30 flex flex-col justify-between gap-1.5 ${
             filters.statusFilter === 'pending' ? 'bg-amber-50 shadow-[inset_0_-2px_0_0_#f59e0b]' : ''
           }`}
         >
           <div className="flex items-start justify-between w-full">
             <div>
               <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Pending Assign</span>
-              <h3 className="text-xl font-black text-amber-600">{stats.pendingScripts}</h3>
+              <h3 className="text-lg font-black text-amber-600">{stats.pendingScripts}</h3>
             </div>
             <div className="p-1.5 bg-amber-50 rounded-xl text-amber-600"><AlertCircle size={14} /></div>
           </div>
@@ -405,7 +405,7 @@ export default function ProjectDashboard() {
                 ? `/admin/allocate-scripts?projectId=${encryptedProjectId}` 
                 : `/allocate-scripts?projectId=${encryptedProjectId}`}
               onClick={(e) => e.stopPropagation()}
-              className="w-full flex items-center justify-center gap-1.5 px-2 py-1 mt-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors"
+              className="w-full flex items-center justify-center gap-1.5 px-2 py-0.5 mt-0.5 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors"
             >
               <Zap size={12} />
               Allocate Scripts
@@ -416,14 +416,14 @@ export default function ProjectDashboard() {
         {/* In Progress */}
         <div 
           onClick={() => handleCardClick('marking')}
-          className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 transition-all duration-200 cursor-pointer hover:bg-teal-50/30 flex flex-col justify-between gap-2 ${
+          className={`bg-white rounded-xl border border-gray-100 shadow-sm px-3 py-2 transition-all duration-200 cursor-pointer hover:bg-teal-50/30 flex flex-col justify-between gap-1.5 ${
             filters.statusFilter === 'marking' ? 'bg-teal-50 shadow-[inset_0_-2px_0_0_#3b82f6]' : ''
           }`}
         >
           <div className="flex items-start justify-between w-full">
             <div>
               <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">In Marking</span>
-              <h3 className="text-xl font-black text-teal-700">{stats.allocatedScripts}</h3>
+              <h3 className="text-lg font-black text-teal-700">{stats.allocatedScripts}</h3>
             </div>
             <div className="p-1.5 bg-teal-50 rounded-xl text-teal-700"><Clock size={14} /></div>
           </div>
@@ -433,7 +433,7 @@ export default function ProjectDashboard() {
               ? `/admin/deallocate-scripts?projectId=${encryptedProjectId}` 
               : `/deallocate-scripts?projectId=${encryptedProjectId}`}
             onClick={(e) => e.stopPropagation()}
-            className="w-full flex items-center justify-center gap-1.5 px-2 py-1 mt-1 bg-teal-100 hover:bg-teal-200 text-teal-800 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors"
+            className="w-full flex items-center justify-center gap-1.5 px-2 py-0.5 mt-0.5 bg-teal-100 hover:bg-teal-200 text-teal-800 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors"
           >
             <Sliders size={12} />
             Deallocate & Overwrite
@@ -443,13 +443,13 @@ export default function ProjectDashboard() {
         {/* Completed */}
         <div 
           onClick={() => handleCardClick('completed')}
-          className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 transition-all duration-200 cursor-pointer hover:bg-emerald-50/30 flex items-center justify-between gap-2 ${
+          className={`bg-white rounded-xl border border-gray-100 shadow-sm px-3 py-2 transition-all duration-200 cursor-pointer hover:bg-emerald-50/30 flex items-center justify-between gap-2 ${
             filters.statusFilter === 'completed' ? 'bg-emerald-50 shadow-[inset_0_-2px_0_0_#10b981]' : ''
           }`}
         >
           <div>
             <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Fully </span>
-            <h3 className="text-xl font-black text-emerald-600">{stats.completedScripts}</h3>
+            <h3 className="text-lg font-black text-emerald-600">{stats.completedScripts}</h3>
           </div>
           <div className="p-1.5 bg-emerald-50 rounded-xl text-emerald-600"><CheckCircle size={14} /></div>
         </div>
@@ -457,13 +457,13 @@ export default function ProjectDashboard() {
         {/* Unconfigured Sections */}
         <div 
           onClick={() => handleCardClick('unconfigured')}
-          className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 transition-all duration-200 cursor-pointer hover:bg-rose-50/30 flex items-center justify-between gap-2 ${
+          className={`bg-white rounded-xl border border-gray-100 shadow-sm px-3 py-2 transition-all duration-200 cursor-pointer hover:bg-rose-50/30 flex items-center justify-between gap-2 ${
             filters.statusFilter === 'unconfigured' ? 'bg-rose-50 shadow-[inset_0_-2px_0_0_#f43f5e]' : ''
           }`}
         >
           <div>
             <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Unconfigured</span>
-            <h3 className="text-xl font-black text-rose-600">{stats.unconfiguredPapersCount}</h3>
+            <h3 className="text-lg font-black text-rose-600">{stats.unconfiguredPapersCount}</h3>
           </div>
           <div className="p-1.5 bg-rose-50 rounded-xl text-rose-600"><Layers size={14} /></div>
         </div>
@@ -473,12 +473,12 @@ export default function ProjectDashboard() {
 
 
       {/* Analytics Tabs and Mappings */}
-      <div className="grid grid-cols-12 gap-6">
+      <div className="grid grid-cols-12 gap-3.5">
         
         {/* LEFT COMPONENT - Papers & Mapped Details */}
-        <div className="col-span-12 xl:col-span-8 space-y-6">
+        <div className="col-span-12 xl:col-span-8">
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-gray-100 flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-gray-50/40">
+            <div className="px-4 py-2 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-gray-50/40">
               <div>
                 <h3 className="text-xs font-black uppercase text-gray-900 tracking-wider flex items-center gap-1.5">
                   <FileText size={15} className="text-teal-700" />
@@ -508,14 +508,14 @@ export default function ProjectDashboard() {
                 </h3>
               </div>
 
-              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
                 
                 
                 {stats.pendingScripts > 0 && project?.isActive !== false && (
                   <button
                     onClick={handleAutoAllocateProject}
                     disabled={isBulkAutoAllocating}
-                    className="px-3 py-2 bg-teal-700 hover:bg-teal-800 text-white text-[10px] font-bold uppercase tracking-wider rounded-md shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    className="px-2.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white text-[10px] font-bold uppercase tracking-wider rounded-md shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                   >
                     <Zap size={12} className={isBulkAutoAllocating ? "animate-pulse" : ""} />
                     {isBulkAutoAllocating ? "Allocating..." : "Auto-Allocate All"}
@@ -523,8 +523,8 @@ export default function ProjectDashboard() {
                 )}
 
                 {/* Search input */}
-                <div className="relative flex items-center bg-white px-3 py-2 rounded-xl border border-gray-200 focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-100 shadow-sm w-full sm:w-64 min-w-[200px] transition-all">
-                  <Search size={14} className="text-gray-400 shrink-0 mr-2" />
+                <div className="relative flex items-center bg-white px-2.5 py-1.5 rounded-xl border border-gray-200 focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-100 shadow-sm w-full sm:w-56 min-w-[180px] transition-all">
+                  <Search size={13} className="text-gray-400 shrink-0 mr-1.5" />
                   <input
                     type="text"
                     placeholder="Search papers by name/code..."
@@ -534,7 +534,7 @@ export default function ProjectDashboard() {
                   />
                   {search && (
                     <button onClick={() => setSearch('')} className="text-gray-400 hover:text-gray-600 ml-1">
-                      <X size={13} />
+                      <X size={12} />
                     </button>
                   )}
                 </div>
@@ -563,6 +563,7 @@ export default function ProjectDashboard() {
                   setPage={setPage}
                   setPageSize={setPageSize}
                   position="top"
+                  className="py-1 px-4"
                 />
 
                 <div className="overflow-x-auto">
@@ -578,7 +579,7 @@ export default function ProjectDashboard() {
                         <SortHeader label="Allocated" field="allocatedScripts" isCenter={true} className="min-w-[55px]" />
                         <SortHeader label="Completed" field="completedScripts" isCenter={true} className="min-w-[55px]" />
                         <SortHeader label="Assigned Examiner" field="examiners" isCenter={true} className="min-w-[140px]" />
-                        <th className="sticky right-0 z-20 bg-gray-50 px-3 py-3 text-center w-28 min-w-[110px] shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] border-l border-gray-200/80">Actions</th>
+                        <th className="sticky right-0 z-20 bg-gray-50 px-3 py-2 text-center w-28 min-w-[110px] shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] border-l border-gray-200/80">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-xs font-bold text-gray-700">
@@ -615,19 +616,19 @@ export default function ProjectDashboard() {
                             className={`group transition hover:z-30 cursor-pointer ${activePaper?.paperId === paper.paperId ? 'bg-teal-50/80 border-l-4 border-l-teal-600 shadow-2xs' : 'hover:bg-gray-50/70'}`}
                             title="Click to view charts for this paper"
                           >
-                            <td className="px-3 py-2.5">
+                            <td className="px-3 py-1.5">
                               <span className="text-gray-900 font-extrabold">{paper.paperCode}</span>
                               <span className="text-sm text-gray-800 block font-semibold mt-0.5 line-clamp-1">{paper.paperName}</span>
                             </td>
-                            <td className="px-3 py-2.5 text-gray-600 font-medium">
+                            <td className="px-3 py-1.5 text-gray-600 font-medium">
                               <span className="line-clamp-1">{paper.subjectName}</span>
                             </td>
-                            <td className="px-2 py-2.5 text-center text-gray-600 font-mono text-[11px]">{paper.catchNo}</td>
-                            <td className="px-2 py-2.5 text-center text-gray-900">{paper.totalScripts}</td>
-                            <td className="px-2 py-2.5 text-center text-amber-600">{paper.pendingScripts}</td>
-                            <td className="px-2 py-2.5 text-center text-teal-700">{paper.allocatedScripts}</td>
-                            <td className="px-2 py-2.5 text-center text-emerald-600">{paper.completedScripts}</td>
-                            <td className="px-3 py-2.5 text-center relative hover:z-40 focus-within:z-40">
+                            <td className="px-2 py-1.5 text-center text-gray-600 font-mono text-[11px]">{paper.catchNo}</td>
+                            <td className="px-2 py-1.5 text-center text-gray-900">{paper.totalScripts}</td>
+                            <td className="px-2 py-1.5 text-center text-amber-600">{paper.pendingScripts}</td>
+                            <td className="px-2 py-1.5 text-center text-teal-700">{paper.allocatedScripts}</td>
+                            <td className="px-2 py-1.5 text-center text-emerald-600">{paper.completedScripts}</td>
+                            <td className="px-3 py-1.5 text-center relative hover:z-40 focus-within:z-40">
                               {examiners.length > 0 ? (
                                 <div className="relative group/examiners inline-flex items-center gap-1 justify-center">
                                   <span 
@@ -685,7 +686,7 @@ export default function ProjectDashboard() {
                                 <span className="text-[11px] text-gray-400 font-medium italic">Not Assigned</span>
                               )}
                             </td>
-                            <td onClick={(e) => e.stopPropagation()} className={`sticky right-0 z-10 group-hover:z-30 hover:z-30 focus-within:z-30 px-3 py-2.5 text-center whitespace-nowrap w-28 min-w-[110px] shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] border-l border-gray-100 ${activePaper?.paperId === paper.paperId ? 'bg-teal-50/80' : 'bg-white group-hover:bg-gray-50'}`}>
+                            <td onClick={(e) => e.stopPropagation()} className={`sticky right-0 z-10 group-hover:z-30 hover:z-30 focus-within:z-30 px-3 py-1.5 text-center whitespace-nowrap w-28 min-w-[110px] shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] border-l border-gray-100 ${activePaper?.paperId === paper.paperId ? 'bg-teal-50/80' : 'bg-white group-hover:bg-gray-50'}`}>
                               <div className="flex items-center justify-center gap-1.5">
                                 {/* Allocate Scripts Button */}
                                 <div className="relative group/tooltip inline-block">
@@ -794,7 +795,7 @@ export default function ProjectDashboard() {
                   </table>
                 </div>
 
-                {/* Standard Centralized Table Pagination (outside overflow-x-auto) */}
+                {/* Standard Centralized Table Pagination (Bottom) */}
                 <TablePagination
                   page={page}
                   totalPages={totalPages}
@@ -802,6 +803,7 @@ export default function ProjectDashboard() {
                   pageSize={pageSize}
                   setPage={setPage}
                   setPageSize={setPageSize}
+                  className="py-1 px-4"
                 />
               </>
             )}
@@ -809,7 +811,7 @@ export default function ProjectDashboard() {
         </div>
 
         {/* RIGHT COMPONENT - Interactive Visual Charts & Analytics */}
-        <div className="col-span-12 xl:col-span-4 space-y-6">
+        <div className="col-span-12 xl:col-span-4">
           {(() => {
             const currentTotal = activePaper ? (activePaper.totalScripts || 0) : stats.totalScripts;
             const currentCompleted = activePaper ? (activePaper.completedScripts || 0) : stats.completedScripts;
@@ -820,11 +822,11 @@ export default function ProjectDashboard() {
             return (
               <>
                 {/* Chart 1: Script Evaluation Status (Donut Chart) */}
-                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 transition-all">
-                  <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-100">
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5 transition-all">
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-100">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className={`p-1.5 rounded-lg shrink-0 ${activePaper ? 'bg-teal-100 text-teal-800' : 'bg-teal-50 text-teal-700'}`}>
-                        <PieChart size={15} />
+                        <PieChart size={14} />
                       </div>
                       <div className="min-w-0">
                         <h4 className="text-xs font-black uppercase text-gray-900 tracking-wider truncate">
@@ -858,8 +860,8 @@ export default function ProjectDashboard() {
                   </div>
 
                   {/* SVG Donut Chart */}
-                  <div className="flex flex-col items-center justify-center pt-2 pb-2">
-                    <div className="relative w-40 h-40 flex items-center justify-center">
+                  <div className="flex flex-col items-center justify-center pt-1 pb-1">
+                    <div className="relative w-32 h-32 flex items-center justify-center">
                       <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 120 120">
                         {/* Background track */}
                         <circle
@@ -915,34 +917,34 @@ export default function ProjectDashboard() {
                       </svg>
                       {/* Center text */}
                       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                        <span className="text-2xl font-black text-gray-900 tracking-tight leading-none">
+                        <span className="text-xl font-black text-gray-900 tracking-tight leading-none">
                           {currentPct}%
                         </span>
-                        <span className="text-[10px] uppercase font-bold text-gray-400 mt-1 tracking-wider">
+                        <span className="text-[9px] uppercase font-bold text-gray-400 mt-1 tracking-wider">
                           Completed
                         </span>
                       </div>
                     </div>
 
                     {/* Legend items */}
-                    <div className="w-full grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-gray-100 text-center">
-                      <div className="p-2 rounded-lg bg-emerald-50/50 border border-emerald-100">
-                        <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-emerald-800">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Completed
+                    <div className="w-full grid grid-cols-3 gap-1.5 mt-2.5 pt-2 border-t border-gray-100 text-center">
+                      <div className="p-1.5 rounded-lg bg-emerald-50/50 border border-emerald-100">
+                        <div className="flex items-center justify-center gap-1 text-[9.5px] font-bold text-emerald-800">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Completed
                         </div>
-                        <span className="text-sm font-black text-emerald-900 mt-0.5 block">{currentCompleted}</span>
+                        <span className="text-xs font-black text-emerald-900 mt-0.5 block">{currentCompleted}</span>
                       </div>
-                      <div className="p-2 rounded-lg bg-teal-50/50 border border-teal-100">
-                        <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-teal-800">
-                          <span className="w-2 h-2 rounded-full bg-teal-500"></span> In Marking
+                      <div className="p-1.5 rounded-lg bg-teal-50/50 border border-teal-100">
+                        <div className="flex items-center justify-center gap-1 text-[9.5px] font-bold text-teal-800">
+                          <span className="w-1.5 h-1.5 rounded-full bg-teal-500"></span> In Marking
                         </div>
-                        <span className="text-sm font-black text-teal-900 mt-0.5 block">{currentAllocated}</span>
+                        <span className="text-xs font-black text-teal-900 mt-0.5 block">{currentAllocated}</span>
                       </div>
-                      <div className="p-2 rounded-lg bg-amber-50/50 border border-amber-100">
-                        <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-amber-800">
-                          <span className="w-2 h-2 rounded-full bg-amber-500"></span> Pending
+                      <div className="p-1.5 rounded-lg bg-amber-50/50 border border-amber-100">
+                        <div className="flex items-center justify-center gap-1 text-[9.5px] font-bold text-amber-800">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Pending
                         </div>
-                        <span className="text-sm font-black text-amber-900 mt-0.5 block">{currentPending}</span>
+                        <span className="text-xs font-black text-amber-900 mt-0.5 block">{currentPending}</span>
                       </div>
                     </div>
                   </div>
